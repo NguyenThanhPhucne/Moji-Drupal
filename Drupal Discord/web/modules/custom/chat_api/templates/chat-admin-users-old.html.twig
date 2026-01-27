@@ -1,0 +1,102 @@
+{#
+/**
+ * @file
+ * Theme template for Chat Admin Users List.
+ *
+ * Available variables:
+ * - users: Array of user objects
+ */
+#}
+
+<div class="chat-admin-users">
+  <div class="page-header">
+    <h1>{{ 'User Management'|t }}</h1>
+    
+    {# TODO: Add search and filters #}
+    <div class="user-filters">
+      <input type="text" placeholder="{{ 'Search users...'|t }}" class="search-input" id="userSearch">
+      <select class="filter-select" id="statusFilter">
+        <option value="">{{ 'All statuses'|t }}</option>
+        <option value="active">{{ 'Active'|t }}</option>
+        <option value="blocked">{{ 'Blocked'|t }}</option>
+      </select>
+    </div>
+  </div>
+
+  {% if users is not empty %}
+    <div class="users-table-wrapper">
+      <table class="admin-table users-table">
+        <thead>
+          <tr>
+            <th>{{ 'ID'|t }}</th>
+            <th>{{ 'Username'|t }}</th>
+            <th>{{ 'Email'|t }}</th>
+            <th>{{ 'Created'|t }}</th>
+            <th>{{ 'Last Access'|t }}</th>
+            <th>{{ 'Status'|t }}</th>
+            <th>{{ 'Actions'|t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr class="user-row {{ user.status == 1 ? 'user-active' : 'user-blocked' }}">
+            <td>{{ user.uid }}</td>
+            <td class="user-name">
+              <a href="/admin/chat/users/{{ user.uid }}">{{ user.name }}</a>
+            </td>
+            <td>{{ user.mail }}</td>
+            <td>{{ user.created|date('Y-m-d H:i') }}</td>
+            <td>
+              {% if user.access > 0 %}
+                {{ user.access|date('Y-m-d H:i') }}
+              {% else %}
+                <span class="text-muted">{{ 'Never'|t }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if user.status == 1 %}
+                <span class="status-badge status-active">{{ 'Active'|t }}</span>
+              {% else %}
+                <span class="status-badge status-blocked">{{ 'Blocked'|t }}</span>
+              {% endif %}
+            </td>
+            <td class="actions-cell">
+              <a href="/user/{{ user.uid }}/edit" class="action-link action-edit" title="{{ 'Edit'|t }}">
+                ✏️
+              </a>
+              <a href="/admin/chat/users/{{ user.uid }}" class="action-link action-view" title="{{ 'View'|t }}">
+                👁️
+              </a>
+              {% if user.status == 1 %}
+                <button 
+                  class="action-link action-ban" 
+                  data-user-id="{{ user.uid }}"
+                  title="{{ 'Ban user'|t }}">
+                  🚫
+                </button>
+              {% else %}
+                <button 
+                  class="action-link action-unban" 
+                  data-user-id="{{ user.uid }}"
+                  title="{{ 'Unban user'|t }}">
+                  ✅
+                </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Pager will be added here by Drupal #}
+    
+  {% else %}
+    <div class="empty-state">
+      <p>{{ 'No users found.'|t }}</p>
+    </div>
+  {% endif %}
+
+</div>
+
+{# TODO: Add JavaScript for ban/unban actions #}

@@ -1,0 +1,53 @@
+{#
+/**
+ * @file
+ * Theme template for Chat Admin Conversations List.
+ *
+ * Available variables:
+ * - conversations: Array of conversation objects
+ */
+#}
+
+<div class="chat-admin-conversations">
+  <div class="page-header">
+    <h1>{{ 'Conversation Management'|t }}</h1>
+    <p class="page-description">{{ 'View and moderate all chat conversations'|t }}</p>
+  </div>
+
+  {# TODO: Implement conversation fetching from Node.js #}
+  <div class="conversations-wrapper">
+    
+    {% if conversations is not empty %}
+      <div class="conversations-list">
+        {% for conversation in conversations %}
+        <div class="conversation-card">
+          <div class="conversation-info">
+            <h3>{{ 'Conversation'|t }} #{{ conversation.id }}</h3>
+            <p class="conversation-meta">
+              {{ 'Participants:'|t }} {{ conversation.participants|length }}
+              | {{ 'Messages:'|t }} {{ conversation.message_count }}
+              | {{ 'Last activity:'|t }} {{ conversation.updated_at|date('Y-m-d H:i') }}
+            </p>
+          </div>
+          <div class="conversation-actions">
+            <a href="/admin/chat/conversations/{{ conversation.id }}" class="btn btn-view">
+              {{ 'View'|t }}
+            </a>
+            <button class="btn btn-delete" data-conversation-id="{{ conversation.id }}">
+              {{ 'Delete'|t }}
+            </button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">💬</div>
+        <h2>{{ 'No conversations found'|t }}</h2>
+        <p>{{ 'TODO: Fetch conversations from Node.js backend'|t }}</p>
+      </div>
+    {% endif %}
+
+  </div>
+
+</div>

@@ -1,0 +1,49 @@
+# Menu items for Chat Administration
+
+# Parent menu item
+chat_api.admin:
+  title: "Chat Administration"
+  description: "Manage chat users, conversations, reports, and settings"
+  route_name: chat_api.admin_dashboard
+  parent: system.admin
+  weight: 50
+
+# User management submenu
+chat_api.admin.users:
+  title: "Users"
+  description: "Manage chat users - view, ban, unban users"
+  route_name: chat_api.admin_users
+  parent: chat_api.admin
+  weight: 10
+
+# Conversations submenu
+chat_api.admin.conversations:
+  title: "Conversations"
+  description: "View and moderate chat conversations"
+  route_name: chat_api.admin_conversations
+  parent: chat_api.admin
+  weight: 20
+
+# Friend requests submenu
+chat_api.admin.friend_requests:
+  title: "Friend Requests"
+  description: "View all friend requests in the system"
+  route_name: chat_api.admin_friend_requests
+  parent: chat_api.admin
+  weight: 30
+
+# Reports submenu
+chat_api.admin.reports:
+  title: "Reports & Analytics"
+  description: "View statistics and analytics"
+  route_name: chat_api.admin_reports
+  parent: chat_api.admin
+  weight: 40
+
+# Settings submenu
+chat_api.admin.settings:
+  title: "Settings"
+  description: "Configure chat system settings"
+  route_name: chat_api.admin_settings
+  parent: chat_api.admin
+  weight: 50

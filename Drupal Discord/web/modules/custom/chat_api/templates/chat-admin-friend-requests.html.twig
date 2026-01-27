@@ -1,0 +1,73 @@
+{#
+/**
+ * @file
+ * Theme template for Chat Admin Friend Requests.
+ *
+ * Available variables:
+ * - requests: Array of friend request objects
+ */
+#}
+
+<div class="chat-admin-friend-requests">
+  <div class="page-header">
+    <h1>{{ 'Friend Requests'|t }}</h1>
+    <p class="page-description">{{ 'View all friend requests in the system'|t }}</p>
+  </div>
+
+  {% if requests is not empty %}
+    <div class="requests-table-wrapper">
+      <table class="admin-table requests-table">
+        <thead>
+          <tr>
+            <th>{{ 'ID'|t }}</th>
+            <th>{{ 'From User'|t }}</th>
+            <th>{{ 'To User'|t }}</th>
+            <th>{{ 'Status'|t }}</th>
+            <th>{{ 'Created'|t }}</th>
+            <th>{{ 'Updated'|t }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for request in requests %}
+          <tr class="request-row request-{{ request.status }}">
+            <td>{{ request.id }}</td>
+            <td>
+              <a href="/admin/chat/users/{{ request.sender_id }}">
+                {{ 'User'|t }} #{{ request.sender_id }}
+              </a>
+            </td>
+            <td>
+              <a href="/admin/chat/users/{{ request.receiver_id }}">
+                {{ 'User'|t }} #{{ request.receiver_id }}
+              </a>
+            </td>
+            <td>
+              {% if request.status == 'pending' %}
+                <span class="status-badge status-pending">{{ 'Pending'|t }}</span>
+              {% elseif request.status == 'accepted' %}
+                <span class="status-badge status-accepted">{{ 'Accepted'|t }}</span>
+              {% elseif request.status == 'declined' %}
+                <span class="status-badge status-declined">{{ 'Declined'|t }}</span>
+              {% endif %}
+            </td>
+            <td>{{ request.created_at|date('Y-m-d H:i') }}</td>
+            <td>
+              {% if request.updated_at %}
+                {{ request.updated_at|date('Y-m-d H:i') }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <div class="empty-icon">🤝</div>
+      <h2>{{ 'No friend requests found'|t }}</h2>
+    </div>
+  {% endif %}
+
+</div>

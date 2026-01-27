@@ -1,0 +1,227 @@
+/**
+ * @file
+ * Additional table styles for admin interface
+ */
+
+/* Enhanced table styling */
+.users-table-wrapper,
+.requests-table-wrapper {
+  overflow-x: auto;
+  margin: 20px 0;
+}
+
+.users-table tbody tr.user-blocked {
+  opacity: 0.6;
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.user-name a {
+  color: #667eea;
+  text-decoration: none;
+}
+
+.user-name a:hover {
+  text-decoration: underline;
+}
+
+.text-muted {
+  color: #999;
+  font-style: italic;
+}
+
+/* Conversation cards */
+.conversations-list {
+  display: grid;
+  gap: 20px;
+}
+
+.conversation-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: transform 0.2s;
+}
+
+.conversation-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.conversation-info h3 {
+  margin: 0 0 10px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.conversation-meta {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+.conversation-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-view,
+.btn-delete {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-view {
+  background: #667eea;
+  color: white;
+}
+
+.btn-delete {
+  background: #f44336;
+  color: white;
+}
+
+.btn-view:hover,
+.btn-delete:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Report statistics */
+.report-stats {
+  margin: 30px 0;
+}
+
+.stat-group {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.stat-group h2 {
+  font-size: 22px;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.stat-item {
+  background: #f5f5f5;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-item .stat-label {
+  display: block;
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.stat-item .stat-value {
+  display: block;
+  font-size: 36px;
+  font-weight: bold;
+  color: #667eea;
+}
+
+/* Charts grid */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 30px;
+  margin-top: 20px;
+}
+
+.chart-container {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.chart-container h3 {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+/* Loading states */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.loading::after {
+  content: "...";
+  animation: dots 1.5s steps(4, end) infinite;
+}
+
+@keyframes dots {
+  0%,
+  20% {
+    content: ".";
+  }
+  40% {
+    content: "..";
+  }
+  60%,
+  100% {
+    content: "...";
+  }
+}
+
+/* Header actions */
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* User actions section */
+.user-actions {
+  margin: 30px 0;
+  padding: 25px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-actions h2 {
+  font-size: 20px;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+/* Request status specific styling */
+.request-pending {
+  background: #fffbf0;
+}
+
+.request-accepted {
+  background: #f0fdf4;
+}
+
+.request-declined {
+  background: #fef2f2;
+}

@@ -106,3 +106,154 @@ chat_api.friends.check:
     }
   methods: [GET]
   requirements: { _access: "TRUE" }
+
+# =============================================================================
+# ADMIN ROUTES - Chat Administration UI
+# =============================================================================
+
+# Main admin dashboard
+chat_api.admin_dashboard:
+  path: "/admin/chat"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::dashboard'
+    _title: "Chat Administration"
+  requirements:
+    _permission: "administer chat"
+
+# User management
+chat_api.admin_users:
+  path: "/admin/chat/users"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::usersList'
+    _title: "Manage Users"
+  requirements:
+    _permission: "administer chat"
+
+chat_api.admin_user_view:
+  path: "/admin/chat/users/{uid}"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::userView'
+    _title: "View User Details"
+  requirements:
+    _permission: "administer chat"
+    uid: \d+
+
+chat_api.admin_user_ban:
+  path: "/admin/chat/users/{uid}/ban"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::banUser'
+  requirements:
+    _permission: "administer chat"
+    uid: \d+
+  methods: [POST]
+
+chat_api.admin_user_unban:
+  path: "/admin/chat/users/{uid}/unban"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::unbanUser'
+  requirements:
+    _permission: "administer chat"
+    uid: \d+
+  methods: [POST]
+
+chat_api.admin_user_detail:
+  path: "/admin/chat/users/{uid}"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::userDetail'
+    _title: "User Details"
+  requirements:
+    _permission: "administer users"
+    uid: \d+
+
+# Conversation management
+chat_api.admin_conversations:
+  path: "/admin/chat/conversations"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::conversationsList'
+    _title: "Manage Conversations"
+  requirements:
+    _permission: "moderate chat"
+
+chat_api.admin_conversation_view:
+  path: "/admin/chat/conversations/{conversation_id}"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::conversationView'
+    _title: "View Conversation"
+  requirements:
+    _permission: "moderate chat"
+
+chat_api.admin_conversation_delete:
+  path: "/admin/chat/conversations/{conversation_id}/delete"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::conversationDelete'
+  requirements:
+    _permission: "administer chat"
+  methods: [POST]
+
+# Friend requests management
+chat_api.admin_friend_requests:
+  path: "/admin/chat/friend-requests"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::friendRequestsList'
+    _title: "Friend Requests"
+  requirements:
+    _permission: "moderate chat"
+
+# Reports & Analytics
+chat_api.admin_reports:
+  path: "/admin/chat/reports"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::reports'
+    _title: "Reports & Analytics"
+  requirements:
+    _permission: "view chat reports"
+
+chat_api.admin_reports_users:
+  path: "/admin/chat/reports/users"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::reportsUsers'
+    _title: "User Statistics"
+  requirements:
+    _permission: "view chat reports"
+
+chat_api.admin_reports_messages:
+  path: "/admin/chat/reports/messages"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::reportsMessages'
+    _title: "Message Statistics"
+  requirements:
+    _permission: "view chat reports"
+
+# Settings
+chat_api.admin_settings:
+  path: "/admin/chat/settings"
+  defaults:
+    _form: '\Drupal\chat_api\Form\ChatSettingsForm'
+    _title: "Chat Settings"
+  requirements:
+    _permission: "administer chat"
+
+# API endpoint for admin AJAX requests
+chat_api.admin_api_stats:
+  path: "/admin/chat/api/stats"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminApiController::getStats'
+  requirements:
+    _permission: "view chat reports"
+  methods: [GET]
+
+chat_api.admin_api_block_user:
+  path: "/admin/chat/api/user/block"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminApiController::blockUser'
+  requirements:
+    _permission: "administer users"
+  methods: [POST]
+
+chat_api.admin_api_unblock_user:
+  path: "/admin/chat/api/user/unblock"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminApiController::unblockUser'
+  requirements:
+    _permission: "administer users"
+  methods: [POST]

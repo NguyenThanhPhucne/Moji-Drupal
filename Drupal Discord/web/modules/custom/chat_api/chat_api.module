@@ -23,3 +23,68 @@ if (file_exists($dotenv_path . '.env') && class_exists('Dotenv\Dotenv')) {
     // Không làm gì nếu lỗi
   }
 }
+
+/**
+ * Implements hook_theme().
+ */
+function chat_api_theme($existing, $type, $theme, $path) {
+  return [
+    'chat_admin_dashboard' => [
+      'variables' => [
+        'stats' => [],
+        'activity_trends' => [],
+        'recent_stats' => [],
+        'system_health' => [],
+      ],
+      'template' => 'chat-admin-dashboard',
+    ],
+    'chat_admin_users' => [
+      'variables' => [
+        'users' => [],
+      ],
+      'template' => 'chat-admin-users',
+    ],
+    'chat_admin_user_detail' => [
+      'variables' => [
+        'user_info' => NULL,
+        'stats' => NULL,
+        'friends' => NULL,
+        'pending_sent' => NULL,
+        'pending_received' => NULL,
+        'recent_activity' => NULL,
+      ],
+      'template' => 'chat-admin-user-detail',
+    ],
+    'chat_admin_user_view' => [
+      'variables' => [
+        'user' => NULL,
+      ],
+      'template' => 'chat-admin-user-view',
+    ],
+    'chat_admin_conversations' => [
+      'variables' => [
+        'conversations' => [],
+      ],
+      'template' => 'chat-admin-conversations',
+    ],
+    'chat_admin_conversation_view' => [
+      'variables' => [
+        'conversation_id' => NULL,
+      ],
+      'template' => 'chat-admin-conversation-view',
+    ],
+    'chat_admin_friend_requests' => [
+      'variables' => [
+        'requests' => [],
+      ],
+      'template' => 'chat-admin-friend-requests',
+    ],
+    'chat_admin_reports' => [
+      'variables' => [
+        'stats' => [],
+      ],
+      'template' => 'chat-admin-reports',
+    ],
+  ];
+}
+

@@ -1,0 +1,47 @@
+# CSS/JS libraries for Chat Admin UI
+
+admin:
+  version: 1.0
+  css:
+    theme:
+      css/admin.css: {}
+  js:
+    js/admin.js: {}
+  dependencies:
+    - core/drupal
+    - core/jquery
+    - core/drupal.ajax
+
+charts:
+  version: 1.0
+  js:
+    js/charts.js: {}
+  dependencies:
+    - core/drupal
+    - chat_api/admin
+  # TODO: Add Chart.js CDN or local library
+  # For now, we'll use CDN in template
+
+admin-tables:
+  version: 1.0
+  css:
+    theme:
+      css/tables.css: {}
+      css/users.css: {}
+  js:
+    js/tables.js: {}
+    js/admin-users.js: {}
+  dependencies:
+    - core/drupal
+    - core/jquery
+
+user-detail:
+  version: 1.0
+  css:
+    theme:
+      css/user-detail.css: {}
+  js:
+    js/admin-users.js: {}
+  dependencies:
+    - core/drupal
+    - core/jquery

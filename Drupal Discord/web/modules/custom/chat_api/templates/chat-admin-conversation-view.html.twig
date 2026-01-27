@@ -1,0 +1,54 @@
+{#
+/**
+ * @file
+ * Theme template for viewing conversation details in admin.
+ *
+ * Available variables:
+ * - conversation_id: ID of the conversation
+ */
+#}
+
+<div class="chat-admin-conversation-view">
+  <div class="page-header">
+    <h1>{{ 'Conversation Details'|t }} #{{ conversation_id }}</h1>
+    <div class="header-actions">
+      <button class="btn btn-danger" id="deleteConversationBtn" data-conversation-id="{{ conversation_id }}">
+        {{ 'Delete Conversation'|t }}
+      </button>
+      <a href="/admin/chat/conversations" class="btn btn-secondary">{{ 'Back to List'|t }}</a>
+    </div>
+  </div>
+
+  <div class="conversation-details">
+    <p class="todo-note">{{ 'TODO: Fetch and display conversation details from Node.js backend'|t }}</p>
+    
+    {# TODO: Implement conversation details view #}
+    <div class="details-section">
+      <h2>{{ 'Participants'|t }}</h2>
+      <div id="participantsList">Loading...</div>
+    </div>
+
+    <div class="details-section">
+      <h2>{{ 'Messages'|t }}</h2>
+      <div id="messagesList">Loading...</div>
+    </div>
+
+    <div class="details-section">
+      <h2>{{ 'Metadata'|t }}</h2>
+      <dl class="details-list">
+        <dt>{{ 'Conversation ID'|t }}</dt>
+        <dd>{{ conversation_id }}</dd>
+        
+        <dt>{{ 'Created'|t }}</dt>
+        <dd>TODO</dd>
+        
+        <dt>{{ 'Last Activity'|t }}</dt>
+        <dd>TODO</dd>
+        
+        <dt>{{ 'Message Count'|t }}</dt>
+        <dd>TODO</dd>
+      </dl>
+    </div>
+  </div>
+
+</div>

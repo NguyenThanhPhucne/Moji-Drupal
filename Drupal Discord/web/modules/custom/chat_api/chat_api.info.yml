@@ -1,6 +1,6 @@
 name: Chat API
 type: module
-description: 'REST API for Chat Application - User Management, Authentication, Friends'
+description: "REST API for Chat Application - User Management, Authentication, Friends, Admin UI"
 core_version_requirement: ^10 || ^11
 package: Custom
 

@@ -1,0 +1,256 @@
+{#
+/**
+ * @file
+ * Professional Chat Admin Dashboard Template with Font Awesome Icons.
+ */
+#}
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+<div class="chat-admin-dashboard">
+  {# Page Header #}
+  <div class="page-header">
+    <div>
+      <h1><i class="fas fa-tachometer-alt"></i> {{ 'Chat Administration'|t }}</h1>
+      <p class="subtitle">{{ 'System Overview and Analytics Dashboard'|t }}</p>
+    </div>
+  </div>
+
+  {# Main Statistics Cards #}
+  <div class="stats-section">
+    <h2 class="section-title">{{ 'System Overview'|t }}</h2>
+    <div class="stats-grid">
+      {# Total Users #}
+      <div class="stat-card stat-card--purple">
+        <div class="stat-content">
+          <div class="stat-header">
+            <i class="fas fa-users stat-icon"></i>
+            <span class="stat-label">{{ 'Total Users'|t }}</span>
+          </div>
+          <div class="stat-value">{{ stats.total_users|number_format }}</div>
+          <div class="stat-meta">
+            <span class="badge badge-success">
+              <i class="fas fa-arrow-up"></i> {{ stats.new_users_today }}
+            </span>
+            <span class="stat-text">{{ 'today'|t }}</span>
+            <span class="badge badge-info">
+              <i class="fas fa-calendar-week"></i> {{ stats.new_users_week }}
+            </span>
+            <span class="stat-text">{{ 'this week'|t }}</span>
+          </div>
+        </div>
+      </div>
+
+      {# Active Users Today #}
+      <div class="stat-card stat-card--pink">
+        <div class="stat-content">
+          <div class="stat-header">
+            <i class="fas fa-user-check stat-icon"></i>
+            <span class="stat-label">{{ 'Active Today'|t }}</span>
+          </div>
+          <div class="stat-value">{{ stats.active_users_today|number_format }}</div>
+          <div class="stat-meta">
+            {% set active_percentage = stats.total_users > 0 ? (stats.active_users_today / stats.total_users * 100)|round : 0 %}
+            <span class="badge badge-primary">
+              <i class="fas fa-percentage"></i> {{ active_percentage }}%
+            </span>
+            <span class="stat-text">{{ 'of total'|t }}</span>
+            <span class="badge badge-secondary">
+              <i class="fas fa-users"></i> {{ stats.active_users_week }}
+            </span>
+            <span class="stat-text">{{ 'this week'|t }}</span>
+          </div>
+        </div>
+      </div>
+
+      {# Total Friendships #}
+      <div class="stat-card stat-card--blue">
+        <div class="stat-content">
+          <div class="stat-header">
+            <i class="fas fa-user-friends stat-icon"></i>
+            <span class="stat-label">{{ 'Friendships'|t }}</span>
+          </div>
+          <div class="stat-value">{{ stats.total_friends|number_format }}</div>
+          <div class="stat-meta">
+            {% set avg_friends = stats.total_users > 0 ? (stats.total_friends / stats.total_users)|round(1) : 0 %}
+            <span class="badge badge-info">
+              <i class="fas fa-chart-line"></i> {{ avg_friends }}
+            </span>
+            <span class="stat-text">{{ 'avg per user'|t }}</span>
+          </div>
+        </div>
+      </div>
+
+      {# Pending Requests #}
+      <div class="stat-card stat-card--green">
+        <div class="stat-content">
+          <div class="stat-header">
+            <i class="fas fa-clock stat-icon"></i>
+            <span class="stat-label">{{ 'Pending Requests'|t }}</span>
+          </div>
+          <div class="stat-value">{{ stats.pending_requests|number_format }}</div>
+          <div class="stat-meta">
+            <span class="badge badge-warning">
+              <i class="fas fa-hourglass-half"></i> {{ 'Awaiting approval'|t }}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Secondary Stats #}
+  <div class="secondary-stats">
+    <div class="stat-item">
+      <i class="fas fa-user-slash stat-item-icon"></i>
+      <span class="stat-item-label">{{ 'Blocked Users'|t }}:</span>
+      <span class="stat-item-value">{{ stats.blocked_users }}</span>
+    </div>
+    <div class="stat-item">
+      <i class="fas fa-heartbeat stat-item-icon"></i>
+      <span class="stat-item-label">{{ 'System Health'|t }}:</span>
+      <span class="stat-item-value">
+        <span class="status-indicator status-ok"></span> {{ system_health.database_status }}
+      </span>
+    </div>
+    <div class="stat-item">
+      <i class="fas fa-database stat-item-icon"></i>
+      <span class="stat-item-label">{{ 'Total Records'|t }}:</span>
+      <span class="stat-item-value">{{ system_health.total_records|number_format }}</span>
+    </div>
+  </div>
+
+  {# Activity Charts #}
+  <div class="dashboard-charts">
+    <h2 class="section-title"><i class="fas fa-chart-area"></i> {{ 'Activity Trends (Last 7 Days)'|t }}</h2>
+    <div class="charts-grid">
+      {# New Users Chart #}
+      <div class="chart-card">
+        <h3><i class="fas fa-user-plus"></i> {{ 'New Users'|t }}</h3>
+        <canvas id="newUsersChart" height="250"></canvas>
+        <div class="chart-summary">
+          <span class="trend-info"><i class="fas fa-info-circle"></i> {{ 'Daily user registrations'|t }}</span>
+        </div>
+      </div>
+      
+      {# Active Users Chart #}
+      <div class="chart-card">
+        <h3><i class="fas fa-chart-line"></i> {{ 'Active Users'|t }}</h3>
+        <canvas id="activeUsersChart" height="250"></canvas>
+        <div class="chart-summary">
+          <span class="trend-up"><i class="fas fa-arrow-trend-up"></i> {{ 'Daily active users'|t }}</span>
+        </div>
+      </div>
+      
+      {# Friend Requests Chart #}
+      <div class="chart-card">
+        <h3><i class="fas fa-handshake"></i> {{ 'Friend Requests'|t }}</h3>
+        <canvas id="friendRequestsChart" height="250"></canvas>
+        <div class="chart-summary">
+          <span class="trend-neutral"><i class="fas fa-equals"></i> {{ 'Daily friend requests'|t }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Recent Activity #}
+  <div class="recent-activity">
+    {# Recent Users #}
+    <div class="activity-section">
+      <h2 class="section-title"><i class="fas fa-user-clock"></i> {{ 'Recent Users'|t }}</h2>
+      {% if recent_stats.recent_users|length > 0 %}
+        <div class="activity-list">
+          {% for user in recent_stats.recent_users %}
+            <div class="activity-item">
+              <div class="activity-avatar">
+                <i class="fas fa-user"></i>
+              </div>
+              <div class="activity-content">
+                <div class="activity-name">
+                  <a href="/user/{{ user.uid }}">{{ user.name }}</a>
+                  {% if user.status == 1 %}
+                    <span class="badge badge-success"><i class="fas fa-check-circle"></i> {{ 'Active'|t }}</span>
+                  {% else %}
+                    <span class="badge badge-danger"><i class="fas fa-ban"></i> {{ 'Blocked'|t }}</span>
+                  {% endif %}
+                </div>
+                <div class="activity-meta">
+                  <i class="fas fa-envelope"></i> {{ user.mail }}
+                  <span class="separator">•</span>
+                  <i class="far fa-calendar-alt"></i> {{ user.created|date('M d, Y') }}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <a href="/admin/chat/users" class="view-all-link"><i class="fas fa-arrow-right"></i> {{ 'View all users'|t }}</a>
+      {% else %}
+        <p class="empty-message"><i class="fas fa-inbox"></i> {{ 'No recent users'|t }}</p>
+      {% endif %}
+    </div>
+
+    {# Recent Friend Requests #}
+    <div class="activity-section">
+      <h2 class="section-title"><i class="fas fa-user-plus"></i> {{ 'Recent Friend Requests'|t }}</h2>
+      {% if recent_stats.recent_requests|length > 0 %}
+        <div class="activity-list">
+          {% for request in recent_stats.recent_requests %}
+            <div class="activity-item">
+              <div class="activity-icon">
+                <i class="fas fa-handshake"></i>
+              </div>
+              <div class="activity-content">
+                <div class="activity-name">
+                  <strong>{{ request.sender_name }}</strong>
+                  <i class="fas fa-arrow-right transfer-icon"></i>
+                  <strong>{{ request.receiver_name }}</strong>
+                </div>
+                <div class="activity-meta">
+                  <span class="badge badge-info"><i class="fas fa-clock"></i> {{ 'Pending'|t }}</span>
+                  <span class="separator">•</span>
+                  <i class="far fa-calendar-alt"></i> {{ request.created|date('M d, H:i') }}
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <a href="/admin/chat/friend-requests" class="view-all-link"><i class="fas fa-arrow-right"></i> {{ 'View all requests'|t }}</a>
+      {% else %}
+        <p class="empty-message"><i class="fas fa-inbox"></i> {{ 'No recent requests'|t }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Quick Actions #}
+  <div class="quick-actions">
+    <h2 class="section-title"><i class="fas fa-bolt"></i> {{ 'Quick Actions'|t }}</h2>
+    <div class="action-links">
+      <a href="/admin/chat/users" class="action-button action-button--primary">
+        <i class="fas fa-users action-icon"></i>
+        <span class="action-text">{{ 'Manage Users'|t }}</span>
+        <i class="fas fa-arrow-right action-arrow"></i>
+      </a>
+      
+      <a href="/admin/chat/conversations" class="action-button action-button--secondary">
+        <i class="fas fa-comments action-icon"></i>
+        <span class="action-text">{{ 'View Conversations'|t }}</span>
+        <i class="fas fa-arrow-right action-arrow"></i>
+      </a>
+      
+      <a href="/admin/chat/reports" class="action-button action-button--info">
+        <i class="fas fa-chart-bar action-icon"></i>
+        <span class="action-text">{{ 'Analytics & Reports'|t }}</span>
+        <i class="fas fa-arrow-right action-arrow"></i>
+      </a>
+      
+      <a href="/admin/chat/settings" class="action-button action-button--warning">
+        <i class="fas fa-cog action-icon"></i>
+        <span class="action-text">{{ 'System Settings'|t }}</span>
+        <i class="fas fa-arrow-right action-arrow"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+{# Chart.js Script #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

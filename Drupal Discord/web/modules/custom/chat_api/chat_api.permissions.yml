@@ -1,0 +1,18 @@
+# Permissions for Chat Administration
+
+administer chat:
+  title: "Administer chat system"
+  description: "Full administrative access to chat system - manage users, conversations, settings"
+  restrict access: true
+
+moderate chat:
+  title: "Moderate chat conversations"
+  description: "Can view and moderate conversations, friend requests"
+
+view chat reports:
+  title: "View chat reports"
+  description: "Can view statistics, analytics, and reports"
+
+ban chat users:
+  title: "Ban/unban chat users"
+  description: "Can ban and unban users from the chat system"

@@ -1,0 +1,72 @@
+{#
+/**
+ * @file
+ * Theme template for Chat Admin Reports.
+ *
+ * Available variables:
+ * - stats: Array of statistics
+ */
+#}
+
+<div class="chat-admin-reports">
+  <div class="page-header">
+    <h1>{{ 'Reports & Analytics'|t }}</h1>
+    <p class="page-description">{{ 'View system statistics and activity reports'|t }}</p>
+  </div>
+
+  {# Overview statistics #}
+  <div class="report-stats">
+    <div class="stat-group">
+      <h2>{{ 'User Statistics'|t }}</h2>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <span class="stat-label">{{ 'Total Users'|t }}</span>
+          <span class="stat-value">{{ stats.total_users }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">{{ 'Active Today'|t }}</span>
+          <span class="stat-value">{{ stats.active_users_today }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">{{ 'New This Week'|t }}</span>
+          <span class="stat-value">{{ stats.new_users_this_week }}</span>
+        </div>
+      </div>
+      <a href="/admin/chat/reports/users" class="btn btn-secondary">
+        {{ 'View detailed user report'|t }}
+      </a>
+    </div>
+
+    <div class="stat-group">
+      <h2>{{ 'Message Statistics'|t }}</h2>
+      <div class="chart-placeholder">
+        <p>{{ 'TODO: Implement message statistics chart'|t }}</p>
+        <canvas id="messageChart" width="600" height="300"></canvas>
+      </div>
+      <a href="/admin/chat/reports/messages" class="btn btn-secondary">
+        {{ 'View detailed message report'|t }}
+      </a>
+    </div>
+  </div>
+
+  {# Activity charts #}
+  <div class="report-charts">
+    <h2>{{ 'Activity Overview'|t }}</h2>
+    <div class="charts-grid">
+      <div class="chart-container">
+        <h3>{{ 'Messages per Day (Last 7 Days)'|t }}</h3>
+        <canvas id="messagesPerDayChart"></canvas>
+      </div>
+      <div class="chart-container">
+        <h3>{{ 'New Users per Day (Last 7 Days)'|t }}</h3>
+        <canvas id="newUsersChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# TODO note #}
+  <div class="todo-note">
+    <p><strong>TODO:</strong> Implement Chart.js integration for data visualization</p>
+  </div>
+
+</div>
