@@ -10,6 +10,11 @@ const IniviteSuggestionList = ({
   filteredFriends,
   onSelect,
 }: InviteSuggestionListProps) => {
+  console.log("🔍 [IniviteSuggestionList] Rendering:", {
+    count: filteredFriends.length,
+    friends: filteredFriends,
+  });
+
   if (filteredFriends.length === 0) {
     return;
   }
@@ -24,11 +29,13 @@ const IniviteSuggestionList = ({
         >
           <UserAvatar
             type="chat"
-            name={friend.displayName}
+            name={friend.displayName || friend.username}
             avatarUrl={friend.avatarUrl}
           />
 
-          <span className="font-medium">{friend.displayName}</span>
+          <span className="font-medium">
+            {friend.displayName || friend.username}
+          </span>
         </div>
       ))}
     </div>

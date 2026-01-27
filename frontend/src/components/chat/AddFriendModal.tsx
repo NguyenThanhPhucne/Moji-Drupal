@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -89,6 +90,9 @@ const AddFriendModal = () => {
       <DialogContent className="sm:max-w-[425px] border-none">
         <DialogHeader>
           <DialogTitle>Kết Bạn</DialogTitle>
+          <DialogDescription className="sr-only">
+            Tìm kiếm và gửi lời mời kết bạn
+          </DialogDescription>
         </DialogHeader>
 
         {!isFound && (

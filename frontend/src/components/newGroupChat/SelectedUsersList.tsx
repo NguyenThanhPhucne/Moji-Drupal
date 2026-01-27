@@ -7,7 +7,10 @@ interface SelectedUsersListProps {
   onRemove: (user: Friend) => void;
 }
 
-const SelectedUsersList = ({ invitedUsers, onRemove }: SelectedUsersListProps) => {
+const SelectedUsersList = ({
+  invitedUsers,
+  onRemove,
+}: SelectedUsersListProps) => {
   if (invitedUsers.length === 0) {
     return;
   }
@@ -20,10 +23,10 @@ const SelectedUsersList = ({ invitedUsers, onRemove }: SelectedUsersListProps) =
         >
           <UserAvatar
             type="chat"
-            name={user.displayName}
+            name={user.displayName || user.username}
             avatarUrl={user.avatarUrl}
           />
-          <span>{user.displayName}</span>
+          <span>{user.displayName || user.username}</span>
 
           <X
             className="size-3 cursor-pointer hover:text-destructive"

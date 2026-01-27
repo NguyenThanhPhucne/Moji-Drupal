@@ -80,6 +80,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     try {
       set({ loading: true });
       const friends = await friendService.getFriendList();
+      console.log("✅ [useFriendStore] Friends loaded:", friends);
+      console.log("🔍 [useFriendStore] First friend details:", friends[0]);
       set({ friends: friends });
     } catch (error) {
       console.error("Lỗi xảy ra khi load friends", error);

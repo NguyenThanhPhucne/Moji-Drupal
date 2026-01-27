@@ -275,15 +275,41 @@ class FriendController extends ControllerBase {
     }
   }
 
+  /**
+   * 6. Kiểm tra quan hệ bạn bè (dành cho Node.js backend)
+   * GET /api/friends/check?userA={id}&userB={id}
+   */
+  public function checkFriendship(Request $request) {
+    // Simple test first
+    $userA = $request->query->get('userA');
+    $userB = $request->query->get('userB');
+
+    if (!$userA || !$userB) {
+      return new JsonResponse(['message' => 'Thiếu userA hoặc userB'], 400);
+    }
+
+    // Test response
+    return new JsonResponse([
+      'isFriend' => false,
+      'userA' => $userA,
+      'userB' => $userB,
+      'note' => 'Test endpoint - Always returns false for now'
+    ]);
+  }
+
   // Helper Auth
   private function getUserFromToken(Request $request) {
     $authHeader = $request->headers->get('Authorization');
     if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) return null;
     $token = substr($authHeader, 7);
-    $key = $_ENV['ACCESS_TOKEN_SECRET'] ?? 'fallback_secret';
+    // Sử dụng cùng key với AuthController
+    $key = \Drupal\Core\Site\Settings::get('chat_api_access_token_secret', 'fallback_secret_key');
     try {
       $decoded = JWT::decode($token, new Key($key, 'HS256'));
       return User::load($decoded->userId);
-    } catch (\Exception $e) { return null; }
+    } catch (\Exception $e) { 
+      \Drupal::logger('chat_api')->error('JWT decode error: ' . $e->getMessage());
+      return null; 
+    }
   }
 }

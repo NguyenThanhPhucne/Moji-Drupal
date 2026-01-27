@@ -37,22 +37,35 @@ export const protectedRoute = async (req, res, next) => {
       );
     }
 
-    // 4. AUTO-SYNC: Nếu chưa có -> TỰ ĐỘNG TẠO MỚI (Khắc phục lỗi 500)
+    // 4. Tìm theo Drupal ID (QUAN TRỌNG cho hybrid architecture)
+    if (!user && decodedUser.userId && Number.isInteger(decodedUser.userId)) {
+      user = await User.findOne({ drupalId: decodedUser.userId }).select(
+        "-hashedPassword",
+      );
+    }
+
+    // 5. AUTO-SYNC: Nếu chưa có -> TỰ ĐỘNG TẠO MỚI (Khắc phục lỗi 500)
     if (!user && decodedUser.username) {
       console.log(
-        `[Sync] User mới từ Drupal: ${decodedUser.username}. Đang tạo...`,
+        `[Sync] User mới từ Drupal: ${decodedUser.username} (ID: ${decodedUser.userId}). Đang tạo...`,
       );
       try {
         user = await User.create({
           username: decodedUser.username,
           email: decodedUser.email || `${decodedUser.username}@drupal.local`,
           displayName: decodedUser.displayName || decodedUser.username,
+          drupalId: decodedUser.userId, // Lưu Drupal ID
           hashedPassword: "linked_with_drupal_jwt",
           avatarUrl: null,
         });
       } catch (err) {
         if (err.code === 11000) {
-          user = await User.findOne({ username: decodedUser.username });
+          user = await User.findOne({
+            $or: [
+              { username: decodedUser.username },
+              { drupalId: decodedUser.userId },
+            ],
+          });
         } else {
           return res.status(500).json({ message: "Lỗi đồng bộ user" });
         }

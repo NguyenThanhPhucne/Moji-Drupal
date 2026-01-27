@@ -15,10 +15,17 @@ api.interceptors.request.use((config) => {
   const { accessToken } = useAuthStore.getState();
 
   // Các API này phải gọi sang Drupal (Cổng 8000)
-  const drupalRoutes = ["/auth", "/users", "/friends"];
+  const drupalRoutes = ["/auth", "/friends"];
+
+  // EXCEPTION: /users/me phải gọi Node.js để lấy MongoDB _id
+  const isUsersMeRoute = config.url?.includes("/users/me");
 
   // Kiểm tra URL
-  if (config.url && drupalRoutes.some((route) => config.url?.includes(route))) {
+  if (
+    config.url &&
+    drupalRoutes.some((route) => config.url?.includes(route)) &&
+    !isUsersMeRoute
+  ) {
     config.baseURL = import.meta.env.VITE_DRUPAL_API || "/api/drupal";
   }
 

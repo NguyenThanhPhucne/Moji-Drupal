@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -27,9 +28,11 @@ const NewGroupChatModal = () => {
 
   const handleGetFriends = async () => {
     await getFriends();
+    console.log("🔍 [NewGroupChatModal] Friends loaded:", friends);
   };
 
   const handleSelectFriend = (friend: Friend) => {
+    console.log("✅ [NewGroupChatModal] Selected friend:", friend);
     setInvitedUsers([...invitedUsers, friend]);
     setSearch("");
   };
@@ -46,24 +49,46 @@ const NewGroupChatModal = () => {
         return;
       }
 
-      await createConversation(
-        "group",
+      const memberIds = invitedUsers.map((u) => u._id);
+      console.log("🔍 [NewGroupChatModal] Creating group with:", {
         groupName,
-        invitedUsers.map((u) => u._id)
-      );
+        invitedUsers,
+        memberIds,
+      });
+
+      await createConversation("group", groupName, memberIds);
 
       setSearch("");
       setInvitedUsers([]);
     } catch (error) {
-      console.error("Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:", error);
+      console.error(
+        "Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:",
+        error,
+      );
     }
   };
 
-  const filteredFriends = friends.filter(
-    (friend) =>
-      friend.displayName.toLowerCase().includes(search.toLowerCase()) &&
-      !invitedUsers.some((u) => u._id === friend._id)
-  );
+  const filteredFriends = friends.filter((friend) => {
+    const searchLower = search.toLowerCase();
+    const matchesSearch =
+      friend.displayName?.toLowerCase().includes(searchLower) ||
+      friend.username?.toLowerCase().includes(searchLower);
+    const notInvited = !invitedUsers.some((u) => u._id === friend._id);
+    return matchesSearch && notInvited;
+  });
+
+  // Debug logs
+  if (search) {
+    console.log("🔍 [NewGroupChatModal] Filter:", {
+      search,
+      totalFriends: friends.length,
+      filteredCount: filteredFriends.length,
+      filteredFriends,
+      invitedUsers,
+      firstFriend: friends[0],
+      firstFriendDisplayName: friends[0]?.displayName,
+    });
+  }
 
   return (
     <Dialog>
@@ -81,18 +106,15 @@ const NewGroupChatModal = () => {
       <DialogContent className="sm:max-w-[425px] border-none">
         <DialogHeader>
           <DialogTitle className="capitalize">tạo nhóm chat mới</DialogTitle>
+          <DialogDescription className="sr-only">
+            Tạo nhóm chat mới với bạn bè
+          </DialogDescription>
         </DialogHeader>
 
-        <form
-          className="space-y-4"
-          onSubmit={handleSubmit}
-        >
+        <form className="space-y-4" onSubmit={handleSubmit}>
           {/* tên nhóm */}
           <div className="space-y-2">
-            <Label
-              htmlFor="groupName"
-              className="text-sm font-semibold"
-            >
+            <Label htmlFor="groupName" className="text-sm font-semibold">
               Tên nhóm
             </Label>
             <Input
@@ -107,16 +129,13 @@ const NewGroupChatModal = () => {
 
           {/* mời thành viên */}
           <div className="space-y-2">
-            <Label
-              htmlFor="invite"
-              className="text-sm font-semibold"
-            >
+            <Label htmlFor="invite" className="text-sm font-semibold">
               Mời thành viên
             </Label>
 
             <Input
               id="invite"
-              placeholder="Tìm theo tên hiển thị..."
+              placeholder="Tìm theo tên hoặc username..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1"

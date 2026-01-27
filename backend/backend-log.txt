@@ -1,0 +1,7 @@
+
+> backend@1.0.0 start
+> node src/server.js
+
+[dotenv@17.2.3] injecting env (8) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+Liên kết CSDL thành công!
+server bắt đầu trên cổng 5001

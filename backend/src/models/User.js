@@ -25,6 +25,11 @@ const userSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    drupalId: {
+      type: Number,
+      sparse: true, // Chỉ có khi sync từ Drupal
+      unique: true,
+    },
     avatarUrl: {
       type: String, // link CDN để hiển thị hình
     },
@@ -42,7 +47,7 @@ const userSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const User = mongoose.model("User", userSchema);

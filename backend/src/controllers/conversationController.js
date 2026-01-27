@@ -1,11 +1,68 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import User from "../models/User.js";
 import { io } from "../socket/index.js";
+
+// 🔥 HYBRID: Helper to get MongoDB user ID from Drupal ID
+const getMongoUserIdFromDrupalId = async (drupalId) => {
+  // If it's already a valid MongoDB ObjectId, return as-is
+  if (/^[0-9a-fA-F]{24}$/.test(drupalId)) {
+    return drupalId;
+  }
+
+  // Convert to integer for Drupal ID lookup
+  const drupalIdInt = parseInt(drupalId);
+
+  try {
+    // 1. Tìm user theo drupalId field (RECOMMENDED)
+    let user = await User.findOne({ drupalId: drupalIdInt });
+
+    if (user) {
+      console.log(`✅ Found user by drupalId: ${drupalId} -> ${user._id}`);
+      return user._id.toString();
+    }
+
+    // 2. Tìm theo pattern cũ (fallback)
+    user = await User.findOne({
+      $or: [
+        { username: `drupal_${drupalId}` },
+        { email: `drupal_${drupalId}@temp.local` },
+      ],
+    });
+
+    if (user) {
+      console.log(`✅ Found user by pattern: ${drupalId} -> ${user._id}`);
+      return user._id.toString();
+    }
+
+    // 3. Nếu không tìm thấy, tạo placeholder (KHÔNG NÊN XẢY RA nếu auth đúng)
+    console.log(`⚠️ Creating placeholder for Drupal ID: ${drupalId}`);
+    user = await User.create({
+      username: `drupal_${drupalId}`,
+      email: `drupal_${drupalId}@temp.local`,
+      displayName: `User ${drupalId}`,
+      drupalId: drupalIdInt,
+      hashedPassword: "linked_with_drupal",
+    });
+
+    return user._id.toString();
+  } catch (error) {
+    console.error("❌ Error mapping Drupal ID to MongoDB:", error);
+    throw new Error(`Cannot map Drupal ID ${drupalId} to MongoDB user`);
+  }
+};
 
 export const createConversation = async (req, res) => {
   try {
     const { type, name, memberIds } = req.body;
     const userId = req.user._id;
+
+    console.log("📝 [createConversation] Request:", {
+      type,
+      name,
+      memberIds,
+      userId,
+    });
 
     if (
       !type ||
@@ -14,6 +71,7 @@ export const createConversation = async (req, res) => {
       !Array.isArray(memberIds) ||
       memberIds.length === 0
     ) {
+      console.log("❌ [createConversation] Validation failed");
       return res
         .status(400)
         .json({ message: "Tên nhóm và danh sách thành viên là bắt buộc" });
@@ -24,15 +82,22 @@ export const createConversation = async (req, res) => {
     if (type === "direct") {
       const participantId = memberIds[0];
 
+      // 🔥 Convert Drupal ID to MongoDB ObjectId
+      const mongoParticipantId =
+        await getMongoUserIdFromDrupalId(participantId);
+      console.log(
+        `🔄 Mapped participant: ${participantId} -> ${mongoParticipantId}`,
+      );
+
       conversation = await Conversation.findOne({
         type: "direct",
-        "participants.userId": { $all: [userId, participantId] },
+        "participants.userId": { $all: [userId, mongoParticipantId] },
       });
 
       if (!conversation) {
         conversation = new Conversation({
           type: "direct",
-          participants: [{ userId }, { userId: participantId }],
+          participants: [{ userId }, { userId: mongoParticipantId }],
           lastMessageAt: new Date(),
         });
 
@@ -41,9 +106,18 @@ export const createConversation = async (req, res) => {
     }
 
     if (type === "group") {
+      // 🔥 Convert all Drupal IDs to MongoDB ObjectIds
+      const mongoMemberIds = await Promise.all(
+        memberIds.map((id) => getMongoUserIdFromDrupalId(id)),
+      );
+      console.log(`🔄 Mapped group members:`, memberIds, "->", mongoMemberIds);
+
       conversation = new Conversation({
         type: "group",
-        participants: [{ userId }, ...memberIds.map((id) => ({ userId: id }))],
+        participants: [
+          { userId },
+          ...mongoMemberIds.map((id) => ({ userId: id })),
+        ],
         group: {
           name,
           createdBy: userId,
@@ -55,7 +129,9 @@ export const createConversation = async (req, res) => {
     }
 
     if (!conversation) {
-      return res.status(400).json({ message: "Conversation type không hợp lệ" });
+      return res
+        .status(400)
+        .json({ message: "Conversation type không hợp lệ" });
     }
 
     await conversation.populate([
@@ -170,7 +246,7 @@ export const getUserConversationsForSocketIO = async (userId) => {
   try {
     const conversations = await Conversation.find(
       { "participants.userId": userId },
-      { _id: 1 }
+      { _id: 1 },
     );
 
     return conversations.map((c) => c._id.toString());
@@ -194,7 +270,9 @@ export const markAsSeen = async (req, res) => {
     const last = conversation.lastMessage;
 
     if (!last) {
-      return res.status(200).json({ message: "Không có tin nhắn để mark as seen" });
+      return res
+        .status(200)
+        .json({ message: "Không có tin nhắn để mark as seen" });
     }
 
     if (last.senderId.toString() === userId) {
@@ -209,7 +287,7 @@ export const markAsSeen = async (req, res) => {
       },
       {
         new: true,
-      }
+      },
     );
 
     io.to(conversationId).emit("read-message", {
