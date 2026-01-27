@@ -1,0 +1,11 @@
+parameters:
+  cors.config:
+    enabled: true
+    allowedHeaders: ['*']
+    allowedMethods: ['*']
+    allowedOrigins:
+      - 'http://localhost:5173'
+      - 'http://localhost:3000'
+    exposedHeaders: ['Authorization']
+    maxAge: 1000
+    supportsCredentials: true

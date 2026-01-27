@@ -1,0 +1,25 @@
+<?php
+
+/**
+ * @file
+ * Chat API module hooks.
+ */
+
+use Dotenv\Dotenv;
+
+/**
+ * Implements hook_init().
+ * Load .env file manually if library exists.
+ */
+// Đường dẫn từ: modules/custom/chat_api ra tới root dự án là 4 cấp
+$dotenv_path = __DIR__ . '/../../../../';
+
+if (file_exists($dotenv_path . '.env') && class_exists('Dotenv\Dotenv')) {
+  try {
+    $dotenv = Dotenv::createImmutable($dotenv_path);
+    $dotenv->safeLoad();
+  }
+  catch (\Exception $e) {
+    // Không làm gì nếu lỗi
+  }
+}

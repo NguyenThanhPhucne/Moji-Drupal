@@ -1,0 +1,102 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for chat_api module.
+ */
+
+use Drupal\field\Entity\FieldStorageConfig;
+use Drupal\field\Entity\FieldConfig;
+
+/**
+ * Implements hook_install().
+ */
+function chat_api_install() {
+  // 1. Thêm field display_name
+  if (!FieldStorageConfig::loadByName('user', 'field_display_name')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_display_name',
+      'entity_type' => 'user',
+      'type' => 'string',
+      'settings' => [
+        'max_length' => 255,
+      ],
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('user', 'user', 'field_display_name')) {
+    FieldConfig::create([
+      'field_name' => 'field_display_name',
+      'entity_type' => 'user',
+      'bundle' => 'user',
+      'label' => 'Display Name',
+      'required' => TRUE,
+      'settings' => [],
+      'description' => 'The display name shown in chat',
+    ])->save();
+  }
+
+  // 2. Thêm field bio
+  if (!FieldStorageConfig::loadByName('user', 'field_bio')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_bio',
+      'entity_type' => 'user',
+      'type' => 'string_long',
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('user', 'user', 'field_bio')) {
+    FieldConfig::create([
+      'field_name' => 'field_bio',
+      'entity_type' => 'user',
+      'bundle' => 'user',
+      'label' => 'Bio',
+      'required' => FALSE,
+      'settings' => [],
+      'description' => 'User biography (max 500 characters)',
+    ])->save();
+  }
+
+  // 3. [MỚI] Thêm field Mongo ID (Để map với Node.js)
+  if (!FieldStorageConfig::loadByName('user', 'field_mongo_id')) {
+    FieldStorageConfig::create([
+      'field_name' => 'field_mongo_id',
+      'entity_type' => 'user',
+      'type' => 'string',
+    ])->save();
+  }
+
+  if (!FieldConfig::loadByName('user', 'user', 'field_mongo_id')) {
+    FieldConfig::create([
+      'field_name' => 'field_mongo_id',
+      'entity_type' => 'user',
+      'bundle' => 'user',
+      'label' => 'MongoDB ID',
+      'required' => FALSE,
+      'settings' => [],
+      'description' => 'Stores the synchronized MongoDB ObjectId.',
+    ])->save();
+  }
+
+  \Drupal::messenger()->addStatus(t('Chat API module installed successfully. User fields added.'));
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function chat_api_uninstall() {
+  // Xóa fields khi uninstall module
+  $field_storage_configs = [
+    'user.field_display_name',
+    'user.field_bio',
+    'user.field_mongo_id', // Thêm dòng này để xóa sạch khi gỡ
+  ];
+
+  foreach ($field_storage_configs as $config_name) {
+    if ($field_storage = FieldStorageConfig::loadByName('user', str_replace('user.', '', $config_name))) {
+      $field_storage->delete();
+    }
+  }
+
+  \Drupal::messenger()->addStatus(t('Chat API module uninstalled. User fields removed.'));
+}

@@ -1,0 +1,88 @@
+# Auth Routes - GIỐNG Y STRUCTURE TRONG authRoute.js
+
+chat_api.signup:
+  path: '/api/auth/signup'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AuthController::signUp'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+chat_api.signin:
+  path: '/api/auth/signin'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AuthController::signIn'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+chat_api.signout:
+  path: '/api/auth/signout'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AuthController::signOut'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+chat_api.refresh:
+  path: '/api/auth/refresh'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AuthController::refreshToken'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+chat_api.users.me:
+  path: '/api/users/me'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\UserController::authMe'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+chat_api.users.search:
+  path: '/api/users/search'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\UserController::searchUserByUsername'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+
+chat_api.users.upload:
+  path: '/api/users/uploadAvatar'
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\UserController::uploadAvatar'
+  methods: [POST]
+  requirements:
+    _access: 'TRUE'
+
+# FRIEND ROUTES
+chat_api.friends.send:
+  path: '/api/friends/requests'
+  defaults: { _controller: '\Drupal\chat_api\Controller\FriendController::sendRequest' }
+  methods: [POST]
+  requirements: { _access: 'TRUE' }
+
+chat_api.friends.get_all:
+  path: '/api/friends'
+  defaults: { _controller: '\Drupal\chat_api\Controller\FriendController::getAllFriends' }
+  methods: [GET]
+  requirements: { _access: 'TRUE' }
+
+chat_api.friends.get_requests:
+  path: '/api/friends/requests'
+  defaults: { _controller: '\Drupal\chat_api\Controller\FriendController::getRequests' }
+  methods: [GET]
+  requirements: { _access: 'TRUE' }
+
+chat_api.friends.accept:
+  path: '/api/friends/requests/{requestId}/accept'
+  defaults: { _controller: '\Drupal\chat_api\Controller\FriendController::acceptRequest' }
+  methods: [POST]
+  requirements: { _access: 'TRUE' }
+
+chat_api.friends.decline:
+  path: '/api/friends/requests/{requestId}/decline'
+  defaults: { _controller: '\Drupal\chat_api\Controller\FriendController::declineRequest' }
+  methods: [POST]
+  requirements: { _access: 'TRUE' }

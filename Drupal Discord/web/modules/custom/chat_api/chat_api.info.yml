@@ -1,0 +1,10 @@
+name: Chat API
+type: module
+description: 'REST API for Chat Application - User Management, Authentication, Friends'
+core_version_requirement: ^10 || ^11
+package: Custom
+
+dependencies:
+  - drupal:rest
+  - drupal:user
+  - drupal:jsonapi
