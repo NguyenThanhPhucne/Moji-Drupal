@@ -45,3 +45,11 @@ user-detail:
   dependencies:
     - core/drupal
     - core/jquery
+
+ban-confirm:
+  version: 1.0
+  css:
+    theme:
+      css/ban-confirm.css: {}
+  dependencies:
+    - core/drupal

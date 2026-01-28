@@ -1,0 +1,76 @@
+{#
+/**
+ * @file
+ * Custom template for user ban/unban confirmation.
+ *
+ * Available variables:
+ * - form: The confirmation form
+ */
+#}
+
+{# Load Font Awesome for icons #}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="chat-admin-ban-confirm" data-action="{{ form['#action'] }}">
+  <div class="ban-confirm-container">
+    
+    {# Header with icon based on action #}
+    <div class="confirm-header">
+      {% if form['#action'] == 'ban' %}
+        <div class="confirm-icon danger">
+          <i class="fas fa-ban"></i>
+        </div>
+        <h1>{{ 'Block User Account'|t }}</h1>
+        <p class="confirm-subtitle">{{ 'Confirm user account suspension'|t }}</p>
+      {% else %}
+        <div class="confirm-icon success">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <h1>{{ 'Unblock User Account'|t }}</h1>
+        <p class="confirm-subtitle">{{ 'Restore user account access'|t }}</p>
+      {% endif %}
+    </div>
+
+    {# User Information Card #}
+    {% if form['#user_info'] %}
+      <div class="user-info-card">
+        <div class="user-avatar-large">
+          {{ form['#user_info'].avatar_letter }}
+        </div>
+        <div class="user-details-confirm">
+          <h2>{{ form['#user_info'].name }}</h2>
+          <p class="user-email"><i class="fas fa-envelope"></i> {{ form['#user_info'].email }}</p>
+          
+          <div class="user-stats-inline">
+            <span class="stat-inline">
+              <i class="fas fa-users"></i>
+              <strong>{{ form['#user_info'].friends_count }}</strong> {{ 'friends'|t }}
+            </span>
+            <span class="stat-inline">
+              <i class="fas fa-clock"></i>
+              <strong>{{ form['#user_info'].pending_requests }}</strong> {{ 'pending'|t }}
+            </span>
+            <span class="stat-inline">
+              <i class="fas fa-calendar"></i>
+              <strong>{{ form['#user_info'].days_registered }}</strong> {{ 'days'|t }}
+            </span>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {# Confirmation Message #}
+    <div class="confirm-message">
+      <div class="description">
+        {{ form.description }}
+      </div>
+    </div>
+
+    {# Action Buttons #}
+    <div class="confirm-actions">
+      {{ form.actions }}
+    </div>
+
+    {# Hidden form elements - REQUIRED for Drupal forms #}
+    {{ form|without('description', 'actions', '#user_info', '#action') }}
+

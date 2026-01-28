@@ -24,6 +24,9 @@
             $.ajax({
               url: "/admin/chat/api/user/block",
               method: "POST",
+              headers: {
+                "X-CSRF-Token": drupalSettings.csrf_token || "",
+              },
               contentType: "application/json",
               data: JSON.stringify({ uid: userId }),
               success: function (response) {
@@ -144,6 +147,9 @@
         $.ajax({
           url: "/admin/chat/api/user/unblock",
           method: "POST",
+          headers: {
+            "X-CSRF-Token": drupalSettings.csrf_token || "",
+          },
           contentType: "application/json",
           data: JSON.stringify({ uid: userId }),
           success: function (response) {

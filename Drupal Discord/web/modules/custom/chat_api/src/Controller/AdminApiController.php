@@ -41,6 +41,23 @@ class AdminApiController extends ControllerBase {
    * Block a user via AJAX.
    */
   public function blockUser(Request $request) {
+    // Validate CSRF token
+    $token = $request->headers->get('X-CSRF-Token');
+    if (!\Drupal::csrfToken()->validate($token, 'rest')) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Invalid CSRF token'),
+      ], 403);
+    }
+
+    // Check permissions
+    if (!$this->currentUser()->hasPermission('administer users')) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Access denied'),
+      ], 403);
+    }
+    
     $uid = $request->request->get('uid');
     
     if (!$uid || $uid <= 1) {
@@ -86,6 +103,23 @@ class AdminApiController extends ControllerBase {
    * Unblock a user via AJAX.
    */
   public function unblockUser(Request $request) {
+    // Validate CSRF token
+    $token = $request->headers->get('X-CSRF-Token');
+    if (!\Drupal::csrfToken()->validate($token, 'rest')) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Invalid CSRF token'),
+      ], 403);
+    }
+
+    // Check permissions
+    if (!$this->currentUser()->hasPermission('administer users')) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Access denied'),
+      ], 403);
+    }
+    
     $uid = $request->request->get('uid');
     
     if (!$uid || $uid <= 1) {

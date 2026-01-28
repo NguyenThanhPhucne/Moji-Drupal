@@ -147,6 +147,9 @@ class AdminController extends ControllerBase {
       ],
       '#attached' => [
         'library' => ['chat_api/admin', 'chat_api/admin-tables'],
+        'drupalSettings' => [
+          'csrf_token' => \Drupal::csrfToken()->get('rest'),
+        ],
       ],
     ];
     
@@ -446,91 +449,6 @@ class AdminController extends ControllerBase {
     });
 
     return array_slice($activities, 0, $limit);
-  }
-
-  /**
-   * View user details.
-   * 
-   * TODO: Show user profile, friends, messages count, activity
-   */
-  public function userView($uid) {
-    // TODO: Implement user detail view
-    $user = \Drupal\user\Entity\User::load($uid);
-    
-    if (!$user) {
-      $this->messenger()->addError($this->t('User not found.'));
-      return $this->redirect('chat_api.admin_users');
-    }
-    
-    $build = [
-      '#theme' => 'chat_admin_user_view',
-      '#user' => $user,
-      '#attached' => [
-        'library' => ['chat_api/admin'],
-      ],
-    ];
-    
-    return $build;
-  }
-
-  /**
-   * Ban user.
-   * 
-   * TODO: Add confirmation dialog, reason logging
-   */
-  public function banUser($uid) {
-    // TODO: Implement ban user with logging
-    $user = \Drupal\user\Entity\User::load($uid);
-    
-    if ($user && $user->isActive()) {
-      $user->block();
-      $user->save();
-      
-      $this->messenger()->addStatus(
-        $this->t('User @name has been banned.', ['@name' => $user->getAccountName()])
-      );
-      
-      // TODO: Log this action
-      \Drupal::logger('chat_api')->info(
-        'User @uid banned by admin @admin',
-        [
-          '@uid' => $uid,
-          '@admin' => $this->currentUser()->id(),
-        ]
-      );
-    }
-    
-    return new RedirectResponse(Url::fromRoute('chat_api.admin_users')->toString());
-  }
-
-  /**
-   * Unban user.
-   * 
-   * TODO: Add logging
-   */
-  public function unbanUser($uid) {
-    // TODO: Implement unban user with logging
-    $user = \Drupal\user\Entity\User::load($uid);
-    
-    if ($user && $user->isBlocked()) {
-      $user->activate();
-      $user->save();
-      
-      $this->messenger()->addStatus(
-        $this->t('User @name has been unbanned.', ['@name' => $user->getAccountName()])
-      );
-      
-      // TODO: Log this action
-      \Drupal::logger('chat_api')->info(
-        'User @uid unbanned by admin @admin',
-        [
-          '@uid' => $uid,
-          '@admin' => $this->currentUser()->id(),
-        ]
-      );
-    }
-    
-    return new RedirectResponse(Url::fromRoute('chat_api.admin_users')->toString());
   }
 
   /**

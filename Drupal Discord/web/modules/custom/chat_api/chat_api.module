@@ -55,6 +55,10 @@ function chat_api_theme($existing, $type, $theme, $path) {
       ],
       'template' => 'chat-admin-user-detail',
     ],
+    'chat_admin_user_ban' => [
+      'render element' => 'form',
+      'template' => 'chat-admin-user-ban-confirm',
+    ],
     'chat_admin_user_view' => [
       'variables' => [
         'user' => NULL,

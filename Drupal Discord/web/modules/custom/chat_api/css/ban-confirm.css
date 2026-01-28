@@ -1,0 +1,291 @@
+/* =================================================================
+   BAN/UNBAN CONFIRMATION PAGE - PROFESSIONAL STYLES
+   ================================================================= */
+
+.chat-admin-ban-confirm {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.ban-confirm-container {
+  max-width: 600px;
+  width: 100%;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 0;
+  overflow: hidden;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =================================================================
+   HEADER
+   ================================================================= */
+.confirm-header {
+  text-align: center;
+  padding: 40px 40px 30px;
+  background: linear-gradient(to bottom, #f8f9fa, white);
+  border-bottom: 1px solid #e9ecef;
+}
+
+.confirm-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  font-size: 36px;
+  color: white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.confirm-icon.danger {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.confirm-icon.success {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.confirm-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.confirm-subtitle {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0;
+}
+
+/* =================================================================
+   USER INFO CARD
+   ================================================================= */
+.user-info-card {
+  padding: 30px 40px;
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  background: white;
+}
+
+.user-avatar-large {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.user-details-confirm h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.user-email {
+  font-size: 14px;
+  color: #6c757d;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-stats-inline {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.stat-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #495057;
+  font-weight: 500;
+}
+
+.stat-inline i {
+  color: #667eea;
+  font-size: 14px;
+}
+
+/* =================================================================
+   CONFIRMATION MESSAGE
+   ================================================================= */
+.confirm-message {
+  padding: 30px 40px;
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.confirm-message .description {
+  font-size: 15px;
+  color: #495057;
+  line-height: 1.6;
+  margin: 0;
+  text-align: center;
+}
+
+/* =================================================================
+   ACTION BUTTONS
+   ================================================================= */
+.confirm-actions {
+  padding: 30px 40px;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.confirm-actions .button,
+.confirm-actions input[type="submit"],
+.confirm-actions a.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 32px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-width: 140px;
+}
+
+/* Primary action button (Confirm) */
+.confirm-actions input[type="submit"],
+.confirm-actions .form-submit {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.confirm-actions input[type="submit"]:hover,
+.confirm-actions .form-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+/* Cancel button */
+.confirm-actions a.button,
+.confirm-actions .button--cancel {
+  background: white;
+  color: #6c757d;
+  border: 2px solid #dee2e6;
+}
+
+.confirm-actions a.button:hover,
+.confirm-actions .button--cancel:hover {
+  background: #f8f9fa;
+  border-color: #6c757d;
+  color: #495057;
+  transform: translateY(-2px);
+}
+
+/* For danger action (Ban) */
+.chat-admin-ban-confirm[data-action="ban"]
+  .confirm-actions
+  input[type="submit"] {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+}
+
+.chat-admin-ban-confirm[data-action="ban"]
+  .confirm-actions
+  input[type="submit"]:hover {
+  box-shadow: 0 6px 16px rgba(245, 87, 108, 0.5);
+}
+
+/* For success action (Unban) */
+.chat-admin-ban-confirm[data-action="unban"]
+  .confirm-actions
+  input[type="submit"] {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
+}
+
+.chat-admin-ban-confirm[data-action="unban"]
+  .confirm-actions
+  input[type="submit"]:hover {
+  box-shadow: 0 6px 16px rgba(56, 239, 125, 0.5);
+}
+
+/* =================================================================
+   FORM ELEMENTS STYLING
+   ================================================================= */
+.chat-admin-ban-confirm .form-item,
+.chat-admin-ban-confirm .form-actions {
+  margin: 0;
+}
+
+.chat-admin-ban-confirm .js-form-item {
+  margin-bottom: 0;
+}
+
+/* =================================================================
+   RESPONSIVE DESIGN
+   ================================================================= */
+@media (max-width: 768px) {
+  .chat-admin-ban-confirm {
+    padding: 20px;
+  }
+
+  .ban-confirm-container {
+    border-radius: 12px;
+  }
+
+  .confirm-header,
+  .user-info-card,
+  .confirm-message,
+  .confirm-actions {
+    padding: 24px;
+  }
+
+  .user-info-card {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .confirm-actions {
+    flex-direction: column;
+  }
+
+  .confirm-actions .button,
+  .confirm-actions input[type="submit"],
+  .confirm-actions a.button {
+    width: 100%;
+  }
+}

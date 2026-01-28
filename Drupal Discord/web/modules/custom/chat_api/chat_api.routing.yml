@@ -129,33 +129,6 @@ chat_api.admin_users:
   requirements:
     _permission: "administer chat"
 
-chat_api.admin_user_view:
-  path: "/admin/chat/users/{uid}"
-  defaults:
-    _controller: '\Drupal\chat_api\Controller\AdminController::userView'
-    _title: "View User Details"
-  requirements:
-    _permission: "administer chat"
-    uid: \d+
-
-chat_api.admin_user_ban:
-  path: "/admin/chat/users/{uid}/ban"
-  defaults:
-    _controller: '\Drupal\chat_api\Controller\AdminController::banUser'
-  requirements:
-    _permission: "administer chat"
-    uid: \d+
-  methods: [POST]
-
-chat_api.admin_user_unban:
-  path: "/admin/chat/users/{uid}/unban"
-  defaults:
-    _controller: '\Drupal\chat_api\Controller\AdminController::unbanUser'
-  requirements:
-    _permission: "administer chat"
-    uid: \d+
-  methods: [POST]
-
 chat_api.admin_user_detail:
   path: "/admin/chat/users/{uid}"
   defaults:
@@ -163,6 +136,26 @@ chat_api.admin_user_detail:
     _title: "User Details"
   requirements:
     _permission: "administer users"
+    uid: \d+
+
+chat_api.admin_user_ban:
+  path: "/admin/chat/users/{uid}/ban"
+  defaults:
+    _form: '\Drupal\chat_api\Form\UserBanForm'
+    _title: "Block User"
+    action: "ban"
+  requirements:
+    _permission: "administer chat"
+    uid: \d+
+
+chat_api.admin_user_unban:
+  path: "/admin/chat/users/{uid}/unban"
+  defaults:
+    _form: '\Drupal\chat_api\Form\UserBanForm'
+    _title: "Unblock User"
+    action: "unban"
+  requirements:
+    _permission: "administer chat"
     uid: \d+
 
 # Conversation management
