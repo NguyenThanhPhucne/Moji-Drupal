@@ -3,7 +3,17 @@ import User from "../models/User.js";
 
 export const protectedRoute = async (req, res, next) => {
   // Skip auth for admin routes (Drupal has its own auth)
-  if (req.path.includes("/admin/conversations")) {
+  const fullPath = req.originalUrl || req.path;
+  const pathToCheck = `${req.baseUrl || ""}${req.path}`;
+
+  console.log(
+    `📍 [protectedRoute] fullPath: ${fullPath}, path: ${req.path}, baseUrl: ${req.baseUrl}`,
+  );
+
+  if (
+    fullPath.includes("/admin/conversations") ||
+    req.path.includes("/admin/conversations")
+  ) {
     console.log("✅ [protectedRoute] Skipping auth for admin route");
     return next();
   }

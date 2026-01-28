@@ -458,34 +458,58 @@ class AdminController extends ControllerBase {
     // Fetch real-time data from MongoDB via Node.js API
     $node_api_url = 'http://localhost:5001/api/conversations/admin/conversations';
     
+    \Drupal::logger('chat_api')->info('📊 [AdminController] Attempting to fetch from: @url', [
+      '@url' => $node_api_url,
+    ]);
+    
     try {
-      $response = \Drupal::httpClient()->get($node_api_url);
-      $data = json_decode($response->getBody(), TRUE);
+      $response = \Drupal::httpClient()->get($node_api_url, [
+        'timeout' => 5,
+      ]);
+      
+      $statusCode = $response->getStatusCode();
+      $body = $response->getBody()->getContents();
+      $data = json_decode($body, TRUE);
+      
+      \Drupal::logger('chat_api')->info('📊 [AdminController] API Response: @status | Data: @data', [
+        '@status' => $statusCode,
+        '@data' => print_r($data, TRUE),
+      ]);
       
       if (!$data['success']) {
         throw new \Exception('Failed to fetch conversations from MongoDB');
       }
       
       $conversations = $data['data'] ?? [];
-      $stats = $data['stats'] ?? [];
+      $api_stats = $data['stats'] ?? [];
       
-      \Drupal::logger('chat_api')->notice('Fetched @count conversations from MongoDB', [
+      // Convert API stats (camelCase) to template format (snake_case)
+      $stats = [
+        'total_conversations' => $api_stats['totalConversations'] ?? 0,
+        'private_conversations' => $api_stats['privateConversations'] ?? 0,
+        'group_conversations' => $api_stats['groupConversations'] ?? 0,
+        'active_today' => $api_stats['activeTodayCount'] ?? 0,
+        'total_messages' => $api_stats['totalMessages'] ?? 0,
+        'avg_participants' => $api_stats['avgParticipants'] ?? 0,
+      ];
+      
+      \Drupal::logger('chat_api')->notice('✅ Fetched @count conversations from MongoDB', [
         '@count' => count($conversations),
       ]);
     } catch (\Exception $e) {
-      \Drupal::logger('chat_api')->error('Failed to fetch conversations: @error', [
+      \Drupal::logger('chat_api')->error('❌ Failed to fetch conversations: @error', [
         '@error' => $e->getMessage(),
       ]);
       
       // Fallback to empty data if API fails
       $conversations = [];
       $stats = [
-        'totalConversations' => 0,
-        'privateConversations' => 0,
-        'groupConversations' => 0,
-        'activeTodayCount' => 0,
-        'totalMessages' => 0,
-        'avgParticipants' => 0,
+        'total_conversations' => 0,
+        'private_conversations' => 0,
+        'group_conversations' => 0,
+        'active_today' => 0,
+        'total_messages' => 0,
+        'avg_participants' => 0,
       ];
     }
     
@@ -500,6 +524,11 @@ class AdminController extends ControllerBase {
             'apiUrl' => $node_api_url,
             'refreshInterval' => 5000, // 5 seconds for real-time feel
             'wsUrl' => 'ws://localhost:5001',
+            'debug' => [
+              'initialConversationsCount' => count($conversations),
+              'initialParticipantsInFirstConv' => count($conversations[0]['participants'] ?? []) ?? 0,
+              'sampleParticipants' => $conversations[0]['participants'] ?? [],
+            ],
           ],
         ],
       ],

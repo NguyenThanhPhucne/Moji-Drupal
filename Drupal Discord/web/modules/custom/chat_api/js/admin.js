@@ -1,130 +1,130 @@
 /**
  * @file
- * Admin JavaScript for Chat Administration UI
+ * Admin JavaScript for Chat Administration UI - Vanilla JS (No jQuery .once())
  */
 
-(function ($, Drupal) {
+(function (Drupal) {
   "use strict";
 
   Drupal.behaviors.chatAdmin = {
-    attach: function (context, settings) {
+    attach: function (context) {
       // Ban user button handler
-      $("#banUserBtn, .action-ban", context)
-        .once("chat-admin-ban")
-        .on("click", function (e) {
-          e.preventDefault();
-          const userId = $(this).data("user-id");
-
-          if (confirm(Drupal.t("Are you sure you want to ban this user?"))) {
-            // TODO: Use AJAX instead of direct redirect
-            window.location.href = `/admin/chat/users/${userId}/ban`;
+      Array.from(context.querySelectorAll("#banUserBtn, .action-ban")).forEach(
+        function (btn) {
+          if (!btn.hasAttribute("data-chat-ban-processed")) {
+            btn.setAttribute("data-chat-ban-processed", "true");
+            btn.addEventListener("click", function (e) {
+              e.preventDefault();
+              const userId = btn.getAttribute("data-user-id");
+              if (confirm("Are you sure you want to ban this user?")) {
+                window.location.href = "/admin/chat/users/" + userId + "/ban";
+              }
+            });
           }
-        });
+        },
+      );
 
       // Unban user button handler
-      $("#unbanUserBtn, .action-unban", context)
-        .once("chat-admin-unban")
-        .on("click", function (e) {
-          e.preventDefault();
-          const userId = $(this).data("user-id");
-
-          if (confirm(Drupal.t("Are you sure you want to unban this user?"))) {
-            // TODO: Use AJAX instead of direct redirect
-            window.location.href = `/admin/chat/users/${userId}/unban`;
-          }
-        });
+      Array.from(
+        context.querySelectorAll("#unbanUserBtn, .action-unban"),
+      ).forEach(function (btn) {
+        if (!btn.hasAttribute("data-chat-unban-processed")) {
+          btn.setAttribute("data-chat-unban-processed", "true");
+          btn.addEventListener("click", function (e) {
+            e.preventDefault();
+            const userId = btn.getAttribute("data-user-id");
+            if (confirm("Are you sure you want to unban this user?")) {
+              window.location.href = "/admin/chat/users/" + userId + "/unban";
+            }
+          });
+        }
+      });
 
       // Delete conversation button handler
-      $("#deleteConversationBtn, .btn-delete", context)
-        .once("chat-admin-delete-conv")
-        .on("click", function (e) {
-          e.preventDefault();
-          const conversationId = $(this).data("conversation-id");
-
-          if (
-            confirm(
-              Drupal.t(
+      Array.from(
+        context.querySelectorAll("#deleteConversationBtn, .btn-delete"),
+      ).forEach(function (btn) {
+        if (!btn.hasAttribute("data-chat-delete-processed")) {
+          btn.setAttribute("data-chat-delete-processed", "true");
+          btn.addEventListener("click", function (e) {
+            e.preventDefault();
+            const conversationId = btn.getAttribute("data-conversation-id");
+            if (
+              confirm(
                 "Are you sure you want to delete this conversation? This action cannot be undone.",
-              ),
-            )
-          ) {
-            // TODO: Implement conversation deletion via AJAX
-            console.log("Delete conversation:", conversationId);
-            alert("TODO: Implement conversation deletion");
-          }
-        });
+              )
+            ) {
+              console.log("Delete conversation:", conversationId);
+              alert("TODO: Implement conversation deletion");
+            }
+          });
+        }
+      });
 
       // User search filter
-      $("#userSearch", context)
-        .once("chat-admin-search")
-        .on("input", function () {
-          const searchTerm = $(this).val().toLowerCase();
-          $(".users-table tbody tr").each(function () {
-            const userName = $(this).find(".user-name").text().toLowerCase();
-            const userEmail = $(this)
-              .find("td:nth-child(3)")
-              .text()
-              .toLowerCase();
+      var userSearchInput = context.querySelector("#userSearch");
+      if (
+        userSearchInput &&
+        !userSearchInput.hasAttribute("data-chat-search-processed")
+      ) {
+        userSearchInput.setAttribute("data-chat-search-processed", "true");
+        userSearchInput.addEventListener("input", function () {
+          const searchTerm = this.value.toLowerCase();
+          Array.from(context.querySelectorAll(".users-table tbody tr")).forEach(
+            function (row) {
+              const userName = row.querySelector(".user-name")
+                ? row.querySelector(".user-name").textContent.toLowerCase()
+                : "";
+              const userEmail = row.cells[2]
+                ? row.cells[2].textContent.toLowerCase()
+                : "";
 
-            if (
-              userName.includes(searchTerm) ||
-              userEmail.includes(searchTerm)
+              if (
+                userName.includes(searchTerm) ||
+                userEmail.includes(searchTerm)
+              ) {
+                row.style.display = "";
+              } else {
+                row.style.display = "none";
+              }
+            },
+          );
+        });
+      }
+
+      // Status filter
+      var statusFilter = context.querySelector("#statusFilter");
+      if (
+        statusFilter &&
+        !statusFilter.hasAttribute("data-chat-status-filter-processed")
+      ) {
+        statusFilter.setAttribute("data-chat-status-filter-processed", "true");
+        statusFilter.addEventListener("change", function () {
+          const status = this.value;
+          const rows = context.querySelectorAll(".users-table tbody tr");
+
+          rows.forEach(function (row) {
+            if (status === "") {
+              row.style.display = "";
+            } else if (
+              status === "active" &&
+              row.classList.contains("user-active")
             ) {
-              $(this).show();
-            } else {
-              $(this).hide();
+              row.style.display = "";
+            } else if (
+              status === "blocked" &&
+              row.classList.contains("user-blocked")
+            ) {
+              row.style.display = "";
+            } else if (status !== "") {
+              row.style.display = "none";
             }
           });
         });
-
-      // Status filter
-      $("#statusFilter", context)
-        .once("chat-admin-status-filter")
-        .on("change", function () {
-          const status = $(this).val();
-
-          if (status === "") {
-            $(".users-table tbody tr").show();
-          } else if (status === "active") {
-            $(".users-table tbody tr.user-active").show();
-            $(".users-table tbody tr.user-blocked").hide();
-          } else if (status === "blocked") {
-            $(".users-table tbody tr.user-blocked").show();
-            $(".users-table tbody tr.user-active").hide();
-          }
-        });
-
-      // TODO: Add real-time statistics updates
-      // TODO: Add AJAX handlers for all actions
-      // TODO: Add form validation
-      // TODO: Add success/error message handling
+      }
     },
   };
 
-  /**
-   * TODO: Fetch statistics from admin API
-   */
+  // Helper namespace
   Drupal.chatAdmin = Drupal.chatAdmin || {};
-
-  Drupal.chatAdmin.fetchStats = function () {
-    $.ajax({
-      url: "/admin/chat/api/stats",
-      method: "GET",
-      success: function (data) {
-        console.log("Statistics:", data);
-        // TODO: Update dashboard with real-time data
-      },
-      error: function (error) {
-        console.error("Error fetching stats:", error);
-      },
-    });
-  };
-
-  /**
-   * TODO: Fetch conversations from Node.js backend
-   */
-  Drupal.chatAdmin.fetchConversations = function () {
-    // TODO: Implement fetching conversations from Node.js
-    console.log("TODO: Fetch conversations from Node.js backend");
-  };
-})(jQuery, Drupal);
+})(Drupal);

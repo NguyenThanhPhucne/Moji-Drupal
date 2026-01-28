@@ -12,10 +12,27 @@
   Drupal.behaviors.chatAdminLiveUpdates = {
     attach: function (context, settings) {
       if (!settings.chatAdminLive) {
+        console.warn(
+          "[ChatAdminLiveUpdates] ⚠️ chatAdminLive settings not found",
+        );
         return;
       }
 
       const config = settings.chatAdminLive;
+      console.log("[ChatAdminLiveUpdates] ✅ Initialized with config:", config);
+
+      // Log debug info from AdminController
+      if (config.debug) {
+        console.log(
+          "[ChatAdminLiveUpdates] 📊 Initial data from AdminController:",
+          {
+            conversationsCount: config.debug.initialConversationsCount,
+            participantsInFirst: config.debug.initialParticipantsInFirstConv,
+            sampleParticipants: config.debug.sampleParticipants,
+          },
+        );
+      }
+
       let updateTimeout;
       let isUpdating = false;
 
@@ -26,22 +43,36 @@
         if (isUpdating) return;
         isUpdating = true;
 
+        console.log("[ChatAdminLiveUpdates] 📡 Fetching from:", config.apiUrl);
         fetch(config.apiUrl)
           .then((response) => {
+            console.log(
+              "[ChatAdminLiveUpdates] 📡 Response status:",
+              response.status,
+            );
             if (!response.ok) {
               throw new Error(`API Error: ${response.status}`);
             }
             return response.json();
           })
           .then((data) => {
+            console.log("[ChatAdminLiveUpdates] 📊 Data received:", data);
             if (data.success) {
+              console.log(
+                "[ChatAdminLiveUpdates] ✅ Updating table with",
+                data.data.length,
+                "conversations",
+              );
               updateConversationTable(data.data, data.stats);
               updateStats(data.stats);
               showUpdateNotification("✅ Data updated", "success");
             }
           })
           .catch((error) => {
-            console.error("[ChatAdminLiveUpdates] Error fetching data:", error);
+            console.error(
+              "[ChatAdminLiveUpdates] ❌ Error fetching data:",
+              error,
+            );
             showUpdateNotification("❌ Failed to update data", "error");
           })
           .finally(() => {
@@ -125,6 +156,15 @@
         const participants = (conversation.participants || [])
           .map((p) => p.displayName)
           .join(", ");
+
+        console.log(
+          `[createConversationRow] Conversation ${conversation._id}:`,
+          {
+            participantCount: conversation.participantCount,
+            participantsArray: conversation.participants,
+            participantsCount: (conversation.participants || []).length,
+          },
+        );
 
         row.innerHTML = `
           <td class="conversation-id"><strong>#${conversation._id.substring(0, 8)}</strong></td>

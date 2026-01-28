@@ -44,6 +44,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use("/api/auth", authRoute);
 
 // admin routes (no auth required - Drupal has its own auth)
+// ⚠️ MUST be BEFORE protectedRoute middleware
 app.get("/api/conversations/admin/conversations", getAdminConversations);
 
 // private routes (auth required)
@@ -51,6 +52,7 @@ app.use(protectedRoute);
 app.use("/api/users", userRoute);
 app.use("/api/friends", friendRoute);
 app.use("/api/messages", messageRoute);
+// ⚠️ Conversation routes after protectedRoute - but admin route already handled above
 app.use("/api/conversations", conversationRoute);
 
 connectDB().then(() => {

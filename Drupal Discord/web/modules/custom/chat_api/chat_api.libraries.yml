@@ -1,7 +1,7 @@
 # CSS/JS libraries for Chat Admin UI
 
 admin:
-  version: 1.0
+  version: 2.0
   css:
     theme:
       css/admin.css: {}
@@ -9,8 +9,6 @@ admin:
     js/admin.js: {}
   dependencies:
     - core/drupal
-    - core/jquery
-    - core/drupal.ajax
 
 charts:
   version: 1.0
@@ -23,7 +21,7 @@ charts:
   # For now, we'll use CDN in template
 
 admin-tables:
-  version: 1.0
+  version: 2.0
   css:
     theme:
       css/tables.css: {}
@@ -33,7 +31,6 @@ admin-tables:
     js/admin-users.js: {}
   dependencies:
     - core/drupal
-    - core/jquery
 
 live-updates:
   version: 1.0
@@ -44,7 +41,7 @@ live-updates:
     - core/drupal.ajax
 
 user-detail:
-  version: 1.0
+  version: 2.0
   css:
     theme:
       css/user-detail.css: {}
@@ -52,7 +49,6 @@ user-detail:
     js/admin-users.js: {}
   dependencies:
     - core/drupal
-    - core/jquery
 
 ban-confirm:
   version: 1.0
