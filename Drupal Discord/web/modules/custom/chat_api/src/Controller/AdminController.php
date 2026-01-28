@@ -387,11 +387,14 @@ class AdminController extends ControllerBase {
     // Get recent friendships
     $friends_query = $this->database->select('chat_friend', 'cf')
       ->fields('cf')
-      ->condition($this->database->orConditionGroup()
-        ->condition('cf.user_a', $uid)
-        ->condition('cf.user_b', $uid))
       ->range(0, 5)
       ->orderBy('cf.created', 'DESC');
+    
+    $or_group = $friends_query->orConditionGroup()
+      ->condition('cf.user_a', $uid)
+      ->condition('cf.user_b', $uid);
+    $friends_query->condition($or_group);
+    
     $friends_result = $friends_query->execute();
 
     foreach ($friends_result as $row) {
@@ -410,11 +413,14 @@ class AdminController extends ControllerBase {
     // Get recent friend requests
     $requests_query = $this->database->select('chat_friend_request', 'cfr')
       ->fields('cfr')
-      ->condition($this->database->orConditionGroup()
-        ->condition('cfr.from_user', $uid)
-        ->condition('cfr.to_user', $uid))
       ->range(0, 5)
       ->orderBy('cfr.created', 'DESC');
+    
+    $or_group = $requests_query->orConditionGroup()
+      ->condition('cfr.from_user', $uid)
+      ->condition('cfr.to_user', $uid);
+    $requests_query->condition($or_group);
+    
     $requests_result = $requests_query->execute();
 
     foreach ($requests_result as $row) {

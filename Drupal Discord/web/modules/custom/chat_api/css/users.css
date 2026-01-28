@@ -401,14 +401,33 @@
   color: white;
 }
 
-.btn-block:hover {
+.btn-block:hover,
+.btn-danger:hover {
   background: #f44336;
   color: white;
 }
 
-.btn-unblock:hover {
+.btn-unblock:hover,
+.btn-success:hover {
   background: #4caf50;
   color: white;
+}
+
+/* Action button base styles */
+.action-block,
+.action-unblock {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-danger {
+  color: #f44336;
+  border-color: #f44336;
+}
+
+.btn-success {
+  color: #4caf50;
+  border-color: #4caf50;
 }
 
 /* Text Utilities */
