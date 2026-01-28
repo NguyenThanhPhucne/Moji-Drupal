@@ -9,13 +9,33 @@ import { MessageCircleMore, Users } from "lucide-react";
 import { Card } from "../ui/card";
 import UserAvatar from "../chat/UserAvatar";
 import { useChatStore } from "@/stores/useChatStore";
+import { toast } from "sonner";
+import { useState } from "react";
 
 const FriendListModal = () => {
   const { friends } = useFriendStore();
-  const { createConversation } = useChatStore();
+  const { createConversation, loading } = useChatStore();
+  const [creatingFor, setCreatingFor] = useState<string | null>(null);
 
   const handleAddConversation = async (friendId: string) => {
-    await createConversation("direct", "", [friendId]);
+    try {
+      setCreatingFor(friendId);
+      const success = await createConversation("direct", "", [friendId]);
+
+      if (success) {
+        const friend = friends.find((f) => f._id === friendId);
+        toast.success(
+          `Tạo cuộc trò chuyện với ${friend?.displayName} thành công! 💬`,
+        );
+      } else {
+        toast.error("Không thể tạo cuộc trò chuyện. Vui lòng thử lại!");
+      }
+    } catch (error) {
+      console.error("❌ [FriendListModal] Error:", error);
+      toast.error("Có lỗi xảy ra. Vui lòng thử lại!");
+    } finally {
+      setCreatingFor(null);
+    }
   };
 
   return (
@@ -42,6 +62,10 @@ const FriendListModal = () => {
               onClick={() => handleAddConversation(friend._id)}
               key={friend._id}
               className="p-3 cursor-pointer transition-smooth hover:shadow-soft glass hover:bg-muted/30 group/friendCard"
+              style={{
+                opacity: loading && creatingFor === friend._id ? 0.6 : 1,
+                pointerEvents: loading ? "none" : "auto",
+              }}
             >
               <div className="flex items-center gap-3">
                 {/* avatar */}
@@ -62,6 +86,13 @@ const FriendListModal = () => {
                     @{friend.username}
                   </span>
                 </div>
+
+                {/* loading state */}
+                {loading && creatingFor === friend._id && (
+                  <div className="text-xs text-muted-foreground">
+                    Đang tạo...
+                  </div>
+                )}
               </div>
             </Card>
           ))}

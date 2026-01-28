@@ -7,11 +7,35 @@ import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { useSocketStore } from "@/stores/useSocketStore";
+import { Button } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { MoreVertical, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/dialog";
+import { useNavigate } from "react-router-dom";
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
-  const { conversations, activeConversationId } = useChatStore();
+  const { conversations, activeConversationId, deleteConversation, loading } =
+    useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const navigate = useNavigate();
 
   let otherUser;
 
@@ -32,47 +56,106 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     if (!user || !otherUser) return;
   }
 
-  return (
-    <header className="sticky top-0 z-10 px-4 py-2 flex items-center bg-background">
-      <div className="flex items-center gap-2 w-full">
-        <SidebarTrigger className="-ml-1 text-foreground" />
-        <Separator
-          orientation="vertical"
-          className="mr-2 data-[orientation=vertical]:h-4"
-        />
+  const handleDeleteConversation = async () => {
+    const success = await deleteConversation(chat._id);
+    if (success) {
+      toast.success("Cuộc hội thoại đã bị xoá");
+      setShowDeleteDialog(false);
+      navigate("/");
+    } else {
+      toast.error("Không thể xoá cuộc hội thoại");
+    }
+  };
 
-        <div className="p-2 w-full flex items-center gap-3">
-          {/* avatar */}
-          <div className="relative">
-            {chat.type === "direct" ? (
-              <>
-                <UserAvatar
-                  type={"sidebar"}
-                  name={otherUser?.displayName || "Moji"}
-                  avatarUrl={otherUser?.avatarUrl || undefined}
-                />
-                {/* todo: socket io */}
-                <StatusBadge
-                  status={
-                    onlineUsers.includes(otherUser?._id ?? "") ? "online" : "offline"
-                  }
-                />
-              </>
-            ) : (
-              <GroupChatAvatar
-                participants={chat.participants}
-                type="sidebar"
-              />
-            )}
+  return (
+    <>
+      <header className="sticky top-0 z-10 px-4 py-2 flex items-center bg-background">
+        <div className="flex items-center gap-2 w-full justify-between">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="-ml-1 text-foreground" />
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-[orientation=vertical]:h-4"
+            />
+
+            <div className="p-2 flex items-center gap-3">
+              {/* avatar */}
+              <div className="relative">
+                {chat.type === "direct" ? (
+                  <>
+                    <UserAvatar
+                      type={"sidebar"}
+                      name={otherUser?.displayName || "Moji"}
+                      avatarUrl={otherUser?.avatarUrl || undefined}
+                    />
+                    {/* todo: socket io */}
+                    <StatusBadge
+                      status={
+                        onlineUsers.includes(otherUser?._id ?? "")
+                          ? "online"
+                          : "offline"
+                      }
+                    />
+                  </>
+                ) : (
+                  <GroupChatAvatar
+                    participants={chat.participants}
+                    type="sidebar"
+                  />
+                )}
+              </div>
+
+              {/* name */}
+              <h2 className="font-semibold text-foreground">
+                {chat.type === "direct"
+                  ? otherUser?.displayName
+                  : chat.group?.name}
+              </h2>
+            </div>
           </div>
 
-          {/* name */}
-          <h2 className="font-semibold text-foreground">
-            {chat.type === "direct" ? otherUser?.displayName : chat.group?.name}
-          </h2>
+          {/* Delete Menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" disabled={loading}>
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => setShowDeleteDialog(true)}
+                className="text-destructive cursor-pointer"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Xoá cuộc hội thoại
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xoá cuộc hội thoại?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Hành động này không thể hoàn tác. Toàn bộ tin nhắn sẽ bị xoá.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConversation}
+              disabled={loading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {loading ? "Đang xoá..." : "Xoá"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 

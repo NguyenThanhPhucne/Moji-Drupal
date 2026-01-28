@@ -1,53 +1,204 @@
 {#
 /**
  * @file
- * Theme template for viewing conversation details in admin.
+ * Template for Conversation Detail View.
  *
  * Available variables:
- * - conversation_id: ID of the conversation
+ * - conversation: Conversation object
+ * - participants: Array of participant objects with user details
  */
 #}
 
-<div class="chat-admin-conversation-view">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="chat-admin-conversation-detail">
+  {# Page Header #}
   <div class="page-header">
-    <h1>{{ 'Conversation Details'|t }} #{{ conversation_id }}</h1>
+    <div class="header-left">
+      <a href="/admin/chat/conversations" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> {{ 'Back to Conversations'|t }}
+      </a>
+      <h1>
+        <i class="fas fa-comment-dots"></i>
+        {% if conversation.type == 'group' %}
+          {{ conversation.name }}
+        {% else %}
+          {{ 'Private Conversation'|t }}
+        {% endif %}
+      </h1>
+    </div>
     <div class="header-actions">
-      <button class="btn btn-danger" id="deleteConversationBtn" data-conversation-id="{{ conversation_id }}">
-        {{ 'Delete Conversation'|t }}
+      <button class="btn btn-danger" onclick="if(confirm('{{ 'Are you sure you want to delete this conversation?'|t }}')) location.href='/admin/chat/conversations/{{ conversation.conversation_id }}/delete'">
+        <i class="fas fa-trash"></i> {{ 'Delete Conversation'|t }}
       </button>
-      <a href="/admin/chat/conversations" class="btn btn-secondary">{{ 'Back to List'|t }}</a>
     </div>
   </div>
 
-  <div class="conversation-details">
-    <p class="todo-note">{{ 'TODO: Fetch and display conversation details from Node.js backend'|t }}</p>
-    
-    {# TODO: Implement conversation details view #}
-    <div class="details-section">
-      <h2>{{ 'Participants'|t }}</h2>
-      <div id="participantsList">Loading...</div>
+  {# Conversation Info Card #}
+  <div class="profile-section">
+    <div class="profile-card">
+      <div class="profile-avatar">
+        <div class="avatar-circle">
+          {% if conversation.type == 'group' %}
+            <i class="fas fa-users"></i>
+          {% else %}
+            <i class="fas fa-user-friends"></i>
+          {% endif %}
+        </div>
+      </div>
+      <div class="profile-info">
+        <h2>
+          {% if conversation.type == 'group' %}
+            {{ conversation.name }}
+          {% else %}
+            {{ 'Private Conversation'|t }}
+          {% endif %}
+        </h2>
+        <p class="email">
+          <i class="fas fa-hashtag"></i> {{ conversation.conversation_id }}
+        </p>
+        <div class="profile-badges">
+          {% if conversation.type == 'group' %}
+            <span class="badge badge-info">
+              <i class="fas fa-users"></i> {{ 'Group Chat'|t }}
+            </span>
+          {% else %}
+            <span class="badge badge-primary">
+              <i class="fas fa-user-friends"></i> {{ 'Private Chat'|t }}
+            </span>
+          {% endif %}
+        </div>
+        <div class="profile-meta">
+          <div class="meta-item">
+            <i class="fas fa-calendar-plus"></i>
+            <span>{{ 'Created:'|t }} {{ conversation.created|date('M d, Y H:i') }}</span>
+          </div>
+          <div class="meta-item">
+            <i class="fas fa-clock"></i>
+            <span>{{ 'Last activity:'|t }} 
+              {% if conversation.last_message_at %}
+                {{ conversation.last_message_at|date('M d, Y H:i') }}
+              {% else %}
+                {{ 'Never'|t }}
+              {% endif %}
+            </span>
+          </div>
+          <div class="meta-item">
+            <i class="fas fa-envelope"></i>
+            <span>{{ 'Total messages:'|t }} {{ conversation.message_count }}</span>
+          </div>
+          <div class="meta-item">
+            <i class="fas fa-users"></i>
+            <span>{{ 'Participants:'|t }} {{ conversation.participants_count }}</span>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="details-section">
-      <h2>{{ 'Messages'|t }}</h2>
-      <div id="messagesList">Loading...</div>
+  {# Statistics Grid #}
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-icon">
+        <i class="fas fa-envelope"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ conversation.message_count }}</div>
+        <div class="stat-label">{{ 'Total Messages'|t }}</div>
+      </div>
     </div>
+    <div class="stat-box">
+      <div class="stat-icon">
+        <i class="fas fa-users"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ conversation.participants_count }}</div>
+        <div class="stat-label">{{ 'Participants'|t }}</div>
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-icon">
+        <i class="fas fa-calendar"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">{{ ((conversation.updated - conversation.created) / 86400)|round }}</div>
+        <div class="stat-label">{{ 'Days Active'|t }}</div>
+      </div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-icon">
+        <i class="fas fa-chart-line"></i>
+      </div>
+      <div class="stat-content">
+        <div class="stat-value">
+          {% set days_active = ((conversation.updated - conversation.created) / 86400) %}
+          {% if days_active > 0 %}
+            {{ (conversation.message_count / days_active)|round(1) }}
+          {% else %}
+            {{ conversation.message_count }}
+          {% endif %}
+        </div>
+        <div class="stat-label">{{ 'Msgs/Day'|t }}</div>
+      </div>
+    </div>
+  </div>
 
-    <div class="details-section">
-      <h2>{{ 'Metadata'|t }}</h2>
-      <dl class="details-list">
-        <dt>{{ 'Conversation ID'|t }}</dt>
-        <dd>{{ conversation_id }}</dd>
-        
-        <dt>{{ 'Created'|t }}</dt>
-        <dd>TODO</dd>
-        
-        <dt>{{ 'Last Activity'|t }}</dt>
-        <dd>TODO</dd>
-        
-        <dt>{{ 'Message Count'|t }}</dt>
-        <dd>TODO</dd>
-      </dl>
+  {# Participants List #}
+  <div class="content-wrapper">
+    <div class="section-card">
+      <div class="section-header">
+        <h3>
+          <i class="fas fa-users"></i>
+          {{ 'Participants'|t }} ({{ participants|length }})
+        </h3>
+      </div>
+      <div class="section-content">
+        {% if participants|length > 0 %}
+          <div class="friends-list">
+            {% for participant in participants %}
+              <div class="friend-item">
+                <div class="friend-avatar">
+                  {{ participant.name|first|upper }}
+                </div>
+                <div class="friend-info">
+                  <a href="/admin/chat/users/{{ participant.user_id }}" class="friend-name">{{ participant.name }}</a>
+                  <div class="friend-meta">
+                    <i class="fas fa-envelope"></i> {{ participant.email }}
+                  </div>
+                </div>
+                <div class="friend-status">
+                  {% if participant.status %}
+                    <span class="status-badge status-active">
+                      <i class="fas fa-circle"></i> {{ 'Active'|t }}
+                    </span>
+                  {% else %}
+                    <span class="status-badge status-blocked">
+                      <i class="fas fa-ban"></i> {{ 'Blocked'|t }}
+                    </span>
+                  {% endif %}
+                  <div class="friend-date">
+                    {{ 'Joined:'|t }} {{ participant.joined_at|date('M d, Y') }}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <i class="fas fa-users"></i>
+            <p>{{ 'No participants found'|t }}</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Note about messages #}
+  <div class="info-box">
+    <i class="fas fa-info-circle"></i>
+    <div>
+      <strong>{{ 'Note:'|t }}</strong>
+      {{ 'Message content is stored in MongoDB and can be accessed through the Node.js backend API.'|t }}
     </div>
   </div>
 

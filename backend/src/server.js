@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import { connectDB } from "./libs/db.js";
+import { initDrupalSync, closeDrupalSync } from "./libs/drupalSync.js";
 import authRoute from "./routes/authRoute.js";
 import userRoute from "./routes/userRoute.js";
 import friendRoute from "./routes/friendRoute.js";
@@ -49,8 +50,25 @@ app.use("/api/messages", messageRoute);
 app.use("/api/conversations", conversationRoute);
 
 connectDB().then(() => {
+  // Initialize Drupal sync
+  initDrupalSync();
+
   // THÊM "0.0.0.0" VÀO ĐÂY
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`server bắt đầu trên cổng ${PORT}`);
+    console.log(`✅ Real-time Drupal sync enabled`);
   });
+});
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("\nShutting down gracefully...");
+  await closeDrupalSync();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("\nShutting down gracefully...");
+  await closeDrupalSync();
+  process.exit(0);
 });

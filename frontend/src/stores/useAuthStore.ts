@@ -4,6 +4,7 @@ import { authService } from "@/services/authService";
 import type { AuthState } from "@/types/store";
 import { persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
+import { useSocketStore } from "./useSocketStore";
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -19,6 +20,9 @@ export const useAuthStore = create<AuthState>()(
         set({ user });
       },
       clearState: () => {
+        // Disconnect socket first
+        useSocketStore.getState().disconnectSocket();
+
         set({ accessToken: null, user: null, loading: false });
         useChatStore.getState().reset();
         localStorage.clear();
@@ -76,12 +80,22 @@ export const useAuthStore = create<AuthState>()(
       },
       signOut: async () => {
         try {
-          get().clearState();
+          set({ loading: true });
+
+          // Call API first (BEFORE clearing state)
           await authService.signOut();
+
+          // Only clear state if API succeeded
+          get().clearState();
+
           toast.success("Logout thành công!");
+          return true;
         } catch (error) {
-          console.error(error);
+          console.error("❌ Logout error:", error);
           toast.error("Lỗi xảy ra khi logout. Hãy thử lại!");
+          return false;
+        } finally {
+          set({ loading: false });
         }
       },
       fetchMe: async () => {

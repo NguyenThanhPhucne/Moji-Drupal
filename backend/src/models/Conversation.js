@@ -1,4 +1,8 @@
 import mongoose from "mongoose";
+import {
+  syncConversationToDrupal,
+  deleteConversationFromDrupal,
+} from "../libs/drupalSync.js";
 
 const participantSchema = new mongoose.Schema(
   {
@@ -14,7 +18,7 @@ const participantSchema = new mongoose.Schema(
   },
   {
     _id: false,
-  }
+  },
 );
 
 const groupSchema = new mongoose.Schema(
@@ -30,7 +34,7 @@ const groupSchema = new mongoose.Schema(
   },
   {
     _id: false,
-  }
+  },
 );
 
 const lastMessageSchema = new mongoose.Schema(
@@ -51,7 +55,7 @@ const lastMessageSchema = new mongoose.Schema(
   },
   {
     _id: false,
-  }
+  },
 );
 
 const conversationSchema = new mongoose.Schema(
@@ -89,12 +93,53 @@ const conversationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 conversationSchema.index({
   "participant.userId": 1,
   lastMessageAt: -1,
+});
+
+// Real-time sync to Drupal after save/update
+conversationSchema.post("save", async function (doc) {
+  try {
+    await syncConversationToDrupal(doc);
+  } catch (error) {
+    console.error("Failed to sync conversation to Drupal:", error);
+  }
+});
+
+conversationSchema.post("findOneAndUpdate", async function (doc) {
+  if (doc) {
+    try {
+      await syncConversationToDrupal(doc);
+    } catch (error) {
+      console.error("Failed to sync updated conversation to Drupal:", error);
+    }
+  }
+});
+
+// Real-time delete from Drupal
+conversationSchema.post("findOneAndDelete", async function (doc) {
+  if (doc) {
+    try {
+      await deleteConversationFromDrupal(doc._id.toString());
+    } catch (error) {
+      console.error("Failed to delete conversation from Drupal:", error);
+    }
+  }
+});
+
+conversationSchema.post("deleteOne", async function () {
+  try {
+    const conversationId = this.getQuery()._id?.toString();
+    if (conversationId) {
+      await deleteConversationFromDrupal(conversationId);
+    }
+  } catch (error) {
+    console.error("Failed to delete conversation from Drupal:", error);
+  }
 });
 
 const Conversation = mongoose.model("Conversation", conversationSchema);

@@ -4,24 +4,24 @@ import { LogOut } from "lucide-react";
 import { useNavigate } from "react-router";
 
 const Logout = () => {
-  const { signOut } = useAuthStore();
+  const { signOut, loading } = useAuthStore();
   const navigate = useNavigate();
+
   const handleLogout = async () => {
     try {
-      await signOut();
-      navigate("/signin");
+      const success = await signOut();
+      if (success) {
+        navigate("/signin");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("❌ Logout handler error:", error);
     }
   };
 
   return (
-    <Button
-      variant="completeGhost"
-      onClick={handleLogout}
-    >
+    <Button variant="completeGhost" onClick={handleLogout} disabled={loading}>
       <LogOut className="text-destructive" />
-      Log out
+      {loading ? "Logging out..." : "Log out"}
     </Button>
   );
 };

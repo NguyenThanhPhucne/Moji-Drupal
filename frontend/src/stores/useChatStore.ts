@@ -226,16 +226,67 @@ export const useChatStore = create<ChatState>()(
             memberIds,
           );
 
-          get().addConvo(conversation);
+          if (!conversation || !conversation._id) {
+            console.error("❌ Invalid conversation response:", conversation);
+            return false;
+          }
 
-          useSocketStore
-            .getState()
-            .socket?.emit("join-conversation", conversation._id);
+          console.log(
+            "✅ [useChatStore] Conversation created:",
+            conversation._id,
+          );
+          get().addConvo(conversation);
+          get().setActiveConversation(conversation._id);
+
+          // Join socket room
+          const socket = useSocketStore.getState().socket;
+          if (socket?.connected) {
+            socket.emit("join-conversation", conversation._id);
+            console.log(
+              "✅ [useChatStore] Joined socket room:",
+              conversation._id,
+            );
+          }
+
+          return true;
         } catch (error) {
           console.error(
-            "Lỗi xảy ra khi gọi createConversation trong store",
+            "❌ [useChatStore] Error creating conversation:",
             error,
           );
+          return false;
+        } finally {
+          set({ loading: false });
+        }
+      },
+      deleteConversation: async (conversationId) => {
+        try {
+          set({ loading: true });
+          console.log(
+            "🗑️ [useChatStore] Deleting conversation:",
+            conversationId,
+          );
+          await chatService.deleteConversation(conversationId);
+
+          // Remove from store
+          set((state) => ({
+            conversations: state.conversations.filter(
+              (c) => c._id !== conversationId,
+            ),
+            activeConversationId:
+              state.activeConversationId === conversationId
+                ? null
+                : state.activeConversationId,
+          }));
+
+          console.log("✅ [useChatStore] Conversation deleted");
+          return true;
+        } catch (error) {
+          console.error(
+            "❌ [useChatStore] Error deleting conversation:",
+            error,
+          );
+          return false;
         } finally {
           set({ loading: false });
         }

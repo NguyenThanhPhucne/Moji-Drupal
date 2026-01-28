@@ -4,69 +4,117 @@
  * Theme template for Chat Admin Friend Requests.
  *
  * Available variables:
- * - requests: Array of friend request objects
+ * - requests: Array of friend request objects with user details
+ * - stats: Summary statistics
  */
 #}
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
 <div class="chat-admin-friend-requests">
   <div class="page-header">
-    <h1>{{ 'Friend Requests'|t }}</h1>
-    <p class="page-description">{{ 'View all friend requests in the system'|t }}</p>
+    <div class="header-left">
+      <a href="/admin/chat" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> {{ 'Back to Dashboard'|t }}
+      </a>
+      <h1>
+        <i class="fas fa-user-plus"></i>
+        {{ 'Friend Requests'|t }}
+      </h1>
+    </div>
   </div>
 
-  {% if requests is not empty %}
-    <div class="requests-table-wrapper">
-      <table class="admin-table requests-table">
+  {# Stats boxes #}
+  {% if stats %}
+    <div class="stats-overview">
+      <div class="stat-box">
+        <div class="stat-icon">
+          <i class="fas fa-list"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.total_requests }}</div>
+          <div class="stat-label">{{ 'Total Requests'|t }}</div>
+        </div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-icon">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.pending_requests }}</div>
+          <div class="stat-label">{{ 'Pending Requests'|t }}</div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if requests|length > 0 %}
+    <div class="table-wrapper">
+      <table class="admin-table">
         <thead>
           <tr>
             <th>{{ 'ID'|t }}</th>
-            <th>{{ 'From User'|t }}</th>
-            <th>{{ 'To User'|t }}</th>
-            <th>{{ 'Status'|t }}</th>
+            <th>{{ 'From'|t }}</th>
+            <th>{{ 'To'|t }}</th>
             <th>{{ 'Created'|t }}</th>
-            <th>{{ 'Updated'|t }}</th>
+            <th>{{ 'Actions'|t }}</th>
           </tr>
         </thead>
         <tbody>
           {% for request in requests %}
-          <tr class="request-row request-{{ request.status }}">
-            <td>{{ request.id }}</td>
+          <tr>
+            <td><span class="id-badge">#{{ request.id }}</span></td>
             <td>
-              <a href="/admin/chat/users/{{ request.sender_id }}">
-                {{ 'User'|t }} #{{ request.sender_id }}
-              </a>
+              <div class="user-cell">
+                <div class="user-avatar">{{ request.from_name|first|upper }}</div>
+                <div class="user-info">
+                  <a href="/admin/chat/users/{{ request.from_user }}" class="user-name">
+                    {{ request.from_name }}
+                  </a>
+                  <div class="user-email">{{ request.from_email }}</div>
+                </div>
+              </div>
             </td>
             <td>
-              <a href="/admin/chat/users/{{ request.receiver_id }}">
-                {{ 'User'|t }} #{{ request.receiver_id }}
-              </a>
+              <div class="user-cell">
+                <div class="user-avatar">{{ request.to_name|first|upper }}</div>
+                <div class="user-info">
+                  <a href="/admin/chat/users/{{ request.to_user }}" class="user-name">
+                    {{ request.to_name }}
+                  </a>
+                  <div class="user-email">{{ request.to_email }}</div>
+                </div>
+              </div>
             </td>
             <td>
-              {% if request.status == 'pending' %}
-                <span class="status-badge status-pending">{{ 'Pending'|t }}</span>
-              {% elseif request.status == 'accepted' %}
-                <span class="status-badge status-accepted">{{ 'Accepted'|t }}</span>
-              {% elseif request.status == 'declined' %}
-                <span class="status-badge status-declined">{{ 'Declined'|t }}</span>
-              {% endif %}
+              <div class="time-info">
+                <div class="date">{{ request.created|date('M d, Y') }}</div>
+                <div class="time-ago">{{ request.time_ago }}</div>
+              </div>
             </td>
-            <td>{{ request.created_at|date('Y-m-d H:i') }}</td>
             <td>
-              {% if request.updated_at %}
-                {{ request.updated_at|date('Y-m-d H:i') }}
-              {% else %}
-                -
-              {% endif %}
+              <div class="action-buttons">
+                <a href="/admin/chat/users/{{ request.from_user }}" class="btn-icon" title="{{ 'View Sender'|t }}">
+                  <i class="fas fa-user"></i>
+                </a>
+                <a href="/admin/chat/users/{{ request.to_user }}" class="btn-icon" title="{{ 'View Receiver'|t }}">
+                  <i class="fas fa-user-check"></i>
+                </a>
+              </div>
             </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    {# Pagination #}
+    {{ pager }}
   {% else %}
     <div class="empty-state">
-      <div class="empty-icon">🤝</div>
+      <i class="fas fa-user-plus"></i>
       <h2>{{ 'No friend requests found'|t }}</h2>
+      <p>{{ 'There are no friend requests in the system yet.'|t }}</p>
     </div>
   {% endif %}
 

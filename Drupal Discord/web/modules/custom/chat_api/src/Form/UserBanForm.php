@@ -111,7 +111,7 @@ class UserBanForm extends ConfirmFormBase {
       'days_registered' => $days_registered,
       'avatar_letter' => strtoupper(substr($user->getAccountName(), 0, 1)),
     ];
-    $form['#action'] = $action;
+    $form['#action'] = $this->action;
 
     return parent::buildForm($form, $form_state);
   }

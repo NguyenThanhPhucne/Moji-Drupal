@@ -64,17 +64,26 @@ export const createConversation = async (req, res) => {
       userId,
     });
 
+    // ✅ Validation
     if (
       !type ||
-      (type === "group" && !name) ||
       !memberIds ||
       !Array.isArray(memberIds) ||
       memberIds.length === 0
     ) {
-      console.log("❌ [createConversation] Validation failed");
-      return res
-        .status(400)
-        .json({ message: "Tên nhóm và danh sách thành viên là bắt buộc" });
+      console.log(
+        "❌ [createConversation] Validation failed: missing type or memberIds",
+      );
+      return res.status(400).json({
+        message: "Loại cuộc trò chuyện và danh sách thành viên là bắt buộc",
+      });
+    }
+
+    if (type === "group" && !name) {
+      console.log(
+        "❌ [createConversation] Validation failed: group without name",
+      );
+      return res.status(400).json({ message: "Tên nhóm là bắt buộc" });
     }
 
     let conversation;
@@ -152,9 +161,32 @@ export const createConversation = async (req, res) => {
 
     const formatted = { ...conversation.toObject(), participants };
 
+    // 🔥 Emit to participants using MongoDB user IDs (NOT Drupal IDs)
     if (type === "group") {
-      memberIds.forEach((userId) => {
-        io.to(userId).emit("new-group", formatted);
+      // Emit to all invited members (NOT creator)
+      console.log(
+        `🔍 [createConversation] Participants:`,
+        conversation.participants.map((p) => ({
+          userId: p.userId._id || p.userId,
+          displayName: p.userId.displayName,
+        })),
+      );
+
+      conversation.participants.forEach((p) => {
+        const participantId = p.userId._id || p.userId;
+        if (participantId.toString() !== userId.toString()) {
+          io.to(participantId.toString()).emit("new-group", formatted);
+          console.log(`📢 Emitted new-group to user ${participantId}`);
+        }
+      });
+    } else if (type === "direct") {
+      // Direct chat: emit to the other participant
+      conversation.participants.forEach((p) => {
+        const participantId = p.userId._id || p.userId;
+        if (participantId.toString() !== userId.toString()) {
+          io.to(participantId.toString()).emit("new-conversation", formatted);
+          console.log(`📢 Emitted new-conversation to user ${participantId}`);
+        }
       });
     }
 
@@ -309,6 +341,57 @@ export const markAsSeen = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi mark as seen", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+export const deleteConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+
+    console.log(
+      `🗑️ [deleteConversation] Request: conversationId=${conversationId}, userId=${userId}`,
+    );
+
+    // 1. Check if user is member of conversation
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation không tồn tại" });
+    }
+
+    const isMember = conversation.participants.some(
+      (p) => p.userId.toString() === userId.toString(),
+    );
+
+    if (!isMember) {
+      return res
+        .status(403)
+        .json({ message: "Bạn không có quyền xoá conversation này" });
+    }
+
+    // 2. Delete all messages in conversation
+    await Message.deleteMany({ conversationId });
+    console.log(`  ✅ Deleted all messages for conversation ${conversationId}`);
+
+    // 3. Delete conversation
+    await Conversation.findByIdAndDelete(conversationId);
+    console.log(`  ✅ Deleted conversation ${conversationId}`);
+
+    // 4. Emit to all participants that conversation was deleted
+    conversation.participants.forEach((p) => {
+      io.to(p.userId.toString()).emit("conversation-deleted", {
+        conversationId,
+      });
+      console.log(`  📢 Emitted conversation-deleted to user ${p.userId}`);
+    });
+
+    return res.status(200).json({
+      message: "Xoá conversation thành công",
+      conversationId,
+    });
+  } catch (error) {
+    console.error("Lỗi khi xoá conversation", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

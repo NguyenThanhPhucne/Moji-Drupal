@@ -22,6 +22,7 @@ import { useChatStore } from "@/stores/useChatStore";
 const NewGroupChatModal = () => {
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
   const { friends, getFriends } = useFriendStore();
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
   const { loading, createConversation } = useChatStore();
@@ -44,8 +45,14 @@ const NewGroupChatModal = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     try {
       e.preventDefault();
+
+      if (!groupName.trim()) {
+        toast.error("Vui lòng nhập tên nhóm");
+        return;
+      }
+
       if (invitedUsers.length === 0) {
-        toast.warning("Bạn phải mời ít nhất 1 thành viên vào nhóm");
+        toast.error("Bạn phải mời ít nhất 1 thành viên vào nhóm");
         return;
       }
 
@@ -56,15 +63,20 @@ const NewGroupChatModal = () => {
         memberIds,
       });
 
-      await createConversation("group", groupName, memberIds);
+      const success = await createConversation("group", groupName, memberIds);
 
-      setSearch("");
-      setInvitedUsers([]);
+      if (success) {
+        toast.success(`Tạo nhóm "${groupName}" thành công! 🎉`);
+        setGroupName("");
+        setSearch("");
+        setInvitedUsers([]);
+        setOpen(false);
+      } else {
+        toast.error("Không thể tạo nhóm. Vui lòng thử lại!");
+      }
     } catch (error) {
-      console.error(
-        "Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:",
-        error,
-      );
+      console.error("❌ [NewGroupChatModal] Error:", error);
+      toast.error("Có lỗi xảy ra. Vui lòng thử lại!");
     }
   };
 
@@ -91,7 +103,7 @@ const NewGroupChatModal = () => {
   }
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"
@@ -123,6 +135,7 @@ const NewGroupChatModal = () => {
               className="glass border-border/50 focus:border-primary/50 transition-smooth"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
+              disabled={loading}
               required
             />
           </div>
@@ -138,6 +151,7 @@ const NewGroupChatModal = () => {
               placeholder="Tìm theo tên hoặc username..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              disabled={loading}
               className="flex-1"
             />
 
@@ -159,7 +173,7 @@ const NewGroupChatModal = () => {
           <DialogFooter>
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || invitedUsers.length === 0}
               className="flex-1 bg-gradient-chat text-white hover:opacity-90 transition-smooth"
             >
               {loading ? (

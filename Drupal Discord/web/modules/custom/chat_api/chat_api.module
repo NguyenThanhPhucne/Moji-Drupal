@@ -59,12 +59,6 @@ function chat_api_theme($existing, $type, $theme, $path) {
       'render element' => 'form',
       'template' => 'chat-admin-user-ban-confirm',
     ],
-    'chat_admin_user_view' => [
-      'variables' => [
-        'user' => NULL,
-      ],
-      'template' => 'chat-admin-user-view',
-    ],
     'chat_admin_conversations' => [
       'variables' => [
         'conversations' => [],
@@ -80,6 +74,7 @@ function chat_api_theme($existing, $type, $theme, $path) {
     'chat_admin_friend_requests' => [
       'variables' => [
         'requests' => [],
+        'stats' => NULL,
       ],
       'template' => 'chat-admin-friend-requests',
     ],

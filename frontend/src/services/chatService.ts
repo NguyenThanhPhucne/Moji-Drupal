@@ -70,4 +70,9 @@ export const chatService = {
     console.log("✅ [chatService] Response:", res.data);
     return res.data.conversation;
   },
+
+  async deleteConversation(conversationId: string) {
+    const res = await api.delete(`/conversations/${conversationId}`);
+    return res.data;
+  },
 };

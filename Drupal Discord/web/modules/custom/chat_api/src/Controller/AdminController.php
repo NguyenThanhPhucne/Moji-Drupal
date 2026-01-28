@@ -453,26 +453,92 @@ class AdminController extends ControllerBase {
 
   /**
    * Conversations list page.
-   * 
-   * TODO: Fetch from Node.js backend, add filters
    */
   public function conversationsList() {
-    // TODO: Call Node.js API to get conversations
-    // For now, show placeholder message
+    // Fetch all conversations from database
+    $query = $this->database->select('chat_conversation', 'cc')
+      ->fields('cc')
+      ->orderBy('cc.last_message_at', 'DESC')
+      ->extend('Drupal\Core\Database\Query\PagerSelectExtender')
+      ->limit(25);
+    
+    $conversations = $query->execute()->fetchAll();
+    
+    // Enrich each conversation with participant details
+    foreach ($conversations as $conversation) {
+      // Get participants for this conversation
+      $participants = $this->database->select('chat_conversation_participant', 'ccp')
+        ->fields('ccp', ['user_id'])
+        ->condition('ccp.conversation_id', $conversation->conversation_id)
+        ->execute()
+        ->fetchCol();
+      
+      // Get user names for participants
+      if (!empty($participants)) {
+        $users_query = $this->database->select('users_field_data', 'u')
+          ->fields('u', ['uid', 'name'])
+          ->condition('u.uid', $participants, 'IN')
+          ->execute()
+          ->fetchAllKeyed();
+        
+        $conversation->participants = $users_query;
+      } else {
+        $conversation->participants = [];
+      }
+      
+      // Calculate time ago for last message
+      if ($conversation->last_message_at) {
+        $diff = time() - $conversation->last_message_at;
+        if ($diff < 3600) {
+          $conversation->time_ago = floor($diff / 60) . ' minutes ago';
+        } elseif ($diff < 86400) {
+          $conversation->time_ago = floor($diff / 3600) . ' hours ago';
+        } else {
+          $conversation->time_ago = floor($diff / 86400) . ' days ago';
+        }
+      } else {
+        $conversation->time_ago = 'Never';
+      }
+    }
+    
+    // Get summary statistics
+    $stats = [
+      'total_conversations' => $this->database->select('chat_conversation', 'cc')
+        ->countQuery()
+        ->execute()
+        ->fetchField(),
+      'private_conversations' => $this->database->select('chat_conversation', 'cc')
+        ->condition('cc.type', 'private')
+        ->countQuery()
+        ->execute()
+        ->fetchField(),
+      'group_conversations' => $this->database->select('chat_conversation', 'cc')
+        ->condition('cc.type', 'group')
+        ->countQuery()
+        ->execute()
+        ->fetchField(),
+      'active_today' => $this->database->select('chat_conversation', 'cc')
+        ->condition('cc.last_message_at', strtotime('today'), '>=')
+        ->countQuery()
+        ->execute()
+        ->fetchField(),
+    ];
     
     $build = [
       '#theme' => 'chat_admin_conversations',
-      '#conversations' => [], // TODO: Fetch from Node.js
+      '#conversations' => $conversations,
+      '#stats' => $stats,
       '#attached' => [
-        'library' => ['chat_api/admin'],
+        'library' => ['chat_api/admin', 'chat_api/admin-tables'],
+      ],
+      '#cache' => [
+        'max-age' => 60,
+        'contexts' => ['user.permissions', 'url.query_args'],
       ],
     ];
     
-    $build['message'] = [
-      '#type' => 'markup',
-      '#markup' => '<div class="messages messages--warning">' . 
-        $this->t('TODO: Implement conversation fetching from Node.js backend') . 
-        '</div>',
+    $build['pager'] = [
+      '#type' => 'pager',
     ];
     
     return $build;
@@ -480,17 +546,46 @@ class AdminController extends ControllerBase {
 
   /**
    * View conversation details.
-   * 
-   * TODO: Show messages, participants, metadata
    */
   public function conversationView($conversation_id) {
-    // TODO: Implement conversation detail view
+    // Fetch conversation from database
+    $conversation = $this->database->select('chat_conversation', 'cc')
+      ->fields('cc')
+      ->condition('cc.conversation_id', $conversation_id)
+      ->execute()
+      ->fetchObject();
+    
+    if (!$conversation) {
+      $this->messenger()->addError($this->t('Conversation not found.'));
+      return $this->redirect('chat_api.admin_conversations');
+    }
+    
+    // Get participants
+    $participants = $this->database->select('chat_conversation_participant', 'ccp')
+      ->fields('ccp', ['user_id', 'joined_at'])
+      ->condition('ccp.conversation_id', $conversation_id)
+      ->execute()
+      ->fetchAll();
+    
+    // Enrich with user details
+    foreach ($participants as $participant) {
+      $user = \Drupal\user\Entity\User::load($participant->user_id);
+      if ($user) {
+        $participant->name = $user->getAccountName();
+        $participant->email = $user->getEmail();
+        $participant->status = $user->isActive();
+      }
+    }
     
     $build = [
       '#theme' => 'chat_admin_conversation_view',
-      '#conversation_id' => $conversation_id,
+      '#conversation' => $conversation,
+      '#participants' => $participants,
       '#attached' => [
-        'library' => ['chat_api/admin'],
+        'library' => ['chat_api/admin', 'chat_api/user-detail'],
+      ],
+      '#cache' => [
+        'contexts' => ['url.path', 'user.permissions'],
       ],
     ];
     
@@ -499,38 +594,93 @@ class AdminController extends ControllerBase {
 
   /**
    * Delete conversation.
-   * 
-   * TODO: Add confirmation, call Node.js API
+   * Deletes conversation metadata from Drupal database.
+   * Note: Messages in MongoDB need to be deleted via Node.js API.
    */
   public function conversationDelete($conversation_id) {
-    // TODO: Implement conversation deletion via Node.js API
-    
-    $this->messenger()->addWarning($this->t('TODO: Implement conversation deletion'));
+    // Delete from Drupal database
+    try {
+      // Delete participants first (foreign key)
+      $this->database->delete('chat_conversation_participant')
+        ->condition('conversation_id', $conversation_id)
+        ->execute();
+      
+      // Delete conversation
+      $deleted = $this->database->delete('chat_conversation')
+        ->condition('conversation_id', $conversation_id)
+        ->execute();
+      
+      if ($deleted > 0) {
+        $this->messenger()->addStatus($this->t('Conversation metadata deleted from Drupal database.'));
+        $this->messenger()->addWarning($this->t('Note: Messages in MongoDB need to be deleted separately via Node.js backend API.'));
+      } else {
+        $this->messenger()->addError($this->t('Conversation not found.'));
+      }
+    } catch (\Exception $e) {
+      $this->messenger()->addError($this->t('Error deleting conversation: @error', ['@error' => $e->getMessage()]));
+    }
     
     return new RedirectResponse(Url::fromRoute('chat_api.admin_conversations')->toString());
   }
 
   /**
-   * Friend requests list.
-   * 
-   * TODO: Show all friend requests with status
+   * Friend requests list with full user details.
    */
   public function friendRequestsList() {
-    // TODO: Implement friend requests listing
-    
+    // Query all friend requests with pagination
     $query = $this->database->select('chat_friend_request', 'cfr')
       ->fields('cfr')
-      ->orderBy('created_at', 'DESC')
+      ->orderBy('created', 'DESC')
       ->extend('Drupal\Core\Database\Query\PagerSelectExtender')
       ->limit(50);
     
     $requests = $query->execute()->fetchAll();
     
+    // Enrich with user details
+    foreach ($requests as $request) {
+      // Load sender user
+      $from_user = \Drupal\user\Entity\User::load($request->from_user);
+      if ($from_user) {
+        $request->from_name = $from_user->getAccountName();
+        $request->from_email = $from_user->getEmail();
+      }
+      
+      // Load receiver user
+      $to_user = \Drupal\user\Entity\User::load($request->to_user);
+      if ($to_user) {
+        $request->to_name = $to_user->getAccountName();
+        $request->to_email = $to_user->getEmail();
+      }
+      
+      // Calculate time ago
+      $diff = time() - $request->created;
+      if ($diff < 3600) {
+        $request->time_ago = floor($diff / 60) . ' minutes ago';
+      } elseif ($diff < 86400) {
+        $request->time_ago = floor($diff / 3600) . ' hours ago';
+      } else {
+        $request->time_ago = floor($diff / 86400) . ' days ago';
+      }
+    }
+    
+    // Get summary stats
+    $stats = [
+      'total_requests' => $this->database->select('chat_friend_request', 'cfr')
+        ->countQuery()->execute()->fetchField(),
+      'pending_requests' => $this->database->select('chat_friend_request', 'cfr')
+        ->countQuery()->execute()->fetchField(),
+    ];
+    
     $build = [
       '#theme' => 'chat_admin_friend_requests',
       '#requests' => $requests,
+      '#stats' => $stats,
       '#attached' => [
-        'library' => ['chat_api/admin'],
+        'library' => ['chat_api/admin', 'chat_api/admin-tables'],
+      ],
+      '#cache' => [
+        'max-age' => 60,
+        'contexts' => ['user.permissions', 'url.query_args'],
       ],
     ];
     

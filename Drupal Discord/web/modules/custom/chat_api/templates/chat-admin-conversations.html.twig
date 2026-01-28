@@ -1,50 +1,186 @@
 {#
 /**
  * @file
- * Theme template for Chat Admin Conversations List.
+ * Professional Conversations Management Template.
  *
  * Available variables:
- * - conversations: Array of conversation objects
+ * - conversations: Array of conversation objects with enriched data
+ * - stats: Summary statistics
  */
 #}
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
 <div class="chat-admin-conversations">
+  {# Page Header #}
   <div class="page-header">
-    <h1>{{ 'Conversation Management'|t }}</h1>
-    <p class="page-description">{{ 'View and moderate all chat conversations'|t }}</p>
+    <div>
+      <h1><i class="fas fa-comments"></i> {{ 'Conversation Management'|t }}</h1>
+      <p class="subtitle">{{ 'View and monitor all chat conversations'|t }}</p>
+    </div>
+    <div class="header-actions">
+      <a href="/admin/chat" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> {{ 'Back to Dashboard'|t }}
+      </a>
+    </div>
   </div>
 
-  {# TODO: Implement conversation fetching from Node.js #}
-  <div class="conversations-wrapper">
-    
-    {% if conversations is not empty %}
-      <div class="conversations-list">
-        {% for conversation in conversations %}
-        <div class="conversation-card">
-          <div class="conversation-info">
-            <h3>{{ 'Conversation'|t }} #{{ conversation.id }}</h3>
-            <p class="conversation-meta">
-              {{ 'Participants:'|t }} {{ conversation.participants|length }}
-              | {{ 'Messages:'|t }} {{ conversation.message_count }}
-              | {{ 'Last activity:'|t }} {{ conversation.updated_at|date('Y-m-d H:i') }}
-            </p>
-          </div>
-          <div class="conversation-actions">
-            <a href="/admin/chat/conversations/{{ conversation.id }}" class="btn btn-view">
-              {{ 'View'|t }}
-            </a>
-            <button class="btn btn-delete" data-conversation-id="{{ conversation.id }}">
-              {{ 'Delete'|t }}
-            </button>
-          </div>
-        </div>
-        {% endfor %}
+  {# Summary Statistics #}
+  <div class="users-stats">
+    <div class="stat-box">
+      <i class="fas fa-comments stat-icon"></i>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.total_conversations }}</div>
+        <div class="stat-label">{{ 'Total Conversations'|t }}</div>
       </div>
+    </div>
+    <div class="stat-box">
+      <i class="fas fa-user-friends stat-icon stat-icon--success"></i>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.private_conversations }}</div>
+        <div class="stat-label">{{ 'Private Chats'|t }}</div>
+      </div>
+    </div>
+    <div class="stat-box">
+      <i class="fas fa-users stat-icon stat-icon--info"></i>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.group_conversations }}</div>
+        <div class="stat-label">{{ 'Group Chats'|t }}</div>
+      </div>
+    </div>
+    <div class="stat-box">
+      <i class="fas fa-fire stat-icon stat-icon--danger"></i>
+      <div class="stat-content">
+        <div class="stat-value">{{ stats.active_today }}</div>
+        <div class="stat-label">{{ 'Active Today'|t }}</div>
+      </div>
+    </div>
+  </div>
+
+  {# Conversations Table #}
+  <div class="table-container">
+    <div class="table-header">
+      <h2><i class="fas fa-list"></i> {{ 'All Conversations'|t }}</h2>
+      <div class="table-actions">
+        <div class="search-box">
+          <i class="fas fa-search"></i>
+          <input type="text" id="conversationSearch" placeholder="{{ 'Search conversations...'|t }}">
+        </div>
+        <select id="typeFilter" class="filter-select">
+          <option value="all">{{ 'All Types'|t }}</option>
+          <option value="private">{{ 'Private Only'|t }}</option>
+          <option value="group">{{ 'Group Only'|t }}</option>
+        </select>
+      </div>
+    </div>
+
+    {% if conversations|length > 0 %}
+      <div class="table-responsive">
+        <table class="users-table conversations-table">
+          <thead>
+            <tr>
+              <th><i class="fas fa-hashtag"></i> {{ 'ID'|t }}</th>
+              <th><i class="fas fa-comment-dots"></i> {{ 'Conversation'|t }}</th>
+              <th><i class="fas fa-tag"></i> {{ 'Type'|t }}</th>
+              <th><i class="fas fa-users"></i> {{ 'Participants'|t }}</th>
+              <th><i class="fas fa-envelope"></i> {{ 'Messages'|t }}</th>
+              <th><i class="far fa-calendar"></i> {{ 'Created'|t }}</th>
+              <th><i class="far fa-clock"></i> {{ 'Last Activity'|t }}</th>
+              <th><i class="fas fa-cog"></i> {{ 'Actions'|t }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for conversation in conversations %}
+              <tr class="conversation-row" data-type="{{ conversation.type }}" data-id="{{ conversation.conversation_id }}">
+                <td class="conversation-id">
+                  <strong>#{{ conversation.id }}</strong>
+                </td>
+                <td class="conversation-info">
+                  {% if conversation.type == 'group' %}
+                    <div class="conversation-avatar">
+                      <i class="fas fa-users"></i>
+                    </div>
+                    <div class="conversation-details">
+                      <span class="conversation-name">{{ conversation.name }}</span>
+                      <div class="conversation-meta">
+                        <i class="fas fa-hashtag"></i> {{ conversation.conversation_id|slice(0, 8) }}
+                      </div>
+                    </div>
+                  {% else %}
+                    <div class="conversation-avatar">
+                      <i class="fas fa-user-friends"></i>
+                    </div>
+                    <div class="conversation-details">
+                      {% if conversation.participants|length > 0 %}
+                        <span class="conversation-name">{{ conversation.participants|join(' & ') }}</span>
+                      {% else %}
+                        <span class="conversation-name">{{ 'Private Chat'|t }}</span>
+                      {% endif %}
+                      <div class="conversation-meta">
+                        <i class="fas fa-hashtag"></i> {{ conversation.conversation_id|slice(0, 8) }}
+                      </div>
+                    </div>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  {% if conversation.type == 'group' %}
+                    <span class="badge badge-info">
+                      <i class="fas fa-users"></i> {{ 'Group'|t }}
+                    </span>
+                  {% else %}
+                    <span class="badge badge-primary">
+                      <i class="fas fa-user-friends"></i> {{ 'Private'|t }}
+                    </span>
+                  {% endif %}
+                </td>
+                <td class="text-center">
+                  <span class="badge badge-secondary">
+                    <i class="fas fa-user"></i> {{ conversation.participants_count }}
+                  </span>
+                </td>
+                <td class="text-center">
+                  <span class="badge badge-success">
+                    <i class="fas fa-envelope"></i> {{ conversation.message_count }}
+                  </span>
+                </td>
+                <td class="conversation-date">
+                  <i class="far fa-calendar-alt"></i>
+                  {{ conversation.created|date('M d, Y') }}
+                  <div class="date-time">{{ conversation.created|date('H:i') }}</div>
+                </td>
+                <td class="conversation-date">
+                  {% if conversation.last_message_at %}
+                    <i class="far fa-clock"></i>
+                    {{ conversation.last_message_at|date('M d, Y') }}
+                    <div class="date-time">{{ conversation.time_ago }}</div>
+                  {% else %}
+                    <span class="text-muted">{{ 'No messages'|t }}</span>
+                  {% endif %}
+                </td>
+                <td class="actions-cell">
+                  <div class="action-buttons">
+                    <a href="/admin/chat/conversations/{{ conversation.conversation_id }}" class="btn-action btn-view" title="{{ 'View Details'|t }}">
+                      <i class="fas fa-eye"></i>
+                    </a>
+                    <button class="btn-action btn-danger action-delete" data-conversation-id="{{ conversation.conversation_id }}" title="{{ 'Delete Conversation'|t }}">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      {# Pagination #}
+      {{ pager }}
+      
     {% else %}
       <div class="empty-state">
-        <div class="empty-icon">💬</div>
-        <h2>{{ 'No conversations found'|t }}</h2>
-        <p>{{ 'TODO: Fetch conversations from Node.js backend'|t }}</p>
+        <i class="fas fa-comments"></i>
+        <p>{{ 'No conversations found'|t }}</p>
+        <small>{{ 'Conversations will appear here when users start chatting'|t }}</small>
       </div>
     {% endif %}
 

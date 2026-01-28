@@ -21,28 +21,38 @@ const onlineUsers = new Map(); // {userId: socketId}
 
 io.on("connection", async (socket) => {
   const user = socket.user;
+  const userId = user._id.toString();
 
-  // console.log(`${user.displayName} online với socket ${socket.id}`);
+  console.log(
+    `✅ [Socket] User connected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
+  );
 
   onlineUsers.set(user._id, socket.id);
 
   io.emit("online-users", Array.from(onlineUsers.keys()));
 
   const conversationIds = await getUserConversationsForSocketIO(user._id);
+  console.log(`  📍 Joined conversation rooms:`, conversationIds);
   conversationIds.forEach((id) => {
     socket.join(id);
   });
 
   socket.on("join-conversation", (conversationId) => {
+    console.log(
+      `  📍 join-conversation: ${user.displayName} joined room ${conversationId}`,
+    );
     socket.join(conversationId);
   });
 
-  socket.join(user._id.toString());
+  socket.join(userId);
+  console.log(`  📍 Joined user room: ${userId}`);
 
   socket.on("disconnect", () => {
+    console.log(
+      `❌ [Socket] User disconnected: ${user.displayName} (${userId})`,
+    );
     onlineUsers.delete(user._id);
     io.emit("online-users", Array.from(onlineUsers.keys()));
-    /* console.log(`socket disconnected: ${socket.id}`); */
   });
 });
 
