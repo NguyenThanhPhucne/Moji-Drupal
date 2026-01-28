@@ -395,3 +395,116 @@ export const deleteConversation = async (req, res) => {
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
+// 🔥 ADMIN API: Lấy tất cả conversations với dữ liệu thật từ MongoDB (cho Drupal admin)
+export const getAdminConversations = async (req, res) => {
+  try {
+    console.log("📊 [getAdminConversations] Fetching real data from MongoDB");
+
+    // Lấy tất cả conversations với populated data
+    const conversations = await Conversation.find()
+      .populate({
+        path: "participants.userId",
+        select: "_id displayName avatarUrl drupalId",
+      })
+      .populate({
+        path: "lastMessage.senderId",
+        select: "_id displayName",
+      })
+      .sort({ lastMessageAt: -1 })
+      .lean();
+
+    console.log(
+      `📊 [getAdminConversations] Found ${conversations.length} conversations`,
+    );
+    if (conversations.length > 0) {
+      console.log(
+        `🔍 Sample conversation:`,
+        JSON.stringify(conversations[0], null, 2),
+      );
+    }
+
+    // Enrich data
+    const enriched = conversations.map((conv) => {
+      const lastActivity = conv.lastMessageAt
+        ? new Date(conv.lastMessageAt)
+        : null;
+      const now = new Date();
+      const diffMs = lastActivity ? now - lastActivity : null;
+
+      let timeAgo = "Never";
+      if (diffMs) {
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) timeAgo = "Just now";
+        else if (diffMins < 60) timeAgo = `${diffMins}m ago`;
+        else if (diffHours < 24) timeAgo = `${diffHours}h ago`;
+        else if (diffDays < 7) timeAgo = `${diffDays}d ago`;
+        else timeAgo = lastActivity.toLocaleDateString();
+      }
+
+      // Filter out null/undefined participants
+      const validParticipants = (conv.participants || [])
+        .filter((p) => p && p.userId)
+        .map((p) => ({
+          userId: p.userId?._id || p.userId,
+          displayName: p.userId?.displayName || "Unknown User",
+          drupalId: p.userId?.drupalId || "N/A",
+        }));
+
+      console.log(
+        `🔍 Conversation ${conv._id}: ${validParticipants.length} valid participants out of ${(conv.participants || []).length}`,
+      );
+
+      return {
+        _id: conv._id,
+        type: conv.type,
+        name: conv.group?.name || "Direct Chat",
+        messageCount: conv.messageCount || 0,
+        participantCount: validParticipants.length,
+        participants: validParticipants,
+        lastMessage: conv.lastMessage?.content || "No messages",
+        lastMessageAt: lastActivity,
+        timeAgo,
+        createdAt: conv.createdAt,
+      };
+    });
+
+    // Statistics
+    const stats = {
+      totalConversations: enriched.length,
+      privateConversations: enriched.filter((c) => c.type === "direct").length,
+      groupConversations: enriched.filter((c) => c.type === "group").length,
+      activeTodayCount: enriched.filter(
+        (c) =>
+          c.lastMessageAt &&
+          c.lastMessageAt > new Date(Date.now() - 24 * 60 * 60 * 1000),
+      ).length,
+      totalMessages: enriched.reduce((sum, c) => sum + c.messageCount, 0),
+      avgParticipants:
+        Math.round(
+          (enriched.reduce((sum, c) => sum + c.participantCount, 0) /
+            enriched.length) *
+            100,
+        ) / 100,
+    };
+
+    console.log(
+      `✅ [getAdminConversations] Found ${enriched.length} conversations`,
+    );
+    return res.status(200).json({
+      success: true,
+      data: enriched,
+      stats,
+      lastUpdated: new Date(),
+    });
+  } catch (error) {
+    console.error("❌ [getAdminConversations] Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Không thể lấy dữ liệu conversations",
+      error: error.message,
+    });
+  }
+};

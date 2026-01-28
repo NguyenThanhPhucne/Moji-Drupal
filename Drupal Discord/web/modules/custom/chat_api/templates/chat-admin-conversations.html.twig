@@ -83,6 +83,7 @@
               <th><i class="fas fa-comment-dots"></i> {{ 'Conversation'|t }}</th>
               <th><i class="fas fa-tag"></i> {{ 'Type'|t }}</th>
               <th><i class="fas fa-users"></i> {{ 'Participants'|t }}</th>
+              <th><i class="fas fa-message"></i> {{ 'Last Message'|t }}</th>
               <th><i class="fas fa-envelope"></i> {{ 'Messages'|t }}</th>
               <th><i class="far fa-calendar"></i> {{ 'Created'|t }}</th>
               <th><i class="far fa-clock"></i> {{ 'Last Activity'|t }}</th>
@@ -91,7 +92,7 @@
           </thead>
           <tbody>
             {% for conversation in conversations %}
-              <tr class="conversation-row" data-type="{{ conversation.type }}" data-id="{{ conversation.conversation_id }}">
+              <tr class="conversation-row" data-type="{{ conversation.type }}" data-id="{{ conversation._id }}">
                 <td class="conversation-id">
                   <strong>#{{ conversation.id }}</strong>
                 </td>
@@ -103,7 +104,7 @@
                     <div class="conversation-details">
                       <span class="conversation-name">{{ conversation.name }}</span>
                       <div class="conversation-meta">
-                        <i class="fas fa-hashtag"></i> {{ conversation.conversation_id|slice(0, 8) }}
+                        <i class="fas fa-hashtag"></i> {{ conversation._id|slice(0, 8) }}
                       </div>
                     </div>
                   {% else %}
@@ -112,12 +113,16 @@
                     </div>
                     <div class="conversation-details">
                       {% if conversation.participants|length > 0 %}
-                        <span class="conversation-name">{{ conversation.participants|join(' & ') }}</span>
+                        <span class="conversation-name">
+                          {% for p in conversation.participants %}
+                            {{ p.displayName }}{% if not loop.last %} & {% endif %}
+                          {% endfor %}
+                        </span>
                       {% else %}
                         <span class="conversation-name">{{ 'Private Chat'|t }}</span>
                       {% endif %}
                       <div class="conversation-meta">
-                        <i class="fas fa-hashtag"></i> {{ conversation.conversation_id|slice(0, 8) }}
+                        <i class="fas fa-hashtag"></i> {{ conversation._id|slice(0, 8) }}
                       </div>
                     </div>
                   {% endif %}
@@ -133,36 +138,54 @@
                     </span>
                   {% endif %}
                 </td>
+                <td class="participants-cell">
+                  <div class="participants-list">
+                    {% for participant in conversation.participants %}
+                      <span class="participant-badge" title="Drupal ID: {{ participant.drupalId }}">
+                        <i class="fas fa-user-circle"></i> {{ participant.displayName }}
+                      </span>
+                    {% endfor %}
+                  </div>
+                </td>
+                <td class="last-message-cell">
+                  <small>
+                    {% if conversation.lastMessage %}
+                      {{ conversation.lastMessage|slice(0, 40) }}{% if conversation.lastMessage|length > 40 %}...{% endif %}
+                    {% else %}
+                      <span class="text-muted">{{ 'No messages'|t }}</span>
+                    {% endif %}
+                  </small>
+                </td>
                 <td class="text-center">
                   <span class="badge badge-secondary">
-                    <i class="fas fa-user"></i> {{ conversation.participants_count }}
+                    <i class="fas fa-user"></i> {{ conversation.participantCount }}
                   </span>
                 </td>
                 <td class="text-center">
                   <span class="badge badge-success">
-                    <i class="fas fa-envelope"></i> {{ conversation.message_count }}
+                    <i class="fas fa-envelope"></i> {{ conversation.messageCount }}
                   </span>
                 </td>
                 <td class="conversation-date">
                   <i class="far fa-calendar-alt"></i>
-                  {{ conversation.created|date('M d, Y') }}
-                  <div class="date-time">{{ conversation.created|date('H:i') }}</div>
+                  {{ conversation.createdAt|date('M d, Y') }}
+                  <div class="date-time">{{ conversation.createdAt|date('H:i') }}</div>
                 </td>
                 <td class="conversation-date">
-                  {% if conversation.last_message_at %}
+                  {% if conversation.lastMessageAt %}
                     <i class="far fa-clock"></i>
-                    {{ conversation.last_message_at|date('M d, Y') }}
-                    <div class="date-time">{{ conversation.time_ago }}</div>
+                    {{ conversation.lastMessageAt|date('M d, Y') }}
+                    <div class="date-time">{{ conversation.timeAgo }}</div>
                   {% else %}
                     <span class="text-muted">{{ 'No messages'|t }}</span>
                   {% endif %}
                 </td>
                 <td class="actions-cell">
                   <div class="action-buttons">
-                    <a href="/admin/chat/conversations/{{ conversation.conversation_id }}" class="btn-action btn-view" title="{{ 'View Details'|t }}">
+                    <a href="/admin/chat/conversations/{{ conversation._id }}" class="btn-action btn-view" title="{{ 'View Details'|t }}">
                       <i class="fas fa-eye"></i>
                     </a>
-                    <button class="btn-action btn-danger action-delete" data-conversation-id="{{ conversation.conversation_id }}" title="{{ 'Delete Conversation'|t }}">
+                    <button class="btn-action btn-danger action-delete" data-conversation-id="{{ conversation._id }}" title="{{ 'Delete Conversation'|t }}">
                       <i class="fas fa-trash"></i>
                     </button>
                   </div>

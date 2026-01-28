@@ -7,6 +7,7 @@ import userRoute from "./routes/userRoute.js";
 import friendRoute from "./routes/friendRoute.js";
 import messageRoute from "./routes/messageRoute.js";
 import conversationRoute from "./routes/conversationRoute.js";
+import { getAdminConversations } from "./controllers/conversationController.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import cors from "cors";
@@ -39,10 +40,13 @@ const swaggerDocument = JSON.parse(
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// public routes
+// public routes (no auth required)
 app.use("/api/auth", authRoute);
 
-// private routes
+// admin routes (no auth required - Drupal has its own auth)
+app.get("/api/conversations/admin/conversations", getAdminConversations);
+
+// private routes (auth required)
 app.use(protectedRoute);
 app.use("/api/users", userRoute);
 app.use("/api/friends", friendRoute);

@@ -99,10 +99,27 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       toast.success(`Bạn có cuộc trò chuyện mới! 💬`);
     });
 
-    // conversation deleted
+    // conversation deleted - from other participants
     socket.on("conversation-deleted", ({ conversationId }) => {
       console.log("🗑️ Received conversation-deleted event:", conversationId);
-      useChatStore.getState().deleteConversation(conversationId);
+      // Only remove from store (don't call API again)
+      set((state) => ({
+        // This will be handled by chat store, just log it
+      }));
+      useChatStore.getState().updateConversation({
+        _id: conversationId,
+        deleted: true,
+      });
+      // Remove from conversations list
+      useChatStore.setState((state) => ({
+        conversations: state.conversations.filter(
+          (c) => c._id !== conversationId,
+        ),
+        activeConversationId:
+          state.activeConversationId === conversationId
+            ? null
+            : state.activeConversationId,
+      }));
       toast.info("Một cuộc hội thoại đã bị xoá");
     });
   },

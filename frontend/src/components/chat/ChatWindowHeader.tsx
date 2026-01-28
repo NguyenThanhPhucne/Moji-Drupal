@@ -28,13 +28,14 @@ import {
   AlertDialogTitle,
 } from "../ui/dialog";
 import { useNavigate } from "react-router-dom";
+import { chatService } from "@/services/chatService";
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
-  const { conversations, activeConversationId, deleteConversation, loading } =
-    useChatStore();
+  const { conversations, activeConversationId, loading } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const navigate = useNavigate();
 
   let otherUser;
@@ -57,13 +58,22 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   }
 
   const handleDeleteConversation = async () => {
-    const success = await deleteConversation(chat._id);
-    if (success) {
+    try {
+      setIsDeleting(true);
+      await chatService.deleteConversation(chat._id);
       toast.success("Cuộc hội thoại đã bị xoá");
       setShowDeleteDialog(false);
+      // Manually remove from store
+      useChatStore.setState((state) => ({
+        conversations: state.conversations.filter((c) => c._id !== chat._id),
+        activeConversationId: null,
+      }));
       navigate("/");
-    } else {
+    } catch (error) {
+      console.error("Error deleting conversation:", error);
       toast.error("Không thể xoá cuộc hội thoại");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -117,7 +127,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           {/* Delete Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={loading}>
+              <Button variant="ghost" size="icon" disabled={isDeleting}>
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -144,10 +154,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={loading}>Hủy</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConversation}
-              disabled={loading}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {loading ? "Đang xoá..." : "Xoá"}

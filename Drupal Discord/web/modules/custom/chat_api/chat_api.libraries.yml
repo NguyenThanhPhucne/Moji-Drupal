@@ -35,6 +35,14 @@ admin-tables:
     - core/drupal
     - core/jquery
 
+live-updates:
+  version: 1.0
+  js:
+    js/live-updates.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.ajax
+
 user-detail:
   version: 1.0
   css:

@@ -455,90 +455,58 @@ class AdminController extends ControllerBase {
    * Conversations list page.
    */
   public function conversationsList() {
-    // Fetch all conversations from database
-    $query = $this->database->select('chat_conversation', 'cc')
-      ->fields('cc')
-      ->orderBy('cc.last_message_at', 'DESC')
-      ->extend('Drupal\Core\Database\Query\PagerSelectExtender')
-      ->limit(25);
+    // Fetch real-time data from MongoDB via Node.js API
+    $node_api_url = 'http://localhost:5001/api/conversations/admin/conversations';
     
-    $conversations = $query->execute()->fetchAll();
-    
-    // Enrich each conversation with participant details
-    foreach ($conversations as $conversation) {
-      // Get participants for this conversation
-      $participants = $this->database->select('chat_conversation_participant', 'ccp')
-        ->fields('ccp', ['user_id'])
-        ->condition('ccp.conversation_id', $conversation->conversation_id)
-        ->execute()
-        ->fetchCol();
+    try {
+      $response = \Drupal::httpClient()->get($node_api_url);
+      $data = json_decode($response->getBody(), TRUE);
       
-      // Get user names for participants
-      if (!empty($participants)) {
-        $users_query = $this->database->select('users_field_data', 'u')
-          ->fields('u', ['uid', 'name'])
-          ->condition('u.uid', $participants, 'IN')
-          ->execute()
-          ->fetchAllKeyed();
-        
-        $conversation->participants = $users_query;
-      } else {
-        $conversation->participants = [];
+      if (!$data['success']) {
+        throw new \Exception('Failed to fetch conversations from MongoDB');
       }
       
-      // Calculate time ago for last message
-      if ($conversation->last_message_at) {
-        $diff = time() - $conversation->last_message_at;
-        if ($diff < 3600) {
-          $conversation->time_ago = floor($diff / 60) . ' minutes ago';
-        } elseif ($diff < 86400) {
-          $conversation->time_ago = floor($diff / 3600) . ' hours ago';
-        } else {
-          $conversation->time_ago = floor($diff / 86400) . ' days ago';
-        }
-      } else {
-        $conversation->time_ago = 'Never';
-      }
+      $conversations = $data['data'] ?? [];
+      $stats = $data['stats'] ?? [];
+      
+      \Drupal::logger('chat_api')->notice('Fetched @count conversations from MongoDB', [
+        '@count' => count($conversations),
+      ]);
+    } catch (\Exception $e) {
+      \Drupal::logger('chat_api')->error('Failed to fetch conversations: @error', [
+        '@error' => $e->getMessage(),
+      ]);
+      
+      // Fallback to empty data if API fails
+      $conversations = [];
+      $stats = [
+        'totalConversations' => 0,
+        'privateConversations' => 0,
+        'groupConversations' => 0,
+        'activeTodayCount' => 0,
+        'totalMessages' => 0,
+        'avgParticipants' => 0,
+      ];
     }
-    
-    // Get summary statistics
-    $stats = [
-      'total_conversations' => $this->database->select('chat_conversation', 'cc')
-        ->countQuery()
-        ->execute()
-        ->fetchField(),
-      'private_conversations' => $this->database->select('chat_conversation', 'cc')
-        ->condition('cc.type', 'private')
-        ->countQuery()
-        ->execute()
-        ->fetchField(),
-      'group_conversations' => $this->database->select('chat_conversation', 'cc')
-        ->condition('cc.type', 'group')
-        ->countQuery()
-        ->execute()
-        ->fetchField(),
-      'active_today' => $this->database->select('chat_conversation', 'cc')
-        ->condition('cc.last_message_at', strtotime('today'), '>=')
-        ->countQuery()
-        ->execute()
-        ->fetchField(),
-    ];
     
     $build = [
       '#theme' => 'chat_admin_conversations',
       '#conversations' => $conversations,
       '#stats' => $stats,
       '#attached' => [
-        'library' => ['chat_api/admin', 'chat_api/admin-tables'],
+        'library' => ['chat_api/admin', 'chat_api/admin-tables', 'chat_api/live-updates'],
+        'drupalSettings' => [
+          'chatAdminLive' => [
+            'apiUrl' => $node_api_url,
+            'refreshInterval' => 5000, // 5 seconds for real-time feel
+            'wsUrl' => 'ws://localhost:5001',
+          ],
+        ],
       ],
       '#cache' => [
-        'max-age' => 60,
-        'contexts' => ['user.permissions', 'url.query_args'],
+        'max-age' => 0, // No caching - always fresh
+        'contexts' => ['user.permissions'],
       ],
-    ];
-    
-    $build['pager'] = [
-      '#type' => 'pager',
     ];
     
     return $build;

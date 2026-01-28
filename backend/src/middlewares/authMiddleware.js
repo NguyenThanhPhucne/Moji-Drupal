@@ -2,6 +2,12 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
 export const protectedRoute = async (req, res, next) => {
+  // Skip auth for admin routes (Drupal has its own auth)
+  if (req.path.includes("/admin/conversations")) {
+    console.log("✅ [protectedRoute] Skipping auth for admin route");
+    return next();
+  }
+
   try {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
