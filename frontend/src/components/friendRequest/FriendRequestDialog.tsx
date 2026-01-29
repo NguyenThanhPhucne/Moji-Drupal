@@ -11,6 +11,7 @@ import { useNotificationStore } from "@/stores/useNotificationStore";
 import SentRequests from "./SentRequests";
 import ReceivedRequests from "./ReceivedRequests";
 import { PendingFriendRequests } from "../notifications/PendingFriendRequests";
+import { AcceptanceNotifications } from "../notifications/AcceptanceNotifications";
 
 interface FriendRequestDialogProps {
   open: boolean;
@@ -49,9 +50,10 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
         <PendingFriendRequests />
 
         <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="received">Đã nhận</TabsTrigger>
             <TabsTrigger value="sent">Đã gửi</TabsTrigger>
+            <TabsTrigger value="notifications">Thông báo</TabsTrigger>
           </TabsList>
 
           <TabsContent value="received">
@@ -60,6 +62,13 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
 
           <TabsContent value="sent">
             <SentRequests />
+          </TabsContent>
+
+          <TabsContent
+            value="notifications"
+            className="max-h-96 overflow-y-auto"
+          >
+            <AcceptanceNotifications />
           </TabsContent>
         </Tabs>
       </DialogContent>

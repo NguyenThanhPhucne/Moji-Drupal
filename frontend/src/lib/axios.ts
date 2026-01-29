@@ -26,12 +26,18 @@ api.interceptors.request.use((config) => {
     drupalRoutes.some((route) => config.url?.includes(route)) &&
     !isUsersMeRoute
   ) {
-    config.baseURL = import.meta.env.VITE_DRUPAL_API || "/api/drupal";
+    // Gọi trực tiếp Drupal trên port 8000 thay vì qua proxy
+    config.baseURL = "http://localhost:8000/api";
   }
 
-  // Gắn Token (Cho Node.js chat)
+  // Gắn Token (Cho Node.js chat) - KHÔNG override Content-Type nếu là FormData
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  // Nếu data là FormData, xóa Content-Type để browser tự set (với boundary)
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
   }
 
   return config;

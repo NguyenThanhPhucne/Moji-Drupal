@@ -138,6 +138,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         },
       });
     });
+
+    // Friend request accepted - notification when someone accepts your request
+    socket.on("friend-request-accepted", ({ from, message }) => {
+      console.log("✅ Friend request accepted:", from);
+      console.log("📦 Adding to notification store...");
+      try {
+        useNotificationStore.getState().addAcceptanceNotification({
+          type: "friend-accepted",
+          from,
+          message,
+          createdAt: new Date(),
+        });
+        console.log(
+          "✅ Notification stored:",
+          useNotificationStore.getState().acceptanceNotifications,
+        );
+      } catch (error) {
+        console.error("❌ Error adding notification:", error);
+      }
+      toast.success(message, {
+        description: `${from?.displayName} bây giờ là bạn bè của bạn! 🎉`,
+      });
+    });
   },
   disconnectSocket: () => {
     const socket = get().socket;

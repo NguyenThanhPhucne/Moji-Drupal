@@ -105,6 +105,16 @@ export const acceptFriendRequest = async (req, res) => {
       .select("_id displayName avatarUrl")
       .lean();
 
+    const receiver = await User.findById(request.to)
+      .select("_id displayName avatarUrl")
+      .lean();
+
+    // Emit socket event tới người gửi lời mời (to notify they are now friends)
+    io.to(request.from.toString()).emit("friend-request-accepted", {
+      from: receiver,
+      message: `${receiver?.displayName} đã chấp nhận lời mời kết bạn của bạn`,
+    });
+
     return res.status(200).json({
       message: "Chấp nhận lời mời kết bạn thành công",
       newFriend: {
