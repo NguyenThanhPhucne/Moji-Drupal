@@ -95,7 +95,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   <>
                     <UserAvatar
                       type={"sidebar"}
-                      name={otherUser?.displayName || "Moji"}
+                      name={otherUser?.displayName || "Coming"}
                       avatarUrl={otherUser?.avatarUrl || undefined}
                     />
                     {/* todo: socket io */}

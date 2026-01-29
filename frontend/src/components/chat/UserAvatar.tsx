@@ -12,7 +12,7 @@ const UserAvatar = ({ type, name, avatarUrl, className }: IUserAvatarProps) => {
   const bgColor = !avatarUrl ? "bg-blue-500" : "";
 
   if (!name) {
-    name = "Moji";
+    name = "Coming";
   }
 
   return (
@@ -21,13 +21,10 @@ const UserAvatar = ({ type, name, avatarUrl, className }: IUserAvatarProps) => {
         className ?? "",
         type === "sidebar" && "size-12 text-base",
         type === "chat" && "size-8 text-sm",
-        type === "profile" && "size-24 text-3xl shadow-md"
+        type === "profile" && "size-24 text-3xl shadow-md",
       )}
     >
-      <AvatarImage
-        src={avatarUrl}
-        alt={name}
-      />
+      <AvatarImage src={avatarUrl} alt={name} />
       <AvatarFallback className={`${bgColor} text-white font-semibold`}>
         {name.charAt(0)}
       </AvatarFallback>

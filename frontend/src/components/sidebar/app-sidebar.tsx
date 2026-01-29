@@ -30,10 +30,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { convoLoading } = useChatStore();
 
   return (
-    <Sidebar
-      variant="inset"
-      {...props}
-    >
+    <Sidebar variant="inset" {...props}>
       {/* Header */}
       <SidebarHeader>
         <SidebarMenu>
@@ -45,7 +42,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             >
               <a href="#">
                 <div className="flex w-full items-center px-2 justify-between">
-                  <h1 className="text-xl font-bold text-white">Moji</h1>
+                  <h1 className="text-xl font-bold text-white">Coming</h1>
                   <div className="flex items-center gap-2">
                     <Sun className="size-4 text-white/80" />
                     <Switch
@@ -74,7 +71,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* Group Chat */}
         <SidebarGroup>
           <div className="flex items-center justify-between">
-            <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
+            <SidebarGroupLabel className="uppercase">
+              nhóm chat
+            </SidebarGroupLabel>
             <NewGroupChatModal />
           </div>
 
@@ -86,10 +85,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* Dirrect Message */}
         <SidebarGroup>
           <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
-          <SidebarGroupAction
-            title="Kết Bạn"
-            className="cursor-pointer"
-          >
+          <SidebarGroupAction title="Kết Bạn" className="cursor-pointer">
             <AddFriendModal />
           </SidebarGroupAction>
 

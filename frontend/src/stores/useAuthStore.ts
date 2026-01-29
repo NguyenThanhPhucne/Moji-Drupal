@@ -70,7 +70,7 @@ export const useAuthStore = create<AuthState>()(
           // Sau khi có user, mới gọi chat
           useChatStore.getState().fetchConversations();
 
-          toast.success("Chào mừng bạn quay lại với Moji 🎉");
+          toast.success("Chào mừng bạn quay lại với Coming 🎉");
         } catch (error) {
           console.error(error);
           toast.error("Đăng nhập không thành công!");

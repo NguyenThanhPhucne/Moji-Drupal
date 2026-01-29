@@ -12,7 +12,7 @@ export const uploadImageFromBuffer = (buffer, options) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
-        folder: "moji_chat/avatars",
+        folder: "coming_chat/avatars",
         resource_type: "image",
         transformation: [{ width: 200, height: 200, crop: "fill" }],
         ...options,
@@ -23,7 +23,7 @@ export const uploadImageFromBuffer = (buffer, options) => {
         } else {
           resolve(result);
         }
-      }
+      },
     );
 
     uploadStream.end(buffer);

@@ -155,7 +155,7 @@ class ChatSettingsForm extends ConfigFormBase {
     $form['backend']['mongodb_connection_string'] = [
       '#type' => 'textfield',
       '#title' => $this->t('MongoDB Connection String'),
-      '#default_value' => $config->get('mongodb_connection_string') ?? 'mongodb://localhost:27017/moji',
+      '#default_value' => $config->get('mongodb_connection_string') ?? 'mongodb://localhost:27017/coming',
       '#description' => $this->t('MongoDB connection string for message storage.'),
     ];
 

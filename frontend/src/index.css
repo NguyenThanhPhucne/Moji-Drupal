@@ -7,38 +7,37 @@
 @layer base {
   :root {
     /* Base colors - soft pastels */
-    --background: 0 0% 100%; /*violet-50*/
+    --background: 0 0% 100%; /*white*/
     --foreground: 217.2 32.6% 17.5%; /* slate-800 */
 
     /* Card system */
-    --card: 250 100% 99%;
+    --card: 200 100% 99%;
     --card-foreground: 217.2 32.6% 17.5%;
 
     /* Popover system */
-    --popover: 250 100% 99%;
+    --popover: 200 100% 99%;
     --popover-foreground: 240 15% 15%;
 
-    /* Primary */
-    /* Tím */
-    --primary: 271 79% 47%;
+    /* Primary - Sky Blue Pastel (nam tính, chuyên nghiệp) */
+    --primary: 204 89% 51%;
     --primary-foreground: 210 40% 96.1%; /*slate-100*/
-    /* Hồng */
-    --primary-glow: 320 100% 70%;
+    /* Sky Blue Light */
+    --primary-glow: 206 100% 60%;
 
-    /* Secondary - lavender */
-    --secondary: 270 50% 92%;
-    --secondary-foreground: 280 100% 40%;
+    /* Secondary - Slate Blue */
+    --secondary: 210 70% 85%;
+    --secondary-foreground: 210 100% 30%;
 
     /* Muted */
-    --muted: 260 30% 95%;
-    --muted-foreground: 240 15% 50%;
+    --muted: 210 30% 92%;
+    --muted-foreground: 210 15% 50%;
 
-    /* Accent - cyan */
-    --accent: 180 100% 75%;
-    --accent-foreground: 240 100% 15%;
+    /* Accent - Teal (bổ sung cho blue) */
+    --accent: 174 100% 45%;
+    --accent-foreground: 210 100% 98%;
 
     /* Chat colors */
-    --chat-bubble-sent: 271 79% 47%;
+    --chat-bubble-sent: 204 89% 51%;
     --chat-bubble-sent-foreground: 0 0% 100%;
     --chat-bubble-received: 0 0% 96%;
     --chat-bubble-received-foreground: 240 15% 15%;
@@ -52,7 +51,7 @@
     --warning-foreground: 0 0% 100%;
 
     /* Info */
-    --info: 198.6 88.7% 48.4%;
+    --info: 204 89% 51%;
     --info-foreground: 0 0% 100%;
 
     /* Destructive */
@@ -60,9 +59,9 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Border and input */
-    --border: 282 16% 87%;
-    --input: 260 30% 92%;
-    --ring: 271 79% 47%;
+    --border: 204 30% 87%;
+    --input: 210 30% 92%;
+    --ring: 204 89% 51%;
 
     /* Design system values */
     --radius: 1rem;
@@ -70,54 +69,54 @@
     /* Gradients */
     --gradient-primary: linear-gradient(
       135deg,
-      hsl(var(--primary)),
-      hsl(var(--primary-glow))
+      hsl(204, 89%, 51%),
+      hsl(206, 100%, 60%)
     );
     --gradient-chat: linear-gradient(
       135deg,
-      hsl(280, 100%, 65%),
-      hsl(320, 100%, 70%)
+      hsl(204, 89%, 51%),
+      hsl(174, 100%, 45%)
     );
     --gradient-accent: linear-gradient(
       90deg,
-      hsl(var(--accent)),
+      hsl(174, 100%, 45%),
       hsl(200, 100%, 70%)
     );
 
     --gradient-glass: linear-gradient(
       135deg,
-      hsl(250, 100%, 98%) 0%,
-      hsl(260, 50%, 96%) 100%
+      hsl(200, 100%, 98%) 0%,
+      hsl(210, 50%, 96%) 100%
     );
 
     /* pattern craft */
     --gradient-purple: radial-gradient(
       125% 125% at 50% 10%,
       hsla(0, 0%, 100%, 1) 40%,
-      hsla(262, 83%, 58%, 0.5) 100%
+      hsla(204, 89%, 51%, 0.5) 100%
     );
 
     /* Shadows */
-    --shadow-soft: 0 8px 32px -8px hsl(271 79% 47% / 0.15);
+    --shadow-soft: 0 8px 32px -8px hsl(204 89% 51% / 0.15);
     --shadow-glow: 0 0 40px hsl(var(--primary) / 0.3);
-    --shadow-bubble: 0 4px 20px -4px hsl(280 50% 70% / 0.2);
+    --shadow-bubble: 0 4px 20px -4px hsl(204 89% 51% / 0.2);
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;
 
-    --sidebar-foreground: 215.3 25% 26.7%; /*slate-700*/
+    --sidebar-foreground: 210 20% 30%; /*slate-700*/
 
-    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary: 204 89% 51%;
 
     --sidebar-primary-foreground: 0 0% 98%;
 
-    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent: 210 30% 92%;
 
-    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-accent-foreground: 210 20% 30%;
 
-    --sidebar-border: 220 13% 91%;
+    --sidebar-border: 204 30% 87%;
 
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-ring: 204 89% 51%;
 
     /* Animations */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -125,34 +124,38 @@
   }
 
   .dark {
-    /* Dark mode - neon on dark aesthetic */
-    --background: 240 15% 18%;
-    --foreground: 214.3 31.8% 91.4%; /* slate-200 */
+    /* Dark mode - Professional Sky Blue theme */
+    --background: 210 25% 15%;
+    --foreground: 210 20% 90%; /* light slate */
 
-    --card: 240 15% 12%;
-    --card-foreground: 214.3 31.8% 91.4%;
+    --card: 210 25% 12%;
+    --card-foreground: 210 20% 90%;
 
-    --popover: 240 15% 12%;
-    --popover-foreground: 250 100% 95%;
+    --popover: 210 25% 12%;
+    --popover-foreground: 204 89% 85%;
 
-    --primary: 280 100% 70%;
-    --primary-foreground: 240 15% 8%;
-    --primary-glow: 320 100% 80%;
+    /* Primary - Sky Blue (đậm hơn cho dark mode) */
+    --primary: 204 89% 60%;
+    --primary-foreground: 210 25% 8%;
+    --primary-glow: 206 100% 70%;
 
-    --secondary: 270 20% 20%;
-    --secondary-foreground: 280 100% 80%;
+    /* Secondary - Slate Blue */
+    --secondary: 210 40% 35%;
+    --secondary-foreground: 204 89% 75%;
 
-    --muted: 240 15% 15%;
-    --muted-foreground: 240 15% 70%;
+    /* Muted */
+    --muted: 210 25% 20%;
+    --muted-foreground: 210 20% 70%;
 
-    --accent: 180 100% 60%;
-    --accent-foreground: 240 15% 8%;
+    /* Accent - Teal */
+    --accent: 174 100% 50%;
+    --accent-foreground: 210 25% 8%;
 
     /* Chat bubbles in dark mode */
-    --chat-bubble-sent: 280 100% 65%;
+    --chat-bubble-sent: 204 89% 60%;
     --chat-bubble-sent-foreground: 0 0% 100%;
-    --chat-bubble-received: 240 15% 18%;
-    --chat-bubble-received-foreground: 250 100% 90%;
+    --chat-bubble-received: 210 25% 15%;
+    --chat-bubble-received-foreground: 204 89% 85%;
 
     /* Status colors */
     --online: 140 100% 60%;
@@ -162,51 +165,52 @@
     --destructive: 0 80% 47%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 281 15% 25%;
-    --input: 240 15% 18%;
-    --ring: 280 100% 70%;
+    /* Border and input */
+    --border: 204 30% 25%;
+    --input: 210 25% 15%;
+    --ring: 204 89% 60%;
 
     /* Dark mode gradients */
     --gradient-primary: linear-gradient(
       135deg,
-      hsl(280, 100%, 70%),
-      hsl(320, 100%, 80%)
+      hsl(204, 89%, 60%),
+      hsl(206, 100%, 70%)
     );
     --gradient-chat: linear-gradient(
       135deg,
-      hsl(280, 100%, 70%),
-      hsl(320, 100%, 75%)
+      hsl(204, 89%, 60%),
+      hsl(174, 100%, 50%)
     );
     --gradient-accent: linear-gradient(
       90deg,
-      hsl(180, 100%, 60%),
+      hsl(174, 100%, 50%),
       hsl(200, 100%, 70%)
     );
     --gradient-glass: linear-gradient(
       45deg,
-      hsl(240, 15%, 12%) 0%,
-      hsl(240, 15%, 18%) 100%
+      hsl(210, 25%, 12%) 0%,
+      hsl(210, 25%, 18%) 100%
     );
 
     --gradient-purple: radial-gradient(
       125% 125% at 50% 10%,
       hsla(0, 0%, 0%, 1) 40%,
-      hsla(310, 96%, 11%, 0.5) 100%
+      hsla(204, 89%, 40%, 0.5) 100%
     );
 
     /* Dark shadows with glow */
-    --shadow-soft: 0 8px 32px -8px hsl(280 100% 70% / 0.25);
+    --shadow-soft: 0 8px 32px -8px hsl(204 89% 60% / 0.25);
     --shadow-glow: 0 0 40px hsl(var(--primary) / 0.4);
-    --shadow-bubble: 0 4px 20px -4px hsl(280 80% 50% / 0.3);
+    --shadow-bubble: 0 4px 20px -4px hsl(204 89% 50% / 0.3);
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 210 25% 15%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 204 89% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 210 25% 20%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 210 25% 20%;
+    --sidebar-ring: 204 89% 60%;
   }
 
   body {
@@ -314,7 +318,8 @@
 
   /* Message bounce in animation */
   .message-bounce {
-    animation: messageSlideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+    animation: messageSlideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)
+      forwards;
   }
 
   @keyframes messageSlideIn {

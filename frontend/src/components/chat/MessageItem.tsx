@@ -30,7 +30,7 @@ const MessageItem = ({
   const isGroupBreak = isShowTime || message.senderId !== prev?.senderId;
 
   const participant = selectedConvo.participants.find(
-    (p: Participant) => p._id.toString() === message.senderId.toString()
+    (p: Participant) => p._id.toString() === message.senderId.toString(),
   );
 
   return (
@@ -45,7 +45,7 @@ const MessageItem = ({
       <div
         className={cn(
           "flex gap-2 message-bounce mt-1",
-          message.isOwn ? "justify-end" : "justify-start"
+          message.isOwn ? "justify-end" : "justify-start",
         )}
       >
         {/* avatar */}
@@ -54,7 +54,7 @@ const MessageItem = ({
             {isGroupBreak && (
               <UserAvatar
                 type="chat"
-                name={participant?.displayName ?? "Moji"}
+                name={participant?.displayName ?? "Coming"}
                 avatarUrl={participant?.avatarUrl ?? undefined}
               />
             )}
@@ -65,16 +65,20 @@ const MessageItem = ({
         <div
           className={cn(
             "max-w-xs lg:max-w-md space-y-1 flex flex-col",
-            message.isOwn ? "items-end" : "items-start"
+            message.isOwn ? "items-end" : "items-start",
           )}
         >
           <Card
             className={cn(
               "p-3",
-              message.isOwn ? "chat-bubble-sent border-0" : "chat-bubble-received"
+              message.isOwn
+                ? "chat-bubble-sent border-0"
+                : "chat-bubble-received",
             )}
           >
-            <p className="text-sm leading-relaxed break-words">{message.content}</p>
+            <p className="text-sm leading-relaxed break-words">
+              {message.content}
+            </p>
           </Card>
 
           {/* seen/ delivered */}
@@ -85,7 +89,7 @@ const MessageItem = ({
                 "text-xs px-1.5 py-0.5 h-4 border-0",
                 lastMessageStatus === "seen"
                   ? "bg-primary/20 text-primary"
-                  : "bg-muted text-muted-foreground"
+                  : "bg-muted text-muted-foreground",
               )}
             >
               {lastMessageStatus}
