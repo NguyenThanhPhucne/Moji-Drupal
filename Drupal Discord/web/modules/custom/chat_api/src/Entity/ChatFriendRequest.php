@@ -9,19 +9,19 @@ use Drupal\Core\Field\BaseFieldDefinition;
 /**
  * Defines the Chat Friend Request entity.
  *
- * Tương đương với MongoDB FriendRequest model trong code cũ.
- *
  * @ContentEntityType(
- *   id = "chat_friend_request",
- *   label = @Translation("Friend Request"),
- *   base_table = "chat_friend_request",
- *   entity_keys = {
- *     "id" = "id",
- *     "uuid" = "uuid",
- *   },
- *   handlers = {
- *     "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
- *   },
+ * id = "chat_friend_request",
+ * label = @Translation("Friend Request"),
+ * base_table = "chat_friend_request",
+ * admin_permission = "administer site configuration",
+ * entity_keys = {
+ * "id" = "id",
+ * "uuid" = "uuid",
+ * },
+ * handlers = {
+ * "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
+ * "views_data" = "Drupal\views\EntityViewsData",
+ * },
  * )
  */
 class ChatFriendRequest extends ContentEntityBase {
@@ -46,7 +46,7 @@ class ChatFriendRequest extends ContentEntityBase {
       ->setSetting('target_type', 'user')
       ->setRequired(TRUE);
 
-    // Message - lời nhắn kèm theo (maxlength: 300)
+    // Message
     $fields['message'] = BaseFieldDefinition::create('string_long')
       ->setLabel(t('Message'))
       ->setDescription(t('Optional message with the friend request'))

@@ -10,19 +10,19 @@ use Drupal\Core\Entity\EntityStorageInterface;
 /**
  * Defines the Chat Friend entity.
  *
- * Tương đương với MongoDB Friend model trong code cũ.
- *
  * @ContentEntityType(
- *   id = "chat_friend",
- *   label = @Translation("Friend Relationship"),
- *   base_table = "chat_friend",
- *   entity_keys = {
- *     "id" = "id",
- *     "uuid" = "uuid",
- *   },
- *   handlers = {
- *     "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
- *   },
+ * id = "chat_friend",
+ * label = @Translation("Friend Relationship"),
+ * base_table = "chat_friend",
+ * admin_permission = "administer site configuration",
+ * entity_keys = {
+ * "id" = "id",
+ * "uuid" = "uuid",
+ * },
+ * handlers = {
+ * "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
+ * "views_data" = "Drupal\views\EntityViewsData",
+ * },
  * )
  */
 class ChatFriend extends ContentEntityBase {
@@ -33,14 +33,14 @@ class ChatFriend extends ContentEntityBase {
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type) {
     $fields = parent::baseFieldDefinitions($entity_type);
 
-    // User A - tương đương userA trong MongoDB
+    // User A
     $fields['user_a'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel(t('User A'))
       ->setDescription(t('First user in friendship (smaller ID)'))
       ->setSetting('target_type', 'user')
       ->setRequired(TRUE);
 
-    // User B - tương đương userB trong MongoDB
+    // User B
     $fields['user_b'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel(t('User B'))
       ->setDescription(t('Second user in friendship (larger ID)'))
@@ -57,9 +57,6 @@ class ChatFriend extends ContentEntityBase {
 
   /**
    * {@inheritdoc}
-   * 
-   * Pre-save hook - GIỐNG NHƯ Friend.js pre-save
-   * Tự động sắp xếp userA < userB để tránh duplicate
    */
   public function preSave(EntityStorageInterface $storage) {
     parent::preSave($storage);
@@ -67,7 +64,6 @@ class ChatFriend extends ContentEntityBase {
     $a = (int) $this->get('user_a')->target_id;
     $b = (int) $this->get('user_b')->target_id;
 
-    // Sort như trong Friend.js
     if ($a > $b) {
       $this->set('user_a', $b);
       $this->set('user_b', $a);

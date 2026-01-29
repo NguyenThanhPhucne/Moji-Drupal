@@ -9,19 +9,19 @@ use Drupal\Core\Field\BaseFieldDefinition;
 /**
  * Defines the Chat Session entity.
  *
- * Tương đương với MongoDB Session model trong code cũ.
- *
  * @ContentEntityType(
- *   id = "chat_session",
- *   label = @Translation("Chat Session"),
- *   base_table = "chat_session",
- *   entity_keys = {
- *     "id" = "id",
- *     "uuid" = "uuid",
- *   },
- *   handlers = {
- *     "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
- *   },
+ * id = "chat_session",
+ * label = @Translation("Chat Session"),
+ * base_table = "chat_session",
+ * admin_permission = "administer site configuration",
+ * entity_keys = {
+ * "id" = "id",
+ * "uuid" = "uuid",
+ * },
+ * handlers = {
+ * "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
+ * "views_data" = "Drupal\views\EntityViewsData",
+ * },
  * )
  */
 class ChatSession extends ContentEntityBase {
@@ -32,14 +32,14 @@ class ChatSession extends ContentEntityBase {
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type) {
     $fields = parent::baseFieldDefinitions($entity_type);
 
-    // User ID - tương đương userId trong MongoDB
+    // User ID
     $fields['user_id'] = BaseFieldDefinition::create('entity_reference')
       ->setLabel(t('User'))
       ->setDescription(t('The user ID who owns this session'))
       ->setSetting('target_type', 'user')
       ->setRequired(TRUE);
 
-    // Refresh Token - tương đương refreshToken trong MongoDB
+    // Refresh Token
     $fields['refresh_token'] = BaseFieldDefinition::create('string')
       ->setLabel(t('Refresh Token'))
       ->setDescription(t('The refresh token string'))
@@ -48,13 +48,13 @@ class ChatSession extends ContentEntityBase {
       ])
       ->setRequired(TRUE);
 
-    // Expires At - tương đương expiresAt trong MongoDB
+    // Expires At
     $fields['expires_at'] = BaseFieldDefinition::create('timestamp')
       ->setLabel(t('Expires At'))
       ->setDescription(t('When this session expires'))
       ->setRequired(TRUE);
 
-    // Created - tự động như timestamps trong MongoDB
+    // Created
     $fields['created'] = BaseFieldDefinition::create('created')
       ->setLabel(t('Created'))
       ->setDescription(t('The time the session was created'));
