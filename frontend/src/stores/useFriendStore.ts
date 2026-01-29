@@ -1,6 +1,7 @@
 import { friendService } from "@/services/friendService";
 import type { FriendState } from "@/types/store";
 import { create } from "zustand";
+import { useNotificationStore } from "./useNotificationStore";
 
 export const useFriendStore = create<FriendState>((set, get) => ({
   friends: [],
@@ -44,6 +45,9 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       const { received, sent } = result;
 
       set({ receivedList: received, sentList: sent });
+
+      // Cập nhật notification count (chỉ tính số lời mời chưa đọc từ received list)
+      useNotificationStore.getState().setUnreadCount(received.length);
     } catch (error) {
       console.error("Lỗi xảy ra khi getAllFriendRequests", error);
     } finally {
@@ -58,6 +62,9 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       set((state) => ({
         receivedList: state.receivedList.filter((r) => r._id !== requestId),
       }));
+
+      // Giảm notification count
+      useNotificationStore.getState().decrementUnreadCount();
     } catch (error) {
       console.error("Lỗi xảy ra khi acceptRequest", error);
     }
@@ -70,6 +77,9 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       set((state) => ({
         receivedList: state.receivedList.filter((r) => r._id !== requestId),
       }));
+
+      // Giảm notification count
+      useNotificationStore.getState().decrementUnreadCount();
     } catch (error) {
       console.error("Lỗi xảy ra khi declineRequest", error);
     } finally {

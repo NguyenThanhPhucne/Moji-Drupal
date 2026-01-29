@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
+import { useNotificationStore } from "./useNotificationStore";
 import { toast } from "sonner";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
@@ -121,6 +122,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             : state.activeConversationId,
       }));
       toast.info("Một cuộc hội thoại đã bị xoá");
+    });
+
+    // Friend request received - real-time notification
+    socket.on("friend-request-received", ({ request, message }) => {
+      console.log("💌 Received friend request:", request);
+      useNotificationStore.getState().addPendingRequest(request);
+      toast.success(message, {
+        description: `${request.from.displayName} (@${request.from.username}) gửi lời mời kết bạn`,
+        action: {
+          label: "Xem",
+          onClick: () => {
+            // Có thể mở dialog ở đây nếu muốn
+          },
+        },
+      });
     });
   },
   disconnectSocket: () => {

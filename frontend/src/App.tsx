@@ -8,11 +8,13 @@ import { useThemeStore } from "./stores/useThemeStore";
 import { useEffect } from "react";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
+import { useFriendStore } from "./stores/useFriendStore";
 
 function App() {
   const { isDark, setTheme } = useThemeStore();
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
+  const { getAllFriendRequests } = useFriendStore();
 
   useEffect(() => {
     setTheme(isDark);
@@ -21,6 +23,8 @@ function App() {
   useEffect(() => {
     if (accessToken) {
       connectSocket();
+      // Load friend requests khi user đăng nhập
+      getAllFriendRequests();
     }
 
     return () => disconnectSocket();

@@ -7,8 +7,10 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFriendStore } from "@/stores/useFriendStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 import SentRequests from "./SentRequests";
 import ReceivedRequests from "./ReceivedRequests";
+import { PendingFriendRequests } from "../notifications/PendingFriendRequests";
 
 interface FriendRequestDialogProps {
   open: boolean;
@@ -18,33 +20,35 @@ interface FriendRequestDialogProps {
 const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
   const [tab, setTab] = useState("received");
   const { getAllFriendRequests } = useFriendStore();
+  const { resetUnreadCount } = useNotificationStore();
 
   useEffect(() => {
     const loadRequest = async () => {
       try {
         await getAllFriendRequests();
+        // Reset notification count khi mở dialog
+        resetUnreadCount();
       } catch (error) {
         console.error("Lỗi xảy ra khi load requests", error);
       }
     };
 
-    loadRequest();
-  }, []);
+    if (open) {
+      loadRequest();
+    }
+  }, [open, getAllFriendRequests, resetUnreadCount]);
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={setOpen}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Lời mời kết bạn</DialogTitle>
         </DialogHeader>
-        <Tabs
-          value={tab}
-          onValueChange={setTab}
-          className="w-full"
-        >
+
+        {/* Hiển thị lời mời mới */}
+        <PendingFriendRequests />
+
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="received">Đã nhận</TabsTrigger>
             <TabsTrigger value="sent">Đã gửi</TabsTrigger>

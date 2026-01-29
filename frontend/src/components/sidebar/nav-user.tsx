@@ -1,4 +1,5 @@
 import { Bell, ChevronsUpDown, UserIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -18,14 +19,25 @@ import {
 } from "@/components/ui/sidebar";
 import type { User } from "@/types/user";
 import Logout from "../auth/Logout";
-import { useState } from "react";
 import FriendRequestDialog from "../friendRequest/FriendRequestDialog";
 import ProfileDialog from "../profile/ProfileDialog";
+import { useFriendStore } from "@/stores/useFriendStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
+import { NotificationBadge } from "../notifications/NotificationBadge";
 
 export function NavUser({ user }: { user: User }) {
   const { isMobile } = useSidebar();
   const [friendRequestOpen, setfriendRequestOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { unreadFriendRequestCount } = useNotificationStore();
+  const { getAllFriendRequests } = useFriendStore();
+
+  // Load friend requests khi mở dialog
+  useEffect(() => {
+    if (friendRequestOpen) {
+      getAllFriendRequests();
+    }
+  }, [friendRequestOpen, getAllFriendRequests]);
 
   return (
     <>
@@ -38,16 +50,15 @@ export function NavUser({ user }: { user: User }) {
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage
-                    src={user.avatarUrl}
-                    alt={user.displayName}
-                  />
+                  <AvatarImage src={user.avatarUrl} alt={user.displayName} />
                   <AvatarFallback className="rounded-lg">
                     {user.displayName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.displayName}</span>
+                  <span className="truncate font-medium">
+                    {user.displayName}
+                  </span>
                   <span className="truncate text-xs">{user.username}</span>
                 </div>
                 <ChevronsUpDown className="ml-auto size-4" />
@@ -62,16 +73,15 @@ export function NavUser({ user }: { user: User }) {
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage
-                      src={user.avatarUrl}
-                      alt={user.username}
-                    />
+                    <AvatarImage src={user.avatarUrl} alt={user.username} />
                     <AvatarFallback className="rounded-lg">
                       {user.displayName.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.displayName}</span>
+                    <span className="truncate font-medium">
+                      {user.displayName}
+                    </span>
                     <span className="truncate text-xs">{user.username}</span>
                   </div>
                 </div>
@@ -82,9 +92,15 @@ export function NavUser({ user }: { user: User }) {
                   <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
                   Tài Khoản
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setfriendRequestOpen(true)}>
-                  <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
-                  Thông Báo
+                <DropdownMenuItem
+                  onClick={() => setfriendRequestOpen(true)}
+                  className="flex items-center justify-between"
+                >
+                  <div className="flex items-center">
+                    <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                    <span className="ml-2">Thông Báo</span>
+                  </div>
+                  <NotificationBadge showBell={false} className="ml-auto" />
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
@@ -104,10 +120,7 @@ export function NavUser({ user }: { user: User }) {
         setOpen={setfriendRequestOpen}
       />
 
-      <ProfileDialog
-        open={profileOpen}
-        setOpen={setProfileOpen}
-      />
+      <ProfileDialog open={profileOpen} setOpen={setProfileOpen} />
     </>
   );
 }
