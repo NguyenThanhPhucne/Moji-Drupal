@@ -9,8 +9,11 @@ import { useEffect } from "react";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
 import { useFriendStore } from "./stores/useFriendStore";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 
-function App() {
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+function AppContent() {
   const { isDark, setTheme } = useThemeStore();
   const { accessToken } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
@@ -46,6 +49,14 @@ function App() {
         </Routes>
       </BrowserRouter>
     </>
+  );
+}
+
+function App() {
+  return (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      <AppContent />
+    </GoogleOAuthProvider>
   );
 }
 

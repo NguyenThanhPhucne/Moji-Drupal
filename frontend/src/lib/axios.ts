@@ -15,17 +15,19 @@ api.interceptors.request.use((config) => {
   const { accessToken } = useAuthStore.getState();
 
   // Các API này phải gọi sang Drupal (Cổng 8000)
-  const drupalRoutes = ["/auth"];
+  // Exception: /auth/google là Node.js, không phải Drupal
+  const isDrupalAuthRoute = (url?: string) => {
+    if (!url) return false;
+    // Chỉ các Drupal auth routes mới redirect sang port 8000
+    // /auth/google, /auth/signin, /auth/signup là Node.js
+    return false; // Tất cả auth routes giờ là Node.js
+  };
 
   // EXCEPTION: /users/me phải gọi Node.js để lấy MongoDB _id
   const isUsersMeRoute = config.url?.includes("/users/me");
 
   // Kiểm tra URL
-  if (
-    config.url &&
-    drupalRoutes.some((route) => config.url?.includes(route)) &&
-    !isUsersMeRoute
-  ) {
+  if (config.url && isDrupalAuthRoute(config.url) && !isUsersMeRoute) {
     // Gọi trực tiếp Drupal trên port 8000 thay vì qua proxy
     config.baseURL = "http://localhost:8000/api";
   }

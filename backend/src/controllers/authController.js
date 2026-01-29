@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import Session from "../models/Session.js";
+import { OAuth2Client } from "google-auth-library";
 
 const ACCESS_TOKEN_TTL = "30m"; // thuờng là dưới 15m
 const REFRESH_TOKEN_TTL = 14 * 24 * 60 * 60 * 1000; // 14 ngày
@@ -14,7 +15,8 @@ export const signUp = async (req, res) => {
 
     if (!username || !password || !email || !firstName || !lastName) {
       return res.status(400).json({
-        message: "Không thể thiếu username, password, email, firstName, và lastName",
+        message:
+          "Không thể thiếu username, password, email, firstName, và lastName",
       });
     }
 
@@ -76,7 +78,7 @@ export const signIn = async (req, res) => {
       { userId: user._id },
       // @ts-ignore
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: ACCESS_TOKEN_TTL }
+      { expiresIn: ACCESS_TOKEN_TTL },
     );
 
     // tạo refresh token
@@ -140,7 +142,9 @@ export const refreshToken = async (req, res) => {
     const session = await Session.findOne({ refreshToken: token });
 
     if (!session) {
-      return res.status(403).json({ message: "Token không hợp lệ hoặc đã hết hạn" });
+      return res
+        .status(403)
+        .json({ message: "Token không hợp lệ hoặc đã hết hạn" });
     }
 
     // kiểm tra hết hạn chưa
@@ -154,13 +158,100 @@ export const refreshToken = async (req, res) => {
         userId: session.userId,
       },
       process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: ACCESS_TOKEN_TTL }
+      { expiresIn: ACCESS_TOKEN_TTL },
     );
 
     // return
     return res.status(200).json({ accessToken });
   } catch (error) {
     console.error("Lỗi khi gọi refreshToken", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+// Google OAuth authentication
+export const googleAuth = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: "Thiếu Google token" });
+    }
+
+    // Xác minh token từ Google
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+    } catch (error) {
+      console.error("Google token verification failed:", error);
+      return res.status(401).json({ message: "Google token không hợp lệ" });
+    }
+
+    const payload = ticket.getPayload();
+    const googleId = payload.sub;
+    const email = payload.email;
+    const displayName = payload.name;
+
+    // Tìm hoặc tạo user
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      // Tạo user mới từ thông tin Google
+      user = await User.create({
+        email,
+        googleId,
+        displayName,
+        // Không có password vì đăng nhập bằng Google
+        username: email.split("@")[0] + "_google_" + googleId.slice(-6),
+        hashedPassword: null,
+      });
+    } else if (!user.googleId) {
+      // Nếu user tồn tại nhưng chưa liên kết Google, liên kết ngay
+      user.googleId = googleId;
+      await user.save();
+    }
+
+    // Tạo access token
+    const accessToken = jwt.sign(
+      { userId: user._id },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: ACCESS_TOKEN_TTL },
+    );
+
+    // Tạo refresh token
+    const refreshToken = crypto.randomBytes(64).toString("hex");
+
+    // Tạo session mới
+    await Session.create({
+      userId: user._id,
+      refreshToken,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL),
+    });
+
+    // Trả refresh token về trong cookie
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: REFRESH_TOKEN_TTL,
+    });
+
+    // Trả access token về trong response
+    return res.status(200).json({
+      message: `User ${user.displayName} đã logged in với Google!`,
+      accessToken,
+      user: {
+        _id: user._id,
+        email: user.email,
+        displayName: user.displayName,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi gọi googleAuth", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

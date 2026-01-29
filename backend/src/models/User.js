@@ -11,7 +11,7 @@ const userSchema = new mongoose.Schema(
     },
     hashedPassword: {
       type: String,
-      required: true,
+      required: false, // Cho phép null khi đăng nhập bằng Google
     },
     email: {
       type: String,
@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+    },
+    googleId: {
+      type: String,
+      sparse: true, // Chỉ có khi đăng nhập bằng Google
+      unique: true,
     },
     drupalId: {
       type: Number,

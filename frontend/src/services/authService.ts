@@ -28,6 +28,13 @@ export const authService = {
     return res.data;
   },
 
+  googleAuth: async (token: string) => {
+    const res = await api.post("/auth/google", {
+      token,
+    });
+    return res.data;
+  },
+
   signOut: async () => {
     return api.post("/auth/signout");
   },
