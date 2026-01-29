@@ -183,6 +183,15 @@ chat_api.admin_conversation_delete:
     _permission: "administer chat"
   methods: [POST]
 
+# Friends management
+chat_api.admin_friends:
+  path: "/admin/chat/friends"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminController::friendsList'
+    _title: "Manage Friends"
+  requirements:
+    _permission: "moderate chat"
+
 # Friend requests management
 chat_api.admin_friend_requests:
   path: "/admin/chat/friend-requests"

@@ -621,6 +621,74 @@ class AdminController extends ControllerBase {
   }
 
   /**
+   * Friends list page - Display all friendships.
+   */
+  public function friendsList() {
+    // Query all friendships with pagination
+    $query = $this->database->select('chat_friend', 'cf')
+      ->fields('cf')
+      ->orderBy('cf.created', 'DESC')
+      ->extend('Drupal\Core\Database\Query\PagerSelectExtender')
+      ->limit(50);
+    
+    $friendships = $query->execute()->fetchAll();
+    
+    // Enrich with user details
+    foreach ($friendships as $friendship) {
+      // Load user A
+      $user_a = \Drupal\user\Entity\User::load($friendship->user_a);
+      if ($user_a) {
+        $friendship->user_a_name = $user_a->getAccountName();
+        $friendship->user_a_email = $user_a->getEmail();
+      }
+      
+      // Load user B
+      $user_b = \Drupal\user\Entity\User::load($friendship->user_b);
+      if ($user_b) {
+        $friendship->user_b_name = $user_b->getAccountName();
+        $friendship->user_b_email = $user_b->getEmail();
+      }
+      
+      // Calculate time ago
+      $diff = time() - $friendship->created;
+      if ($diff < 3600) {
+        $friendship->time_ago = floor($diff / 60) . ' minutes ago';
+      } elseif ($diff < 86400) {
+        $friendship->time_ago = floor($diff / 3600) . ' hours ago';
+      } else {
+        $friendship->time_ago = floor($diff / 86400) . ' days ago';
+      }
+    }
+    
+    // Get summary stats
+    $stats = [
+      'total_friends' => $this->getTotalFriendships(),
+      'new_friendships_today' => $this->getNewFriendshipsToday(),
+      'new_friendships_week' => $this->getNewFriendshipsThisWeek(),
+      'avg_friends_per_user' => $this->getAverageFriendsPerUser(),
+    ];
+    
+    $build = [
+      '#theme' => 'chat_admin_friends',
+      '#friendships' => $friendships,
+      '#stats' => $stats,
+      '#attached' => [
+        'library' => ['chat_api/admin', 'chat_api/admin-tables'],
+      ],
+      '#cache' => [
+        'max-age' => 60,
+        'contexts' => ['user.permissions', 'url.query_args'],
+      ],
+    ];
+    
+    $build['pager'] = [
+      '#type' => 'pager',
+    ];
+    
+    return $build;
+  }
+
+  /**
    * Friend requests list with full user details.
    */
   public function friendRequestsList() {
@@ -942,6 +1010,48 @@ class AdminController extends ControllerBase {
     }
     
     return $requests;
+  }
+
+  /**
+   * Get new friendships today.
+   */
+  private function getNewFriendshipsToday() {
+    $today = strtotime('today');
+    return $this->database->select('chat_friend', 'cf')
+      ->fields('cf', ['id'])
+      ->condition('cf.created', $today, '>=')
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
+  /**
+   * Get new friendships this week.
+   */
+  private function getNewFriendshipsThisWeek() {
+    $week_ago = strtotime('-7 days');
+    return $this->database->select('chat_friend', 'cf')
+      ->fields('cf', ['id'])
+      ->condition('cf.created', $week_ago, '>=')
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
+  /**
+   * Get average friends per user.
+   */
+  private function getAverageFriendsPerUser() {
+    $total_users = (int) $this->getTotalUsers();
+    if ($total_users === 0) {
+      return 0;
+    }
+    
+    $total_friendships = (int) $this->getTotalFriendships();
+    // Each friendship is counted twice (user_a + user_b), so total friend count is friendships * 2
+    $total_friend_connections = $total_friendships * 2;
+    
+    return round($total_friend_connections / $total_users, 2);
   }
 
 }
