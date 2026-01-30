@@ -3,7 +3,7 @@ import axios from "axios";
 
 // Cấu hình Proxy (Đừng điền cứng http://localhost:5001 ở đây!)
 const api = axios.create({
-  baseURL: import.meta.env.VITE_NODE_API || "/api",
+  baseURL: import.meta.env.VITE_NODE_API || "/api/node",
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
