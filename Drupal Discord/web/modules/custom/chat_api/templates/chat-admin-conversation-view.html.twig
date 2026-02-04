@@ -4,8 +4,9 @@
  * Template for Conversation Detail View.
  *
  * Available variables:
- * - conversation: Conversation object
- * - participants: Array of participant objects with user details
+ * - conversation: Conversation object from MongoDB
+ * - messages: Array of message objects
+ * - conversation_id: MongoDB conversation ID
  */
 #}
 
@@ -28,7 +29,7 @@
       </h1>
     </div>
     <div class="header-actions">
-      <button class="btn btn-danger" onclick="if(confirm('{{ 'Are you sure you want to delete this conversation?'|t }}')) location.href='/admin/chat/conversations/{{ conversation.conversation_id }}/delete'">
+      <button class="btn btn-danger" id="deleteConversationBtn" data-conversation-id="{{ conversation_id }}">
         <i class="fas fa-trash"></i> {{ 'Delete Conversation'|t }}
       </button>
     </div>
@@ -55,7 +56,7 @@
           {% endif %}
         </h2>
         <p class="email">
-          <i class="fas fa-hashtag"></i> {{ conversation.conversation_id }}
+          <i class="fas fa-hashtag"></i> {{ conversation._id|slice(0, 12) }}...
         </p>
         <div class="profile-badges">
           {% if conversation.type == 'group' %}
@@ -71,13 +72,13 @@
         <div class="profile-meta">
           <div class="meta-item">
             <i class="fas fa-calendar-plus"></i>
-            <span>{{ 'Created:'|t }} {{ conversation.created|date('M d, Y H:i') }}</span>
+            <span>{{ 'Created:'|t }} {{ conversation.createdAt|date('M d, Y H:i') }}</span>
           </div>
           <div class="meta-item">
             <i class="fas fa-clock"></i>
             <span>{{ 'Last activity:'|t }} 
-              {% if conversation.last_message_at %}
-                {{ conversation.last_message_at|date('M d, Y H:i') }}
+              {% if conversation.lastMessageAt %}
+                {{ conversation.lastMessageAt|date('M d, Y H:i') }}
               {% else %}
                 {{ 'Never'|t }}
               {% endif %}
@@ -85,11 +86,11 @@
           </div>
           <div class="meta-item">
             <i class="fas fa-envelope"></i>
-            <span>{{ 'Total messages:'|t }} {{ conversation.message_count }}</span>
+            <span>{{ 'Total messages:'|t }} {{ conversation.messageCount }}</span>
           </div>
           <div class="meta-item">
             <i class="fas fa-users"></i>
-            <span>{{ 'Participants:'|t }} {{ conversation.participants_count }}</span>
+            <span>{{ 'Participants:'|t }} {{ conversation.participantCount }}</span>
           </div>
         </div>
       </div>
@@ -103,7 +104,7 @@
         <i class="fas fa-envelope"></i>
       </div>
       <div class="stat-content">
-        <div class="stat-value">{{ conversation.message_count }}</div>
+        <div class="stat-value">{{ conversation.messageCount }}</div>
         <div class="stat-label">{{ 'Total Messages'|t }}</div>
       </div>
     </div>
@@ -112,33 +113,17 @@
         <i class="fas fa-users"></i>
       </div>
       <div class="stat-content">
-        <div class="stat-value">{{ conversation.participants_count }}</div>
+        <div class="stat-value">{{ conversation.participantCount }}</div>
         <div class="stat-label">{{ 'Participants'|t }}</div>
       </div>
     </div>
     <div class="stat-box">
       <div class="stat-icon">
-        <i class="fas fa-calendar"></i>
+        <i class="fas fa-comments"></i>
       </div>
       <div class="stat-content">
-        <div class="stat-value">{{ ((conversation.updated - conversation.created) / 86400)|round }}</div>
-        <div class="stat-label">{{ 'Days Active'|t }}</div>
-      </div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-icon">
-        <i class="fas fa-chart-line"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value">
-          {% set days_active = ((conversation.updated - conversation.created) / 86400) %}
-          {% if days_active > 0 %}
-            {{ (conversation.message_count / days_active)|round(1) }}
-          {% else %}
-            {{ conversation.message_count }}
-          {% endif %}
-        </div>
-        <div class="stat-label">{{ 'Msgs/Day'|t }}</div>
+        <div class="stat-value">{{ messages|length }}</div>
+        <div class="stat-label">{{ 'Recent Messages'|t }}</div>
       </div>
     </div>
   </div>
@@ -149,35 +134,30 @@
       <div class="section-header">
         <h3>
           <i class="fas fa-users"></i>
-          {{ 'Participants'|t }} ({{ participants|length }})
+          {{ 'Participants'|t }} ({{ conversation.participantCount }})
         </h3>
       </div>
       <div class="section-content">
-        {% if participants|length > 0 %}
+        {% if conversation.participants|length > 0 %}
           <div class="friends-list">
-            {% for participant in participants %}
+            {% for participant in conversation.participants %}
               <div class="friend-item">
                 <div class="friend-avatar">
-                  {{ participant.name|first|upper }}
+                  {% if participant.avatarUrl %}
+                    <img src="{{ participant.avatarUrl }}" alt="{{ participant.displayName }}">
+                  {% else %}
+                    {{ participant.displayName|first|upper }}
+                  {% endif %}
                 </div>
                 <div class="friend-info">
-                  <a href="/admin/chat/users/{{ participant.user_id }}" class="friend-name">{{ participant.name }}</a>
+                  <div class="friend-name">{{ participant.displayName }}</div>
                   <div class="friend-meta">
                     <i class="fas fa-envelope"></i> {{ participant.email }}
-                  </div>
-                </div>
-                <div class="friend-status">
-                  {% if participant.status %}
-                    <span class="status-badge status-active">
-                      <i class="fas fa-circle"></i> {{ 'Active'|t }}
-                    </span>
-                  {% else %}
-                    <span class="status-badge status-blocked">
-                      <i class="fas fa-ban"></i> {{ 'Blocked'|t }}
-                    </span>
-                  {% endif %}
-                  <div class="friend-date">
-                    {{ 'Joined:'|t }} {{ participant.joined_at|date('M d, Y') }}
+                    {% if participant.drupalId %}
+                      <div>
+                        <i class="fas fa-id-card"></i> {{ 'Drupal ID:'|t }} {{ participant.drupalId }}
+                      </div>
+                    {% endif %}
                   </div>
                 </div>
               </div>
@@ -193,13 +173,198 @@
     </div>
   </div>
 
-  {# Note about messages #}
-  <div class="info-box">
-    <i class="fas fa-info-circle"></i>
-    <div>
-      <strong>{{ 'Note:'|t }}</strong>
-      {{ 'Message content is stored in MongoDB and can be accessed through the Node.js backend API.'|t }}
+  {# Recent Messages #}
+  <div class="content-wrapper">
+    <div class="section-card">
+      <div class="section-header">
+        <h3>
+          <i class="fas fa-comments"></i>
+          {{ 'Recent Messages'|t }} ({{ messages|length }})
+        </h3>
+        <div class="section-info">
+          {{ 'Showing latest 50 messages'|t }}
+        </div>
+      </div>
+      <div class="section-content">
+        {% if messages|length > 0 %}
+          <div class="messages-list">
+            {% for message in messages %}
+              <div class="message-item">
+                <div class="message-avatar">
+                  {% if message.senderId.avatarUrl %}
+                    <img src="{{ message.senderId.avatarUrl }}" alt="{{ message.senderId.displayName }}">
+                  {% else %}
+                    {{ message.senderId.displayName|first|upper }}
+                  {% endif %}
+                </div>
+                <div class="message-content">
+                  <div class="message-header">
+                    <strong>{{ message.senderId.displayName }}</strong>
+                    <span class="message-time">
+                      <i class="fas fa-clock"></i> {{ message.createdAt|date('M d, Y H:i:s') }}
+                    </span>
+                  </div>
+                  <div class="message-body">
+                    {{ message.content|truncate(500) }}
+                  </div>
+                  {% if message.attachments|length > 0 %}
+                    <div class="message-attachments">
+                      <i class="fas fa-paperclip"></i>
+                      {% for attachment in message.attachments %}
+                        <span class="attachment-badge">{{ attachment.filename|default('Attachment') }}</span>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">
+            <i class="fas fa-inbox"></i>
+            <p>{{ 'No messages in this conversation'|t }}</p>
+          </div>
+        {% endif %}
+      </div>
     </div>
   </div>
 
 </div>
+
+<style>
+  .chat-admin-conversation-detail {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .messages-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 600px;
+    overflow-y: auto;
+    padding: 15px 0;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .message-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    transition: background-color 0.2s;
+  }
+
+  .message-item:hover {
+    background: #f0f1f2;
+  }
+
+  .message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .message-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .message-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 12px;
+  }
+
+  .message-header strong {
+    font-size: 14px;
+    color: #333;
+  }
+
+  .message-time {
+    font-size: 12px;
+    color: #999;
+    white-space: nowrap;
+  }
+
+  .message-body {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.5;
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  .message-attachments {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .attachment-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .section-info {
+    font-size: 12px;
+    color: #999;
+    font-style: italic;
+  }
+</style>
+
+<script>
+(function() {
+  const deleteBtn = document.getElementById('deleteConversationBtn');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', function() {
+      const conversationId = this.getAttribute('data-conversation-id');
+      if (confirm('{{ "Are you sure you want to delete this conversation? This action cannot be undone."|t }}')) {
+        // Fetch delete API
+        fetch('/api/conversations/admin/' + conversationId, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert('{{ "Conversation deleted successfully!"|t }}');
+            window.location.href = '/admin/chat/conversations';
+          } else {
+            alert('{{ "Failed to delete conversation: "|t }}' + (data.message || 'Unknown error'));
+          }
+        })
+        .catch(error => {
+          alert('{{ "Error deleting conversation: "|t }}' + error.message);
+        });
+      }
+    });
+  }
+})();
+</script>

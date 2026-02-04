@@ -184,7 +184,7 @@ chat_api.admin_conversations:
     _permission: "moderate chat"
 
 chat_api.admin_conversation_view:
-  path: "/admin/chat/conversations/{conversation_id}"
+  path: "/admin/chat/conversations/{conversation-id}"
   defaults:
     _controller: '\Drupal\chat_api\Controller\AdminController::conversationView'
     _title: "View Conversation"
@@ -192,12 +192,11 @@ chat_api.admin_conversation_view:
     _permission: "moderate chat"
 
 chat_api.admin_conversation_delete:
-  path: "/admin/chat/conversations/{conversation_id}/delete"
+  path: "/admin/chat/conversations/{conversation-id}/delete"
   defaults:
     _controller: '\Drupal\chat_api\Controller\AdminController::conversationDelete'
   requirements:
     _permission: "administer chat"
-  methods: [POST]
 
 # Friends management
 chat_api.admin_friends:
@@ -207,6 +206,15 @@ chat_api.admin_friends:
     _title: "Manage Friends"
   requirements:
     _permission: "moderate chat"
+
+# Test routes
+chat_api.test_api:
+  path: "/admin/test-api"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\TestController::testConversationsAPI'
+    _title: "Test API"
+  requirements:
+    _access: "TRUE"
 
 # Friend requests management
 chat_api.admin_friend_requests:
@@ -275,3 +283,21 @@ chat_api.admin_api_unblock_user:
   requirements:
     _permission: "administer users"
   methods: [POST]
+
+# Proxy endpoint to get conversations from Node.js
+chat_api.admin_api_conversations:
+  path: "/admin/chat/api/conversations"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminApiController::getConversationsProxy'
+  requirements:
+    _permission: "moderate chat"
+  methods: [GET]
+
+# Proxy endpoint to delete conversation via Node.js
+chat_api.admin_api_conversation_delete:
+  path: "/admin/chat/api/conversations/{conversation_id}/delete"
+  defaults:
+    _controller: '\Drupal\chat_api\Controller\AdminApiController::deleteConversationProxy'
+  requirements:
+    _permission: "administer chat"
+  methods: [DELETE]

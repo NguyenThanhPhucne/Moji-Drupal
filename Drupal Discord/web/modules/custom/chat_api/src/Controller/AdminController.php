@@ -519,6 +519,11 @@ class AdminController extends ControllerBase {
       \Drupal::logger('chat_api')->error('❌ Lỗi khi lấy cuộc trò chuyện: @error', [
         '@error' => $e->getMessage(),
       ]);
+
+      // Show error to user
+      $this->messenger()->addError($this->t('Lỗi khi kết nối tới API: @error', [
+        '@error' => $e->getMessage(),
+      ]));
       
       // Fallback về dữ liệu rỗng nếu API lỗi
       $conversations = [];
@@ -564,78 +569,102 @@ class AdminController extends ControllerBase {
    * Xem chi tiết cuộc trò chuyện.
    */
   public function conversationView($conversation_id) {
-    // Lấy cuộc trò chuyện từ database
-    $conversation = $this->database->select('chat_conversation', 'cc')
-      ->fields('cc')
-      ->condition('cc.conversation_id', $conversation_id)
-      ->execute()
-      ->fetchObject();
-    
-    if (!$conversation) {
-      $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện.'));
+    // Lấy cuộc trò chuyện từ MongoDB qua API Node.js
+    $node_api_url = 'http://localhost:5001/api/conversations/admin/' . $conversation_id;
+
+    try {
+      $response = \Drupal::httpClient()->get($node_api_url, [
+        'timeout' => 5,
+      ]);
+
+      $statusCode = $response->getStatusCode();
+      $body = $response->getBody()->getContents();
+      $data = json_decode($body, TRUE);
+
+      if ($statusCode !== 200 || !$data['success']) {
+        $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện.'));
+        return $this->redirect('chat_api.admin_conversations');
+      }
+
+      $conversation = $data['data']['conversation'] ?? NULL;
+      $messages = $data['data']['messages'] ?? [];
+
+      if (!$conversation) {
+        $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện.'));
+        return $this->redirect('chat_api.admin_conversations');
+      }
+
+      $build = [
+        '#theme' => 'chat_admin_conversation_view',
+        '#conversation' => $conversation,
+        '#messages' => $messages,
+        '#conversation_id' => $conversation_id,
+        '#attached' => [
+          'library' => ['chat_api/admin', 'chat_api/admin-conversation-view'],
+          'drupalSettings' => [
+            'chatAdminConversation' => [
+              'conversationId' => $conversation_id,
+              'apiUrl' => $node_api_url,
+            ],
+          ],
+        ],
+        '#cache' => [
+          'max-age' => 0, // No cache - always fresh
+          'contexts' => ['url.path', 'user.permissions'],
+        ],
+      ];
+
+      return $build;
+    } catch (\Exception $e) {
+      $this->messenger()->addError($this->t('Lỗi khi lấy dữ liệu cuộc trò chuyện: @error', [
+        '@error' => $e->getMessage(),
+      ]));
       return $this->redirect('chat_api.admin_conversations');
     }
-    
-    // Lấy người tham gia
-    $participants = $this->database->select('chat_conversation_participant', 'ccp')
-      ->fields('ccp', ['user_id', 'joined_at'])
-      ->condition('ccp.conversation_id', $conversation_id)
-      ->execute()
-      ->fetchAll();
-    
-    // Bổ sung chi tiết người dùng
-    foreach ($participants as $participant) {
-      $user = \Drupal\user\Entity\User::load($participant->user_id);
-      if ($user) {
-        $participant->name = $user->getAccountName();
-        $participant->email = $user->getEmail();
-        $participant->status = $user->isActive();
-      }
-    }
-    
-    $build = [
-      '#theme' => 'chat_admin_conversation_view',
-      '#conversation' => $conversation,
-      '#participants' => $participants,
-      '#attached' => [
-        'library' => ['chat_api/admin', 'chat_api/user-detail'],
-      ],
-      '#cache' => [
-        'contexts' => ['url.path', 'user.permissions'],
-      ],
-    ];
-    
-    return $build;
   }
 
   /**
    * Xóa cuộc trò chuyện.
-   * Xóa metadata cuộc trò chuyện khỏi Database Drupal.
-   * Lưu ý: Tin nhắn trong MongoDB cần xóa qua API Backend Node.js.
+   * Xóa từ MongoDB qua API Backend Node.js.
    */
   public function conversationDelete($conversation_id) {
-    // Xóa khỏi database Drupal
+    // Check if this is an AJAX request
+    $request = \Drupal::request();
+    $is_ajax = $request->getMethod() === 'DELETE' || 
+               $request->headers->get('X-Requested-With') === 'XMLHttpRequest' ||
+               !empty($request->query->get('ajax'));
+    
+    $node_api_url = 'http://localhost:5001/api/conversations/admin/' . $conversation_id;
+
     try {
-      // Xóa người tham gia trước (khóa ngoại)
-      $this->database->delete('chat_conversation_participant')
-        ->condition('conversation_id', $conversation_id)
-        ->execute();
-      
-      // Xóa cuộc trò chuyện
-      $deleted = $this->database->delete('chat_conversation')
-        ->condition('conversation_id', $conversation_id)
-        ->execute();
-      
-      if ($deleted > 0) {
-        $this->messenger()->addStatus($this->t('Metadata cuộc trò chuyện đã bị xóa khỏi Database Drupal.'));
-        $this->messenger()->addWarning($this->t('Lưu ý: Tin nhắn trong MongoDB cần được xóa riêng qua API backend Node.js.'));
+      $response = \Drupal::httpClient()->delete($node_api_url, [
+        'timeout' => 5,
+      ]);
+
+      $statusCode = $response->getStatusCode();
+      $body = $response->getBody()->getContents();
+      $data = json_decode($body, TRUE);
+
+      if ($statusCode === 200 && $data['success']) {
+        if ($is_ajax) {
+          return new JsonResponse(['success' => true, 'message' => 'Conversation deleted successfully']);
+        }
+        $this->messenger()->addStatus($this->t('Cuộc trò chuyện đã bị xóa thành công.'));
       } else {
-        $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện.'));
+        if ($is_ajax) {
+          return new JsonResponse(['success' => false, 'error' => 'Failed to delete conversation'], 400);
+        }
+        $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện để xóa.'));
       }
     } catch (\Exception $e) {
-      $this->messenger()->addError($this->t('Lỗi khi xóa cuộc trò chuyện: @error', ['@error' => $e->getMessage()]));
+      if ($is_ajax) {
+        return new JsonResponse(['success' => false, 'error' => $e->getMessage()], 500);
+      }
+      $this->messenger()->addError($this->t('Lỗi khi xóa cuộc trò chuyện: @error', [
+        '@error' => $e->getMessage(),
+      ]));
     }
-    
+
     return new RedirectResponse(Url::fromRoute('chat_api.admin_conversations')->toString());
   }
 

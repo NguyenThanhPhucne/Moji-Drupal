@@ -101,6 +101,8 @@ function chat_api_theme($existing, $type, $theme, $path) {
     'chat_admin_conversation_view' => [
       'variables' => [
         'conversation_id' => NULL,
+        'conversation' => NULL,
+        'messages' => [],
       ],
       'template' => 'chat-admin-conversation-view',
     ],

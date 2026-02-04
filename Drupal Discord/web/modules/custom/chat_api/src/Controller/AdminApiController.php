@@ -305,4 +305,97 @@ class AdminApiController extends ControllerBase {
     return new JsonResponse($stats);
   }
 
+  /**
+   * Proxy endpoint to get conversations from Node.js API.
+   * This allows browser to call Drupal API which then forwards to Node.js.
+   */
+  public function getConversationsProxy() {
+    // Check permissions
+    if (!$this->currentUser()->hasPermission('moderate chat')) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Access denied'),
+      ], 403);
+    }
+
+    $node_api_url = 'http://localhost:5001/api/conversations/admin/conversations';
+    
+    try {
+      $response = \Drupal::httpClient()->get($node_api_url, [
+        'timeout' => 10,
+      ]);
+      
+      $statusCode = $response->getStatusCode();
+      $body = $response->getBody()->getContents();
+      
+      // Return the response as-is from Node.js
+      return new JsonResponse(
+        json_decode($body, TRUE),
+        $statusCode
+      );
+      
+    } catch (\Exception $e) {
+      \Drupal::logger('chat_api')->error('❌ Proxy error: @error', [
+        '@error' => $e->getMessage(),
+      ]);
+      
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Failed to connect to Node.js server: @error', [
+          '@error' => $e->getMessage(),
+        ]),
+        'data' => [],
+        'stats' => [
+          'totalConversations' => 0,
+          'privateConversations' => 0,
+          'groupConversations' => 0,
+          'activeTodayCount' => 0,
+          'totalMessages' => 0,
+          'avgParticipants' => 0,
+        ],
+      ], 500);
+    }
+  }
+
+  /**
+   * Proxy endpoint to delete conversation via Node.js API.
+   */
+  public function deleteConversationProxy($conversation_id) {
+    // Check permissions
+    if (!$this->currentUser()->hasPermission('administer chat')) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Access denied'),
+      ], 403);
+    }
+
+    $node_api_url = 'http://localhost:5001/api/conversations/admin/' . $conversation_id;
+    
+    try {
+      $response = \Drupal::httpClient()->delete($node_api_url, [
+        'timeout' => 10,
+      ]);
+      
+      $statusCode = $response->getStatusCode();
+      $body = $response->getBody()->getContents();
+      
+      return new JsonResponse(
+        json_decode($body, TRUE),
+        $statusCode
+      );
+      
+    } catch (\Exception $e) {
+      \Drupal::logger('chat_api')->error('❌ Delete proxy error: @error', [
+        '@error' => $e->getMessage(),
+      ]);
+      
+      return new JsonResponse([
+        'success' => false,
+        'message' => $this->t('Failed to delete conversation: @error', [
+          '@error' => $e->getMessage(),
+        ]),
+      ], 500);
+    }
+  }
+
 }

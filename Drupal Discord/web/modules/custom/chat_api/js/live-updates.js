@@ -51,12 +51,15 @@
         if (isUpdating) return;
         isUpdating = true;
 
+        // Use Drupal proxy endpoint instead of calling Node.js directly
+        const proxyUrl = "/admin/chat/api/conversations";
+
         if (DEBUG_MODE)
           console.log(
-            "[ChatAdminLiveUpdates] 📡 Fetching from:",
-            config.apiUrl,
+            "[ChatAdminLiveUpdates] 📡 Fetching via Drupal proxy:",
+            proxyUrl,
           );
-        fetch(config.apiUrl)
+        fetch(proxyUrl)
           .then((response) => {
             if (DEBUG_MODE)
               console.log(
@@ -158,6 +161,95 @@
             row.remove();
           }, 300);
         });
+
+        // Attach delete event handlers to all delete buttons
+        table.querySelectorAll(".delete-conversation").forEach((button) => {
+          button.addEventListener("click", function (e) {
+            e.preventDefault();
+            const conversationId = this.getAttribute("data-id");
+            const row = this.closest("tr");
+            const conversationName =
+              row.querySelector(".conversation-name")?.textContent ||
+              "this conversation";
+
+            if (
+              confirm(
+                `Are you sure you want to delete "${conversationName}"? This action cannot be undone.`,
+              )
+            ) {
+              deleteConversationViaApi(conversationId, row);
+            }
+          });
+        });
+      }
+
+      /**
+       * Delete conversation via API
+       */
+      function deleteConversationViaApi(conversationId, rowElement) {
+        // Use Drupal proxy endpoint instead of direct Node.js call
+        const drupalDeleteUrl = `/admin/chat/api/conversations/${conversationId}/delete`;
+
+        if (DEBUG_MODE)
+          console.log(
+            "[ChatAdminLiveUpdates] Deleting via proxy:",
+            drupalDeleteUrl,
+          );
+
+        const button = rowElement.querySelector(".delete-conversation");
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        button.disabled = true;
+
+        fetch(drupalDeleteUrl, {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.success) {
+              if (DEBUG_MODE)
+                console.log("[ChatAdminLiveUpdates] ✅ Deleted successfully");
+              showUpdateNotification(
+                "✅ Conversation deleted successfully",
+                "success",
+              );
+
+              // Fade out and remove row
+              rowElement.style.transition = "opacity 0.3s ease";
+              rowElement.style.opacity = "0";
+
+              setTimeout(() => {
+                rowElement.remove();
+                if (DEBUG_MODE)
+                  console.log("[ChatAdminLiveUpdates] Row removed");
+              }, 300);
+            } else {
+              if (DEBUG_MODE)
+                console.error(
+                  "[ChatAdminLiveUpdates] Delete failed:",
+                  data.error,
+                );
+              showUpdateNotification(
+                `❌ Failed to delete: ${data.message || data.error}`,
+                "error",
+              );
+              button.innerHTML = originalHTML;
+              button.disabled = false;
+            }
+          })
+          .catch((error) => {
+            if (DEBUG_MODE)
+              console.error("[ChatAdminLiveUpdates] Delete error:", error);
+            showUpdateNotification(
+              `❌ Error deleting conversation: ${error.message}`,
+              "error",
+            );
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+          });
       }
 
       /**
@@ -235,7 +327,7 @@
             <span class="time-badge">${conversation.timeAgo}</span>
           </td>
           <td class="actions">
-            <a href="/admin/chat/conversation/${conversation._id}" class="btn btn-sm btn-info">
+            <a href="/admin/chat/conversations/${conversation._id}" class="btn btn-sm btn-info">
               <i class="fas fa-eye"></i> View
             </a>
             <button class="btn btn-sm btn-danger delete-conversation" data-id="${conversation._id}">

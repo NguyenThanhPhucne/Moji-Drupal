@@ -29,6 +29,7 @@ admin-tables:
   js:
     js/tables.js: {}
     js/admin-users.js: {}
+    js/admin-conversations.js: {}
   dependencies:
     - core/drupal
 
