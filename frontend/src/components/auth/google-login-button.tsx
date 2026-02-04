@@ -31,10 +31,14 @@ export function GoogleLoginButton() {
 
       const { accessToken, user } = response.data;
 
-      // Lưu token và user thông tin
-      if (accessToken) {
-        setAccessToken(accessToken);
+      // Validate both token and user are returned
+      if (!accessToken || !user) {
+        toast.error("Phản hồi từ server không hợp lệ");
+        return;
       }
+
+      // Lưu token và user thông tin
+      setAccessToken(accessToken);
       setUser(user);
 
       // Fetch conversations

@@ -167,7 +167,7 @@
               </div>
               <div class="activity-content">
                 <div class="activity-name">
-                  <a href="/user/{{ user.uid }}">{{ user.name }}</a>
+                  <a href="/admin/chat/users/{{ user.uid }}">{{ user.name }}</a>
                   {% if user.status == 1 %}
                     <span class="badge badge-success"><i class="fas fa-check-circle"></i> {{ 'Active'|t }}</span>
                   {% else %}

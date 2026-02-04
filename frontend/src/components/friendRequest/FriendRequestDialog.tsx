@@ -37,7 +37,7 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
     if (open) {
       loadRequest();
     }
-  }, [open, getAllFriendRequests, resetUnreadCount]);
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

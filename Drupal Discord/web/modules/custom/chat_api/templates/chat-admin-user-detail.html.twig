@@ -1,161 +1,182 @@
-{#
-/**
- * @file
- * Template for Chat Admin User Detail Page.
- *
- * Available variables:
- * - user_info: User basic information (uid, name, email, created, access, status, roles)
- * - stats: User statistics (friends_count, pending_sent, pending_received, days_registered)
- * - friends: List of user's friends
- * - pending_sent: Friend requests sent by user
- * - pending_received: Friend requests received by user
- * - recent_activity: User's recent activity log
- */
+{# 
+  File: templates/chat-admin-user-detail.html.twig
+  Mô tả: Trang chi tiết người dùng - Phiên bản chuyên nghiệp
+  Kiến trúc:
+    - SVG icon từ lucide-react
+    - CSS tách biệt, không inline styles
+    - Dữ liệu thật từ backend
+    - Responsive grid layout
+    - Professional styling
 #}
 
-{# Load Font Awesome for icons #}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+{# Import SVG icon macros #}
+{% import '@chat_api/_icons.html.twig' as icons %}
+
+{# Nạp CSS/JS thư viện #}
+{{ attach_library('chat_api/listing') }}
+{{ attach_library('chat_api/user-detail') }}
+
+{% set css_import %}
+  <link rel="stylesheet" href="/modules/custom/chat_api/css/listing.css">
+  <link rel="stylesheet" href="/modules/custom/chat_api/css/notifications.css">
+  <link rel="stylesheet" href="/modules/custom/chat_api/css/user-detail.css">
+{% endset %}
+{{ css_import|raw }}
 
 <div class="chat-admin-user-detail">
-  {# Page Header #}
+  
+  {# ========== 1. HEADER ========== #}
   <div class="page-header">
-    <div class="header-left">
+    <div>
       <a href="/admin/chat/users" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> Back to Users
+        {{ icons.icon_arrow_left('') }}
+        {{ 'Quay lại'|t }}
       </a>
       <h1>
-        <i class="fas fa-user-circle"></i>
+        {{ icons.icon_user_circle('') }}
         {{ user_info.name }}
       </h1>
     </div>
     <div class="header-actions">
-      <a href="/user/{{ user_info.uid }}/edit" class="btn btn-primary">
-        <i class="fas fa-edit"></i> Edit User
+      <a href="/admin/chat/users/{{ user_info.uid }}" class="btn btn-primary">
+        {{ icons.icon_edit('') }}
+        {{ 'Sửa User'|t }}
       </a>
+      
       {% if user_info.status %}
-        <a href="/admin/chat/users/{{ user_info.uid }}/ban" class="btn btn-danger">
-          <i class="fas fa-ban"></i> Block User
-        </a>
+        <button 
+          class="btn btn-danger" 
+          data-block-user="{{ user_info.uid }}"
+          type="button">
+          {{ icons.icon_ban('') }}
+          {{ 'Khóa tài khoản'|t }}
+        </button>
       {% else %}
-        <a href="/admin/chat/users/{{ user_info.uid }}/unban" class="btn btn-success">
-          <i class="fas fa-check"></i> Unblock User
-        </a>
+        <button 
+          class="btn btn-success" 
+          data-unblock-user="{{ user_info.uid }}"
+          type="button">
+          {{ icons.icon_unlock('') }}
+          {{ 'Mở khóa'|t }}
+        </button>
       {% endif %}
     </div>
   </div>
 
-  {# User Profile Card #}
+  {# ========== 2. PROFILE CARD ========== #}
   <div class="profile-section">
     <div class="profile-card">
+      
+      {# Avatar #}
       <div class="profile-avatar">
-        <div class="avatar-circle">
-          {{ user_info.name|first|upper }}
-        </div>
+        {% if user_info.avatarUrl %}
+          <img src="{{ user_info.avatarUrl }}" alt="{{ user_info.name }}" />
+        {% else %}
+          <div class="avatar-circle">{{ user_info.name|first|upper }}</div>
+        {% endif %}
       </div>
+
       <div class="profile-info">
         <h2>{{ user_info.name }}</h2>
-        <p class="email"><i class="fas fa-envelope"></i> {{ user_info.email }}</p>
+        <p class="email">
+          {{ icons.icon_mail('') }}
+          {{ user_info.email }}
+        </p>
+        
         <div class="profile-badges">
           {% if user_info.status %}
-            <span class="badge badge-success"><i class="fas fa-circle"></i> Active</span>
+            <span class="badge badge-success">
+              {{ icons.icon_check_circle('') }}
+              {{ 'Hoạt động'|t }}
+            </span>
           {% else %}
-            <span class="badge badge-danger"><i class="fas fa-ban"></i> Blocked</span>
+            <span class="badge badge-danger">
+              {{ icons.icon_ban('') }}
+              {{ 'Đã khóa'|t }}
+            </span>
           {% endif %}
+          
           {% for role in user_info.roles %}
             {% if role != 'authenticated' %}
-              <span class="badge badge-info"><i class="fas fa-shield-alt"></i> {{ role|capitalize }}</span>
+              <span class="badge badge-info">
+                {{ icons.icon_shield('') }}
+                {{ role|capitalize }}
+              </span>
             {% endif %}
           {% endfor %}
         </div>
-        <div class="profile-meta">
-          <div class="meta-item">
-            <i class="fas fa-calendar-plus"></i>
-            <span>Registered: {{ user_info.created|date('M d, Y') }}</span>
-          </div>
-          <div class="meta-item">
-            <i class="fas fa-clock"></i>
-            <span>Last access: 
-              {% if user_info.access > 0 %}
-                {{ user_info.access|date('M d, Y H:i') }}
-              {% else %}
-                Never
-              {% endif %}
-            </span>
-          </div>
-          <div class="meta-item">
-            <i class="fas fa-sign-in-alt"></i>
-            <span>Last login: 
-              {% if user_info.login > 0 %}
-                {{ user_info.login|date('M d, Y H:i') }}
-              {% else %}
-                Never
-              {% endif %}
-            </span>
-          </div>
-          <div class="meta-item">
-            <i class="fas fa-hourglass-half"></i>
-            <span>Member for: {{ stats.days_registered }} days</span>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 
-  {# Statistics Overview #}
-  <div class="stats-section">
-    <h2><i class="fas fa-chart-bar"></i> Statistics Overview</h2>
+  {# ========== 3. THỐNG KÊ ========== #}
+  <div class="stats-section" data-user-stats data-pending-received="{{ stats.pending_received }}" data-friends-count="{{ stats.friends_count }}">
+    <h3>
+      {{ icons.icon_bar_chart('') }}
+      {{ 'Thống kê tổng quan'|t }}
+    </h3>
     <div class="stats-grid">
-      <div class="stat-box">
+      
+      {# Bạn bè #}
+      <div class="stat-box" data-friends-count="{{ stats.friends_count }}">
         <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-          <i class="fas fa-user-friends"></i>
+          {{ icons.icon_user_friends('') }}
         </div>
         <div class="stat-content">
           <div class="stat-number">{{ stats.friends_count }}</div>
-          <div class="stat-label">Friends</div>
+          <div class="stat-label">{{ 'Bạn bè'|t }}</div>
         </div>
       </div>
       
+      {# Lời mời đã gửi #}
       <div class="stat-box">
         <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-          <i class="fas fa-paper-plane"></i>
+          {{ icons.icon_send('') }}
         </div>
         <div class="stat-content">
           <div class="stat-number">{{ stats.pending_sent }}</div>
-          <div class="stat-label">Requests Sent</div>
+          <div class="stat-label">{{ 'Đã gửi'|t }}</div>
         </div>
       </div>
       
+      {# Lời mời đã nhận #}
       <div class="stat-box">
         <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-          <i class="fas fa-inbox"></i>
+          {{ icons.icon_inbox('') }}
         </div>
         <div class="stat-content">
           <div class="stat-number">{{ stats.pending_received }}</div>
-          <div class="stat-label">Requests Received</div>
+          <div class="stat-label">{{ 'Đã nhận'|t }}</div>
         </div>
       </div>
       
+      {# Số ngày tham gia #}
       <div class="stat-box">
         <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
-          <i class="fas fa-calendar-check"></i>
+          {{ icons.icon_calendar('') }}
         </div>
         <div class="stat-content">
           <div class="stat-number">{{ stats.days_registered }}</div>
-          <div class="stat-label">Days Registered</div>
+          <div class="stat-label">{{ 'Số ngày'|t }}</div>
         </div>
       </div>
     </div>
   </div>
 
-  {# Two Column Layout #}
+  {# ========== 4. 2-COLUMN CONTENT GRID ========== #}
   <div class="content-grid">
-    {# Left Column #}
+    
+    {# LEFT COLUMN #}
     <div class="content-left">
-      {# Friends List #}
+      
+      {# Bạn bè #}
       <div class="section-card">
         <div class="section-header">
-          <h3><i class="fas fa-user-friends"></i> Friends ({{ friends|length }})</h3>
-          <span class="section-badge">{{ stats.friends_count }} Total</span>
+          <h3>
+            {{ icons.icon_user_friends('') }}
+            {{ 'Bạn bè'|t }} ({{ friends|length }})
+          </h3>
+          <span class="section-badge">{{ stats.friends_count }} {{ 'Tổng'|t }}</span>
         </div>
         <div class="section-content">
           {% if friends|length > 0 %}
@@ -166,19 +187,22 @@
                   <div class="friend-info">
                     <div class="friend-name">
                       <a href="/admin/chat/users/{{ friend.uid }}">{{ friend.name }}</a>
-                      {% if friend.status %}
-                        <span class="friend-status online"><i class="fas fa-circle"></i></span>
-                      {% else %}
-                        <span class="friend-status offline"><i class="fas fa-ban"></i></span>
-                      {% endif %}
+                      <span class="friend-status {% if friend.status %}online{% else %}offline{% endif %}" title="{% if friend.status %}Online{% else %}Offline{% endif %}">
+                        {% if friend.status %}
+                          {{ icons.icon_check_circle('') }}
+                        {% else %}
+                          {{ icons.icon_ban('') }}
+                        {% endif %}
+                      </span>
                     </div>
                     <div class="friend-meta">
-                      <i class="fas fa-calendar"></i> Friends since {{ friend.friend_since|date('M d, Y') }}
+                      {{ icons.icon_calendar('') }}
+                      {{ 'Từ:'|t }} {{ friend.friend_since|date('d/m/Y') }}
                     </div>
                   </div>
                   <div class="friend-actions">
-                    <a href="/admin/chat/users/{{ friend.uid }}" class="btn-icon" title="View Profile">
-                      <i class="fas fa-eye"></i>
+                    <a href="/admin/chat/users/{{ friend.uid }}" class="btn-icon" title="{{ 'Xem hồ sơ'|t }}">
+                      {{ icons.icon_eye('') }}
                     </a>
                   </div>
                 </div>
@@ -186,17 +210,20 @@
             </div>
           {% else %}
             <div class="empty-state">
-              <i class="fas fa-user-slash"></i>
-              <p>No friends yet</p>
+              {{ icons.icon_user_friends('') }}
+              <p>{{ 'Chưa có bạn bè'|t }}</p>
             </div>
           {% endif %}
         </div>
       </div>
 
-      {# Recent Activity #}
+      {# Hoạt động gần đây #}
       <div class="section-card">
         <div class="section-header">
-          <h3><i class="fas fa-history"></i> Recent Activity</h3>
+          <h3>
+            {{ icons.icon_history('') }}
+            {{ 'Hoạt động gần đây'|t }}
+          </h3>
         </div>
         <div class="section-content">
           {% if recent_activity|length > 0 %}
@@ -204,12 +231,21 @@
               {% for activity in recent_activity %}
                 <div class="activity-item">
                   <div class="activity-icon {{ activity.type }}">
-                    <i class="fas {{ activity.icon }}"></i>
+                    {% if activity.type == 'friend-added' %}
+                      {{ icons.icon_user_friends('') }}
+                    {% elseif activity.type == 'message-sent' %}
+                      {{ icons.icon_message_square('') }}
+                    {% elseif activity.type == 'login' %}
+                      {{ icons.icon_login('') }}
+                    {% else %}
+                      {{ icons.icon_info('') }}
+                    {% endif %}
                   </div>
                   <div class="activity-content">
                     <div class="activity-description">{{ activity.description }}</div>
                     <div class="activity-time">
-                      <i class="fas fa-clock"></i> {{ activity.timestamp|date('M d, Y H:i') }}
+                      {{ icons.icon_clock('') }}
+                      {{ activity.timestamp|date('d/m/Y H:i') }}
                     </div>
                   </div>
                 </div>
@@ -217,20 +253,24 @@
             </div>
           {% else %}
             <div class="empty-state">
-              <i class="fas fa-history"></i>
-              <p>No recent activity</p>
+              {{ icons.icon_history('') }}
+              <p>{{ 'Không có hoạt động nào'|t }}</p>
             </div>
           {% endif %}
         </div>
       </div>
     </div>
 
-    {# Right Column #}
+    {# RIGHT COLUMN #}
     <div class="content-right">
-      {# Pending Requests Sent #}
+      
+      {# Lời mời đã gửi #}
       <div class="section-card">
         <div class="section-header">
-          <h3><i class="fas fa-paper-plane"></i> Requests Sent</h3>
+          <h3>
+            {{ icons.icon_send('') }}
+            {{ 'Lời mời đã gửi'|t }}
+          </h3>
           <span class="section-badge">{{ stats.pending_sent }}</span>
         </div>
         <div class="section-content">
@@ -244,28 +284,32 @@
                       <a href="/admin/chat/users/{{ request.uid }}">{{ request.name }}</a>
                     </div>
                     <div class="request-meta">
-                      <i class="fas fa-clock"></i> {{ request.created|date('M d, Y') }}
+                      {{ icons.icon_clock('') }}
+                      {{ request.created|date('d/m/Y') }}
                     </div>
                   </div>
                   <div class="request-badge">
-                    <span class="badge badge-warning">Pending</span>
+                    <span class="badge badge-warning">{{ 'Đang chờ'|t }}</span>
                   </div>
                 </div>
               {% endfor %}
             </div>
           {% else %}
             <div class="empty-state">
-              <i class="fas fa-paper-plane"></i>
-              <p>No pending requests sent</p>
+              {{ icons.icon_send('') }}
+              <p>{{ 'Không có lời mời nào'|t }}</p>
             </div>
           {% endif %}
         </div>
       </div>
 
-      {# Pending Requests Received #}
+      {# Lời mời đã nhận #}
       <div class="section-card">
         <div class="section-header">
-          <h3><i class="fas fa-inbox"></i> Requests Received</h3>
+          <h3>
+            {{ icons.icon_inbox('') }}
+            {{ 'Lời mời đã nhận'|t }}
+          </h3>
           <span class="section-badge">{{ stats.pending_received }}</span>
         </div>
         <div class="section-content">
@@ -279,53 +323,91 @@
                       <a href="/admin/chat/users/{{ request.uid }}">{{ request.name }}</a>
                     </div>
                     <div class="request-meta">
-                      <i class="fas fa-clock"></i> {{ request.created|date('M d, Y') }}
+                      {{ icons.icon_clock('') }}
+                      {{ request.created|date('d/m/Y') }}
                     </div>
                   </div>
                   <div class="request-badge">
-                    <span class="badge badge-info">Pending</span>
+                    <span class="badge badge-info">{{ 'Đang chờ'|t }}</span>
                   </div>
                 </div>
               {% endfor %}
             </div>
           {% else %}
             <div class="empty-state">
-              <i class="fas fa-inbox"></i>
-              <p>No pending requests received</p>
+              {{ icons.icon_inbox('') }}
+              <p>{{ 'Không có lời mời nào'|t }}</p>
             </div>
           {% endif %}
         </div>
       </div>
 
-      {# Quick Actions #}
+      {# Thao tác nhanh #}
       <div class="section-card">
         <div class="section-header">
-          <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+          <h3>
+            {{ icons.icon_zap('') }}
+            {{ 'Thao tác nhanh'|t }}
+          </h3>
         </div>
         <div class="section-content">
           <div class="quick-actions">
-            <a href="/user/{{ user_info.uid }}/edit" class="action-btn">
-              <i class="fas fa-user-edit"></i>
-              <span>Edit Profile</span>
+            <a href="/admin/chat/users/{{ user_info.uid }}" class="action-btn">
+              {{ icons.icon_edit('') }}
+              <span>{{ 'Sửa Hồ sơ'|t }}</span>
             </a>
             {% if user_info.status %}
-              <a href="/admin/chat/users/{{ user_info.uid }}/ban" class="action-btn danger">
-                <i class="fas fa-ban"></i>
-                <span>Block User</span>
-              </a>
+              <button 
+                class="action-btn danger" 
+                data-block-user="{{ user_info.uid }}"
+                type="button">
+                {{ icons.icon_ban('') }}
+                <span>{{ 'Khóa User'|t }}</span>
+              </button>
             {% else %}
-              <a href="/admin/chat/users/{{ user_info.uid }}/unban" class="action-btn success">
-                <i class="fas fa-check"></i>
-                <span>Unblock User</span>
-              </a>
+              <button 
+                class="action-btn success" 
+                data-unblock-user="{{ user_info.uid }}"
+                type="button">
+                {{ icons.icon_unlock('') }}
+                <span>{{ 'Mở khóa User'|t }}</span>
+              </button>
             {% endif %}
             <a href="/admin/chat/users" class="action-btn">
-              <i class="fas fa-list"></i>
-              <span>All Users</span>
+              {{ icons.icon_list('') }}
+              <span>{{ 'Danh sách User'|t }}</span>
             </a>
           </div>
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+{# Profile metadata section (hidden for now, can be expanded) #}
+<div class="profile-meta-extended" style="display: none;">
+  <div class="meta-item">
+    {{ icons.icon_calendar('') }}
+    <span>{{ 'Đăng ký:'|t }} {{ user_info.created|date('d/m/Y H:i') }}</span>
+  </div>
+  <div class="meta-item">
+    {{ icons.icon_login('') }}
+    <span>{{ 'Lần cuối truy cập:'|t }} 
+      {% if user_info.access > 0 %}
+        {{ user_info.access|date('d/m/Y H:i') }}
+      {% else %}
+        {{ 'Chưa bao giờ'|t }}
+      {% endif %}
+    </span>
+  </div>
+  <div class="meta-item">
+    {{ icons.icon_login('') }}
+    <span>{{ 'Lần cuối đăng nhập:'|t }} 
+      {% if user_info.login > 0 %}
+        {{ user_info.login|date('d/m/Y H:i') }}
+      {% else %}
+        {{ 'Chưa bao giờ'|t }}
+      {% endif %}
+    </span>
   </div>
 </div>

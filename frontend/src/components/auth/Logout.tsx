@@ -18,17 +18,15 @@ const Logout = () => {
     e.stopPropagation();
 
     try {
-      // Fire logout request but don't wait for it
-      signOut().catch(() => {
-        // Silence errors, still navigate
-      });
-
-      // Navigate immediately for smooth UX
-      setTimeout(() => {
-        navigate("/signin");
-      }, 100);
+      // Wait for logout to complete
+      await signOut();
+      // Navigate after logout completes
+      navigate("/signin");
     } catch (error) {
-      console.error("❌ Logout handler error:", error);
+      console.error("❌ Logout error:", error);
+      // Still navigate even if logout fails
+      navigate("/signin");
+    } finally {
       logoutInProgressRef.current = false;
     }
   };

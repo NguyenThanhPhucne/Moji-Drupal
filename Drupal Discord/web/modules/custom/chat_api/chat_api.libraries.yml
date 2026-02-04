@@ -46,9 +46,12 @@ user-detail:
     theme:
       css/user-detail.css: {}
   js:
+    https://cdn.socket.io/4.5.4/socket.io.js: { type: external }
     js/admin-users.js: {}
+    js/user-detail-refresh-auto.js: {}
   dependencies:
     - core/drupal
+    - core/drupal.ajax
 
 ban-confirm:
   version: 1.0
@@ -57,3 +60,15 @@ ban-confirm:
       css/ban-confirm.css: {}
   dependencies:
     - core/drupal
+
+listing:
+  version: 2.0
+  css:
+    theme:
+      css/listing.css: {}
+      css/notifications.css: {}
+  js:
+    js/listing.js: {}
+  dependencies:
+    - core/drupal
+    - core/drupal.ajax

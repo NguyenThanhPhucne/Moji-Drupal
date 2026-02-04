@@ -21,7 +21,7 @@ function AppContent() {
 
   useEffect(() => {
     setTheme(isDark);
-  }, [isDark]);
+  }, [isDark, setTheme]);
 
   useEffect(() => {
     if (accessToken) {

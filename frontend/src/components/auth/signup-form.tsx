@@ -36,10 +36,17 @@ export function SignupForm({
   const onSubmit = async (data: SignUpFormValues) => {
     const { firstname, lastname, username, email, password } = data;
 
-    // gọi backend để signup
-    await signUp(username, password, email, firstname, lastname);
+    try {
+      await signUp(username, password, email, firstname, lastname);
 
-    navigate("/signin");
+      // Check if signup was successful
+      const { user } = useAuthStore.getState();
+      if (user) {
+        navigate("/signin");
+      }
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   return (

@@ -7,14 +7,14 @@ export const protectedRoute = async (req, res, next) => {
   const pathToCheck = `${req.baseUrl || ""}${req.path}`;
 
   console.log(
-    `📍 [protectedRoute] fullPath: ${fullPath}, path: ${req.path}, baseUrl: ${req.baseUrl}`,
+    `[protectedRoute] fullPath: ${fullPath}, path: ${req.path}, baseUrl: ${req.baseUrl}`,
   );
 
   if (
     fullPath.includes("/admin/conversations") ||
     req.path.includes("/admin/conversations")
   ) {
-    console.log("✅ [protectedRoute] Skipping auth for admin route");
+    console.log("[protectedRoute] Skipping auth for admin route");
     return next();
   }
 

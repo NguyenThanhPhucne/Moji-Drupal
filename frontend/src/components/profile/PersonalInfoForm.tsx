@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { User } from "@/types/user";
+import { useState } from "react";
+import { toast } from "sonner";
 
 type EditableField = {
   key: keyof Pick<User, "displayName" | "username" | "email" | "phone">;
@@ -30,6 +32,29 @@ type Props = {
 };
 
 const PersonalInfoForm = ({ userInfo }: Props) => {
+  const [formData, setFormData] = useState({
+    displayName: userInfo?.displayName ?? "",
+    username: userInfo?.username ?? "",
+    email: userInfo?.email ?? "",
+    phone: userInfo?.phone ?? "",
+    bio: userInfo?.bio ?? "",
+  });
+
+  const handleFieldChange = (key: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    try {
+      // TODO: Implement API call to save user info
+      // await userService.updateProfile(formData);
+      toast.success("Lưu thay đổi thành công!");
+    } catch (error) {
+      console.error("Lỗi khi lưu:", error);
+      toast.error("Lỗi khi lưu thay đổi");
+    }
+  };
+
   if (!userInfo) return null;
 
   return (
@@ -47,16 +72,13 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {PERSONAL_FIELDS.map(({ key, label, type }) => (
-            <div
-              key={key}
-              className="space-y-2"
-            >
+            <div key={key} className="space-y-2">
               <Label htmlFor={key}>{label}</Label>
               <Input
                 id={key}
                 type={type ?? "text"}
-                value={userInfo[key] ?? ""}
-                onChange={() => {}}
+                value={formData[key]}
+                onChange={(e) => handleFieldChange(key, e.target.value)}
                 className="glass-light border-border/30"
               />
             </div>
@@ -68,13 +90,16 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
           <Textarea
             id="bio"
             rows={3}
-            value={userInfo.bio ?? ""}
-            onChange={() => {}}
+            value={formData.bio}
+            onChange={(e) => handleFieldChange("bio", e.target.value)}
             className="glass-light border-border/30 resize-none"
           />
         </div>
 
-        <Button className="w-full md:w-auto bg-gradient-primary hover:opacity-90 transition-opacity">
+        <Button
+          onClick={handleSave}
+          className="w-full md:w-auto bg-gradient-primary hover:opacity-90 transition-opacity"
+        >
           Lưu thay đổi
         </Button>
       </CardContent>

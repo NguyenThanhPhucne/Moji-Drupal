@@ -10,13 +10,14 @@ export function PendingFriendRequests() {
 
   // Clear pending requests sau 5 giây
   useEffect(() => {
-    if (pendingRequests.length > 0) {
-      const timer = setTimeout(() => {
-        clearPendingRequests();
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [pendingRequests, clearPendingRequests]);
+    if (pendingRequests.length === 0) return;
+
+    const timer = setTimeout(() => {
+      clearPendingRequests();
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [pendingRequests.length]);
 
   if (pendingRequests.length === 0) {
     return null;

@@ -24,7 +24,7 @@ io.on("connection", async (socket) => {
   const userId = user._id.toString();
 
   console.log(
-    `✅ [Socket] User connected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
+    `[Socket] User connected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
   );
 
   onlineUsers.set(user._id, socket.id);
@@ -32,25 +32,23 @@ io.on("connection", async (socket) => {
   io.emit("online-users", Array.from(onlineUsers.keys()));
 
   const conversationIds = await getUserConversationsForSocketIO(user._id);
-  console.log(`  📍 Joined conversation rooms:`, conversationIds);
+  console.log("[Socket] Joined conversation rooms:", conversationIds);
   conversationIds.forEach((id) => {
     socket.join(id);
   });
 
   socket.on("join-conversation", (conversationId) => {
     console.log(
-      `  📍 join-conversation: ${user.displayName} joined room ${conversationId}`,
+      `[Socket] join-conversation: ${user.displayName} joined room ${conversationId}`,
     );
     socket.join(conversationId);
   });
 
   socket.join(userId);
-  console.log(`  📍 Joined user room: ${userId}`);
+  console.log(`[Socket] Joined user room: ${userId}`);
 
   socket.on("disconnect", () => {
-    console.log(
-      `❌ [Socket] User disconnected: ${user.displayName} (${userId})`,
-    );
+    console.log(`[Socket] User disconnected: ${user.displayName} (${userId})`);
     onlineUsers.delete(user._id);
     io.emit("online-users", Array.from(onlineUsers.keys()));
   });

@@ -1,0 +1,147 @@
+{#
+  /**
+   * @file
+   * Template for access denied message on admin pages
+   *
+   * Variables:
+   * - logout_url: URL to logout
+   * - back_url: URL to go back
+   */
+#}
+
+<div class="chat-admin-access-denied">
+  <div class="container">
+    <div class="access-denied-card">
+      <div class="icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      
+      <h1>{{ 'Access Denied'|t }}</h1>
+      
+      <p class="message">
+        {{ 'You do not have permission to access the Chat Administration panel.'|t }}
+      </p>
+      
+      <p class="reason">
+        {{ 'You are currently logged in as a regular user. Only administrators can access this page.'|t }}
+      </p>
+      
+      <div class="actions">
+        <a href="{{ logout_url }}" class="button button-logout">
+          {{ 'Log Out & Switch Account'|t }}
+        </a>
+        <a href="{{ back_url }}" class="button button-back">
+          {{ 'Back to Home'|t }}
+        </a>
+      </div>
+      
+      <p class="hint">
+        <strong>{{ 'Hint:'|t }}</strong>
+        {{ 'If you need admin access, please log out and log in with an administrator account.'|t }}
+      </p>
+    </div>
+  </div>
+</div>
+
+<style>
+  .chat-admin-access-denied {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 20px;
+  }
+  
+  .chat-admin-access-denied .container {
+    width: 100%;
+    max-width: 500px;
+  }
+  
+  .access-denied-card {
+    background: white;
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    text-align: center;
+  }
+  
+  .access-denied-card .icon {
+    color: #ff6b6b;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: center;
+  }
+  
+  .access-denied-card h1 {
+    color: #333;
+    margin: 0 0 15px 0;
+    font-size: 28px;
+  }
+  
+  .access-denied-card .message {
+    color: #666;
+    font-size: 16px;
+    margin: 15px 0;
+    line-height: 1.6;
+  }
+  
+  .access-denied-card .reason {
+    color: #999;
+    font-size: 14px;
+    margin: 15px 0;
+    font-style: italic;
+  }
+  
+  .access-denied-card .actions {
+    display: flex;
+    gap: 10px;
+    margin: 30px 0;
+    flex-direction: column;
+  }
+  
+  .access-denied-card .button {
+    padding: 12px 24px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s ease;
+  }
+  
+  .access-denied-card .button-logout {
+    background: #667eea;
+    color: white;
+  }
+  
+  .access-denied-card .button-logout:hover {
+    background: #5568d3;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+  }
+  
+  .access-denied-card .button-back {
+    background: #f5f5f5;
+    color: #333;
+  }
+  
+  .access-denied-card .button-back:hover {
+    background: #eeeeee;
+    transform: translateY(-2px);
+  }
+  
+  .access-denied-card .hint {
+    color: #ff6b6b;
+    font-size: 13px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
+  }
+</style>

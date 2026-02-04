@@ -2,101 +2,243 @@
 
 /**
  * @file
- * Install, update and uninstall functions for chat_api module.
+ * Các hàm cài đặt, cập nhật và gỡ cài đặt module.
  */
 
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\field\Entity\FieldConfig;
+use Drupal\Core\Database\Database;
+
+/**
+ * Implements hook_schema().
+ * Định nghĩa cấu trúc các bảng Database riêng cho module.
+ */
+function chat_api_schema() {
+  $schema = [];
+
+  // --- Bảng 1: chat_conversation (Lưu thông tin metadata cuộc trò chuyện) ---
+  $schema['chat_conversation'] = [
+    'description' => 'Lưu trữ thông tin cơ bản về các cuộc hội thoại.',
+    'fields' => [
+      'conversation_id' => [
+        'description' => 'ID duy nhất (đồng bộ từ MongoDB).',
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+      ],
+      'type' => [
+        'description' => 'Loại: private hoặc group.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'default' => 'private',
+      ],
+      'name' => [
+        'description' => 'Tên nhóm chat (nếu là group).',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+      ],
+      'participants_count' => [
+        'description' => 'Số lượng thành viên.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'message_count' => [
+        'description' => 'Tổng số tin nhắn.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ],
+      'last_message_at' => [
+        'description' => 'Timestamp tin nhắn cuối.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ],
+      'created' => [
+        'description' => 'Thời gian tạo.',
+        'type' => 'int',
+        'not null' => TRUE,
+      ],
+      'updated' => [
+        'description' => 'Thời gian cập nhật.',
+        'type' => 'int',
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['conversation_id'],
+  ];
+
+  // --- Bảng 2: chat_friend (Lưu danh sách bạn bè) ---
+  $schema['chat_friend'] = [
+    'description' => 'Lưu trữ mối quan hệ bạn bè.',
+    'fields' => [
+      'id' => [
+        'type' => 'serial',
+        'not null' => TRUE,
+      ],
+      'user_a' => [ // Đổi tên từ user_id_1 cho ngắn gọn
+        'description' => 'ID User A.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'user_b' => [ // Đổi tên từ user_id_2 cho ngắn gọn
+        'description' => 'ID User B.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'status' => [
+        'type' => 'varchar',
+        'length' => 32,
+        'default' => 'active',
+      ],
+      'created' => [
+        'type' => 'int',
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['id'],
+    'indexes' => [
+      'users' => ['user_a', 'user_b'],
+    ],
+  ];
+
+  // --- Bảng 3: chat_friend_request (Lưu lời mời kết bạn) ---
+  $schema['chat_friend_request'] = [
+    'description' => 'Lưu trữ các lời mời kết bạn đang chờ.',
+    'fields' => [
+      'id' => [
+        'type' => 'serial',
+        'not null' => TRUE,
+      ],
+      'from_user' => [
+        'description' => 'Người gửi.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'to_user' => [
+        'description' => 'Người nhận.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ],
+      'status' => [
+        'type' => 'varchar',
+        'length' => 32,
+        'default' => 'pending',
+      ],
+      'created' => [
+        'type' => 'int',
+        'not null' => TRUE,
+      ],
+    ],
+    'primary key' => ['id'],
+  ];
+
+  return $schema;
+}
 
 /**
  * Implements hook_install().
+ * Tạo thêm các cột dữ liệu (Fields) vào bảng User khi cài module.
  */
 function chat_api_install() {
-  // 1. Thêm field display_name
-  if (!FieldStorageConfig::loadByName('user', 'field_display_name')) {
-    FieldStorageConfig::create([
-      'field_name' => 'field_display_name',
-      'entity_type' => 'user',
+  // Danh sách các field cần tạo
+  $fields_to_create = [
+    'field_display_name' => [
       'type' => 'string',
-      'settings' => [
-        'max_length' => 255,
-      ],
-    ])->save();
-  }
-
-  if (!FieldConfig::loadByName('user', 'user', 'field_display_name')) {
-    FieldConfig::create([
-      'field_name' => 'field_display_name',
-      'entity_type' => 'user',
-      'bundle' => 'user',
       'label' => 'Display Name',
+      'description' => 'Tên hiển thị trong chat',
+      'settings' => ['max_length' => 255],
       'required' => TRUE,
-      'settings' => [],
-      'description' => 'The display name shown in chat',
-    ])->save();
-  }
-
-  // 2. Thêm field bio
-  if (!FieldStorageConfig::loadByName('user', 'field_bio')) {
-    FieldStorageConfig::create([
-      'field_name' => 'field_bio',
-      'entity_type' => 'user',
-      'type' => 'string_long',
-    ])->save();
-  }
-
-  if (!FieldConfig::loadByName('user', 'user', 'field_bio')) {
-    FieldConfig::create([
-      'field_name' => 'field_bio',
-      'entity_type' => 'user',
-      'bundle' => 'user',
+    ],
+    'field_bio' => [
+      'type' => 'string_long', // Textarea
       'label' => 'Bio',
-      'required' => FALSE,
+      'description' => 'Tiểu sử người dùng',
       'settings' => [],
-      'description' => 'User biography (max 500 characters)',
-    ])->save();
-  }
-
-  // 3. [MỚI] Thêm field Mongo ID (Để map với Node.js)
-  if (!FieldStorageConfig::loadByName('user', 'field_mongo_id')) {
-    FieldStorageConfig::create([
-      'field_name' => 'field_mongo_id',
-      'entity_type' => 'user',
+      'required' => FALSE,
+    ],
+    'field_mongo_id' => [
       'type' => 'string',
-    ])->save();
-  }
-
-  if (!FieldConfig::loadByName('user', 'user', 'field_mongo_id')) {
-    FieldConfig::create([
-      'field_name' => 'field_mongo_id',
-      'entity_type' => 'user',
-      'bundle' => 'user',
       'label' => 'MongoDB ID',
+      'description' => 'ID đồng bộ từ MongoDB',
+      'settings' => ['max_length' => 255],
       'required' => FALSE,
-      'settings' => [],
-      'description' => 'Stores the synchronized MongoDB ObjectId.',
-    ])->save();
+    ],
+    // [QUAN TRỌNG] Field mới để lưu link Avatar Cloudinary
+    'field_avatar_url' => [
+      'type' => 'string',
+      'label' => 'Avatar URL',
+      'description' => 'Link ảnh đại diện từ Cloudinary',
+      'settings' => ['max_length' => 512], // URL có thể dài
+      'required' => FALSE,
+    ],
+  ];
+
+  // Vòng lặp tạo field tự động
+  foreach ($fields_to_create as $field_name => $info) {
+    // 1. Tạo Kho chứa (Storage)
+    if (!FieldStorageConfig::loadByName('user', $field_name)) {
+      FieldStorageConfig::create([
+        'field_name' => $field_name,
+        'entity_type' => 'user',
+        'type' => $info['type'],
+        'settings' => $info['settings'],
+      ])->save();
+    }
+
+    // 2. Gắn Field vào User (Instance)
+    if (!FieldConfig::loadByName('user', 'user', $field_name)) {
+      FieldConfig::create([
+        'field_name' => $field_name,
+        'entity_type' => 'user',
+        'bundle' => 'user',
+        'label' => $info['label'],
+        'description' => $info['description'],
+        'required' => $info['required'],
+        'settings' => [],
+      ])->save();
+    }
   }
 
-  \Drupal::messenger()->addStatus(t('Chat API module installed successfully. User fields added.'));
+  \Drupal::messenger()->addStatus(t('Chat API cài đặt thành công. Đã tạo đầy đủ bảng và field avatar.'));
 }
 
 /**
  * Implements hook_uninstall().
+ * Dọn dẹp sạch sẽ khi gỡ module.
  */
 function chat_api_uninstall() {
-  // Xóa fields khi uninstall module
-  $field_storage_configs = [
-    'user.field_display_name',
-    'user.field_bio',
-    'user.field_mongo_id', // Thêm dòng này để xóa sạch khi gỡ
+  // 1. Xóa các Fields đã tạo
+  $fields = [
+    'field_display_name',
+    'field_bio',
+    'field_mongo_id',
+    'field_avatar_url', // Xóa luôn cột avatar
   ];
 
-  foreach ($field_storage_configs as $config_name) {
-    if ($field_storage = FieldStorageConfig::loadByName('user', str_replace('user.', '', $config_name))) {
-      $field_storage->delete();
+  foreach ($fields as $field_name) {
+    if ($storage = FieldStorageConfig::loadByName('user', $field_name)) {
+      $storage->delete();
     }
   }
 
-  \Drupal::messenger()->addStatus(t('Chat API module uninstalled. User fields removed.'));
+  // 2. Xóa các Bảng (Table)
+  $schema = Database::getConnection()->schema();
+  $tables = ['chat_conversation', 'chat_friend', 'chat_friend_request'];
+  
+  foreach ($tables as $table) {
+    if ($schema->tableExists($table)) {
+      $schema->dropTable($table);
+    }
+  }
+
+  \Drupal::messenger()->addStatus(t('Đã gỡ module Chat API và xóa toàn bộ dữ liệu.'));
 }

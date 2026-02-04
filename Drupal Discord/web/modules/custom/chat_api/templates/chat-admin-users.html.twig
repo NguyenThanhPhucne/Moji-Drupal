@@ -1,177 +1,208 @@
-{#
-/**
- * @file
- * Professional User Management Template.
- *
- * Available variables:
- * - users: Array of user objects with enriched data
- * - stats: Summary statistics
- */
+{# 
+  File: templates/chat-admin-users.html.twig
+  Mô tả: Trang danh sách quản lý người dùng - Phiên bản chuyên nghiệp
+  Kiến trúc:
+    - SVG icon từ lucide-react
+    - CSS tách biệt (không inline)
+    - Dữ liệu thật từ backend Controller
+    - AJAX cho block/unblock
+    - Responsive design
 #}
 
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+{# Import SVG icon macros #}
+{% import '@chat_api/_icons.html.twig' as icons %}
+
+{# Nạp CSS/JS thư viện chuyên nghiệp #}
+{{ attach_library('chat_api/listing') }}
+
+{% set css_import %}
+  <link rel="stylesheet" href="/modules/custom/chat_api/css/listing.css">
+  <link rel="stylesheet" href="/modules/custom/chat_api/css/notifications.css">
+{% endset %}
+{{ css_import|raw }}
 
 <div class="chat-admin-users">
-  {# Page Header #}
+  
+  {# ========== 1. HEADER ========== #}
   <div class="page-header">
     <div>
-      <h1><i class="fas fa-users"></i> {{ 'User Management'|t }}</h1>
-      <p class="subtitle">{{ 'Manage and monitor all chat users'|t }}</p>
+      <h1>
+        {{ icons.icon_users('') }}
+        {{ 'Quản lý Người dùng'|t }}
+      </h1>
+      <p class="subtitle">{{ 'Quản lý và theo dõi tất cả người dùng Chat'|t }}</p>
     </div>
     <div class="header-actions">
       <a href="/admin/chat" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> {{ 'Back to Dashboard'|t }}
+        {{ icons.icon_arrow_left('') }}
+        {{ 'Quay lại Dashboard'|t }}
       </a>
     </div>
   </div>
 
-  {# Summary Statistics #}
+  {# ========== 2. THỐNG KÊ (Statistics) ========== #}
   <div class="users-stats">
+    
+    {# Tổng User #}
     <div class="stat-box">
-      <i class="fas fa-users stat-icon"></i>
+      <div class="stat-icon">
+        {{ icons.icon_users('') }}
+      </div>
       <div class="stat-content">
         <div class="stat-value">{{ stats.total_users }}</div>
-        <div class="stat-label">{{ 'Total Users'|t }}</div>
+        <div class="stat-label">{{ 'Tổng User'|t }}</div>
       </div>
     </div>
-    <div class="stat-box">
-      <i class="fas fa-user-check stat-icon stat-icon--success"></i>
+
+    {# Active hôm nay #}
+    <div class="stat-box stat-success">
+      <div class="stat-icon">
+        {{ icons.icon_check_circle('') }}
+      </div>
       <div class="stat-content">
         <div class="stat-value">{{ stats.active_today }}</div>
-        <div class="stat-label">{{ 'Active Today'|t }}</div>
+        <div class="stat-label">{{ 'Online Hôm nay'|t }}</div>
       </div>
     </div>
-    <div class="stat-box">
-      <i class="fas fa-calendar-week stat-icon stat-icon--info"></i>
+
+    {# Active tuần này #}
+    <div class="stat-box stat-warning">
+      <div class="stat-icon">
+        {{ icons.icon_clock('') }}
+      </div>
       <div class="stat-content">
         <div class="stat-value">{{ stats.active_week }}</div>
-        <div class="stat-label">{{ 'Active This Week'|t }}</div>
+        <div class="stat-label">{{ 'Online Tuần này'|t }}</div>
       </div>
     </div>
-    <div class="stat-box">
-      <i class="fas fa-user-slash stat-icon stat-icon--danger"></i>
+
+    {# Bị khóa #}
+    <div class="stat-box stat-danger" data-stat-blocked>
+      <div class="stat-icon">
+        {{ icons.icon_ban('') }}
+      </div>
       <div class="stat-content">
         <div class="stat-value">{{ stats.blocked_users }}</div>
-        <div class="stat-label">{{ 'Blocked Users'|t }}</div>
+        <div class="stat-label">{{ 'Bị khóa'|t }}</div>
       </div>
     </div>
   </div>
 
-  {# Users Table #}
-  <div class="table-container">
-    <div class="table-header">
-      <h2><i class="fas fa-list"></i> {{ 'All Users'|t }}</h2>
-      <div class="table-actions">
-        <div class="search-box">
-          <i class="fas fa-search"></i>
-          <input type="text" id="userSearch" placeholder="{{ 'Search users...'|t }}">
-        </div>
-        <select id="statusFilter" class="filter-select">
-          <option value="all">{{ 'All Status'|t }}</option>
-          <option value="active">{{ 'Active Only'|t }}</option>
-          <option value="blocked">{{ 'Blocked Only'|t }}</option>
-        </select>
-      </div>
-    </div>
-
-    {% if users|length > 0 %}
+  {# ========== 3. BẢNG DANH SÁCH ========== #}
+  <div class="card">
+    {% if users is not empty %}
       <div class="table-responsive">
-        <table class="users-table">
+        <table class="chat-table">
           <thead>
             <tr>
-              <th><i class="fas fa-hashtag"></i> {{ 'ID'|t }}</th>
-              <th><i class="fas fa-user"></i> {{ 'User'|t }}</th>
-              <th><i class="fas fa-envelope"></i> {{ 'Email'|t }}</th>
-              <th><i class="fas fa-user-friends"></i> {{ 'Friends'|t }}</th>
-              <th><i class="fas fa-clock"></i> {{ 'Requests'|t }}</th>
-              <th><i class="far fa-calendar"></i> {{ 'Registered'|t }}</th>
-              <th><i class="fas fa-sign-in-alt"></i> {{ 'Last Access'|t }}</th>
-              <th><i class="fas fa-toggle-on"></i> {{ 'Status'|t }}</th>
-              <th><i class="fas fa-cog"></i> {{ 'Actions'|t }}</th>
+              <th>{{ 'Người dùng'|t }}</th>
+              <th>{{ 'Trạng thái'|t }}</th>
+              <th>{{ 'Bạn bè'|t }}</th>
+              <th>{{ 'Lời mời'|t }}</th>
+              <th>{{ 'Đăng ký'|t }}</th>
+              <th>{{ 'Truy cập cuối'|t }}</th>
+              <th class="text-right">{{ 'Hành động'|t }}</th>
             </tr>
           </thead>
           <tbody>
             {% for user in users %}
-              <tr class="user-row" data-status="{{ user.status ? 'active' : 'blocked' }}" data-uid="{{ user.uid }}">
-                <td class="user-id">
-                  <strong>#{{ user.uid }}</strong>
-                </td>
-                <td class="user-info">
-                  <div class="user-avatar">
-                    <i class="fas fa-user-circle"></i>
-                  </div>
-                  <div class="user-details">
-                    <a href="/admin/chat/users/{{ user.uid }}" class="user-name">{{ user.name }}</a>
-                    <div class="user-meta">
-                      {{ user.days_registered }} {{ 'days ago'|t }}
+              <tr data-user-uid="{{ user.uid }}" data-user-status="{% if user.status == 1 %}active{% else %}blocked{% endif %}" onclick="window.location.href='/admin/chat/users/{{ user.uid }}';" style="cursor: pointer;">
+                
+                {# Cột Thông tin User #}
+                <td>
+                  <div class="user-cell">
+                    <div class="user-avatar">
+                      {% if user.avatarUrl %}
+                        <img src="{{ user.avatarUrl }}" alt="{{ user.name }}" />
+                      {% else %}
+                        <div>{{ user.name|first|upper }}</div>
+                      {% endif %}
+                    </div>
+                    <div class="user-info">
+                      <a href="/admin/chat/users/{{ user.uid }}" class="user-name">
+                        {{ user.name }}
+                      </a>
+                      <div class="user-email">{{ user.mail }}</div>
                     </div>
                   </div>
                 </td>
-                <td class="user-email">
-                  <i class="fas fa-envelope"></i> {{ user.mail }}
+                
+                {# Cột Trạng thái #}
+                <td data-status-badge>
+                  {% if user.status == 1 %}
+                    <span class="badge badge-success">{{ 'Hoạt động'|t }}</span>
+                  {% else %}
+                    <span class="badge badge-danger">{{ 'Đã khóa'|t }}</span>
+                  {% endif %}
                 </td>
-                <td class="text-center">
-                  <span class="badge badge-info">
-                    <i class="fas fa-user-friends"></i> {{ user.friend_count }}
-                  </span>
+                
+                {# Cột Bạn bè #}
+                <td>
+                  <div class="data-cell">
+                    {{ icons.icon_user_friends('') }}
+                    {{ user.friend_count }}
+                  </div>
                 </td>
-                <td class="text-center">
+                
+                {# Cột Lời mời #}
+                <td>
                   {% if user.pending_requests > 0 %}
-                    <span class="badge badge-warning">
-                      <i class="fas fa-clock"></i> {{ user.pending_requests }}
-                    </span>
+                    <span class="badge badge-warning">{{ user.pending_requests }}</span>
                   {% else %}
                     <span class="text-muted">-</span>
                   {% endif %}
                 </td>
-                <td class="user-date">
-                  <i class="far fa-calendar-alt"></i>
-                  {{ user.created|date('M d, Y') }}
-                  <div class="date-time">{{ user.created|date('H:i') }}</div>
+                
+                {# Cột Đăng ký #}
+                <td>
+                  <div class="data-cell">
+                    {{ icons.icon_calendar('') }}
+                    {{ user.days_registered }} {{ 'ngày trước'|t }}
+                  </div>
                 </td>
-                <td class="user-date">
-                  {% if user.access > 0 %}
-                    <i class="fas fa-sign-in-alt"></i>
-                    {{ user.access|date('M d, Y') }}
-                    <div class="date-time">
-                      {% if user.days_since_access == 0 %}
-                        <span class="text-success">{{ 'Today'|t }}</span>
-                      {% elseif user.days_since_access == 1 %}
-                        {{ 'Yesterday'|t }}
-                      {% else %}
-                        {{ user.days_since_access }} {{ 'days ago'|t }}
-                      {% endif %}
-                    </div>
+                
+                {# Cột Truy cập cuối #}
+                <td>
+                  {% if user.days_since_access is not null %}
+                    {% if user.days_since_access == 0 %}
+                      <span class="text-success">{{ 'Hôm nay'|t }}</span>
+                    {% else %}
+                      {{ user.days_since_access }} {{ 'ngày trước'|t }}
+                    {% endif %}
                   {% else %}
-                    <span class="text-muted">{{ 'Never'|t }}</span>
+                    <span class="text-muted">{{ 'Chưa bao giờ'|t }}</span>
                   {% endif %}
                 </td>
-                <td class="text-center">
-                  {% if user.status == 1 %}
-                    <span class="status-badge status-active">
-                      <i class="fas fa-check-circle"></i> {{ 'Active'|t }}
-                    </span>
-                  {% else %}
-                    <span class="status-badge status-blocked">
-                      <i class="fas fa-ban"></i> {{ 'Blocked'|t }}
-                    </span>
-                  {% endif %}
-                </td>
-                <td class="actions-cell">
+                
+                {# Cột Hành động #}
+                <td class="text-right">
                   <div class="action-buttons">
-                    <a href="/admin/chat/users/{{ user.uid }}" class="btn-action btn-view" title="{{ 'View Profile'|t }}">
-                      <i class="fas fa-eye"></i>
+                    {# Nút Xem chi tiết #}
+                    <a href="/admin/chat/users/{{ user.uid }}" class="btn-icon" title="{{ 'Xem chi tiết'|t }}">
+                      {{ icons.icon_eye('') }}
                     </a>
-                    <a href="/user/{{ user.uid }}/edit" class="btn-action btn-edit" title="{{ 'Edit User'|t }}">
-                      <i class="fas fa-edit"></i>
+                    
+                    {# Nút Sửa thông tin #}
+                    <a href="/admin/chat/users/{{ user.uid }}" class="btn-icon" title="{{ 'Xem chi tiết'|t }}">
+                      {{ icons.icon_edit('') }}
                     </a>
+                    
+                    {# Logic Nút Block/Unblock #}
                     {% if user.status == 1 %}
-                      <button class="btn-action btn-danger action-block" data-uid="{{ user.uid }}" data-status="active" title="{{ 'Block User'|t }}">
-                        <i class="fas fa-ban"></i>
+                      <button 
+                        class="btn-icon btn-danger-icon" 
+                        data-block-user="{{ user.uid }}"
+                        title="{{ 'Khóa tài khoản'|t }}"
+                        type="button">
+                        {{ icons.icon_ban('') }}
                       </button>
                     {% else %}
-                      <button class="btn-action btn-success action-unblock" data-uid="{{ user.uid }}" data-status="blocked" title="{{ 'Unblock User'|t }}">
-                        <i class="fas fa-check"></i>
+                      <button 
+                        class="btn-icon btn-success-icon" 
+                        data-unblock-user="{{ user.uid }}"
+                        title="{{ 'Mở khóa'|t }}"
+                        type="button">
+                        {{ icons.icon_unlock('') }}
                       </button>
                     {% endif %}
                   </div>
@@ -182,18 +213,21 @@
         </table>
       </div>
 
-      {# Pagination will be rendered here by Drupal #}
+      {# PHÂN TRANG #}
       <div class="table-footer">
         <div class="table-info">
-          <i class="fas fa-info-circle"></i>
-          {{ 'Showing'|t }} <strong>{{ users|length }}</strong> {{ 'users per page'|t }}
+          {{ icons.icon_info('') }}
+          {{ 'Đang hiển thị'|t }} <strong>{{ users|length }}</strong> {{ 'người dùng'|t }}
         </div>
+        {{ pager }}
       </div>
+
     {% else %}
+      {# EMPTY STATE #}
       <div class="empty-state">
-        <i class="fas fa-users-slash"></i>
-        <h3>{{ 'No Users Found'|t }}</h3>
-        <p>{{ 'There are no users matching your criteria.'|t }}</p>
+        {{ icons.icon_users('') }}
+        <h3>{{ 'Không tìm thấy người dùng nào'|t }}</h3>
+        <p>{{ 'Hiện tại hệ thống chưa có dữ liệu user phù hợp.'|t }}</p>
       </div>
     {% endif %}
   </div>

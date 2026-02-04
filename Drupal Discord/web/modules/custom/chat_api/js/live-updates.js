@@ -9,6 +9,9 @@
 (function (Drupal, drupalSettings) {
   "use strict";
 
+  // DEBUG MODE - set to true to enable console logs and notifications
+  const DEBUG_MODE = false;
+
   Drupal.behaviors.chatAdminLiveUpdates = {
     attach: function (context, settings) {
       if (!settings.chatAdminLive) {
@@ -19,10 +22,15 @@
       }
 
       const config = settings.chatAdminLive;
-      console.log("[ChatAdminLiveUpdates] ✅ Initialized with config:", config);
+      if (DEBUG_MODE) {
+        console.log(
+          "[ChatAdminLiveUpdates] ✅ Initialized with config:",
+          config,
+        );
+      }
 
       // Log debug info from AdminController
-      if (config.debug) {
+      if (DEBUG_MODE && config.debug) {
         console.log(
           "[ChatAdminLiveUpdates] 📊 Initial data from AdminController:",
           {
@@ -43,29 +51,37 @@
         if (isUpdating) return;
         isUpdating = true;
 
-        console.log("[ChatAdminLiveUpdates] 📡 Fetching from:", config.apiUrl);
+        if (DEBUG_MODE)
+          console.log(
+            "[ChatAdminLiveUpdates] 📡 Fetching from:",
+            config.apiUrl,
+          );
         fetch(config.apiUrl)
           .then((response) => {
-            console.log(
-              "[ChatAdminLiveUpdates] 📡 Response status:",
-              response.status,
-            );
+            if (DEBUG_MODE)
+              console.log(
+                "[ChatAdminLiveUpdates] 📡 Response status:",
+                response.status,
+              );
             if (!response.ok) {
               throw new Error(`API Error: ${response.status}`);
             }
             return response.json();
           })
           .then((data) => {
-            console.log("[ChatAdminLiveUpdates] 📊 Data received:", data);
+            if (DEBUG_MODE)
+              console.log("[ChatAdminLiveUpdates] 📊 Data received:", data);
             if (data.success) {
-              console.log(
-                "[ChatAdminLiveUpdates] ✅ Updating table with",
-                data.data.length,
-                "conversations",
-              );
+              if (DEBUG_MODE)
+                console.log(
+                  "[ChatAdminLiveUpdates] ✅ Updating table with",
+                  data.data.length,
+                  "conversations",
+                );
               updateConversationTable(data.data, data.stats);
               updateStats(data.stats);
-              showUpdateNotification("✅ Data updated", "success");
+              if (DEBUG_MODE)
+                showUpdateNotification("✅ Data updated", "success");
             }
           })
           .catch((error) => {
@@ -73,7 +89,8 @@
               "[ChatAdminLiveUpdates] ❌ Error fetching data:",
               error,
             );
-            showUpdateNotification("❌ Failed to update data", "error");
+            if (DEBUG_MODE)
+              showUpdateNotification("❌ Failed to update data", "error");
           })
           .finally(() => {
             isUpdating = false;

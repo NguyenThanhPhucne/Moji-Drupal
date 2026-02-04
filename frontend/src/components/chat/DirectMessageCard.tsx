@@ -10,8 +10,12 @@ import { useSocketStore } from "@/stores/useSocketStore";
 
 const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
-  const { activeConversationId, setActiveConversation, messages, fetchMessages } =
-    useChatStore();
+  const {
+    activeConversationId,
+    setActiveConversation,
+    messages,
+    fetchMessages,
+  } = useChatStore();
   const { onlineUsers } = useSocketStore();
 
   if (!user) return null;
@@ -25,7 +29,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   const handleSelectConversation = async (id: string) => {
     setActiveConversation(id);
     if (!messages[id]) {
-      await fetchMessages();
+      await fetchMessages(id);
     }
   };
 
@@ -60,7 +64,9 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
         <p
           className={cn(
             "text-sm truncate",
-            unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
+            unreadCount > 0
+              ? "font-medium text-foreground"
+              : "text-muted-foreground",
           )}
         >
           {lastMessage}

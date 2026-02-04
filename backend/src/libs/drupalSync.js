@@ -29,13 +29,10 @@ export function initDrupalSync() {
       keepAliveInitialDelay: 0,
     });
 
-    console.log("✅ Drupal database pool initialized");
+    console.log("Drupal database pool initialized");
     return drupalDbPool;
   } catch (error) {
-    console.error(
-      "❌ Failed to initialize Drupal database pool:",
-      error.message,
-    );
+    console.error("Failed to initialize Drupal database pool:", error.message);
     return null;
   }
 }
@@ -46,7 +43,7 @@ export function initDrupalSync() {
  */
 export async function syncConversationToDrupal(conversation) {
   if (!drupalDbPool) {
-    console.warn("⚠️ Drupal sync skipped: database pool not initialized");
+    console.warn("Drupal sync skipped: database pool not initialized");
     return;
   }
 
@@ -94,9 +91,9 @@ export async function syncConversationToDrupal(conversation) {
     // Sync participants
     await syncParticipantsToDrupal(conversationId, conversation.participants);
 
-    console.log(`✅ Synced conversation ${conversationId} to Drupal`);
+    console.log(`Synced conversation ${conversationId} to Drupal`);
   } catch (error) {
-    console.error("❌ Failed to sync conversation to Drupal:", error.message);
+    console.error("Failed to sync conversation to Drupal:", error.message);
   }
 }
 
@@ -142,16 +139,16 @@ async function syncParticipantsToDrupal(conversationId, participants) {
       } catch (insertError) {
         // If insert fails (type mismatch), skip this participant
         console.warn(
-          `⚠️ Could not sync participant ${mongoUserId} (likely schema type mismatch)`,
+          `Could not sync participant ${mongoUserId} (likely schema type mismatch)`,
         );
       }
     }
 
     console.log(
-      `✅ Synced ${participants.length} participants for conversation ${conversationId}`,
+      `Synced ${participants.length} participants for conversation ${conversationId}`,
     );
   } catch (error) {
-    console.error("❌ Failed to sync participants to Drupal:", error.message);
+    console.error("Failed to sync participants to Drupal:", error.message);
   }
 }
 
@@ -172,13 +169,10 @@ export async function updateMessageCountInDrupal(conversationId, messageCount) {
     );
 
     console.log(
-      `✅ Updated message count for conversation ${conversationId}: ${messageCount}`,
+      `Updated message count for conversation ${conversationId}: ${messageCount}`,
     );
   } catch (error) {
-    console.error(
-      "❌ Failed to update message count in Drupal:",
-      error.message,
-    );
+    console.error("Failed to update message count in Drupal:", error.message);
   }
 }
 
@@ -204,12 +198,9 @@ export async function deleteConversationFromDrupal(conversationId) {
       [conversationId],
     );
 
-    console.log(`✅ Deleted conversation ${conversationId} from Drupal`);
+    console.log(`Deleted conversation ${conversationId} from Drupal`);
   } catch (error) {
-    console.error(
-      "❌ Failed to delete conversation from Drupal:",
-      error.message,
-    );
+    console.error("Failed to delete conversation from Drupal:", error.message);
   }
 }
 
@@ -220,6 +211,6 @@ export async function closeDrupalSync() {
   if (drupalDbPool) {
     await drupalDbPool.end();
     drupalDbPool = null;
-    console.log("✅ Drupal database pool closed");
+    console.log("Drupal database pool closed");
   }
 }

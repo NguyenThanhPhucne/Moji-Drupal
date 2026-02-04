@@ -5,296 +5,293 @@ namespace Drupal\chat_api\Controller;
 use Drupal\Core\Controller\ControllerBase;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Drupal\Core\Database\Database;
 use Drupal\user\Entity\User;
-use Drupal\chat_api\Entity\ChatFriend;
-use Drupal\chat_api\Entity\ChatFriendRequest;
+use Drupal\Core\Site\Settings;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
+/**
+ * Controller quản lý tính năng Bạn bè & Lời mời.
+ */
 class FriendController extends ControllerBase {
 
   /**
-   * 1. Gửi lời mời kết bạn
-   * POST /api/friends/requests
+   * API 1: Gửi lời mời kết bạn (POST /api/friends/requests)
    */
   public function sendRequest(Request $request) {
     try {
       $currentUser = $this->getUserFromToken($request);
-      if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
+      if (!$currentUser) return new JsonResponse(['message' => 'Phiên đăng nhập hết hạn'], 401);
 
       $data = json_decode($request->getContent(), TRUE);
-      $toId = $data['to'] ?? null;
-      $message = $data['message'] ?? '';
+      $toId = $data['to_user_id'] ?? null; // ID người nhận
 
       if (!$toId) return new JsonResponse(['message' => 'Thiếu ID người nhận'], 400);
 
-      $fromId = $currentUser->id();
+      $fromId = (int) $currentUser->id();
+      $toId = (int) $toId;
 
-      // Check: Không gửi cho chính mình
-      if ($fromId == $toId) {
-        return new JsonResponse(['message' => 'Không thể kết bạn với chính mình'], 400);
-      }
+      if ($fromId === $toId) return new JsonResponse(['message' => 'Không thể tự kết bạn'], 400);
 
-      // Check: Người nhận có tồn tại không
-      $toUser = User::load($toId);
-      if (!$toUser) return new JsonResponse(['message' => 'Người dùng không tồn tại'], 404);
+      $connection = Database::getConnection();
 
-      // Check: Đã là bạn bè chưa
-      $userA = min($fromId, $toId);
-      $userB = max($fromId, $toId);
-      
-      $friends = \Drupal::entityTypeManager()->getStorage('chat_friend')
-        ->getQuery()
-        ->condition('user_a', $userA)
-        ->condition('user_b', $userB)
-        ->accessCheck(FALSE)
-        ->execute();
+      // 1. Kiểm tra đã là bạn chưa
+      $isFriend = $connection->select('chat_friend', 'cf')
+        ->fields('cf', ['id'])
+        ->condition($connection->condition('OR')
+          ->condition($connection->condition('AND')->condition('user_a', $fromId)->condition('user_b', $toId))
+          ->condition($connection->condition('AND')->condition('user_a', $toId)->condition('user_b', $fromId))
+        )
+        ->execute()->fetchField();
 
-      if (!empty($friends)) {
-        return new JsonResponse(['message' => 'Hai người đã là bạn bè'], 400);
-      }
+      if ($isFriend) return new JsonResponse(['message' => 'Hai người đã là bạn bè'], 400);
 
-      // Check: Đã có lời mời chưa (Chiều đi hoặc chiều về)
-      $requests = \Drupal::entityTypeManager()->getStorage('chat_friend_request')
-        ->getQuery()
+      // 2. Kiểm tra đã gửi lời mời chưa (tránh spam)
+      $existingReq = $connection->select('chat_friend_request', 'cfr')
+        ->fields('cfr', ['id'])
         ->condition('from_user', $fromId)
         ->condition('to_user', $toId)
-        ->accessCheck(FALSE)
-        ->execute();
+        ->condition('status', 'pending')
+        ->execute()->fetchField();
+
+      if ($existingReq) return new JsonResponse(['message' => 'Đã gửi lời mời trước đó'], 400);
+
+      // 3. Lưu vào DB
+      $connection->insert('chat_friend_request')
+        ->fields([
+          'from_user' => $fromId,
+          'to_user' => $toId,
+          'status' => 'pending',
+          'created' => \Drupal::time()->getRequestTime(),
+        ])->execute();
+
+      // Invalidate admin cache cho recipient (người nhận)
+      \Drupal::service('cache.default')->invalidate("user_detail_{$toId}");
+      \Drupal::service('cache.default')->invalidate("user_stats_{$toId}");
+
+      return new JsonResponse(['message' => 'Gửi lời mời thành công'], 201);
+
+    } catch (\Exception $e) {
+      return new JsonResponse(['message' => 'Lỗi: ' . $e->getMessage()], 500);
+    }
+  }
+
+  /**
+   * API 2: Lấy danh sách lời mời kết bạn (GET /api/friends/requests)
+   * [CẬP NHẬT] Đã thêm logic lấy Avatar để hiển thị đẹp trên React
+   */
+  public function getRequests(Request $request) {
+    try {
+      $currentUser = $this->getUserFromToken($request);
+      if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
       
-      // Check chiều ngược lại
-      $reverseRequests = \Drupal::entityTypeManager()->getStorage('chat_friend_request')
-        ->getQuery()
-        ->condition('from_user', $toId)
-        ->condition('to_user', $fromId)
-        ->accessCheck(FALSE)
-        ->execute();
+      $uid = $currentUser->id();
+      $connection = Database::getConnection();
 
-      if (!empty($requests) || !empty($reverseRequests)) {
-        return new JsonResponse(['message' => 'Đã có lời mời kết bạn đang chờ'], 400);
-      }
+      // Query lấy request gửi CHO MÌNH
+      $query = $connection->select('chat_friend_request', 'cfr');
+      $query->fields('cfr', ['id', 'created', 'from_user']);
+      $query->condition('cfr.to_user', $uid);
+      $query->condition('cfr.status', 'pending');
+      $results = $query->execute()->fetchAll();
 
-      // Tạo Request
-      $friendRequest = ChatFriendRequest::create([
-        'from_user' => $fromId,
-        'to_user' => $toId,
-        'message' => $message,
-      ]);
-      $friendRequest->save();
+      // Format dữ liệu + Lấy Avatar
+      $formatted = array_map(function($item) {
+        // Load User người gửi để lấy thông tin chi tiết
+        $sender = User::load($item->from_user);
+        
+        // Lấy link avatar từ Cloudinary (nếu có)
+        $avatar = $sender->hasField('field_avatar_url') ? $sender->get('field_avatar_url')->value : null;
+        
+        // Lấy tên hiển thị
+        $name = $sender->hasField('field_display_name') ? $sender->get('field_display_name')->value : $sender->getAccountName();
 
-      return new JsonResponse([
-        'message' => 'Gửi lời mời thành công',
-        'request' => [
-          '_id' => $friendRequest->id(),
-          'from' => $fromId,
-          'to' => $toId
-        ]
-      ], 201);
+        return [
+          '_id' => $item->id, // ID request số (dùng để Accept)
+          'from' => [
+            '_id' => $sender->id(),
+            'username' => $sender->getAccountName(),
+            'displayName' => $name,
+            'avatarUrl' => $avatar // [QUAN TRỌNG] React cần cái này
+          ],
+          'created' => $item->created
+        ];
+      }, $results);
+
+      return new JsonResponse($formatted);
 
     } catch (\Exception $e) {
-      return new JsonResponse(['message' => 'Lỗi hệ thống: ' . $e->getMessage()], 500);
+      return new JsonResponse(['message' => $e->getMessage()], 500);
     }
   }
 
   /**
-   * 2. Chấp nhận lời mời
-   * POST /api/friends/requests/{requestId}/accept
-   */
-  public function acceptRequest(Request $request, $requestId) {
-    try {
-      $currentUser = $this->getUserFromToken($request);
-      if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
-
-      $friendRequest = ChatFriendRequest::load($requestId);
-      if (!$friendRequest) return new JsonResponse(['message' => 'Lời mời không tồn tại'], 404);
-
-      // Chỉ người nhận mới được chấp nhận
-      if ($friendRequest->get('to_user')->target_id != $currentUser->id()) {
-        return new JsonResponse(['message' => 'Bạn không có quyền này'], 403);
-      }
-
-      // Tạo bạn bè
-      ChatFriend::create([
-        'user_a' => $friendRequest->get('from_user')->target_id,
-        'user_b' => $friendRequest->get('to_user')->target_id,
-      ])->save();
-
-      // Xóa lời mời
-      $friendRequest->delete();
-
-      // Lấy thông tin người gửi để trả về cho Frontend hiển thị
-      $fromUser = User::load($friendRequest->get('from_user')->target_id);
-
-      return new JsonResponse([
-        'message' => 'Đã chấp nhận kết bạn',
-        'newFriend' => [
-          '_id' => $fromUser->id(),
-          'displayName' => $fromUser->get('field_display_name')->value,
-          'avatarUrl' => null,
-          'username' => $fromUser->getAccountName(),
-        ]
-      ]);
-
-    } catch (\Exception $e) {
-      return new JsonResponse(['message' => 'Lỗi hệ thống'], 500);
-    }
-  }
-
-  /**
-   * 3. Từ chối lời mời
-   * POST /api/friends/requests/{requestId}/decline
-   */
-  public function declineRequest(Request $request, $requestId) {
-    try {
-      $currentUser = $this->getUserFromToken($request);
-      if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
-
-      $friendRequest = ChatFriendRequest::load($requestId);
-      if (!$friendRequest) return new JsonResponse(['message' => 'Lời mời không tồn tại'], 404);
-
-      if ($friendRequest->get('to_user')->target_id != $currentUser->id()) {
-        return new JsonResponse(['message' => 'Bạn không có quyền này'], 403);
-      }
-
-      $friendRequest->delete();
-      return new JsonResponse(NULL, 204);
-
-    } catch (\Exception $e) {
-      return new JsonResponse(['message' => 'Lỗi hệ thống'], 500);
-    }
-  }
-
-  /**
-   * 4. Lấy danh sách bạn bè
-   * GET /api/friends
+   * API 3: Lấy danh sách bạn bè đã kết bạn (GET /api/friends)
+   * [CẬP NHẬT] Bổ sung logic lấy Avatar
    */
   public function getAllFriends(Request $request) {
     try {
       $currentUser = $this->getUserFromToken($request);
       if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
 
-      $uid = $currentUser->id();
+      $uid = (int) $currentUser->id();
+      $connection = Database::getConnection();
 
-      // Query: Tìm tất cả record mà user_a HOẶC user_b là mình
-      $query = \Drupal::entityTypeManager()->getStorage('chat_friend')->getQuery();
-      $group = $query->orConditionGroup()
+      // Tìm trong bảng chat_friend, mình có thể là user_a hoặc user_b
+      $query = $connection->select('chat_friend', 'cf');
+      $query->fields('cf', ['user_a', 'user_b']);
+      $query->condition($query->orConditionGroup()
         ->condition('user_a', $uid)
-        ->condition('user_b', $uid);
-      
-      $ids = $query->condition($group)->accessCheck(FALSE)->execute();
-      
-      $friends = [];
-      if (!empty($ids)) {
-        $friendships = ChatFriend::loadMultiple($ids);
-        foreach ($friendships as $f) {
-          $idA = $f->get('user_a')->target_id;
-          $idB = $f->get('user_b')->target_id;
-          
-          // Lấy ID của người kia
-          $friendId = ($idA == $uid) ? $idB : $idA;
-          $friendUser = User::load($friendId);
+        ->condition('user_b', $uid)
+      );
+      $query->condition('status', 'active');
+      $results = $query->execute()->fetchAll();
 
-          if ($friendUser) {
-            $friends[] = [
-              '_id' => $friendUser->id(),
-              'username' => $friendUser->getAccountName(),
-              'displayName' => $friendUser->get('field_display_name')->value,
-              'avatarUrl' => null
-            ];
-          }
+      $friends = [];
+      foreach ($results as $row) {
+        // Xác định ID của người kia (người không phải là mình)
+        $friendId = ($row->user_a == $uid) ? $row->user_b : $row->user_a;
+        
+        $friendUser = User::load($friendId);
+        if ($friendUser) {
+          $avatar = $friendUser->hasField('field_avatar_url') ? $friendUser->get('field_avatar_url')->value : null;
+          $name = $friendUser->hasField('field_display_name') ? $friendUser->get('field_display_name')->value : $friendUser->getAccountName();
+
+          $friends[] = [
+            '_id' => $friendUser->id(),
+            'username' => $friendUser->getAccountName(),
+            'displayName' => $name,
+            'avatarUrl' => $avatar, // Avatar của bạn bè
+            'isOnline' => false // Node.js sẽ xử lý phần online sau
+          ];
         }
       }
 
-      return new JsonResponse(['friends' => $friends]);
+      return new JsonResponse($friends);
 
     } catch (\Exception $e) {
-      return new JsonResponse(['message' => 'Lỗi hệ thống'], 500);
+      return new JsonResponse(['message' => $e->getMessage()], 500);
     }
   }
 
   /**
-   * 5. Lấy danh sách lời mời (Sent & Received)
-   * GET /api/friends/requests
+   * API 4: Chấp nhận kết bạn (POST)
    */
-  public function getRequests(Request $request) {
+  public function acceptRequest(Request $request, $requestId) {
     try {
       $currentUser = $this->getUserFromToken($request);
       if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
-      $uid = $currentUser->id();
 
-      // Lấy lời mời ĐÃ NHẬN (Received)
-      $receivedIds = \Drupal::entityTypeManager()->getStorage('chat_friend_request')
-        ->getQuery()
-        ->condition('to_user', $uid)
-        ->accessCheck(FALSE)->execute();
+      $connection = Database::getConnection();
 
-      $received = [];
-      foreach (ChatFriendRequest::loadMultiple($receivedIds) as $req) {
-        $from = $req->get('from_user')->entity;
-        if ($from) {
-          $received[] = [
-            '_id' => $req->id(),
-            'from' => [
-              '_id' => $from->id(),
-              'username' => $from->getAccountName(),
-              'displayName' => $from->get('field_display_name')->value,
-              'avatarUrl' => null
-            ],
-            'message' => $req->get('message')->value
-          ];
-        }
+      // Tìm request
+      $reqData = $connection->select('chat_friend_request', 'cfr')
+        ->fields('cfr')
+        ->condition('id', $requestId)
+        ->execute()->fetchObject();
+
+      if (!$reqData) return new JsonResponse(['message' => 'Lời mời không tồn tại'], 404);
+
+      if ($reqData->to_user != $currentUser->id()) {
+        return new JsonResponse(['message' => 'Không có quyền'], 403);
       }
 
-      // Lấy lời mời ĐÃ GỬI (Sent)
-      $sentIds = \Drupal::entityTypeManager()->getStorage('chat_friend_request')
-        ->getQuery()
-        ->condition('from_user', $uid)
-        ->accessCheck(FALSE)->execute();
+      $transaction = $connection->startTransaction();
+      try {
+        // Thêm vào bảng bạn bè
+        $connection->insert('chat_friend')
+          ->fields([
+            'user_a' => $reqData->from_user,
+            'user_b' => $reqData->to_user,
+            'status' => 'active',
+            'created' => \Drupal::time()->getRequestTime(),
+          ])->execute();
 
-      $sent = [];
-      foreach (ChatFriendRequest::loadMultiple($sentIds) as $req) {
-        $to = $req->get('to_user')->entity;
-        if ($to) {
-          $sent[] = [
-            '_id' => $req->id(),
-            'to' => [
-              '_id' => $to->id(),
-              'username' => $to->getAccountName(),
-              'displayName' => $to->get('field_display_name')->value,
-              'avatarUrl' => null
-            ],
-            'message' => $req->get('message')->value
-          ];
-        }
+        // Xóa lời mời
+        $connection->delete('chat_friend_request')
+          ->condition('id', $requestId)
+          ->execute();
+
+        return new JsonResponse(['message' => 'Đã chấp nhận kết bạn'], 200);
+
+      } catch (\Exception $e) {
+        $transaction->rollBack();
+        throw $e;
       }
-
-      return new JsonResponse(['received' => $received, 'sent' => $sent]);
 
     } catch (\Exception $e) {
-      return new JsonResponse(['message' => 'Lỗi hệ thống'], 500);
+      return new JsonResponse(['message' => 'Lỗi: ' . $e->getMessage()], 500);
     }
   }
 
   /**
-   * 6. Kiểm tra quan hệ bạn bè (dành cho Node.js backend)
-   * GET /api/friends/check?userA={id}&userB={id}
+   * API 5: Từ chối lời mời (POST)
+   */
+  public function declineRequest(Request $request, $requestId) {
+    try {
+        $currentUser = $this->getUserFromToken($request);
+        if (!$currentUser) return new JsonResponse(['message' => 'Unauthorized'], 401);
+  
+        $connection = Database::getConnection();
+        
+        $reqData = $connection->select('chat_friend_request', 'cfr')
+          ->fields('cfr')
+          ->condition('id', $requestId)
+          ->execute()->fetchObject();
+
+        if (!$reqData) return new JsonResponse(['message' => 'Not Found'], 404);
+        if ($reqData->to_user != $currentUser->id()) return new JsonResponse(['message' => 'Forbidden'], 403);
+
+        $connection->delete('chat_friend_request')->condition('id', $requestId)->execute();
+        
+        return new JsonResponse(['message' => 'Đã từ chối'], 200);
+    } catch (\Exception $e) {
+        return new JsonResponse(['message' => $e->getMessage()], 500);
+    }
+  }
+
+  /**
+   * Helper: Check quan hệ bạn bè (Dùng cho nút "Add Friend" trên UI)
+   * GET /api/friends/check?userB={id}
    */
   public function checkFriendship(Request $request) {
-    // Simple test first
-    $userA = $request->query->get('userA');
+    $currentUser = $this->getUserFromToken($request);
+    if (!$currentUser) return new JsonResponse(['isFriend' => false, 'status' => 'none']);
+
     $userB = $request->query->get('userB');
+    $userA = $currentUser->id();
+    $connection = Database::getConnection();
 
-    if (!$userA || !$userB) {
-      return new JsonResponse(['message' => 'Thiếu userA hoặc userB'], 400);
-    }
+    // 1. Check Friends
+    $isFriend = $connection->select('chat_friend', 'cf')
+      ->fields('cf', ['id'])
+      ->condition($connection->condition('OR')
+        ->condition($connection->condition('AND')->condition('user_a', $userA)->condition('user_b', $userB))
+        ->condition($connection->condition('AND')->condition('user_a', $userB)->condition('user_b', $userA))
+      )->execute()->fetchField();
 
-    // Test response
-    return new JsonResponse([
-      'isFriend' => false,
-      'userA' => $userA,
-      'userB' => $userB,
-      'note' => 'Test endpoint - Always returns false for now'
-    ]);
+    if ($isFriend) return new JsonResponse(['isFriend' => true, 'status' => 'friend']);
+
+    // 2. Check Sent Request (Mình gửi đi)
+    $sent = $connection->select('chat_friend_request', 'cfr')
+      ->fields('cfr', ['id'])
+      ->condition('from_user', $userA)
+      ->condition('to_user', $userB)
+      ->execute()->fetchField();
+    
+    if ($sent) return new JsonResponse(['isFriend' => false, 'status' => 'sent']);
+
+    // 3. Check Received Request (Họ gửi đến)
+    $received = $connection->select('chat_friend_request', 'cfr')
+      ->fields('cfr', ['id'])
+      ->condition('from_user', $userB)
+      ->condition('to_user', $userA)
+      ->execute()->fetchField();
+
+    if ($received) return new JsonResponse(['isFriend' => false, 'status' => 'received']);
+
+    return new JsonResponse(['isFriend' => false, 'status' => 'none']);
   }
 
   // Helper Auth
@@ -302,14 +299,10 @@ class FriendController extends ControllerBase {
     $authHeader = $request->headers->get('Authorization');
     if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) return null;
     $token = substr($authHeader, 7);
-    // Sử dụng cùng key với AuthController
-    $key = \Drupal\Core\Site\Settings::get('chat_api_access_token_secret', 'fallback_secret_key');
+    $key = Settings::get('chat_api_access_token_secret', 'fallback_secret_key');
     try {
       $decoded = JWT::decode($token, new Key($key, 'HS256'));
       return User::load($decoded->userId);
-    } catch (\Exception $e) { 
-      \Drupal::logger('chat_api')->error('JWT decode error: ' . $e->getMessage());
-      return null; 
-    }
+    } catch (\Exception $e) { return null; }
   }
 }

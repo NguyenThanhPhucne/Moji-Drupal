@@ -2,48 +2,65 @@
 
 /**
  * @file
- * Chat API module hooks.
+ * Các hook chính của module Chat API.
+ * File này chạy trên mọi request của Drupal, dùng để can thiệp vào hệ thống.
  */
 
 use Dotenv\Dotenv;
 
 /**
  * Implements hook_init().
- * Load .env file manually if library exists.
+ * Hook này chạy ở giai đoạn khởi tạo ban đầu.
+ * Mục đích: Load file biến môi trường (.env) để lấy cấu hình DB, API Key...
  */
-// Đường dẫn từ: modules/custom/chat_api ra tới root dự án là 4 cấp
+// Đường dẫn này đi ngược ra 4 cấp thư mục để tìm file .env ở root dự án
 $dotenv_path = __DIR__ . '/../../../../';
 
 if (file_exists($dotenv_path . '.env') && class_exists('Dotenv\Dotenv')) {
   try {
+    // Thư viện Dotenv giúp đọc file .env và nạp vào biến $_ENV hoặc getenv()
     $dotenv = Dotenv::createImmutable($dotenv_path);
     $dotenv->safeLoad();
   }
   catch (\Exception $e) {
-    // Không làm gì nếu lỗi
+    // Nếu lỗi thì bỏ qua, không làm sập web
   }
 }
 
 /**
  * Implements hook_theme().
+ * QUAN TRỌNG: Hook này đăng ký các "khuôn mẫu giao diện" (templates).
+ *
+ * Logic:
+ * 1. Controller xử lý dữ liệu PHP.
+ * 2. Controller trả về một mảng render (VD: ['#theme' => 'chat_admin_users']).
+ * 3. Drupal nhìn vào hook này để biết 'chat_admin_users' ứng với file twig nào.
  */
 function chat_api_theme($existing, $type, $theme, $path) {
   return [
+    // 1. Dashboard chính
     'chat_admin_dashboard' => [
       'variables' => [
+        // Khai báo các biến sẽ được truyền từ Controller sang file Twig
         'stats' => [],
         'activity_trends' => [],
         'recent_stats' => [],
         'system_health' => [],
       ],
+      // Tên file template: templates/chat-admin-dashboard.html.twig
       'template' => 'chat-admin-dashboard',
     ],
+
+    // 2. Danh sách User
     'chat_admin_users' => [
       'variables' => [
         'users' => [],
       ],
+      'path' => $path . '/templates',
       'template' => 'chat-admin-users',
     ],
+
+    // 3. Chi tiết User
     'chat_admin_user_detail' => [
       'variables' => [
         'user_info' => NULL,
@@ -53,24 +70,42 @@ function chat_api_theme($existing, $type, $theme, $path) {
         'pending_received' => NULL,
         'recent_activity' => NULL,
       ],
+      'path' => $path . '/templates',
       'template' => 'chat-admin-user-detail',
     ],
+
+    // 4. Form xác nhận Ban User
     'chat_admin_user_ban' => [
-      'render element' => 'form',
+      'render element' => 'form', // Dạng Form thì dùng render element
       'template' => 'chat-admin-user-ban-confirm',
     ],
+
+    // 5. [ĐÃ SỬA LỖI] Danh sách Bạn bè (Lúc trước bạn thiếu cái này nên không view được)
+    'chat_admin_friends' => [
+      'variables' => [
+        'friends' => [], // Biến chứa list bạn bè
+        'stats' => NULL,
+      ],
+      'template' => 'chat-admin-friends', // File: templates/chat-admin-friends.html.twig
+    ],
+
+    // 6. Danh sách cuộc trò chuyện
     'chat_admin_conversations' => [
       'variables' => [
         'conversations' => [],
       ],
       'template' => 'chat-admin-conversations',
     ],
+
+    // 7. Chi tiết cuộc trò chuyện
     'chat_admin_conversation_view' => [
       'variables' => [
         'conversation_id' => NULL,
       ],
       'template' => 'chat-admin-conversation-view',
     ],
+
+    // 8. Danh sách lời mời kết bạn
     'chat_admin_friend_requests' => [
       'variables' => [
         'requests' => [],
@@ -78,12 +113,22 @@ function chat_api_theme($existing, $type, $theme, $path) {
       ],
       'template' => 'chat-admin-friend-requests',
     ],
+
+    // 9. Báo cáo thống kê
     'chat_admin_reports' => [
       'variables' => [
         'stats' => [],
       ],
       'template' => 'chat-admin-reports',
     ],
+
+    // 10. Access Denied Page - Thân thiện khi user không có quyền admin
+    'chat_admin_access_denied' => [
+      'variables' => [
+        'logout_url' => NULL,
+        'back_url' => NULL,
+      ],
+      'template' => 'chat-admin-access-denied',
+    ],
   ];
 }
-

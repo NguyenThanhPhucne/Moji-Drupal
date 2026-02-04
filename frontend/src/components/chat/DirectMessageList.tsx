@@ -4,19 +4,24 @@ import DirectMessageCard from "./DirectMessageCard";
 const DirectMessageList = () => {
   const { conversations } = useChatStore();
 
-  if (!conversations) return;
+  if (!conversations || conversations.length === 0) return null;
 
   const directConversations = conversations.filter(
-    (convo) => convo.type === "direct"
+    (convo) => convo.type === "direct",
   );
+
+  if (directConversations.length === 0) {
+    return (
+      <div className="p-2 text-center text-sm text-muted-foreground">
+        Không có cuộc trò chuyện trực tiếp
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-2">
       {directConversations.map((convo) => (
-        <DirectMessageCard
-          convo={convo}
-          key={convo._id}
-        />
+        <DirectMessageCard convo={convo} key={convo._id} />
       ))}
     </div>
   );

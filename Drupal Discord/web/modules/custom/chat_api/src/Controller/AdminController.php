@@ -10,24 +10,23 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Drupal\Core\Url;
 
 /**
- * Admin Controller for Chat Administration.
- * 
- * Provides admin interface for managing users, conversations, and viewing reports.
+ * Admin Controller - Bộ não quản lý trang Admin Chat.
+ * * Cung cấp giao diện quản trị cho người dùng, cuộc trò chuyện và xem báo cáo.
  */
 class AdminController extends ControllerBase {
 
   /**
-   * The database connection.
+   * Kết nối cơ sở dữ liệu.
    *
    * @var \Drupal\Core\Database\Connection
    */
   protected $database;
 
   /**
-   * Constructs an AdminController object.
+   * Khởi tạo đối tượng AdminController.
    *
    * @param \Drupal\Core\Database\Connection $database
-   *   The database connection.
+   * Kết nối cơ sở dữ liệu.
    */
   public function __construct(Connection $database) {
     $this->database = $database;
@@ -43,12 +42,22 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Dashboard - Main admin overview page with comprehensive statistics.
-   * 
-   * Displays overview statistics, activity trends, and system health.
+   * Dashboard - Trang tổng quan quản trị chính với số liệu thống kê toàn diện.
+   * * Hiển thị số liệu tổng quan, xu hướng hoạt động và tình trạng hệ thống.
    */
   public function dashboard() {
-    // Get comprehensive statistics
+    // Kiểm tra quyền admin
+    $current_user = $this->currentUser();
+    if (!$current_user->hasPermission('administer chat')) {
+      // Hiển thị access denied page thân thiện với link logout
+      return [
+        '#theme' => 'chat_admin_access_denied',
+        '#logout_url' => Url::fromRoute('user.logout'),
+        '#back_url' => Url::fromRoute('<front>'),
+      ];
+    }
+
+    // Lấy số liệu thống kê toàn diện
     $stats = [
       'total_users' => $this->getTotalUsers(),
       'active_users_today' => $this->getActiveUsersToday(),
@@ -60,18 +69,18 @@ class AdminController extends ControllerBase {
       'blocked_users' => $this->getBlockedUsers(),
     ];
 
-    // Get activity trends for charts (last 7 days)
+    // Lấy xu hướng hoạt động cho biểu đồ (7 ngày qua)
     $activity_trends = $this->getActivityTrends();
 
-    // Get recent statistics
+    // Lấy số liệu thống kê gần đây
     $recent_stats = [
       'recent_users' => $this->getRecentUsers(5),
       'recent_requests' => $this->getRecentFriendRequests(5),
     ];
 
-    // System health check
+    // Kiểm tra tình trạng hệ thống
     $system_health = [
-      'database_status' => 'OK',
+      'database_status' => 'OK', // Trạng thái DB
       'total_records' => $this->getTotalUsers() + $this->getTotalFriendships(),
     ];
     
@@ -82,7 +91,7 @@ class AdminController extends ControllerBase {
       '#recent_stats' => $recent_stats,
       '#system_health' => $system_health,
       '#cache' => [
-        'max-age' => 300, // Cache for 5 minutes
+        'max-age' => 300, // Cache trong 5 phút
         'contexts' => ['user.permissions'],
         'tags' => ['chat_api:dashboard'],
       ],
@@ -101,35 +110,47 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Users list page - Display all users with comprehensive data.
+   * Trang danh sách người dùng - Hiển thị tất cả người dùng với dữ liệu đầy đủ.
    */
   public function usersList() {
-    // Get all users with basic info
+    // Lấy tất cả người dùng với thông tin cơ bản
     $query = $this->database->select('users_field_data', 'u')
       ->fields('u', ['uid', 'name', 'mail', 'created', 'access', 'status'])
-      ->condition('u.uid', 0, '>')
+      ->condition('u.uid', 0, '>') // Bỏ qua user ẩn danh
       ->orderBy('u.created', 'DESC')
       ->extend('Drupal\Core\Database\Query\PagerSelectExtender')
       ->limit(25);
     
     $users = $query->execute()->fetchAll();
     
-    // Enrich each user with additional data
+    // Bổ sung thêm dữ liệu cho từng user (Avatar, Bạn bè, Request...)
     foreach ($users as $user) {
-      // Get friend count
+      
+      // --- [MỚI] LẤY AVATAR TỪ CLOUDINARY ---
+      // Load Entity User đầy đủ để truy cập field_avatar_url
+      $userEntity = \Drupal\user\Entity\User::load($user->uid);
+      $user->avatarUrl = null; 
+      
+      // Kiểm tra xem field có tồn tại và có dữ liệu không
+      if ($userEntity && $userEntity->hasField('field_avatar_url') && !$userEntity->get('field_avatar_url')->isEmpty()) {
+          $user->avatarUrl = $userEntity->get('field_avatar_url')->value;
+      }
+      // -------------------------------------
+
+      // Lấy số lượng bạn bè
       $user->friend_count = $this->getUserFriendCount($user->uid);
       
-      // Get friend request counts (sent + received)
+      // Lấy số lượng lời mời kết bạn (gửi đi + nhận về)
       $user->pending_requests = $this->getUserPendingRequests($user->uid);
       
-      // Calculate days since registration
+      // Tính số ngày kể từ khi đăng ký
       $user->days_registered = floor((time() - $user->created) / 86400);
       
-      // Calculate days since last access
+      // Tính số ngày kể từ lần truy cập cuối
       $user->days_since_access = $user->access > 0 ? floor((time() - $user->access) / 86400) : null;
     }
     
-    // Get summary statistics
+    // Lấy số liệu thống kê tóm tắt
     $stats = [
       'total_users' => $this->getTotalUsers(),
       'active_today' => $this->getActiveUsersToday(),
@@ -141,15 +162,8 @@ class AdminController extends ControllerBase {
       '#theme' => 'chat_admin_users',
       '#users' => $users,
       '#stats' => $stats,
-      '#cache' => [
-        'max-age' => 60, // Cache for 1 minute (more dynamic than dashboard)
-        'contexts' => ['user.permissions', 'url.query_args'],
-      ],
       '#attached' => [
-        'library' => ['chat_api/admin', 'chat_api/admin-tables'],
-        'drupalSettings' => [
-          'csrf_token' => \Drupal::csrfToken()->get('rest'),
-        ],
+        'library' => ['chat_api/listing'],
       ],
     ];
     
@@ -161,10 +175,10 @@ class AdminController extends ControllerBase {
   }
   
   /**
-   * Get friend count for a specific user.
+   * Lấy số lượng bạn bè của một người dùng cụ thể.
    */
   private function getUserFriendCount($uid) {
-    // Count where user is either user_a or user_b
+    // Đếm trường hợp người dùng là user_a
     $count_a = $this->database->select('chat_friend', 'cf')
       ->fields('cf', ['id'])
       ->condition('cf.user_a', $uid)
@@ -172,6 +186,7 @@ class AdminController extends ControllerBase {
       ->execute()
       ->fetchField();
       
+    // Đếm trường hợp người dùng là user_b
     $count_b = $this->database->select('chat_friend', 'cf')
       ->fields('cf', ['id'])
       ->condition('cf.user_b', $uid)
@@ -183,7 +198,7 @@ class AdminController extends ControllerBase {
   }
   
   /**
-   * Get pending friend requests for a user (sent + received).
+   * Lấy số lượng lời mời kết bạn đang chờ (gửi đi + nhận về).
    */
   private function getUserPendingRequests($uid) {
     $sent = $this->database->select('chat_friend_request', 'cfr')
@@ -204,7 +219,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * User detail page - Comprehensive user profile and statistics.
+   * Trang chi tiết người dùng - Hồ sơ người dùng và thống kê toàn diện.
    */
   public function userDetail($uid) {
     // Load user entity
@@ -215,7 +230,14 @@ class AdminController extends ControllerBase {
       return $this->redirect('chat_api.admin_users');
     }
 
-    // Get user basic info
+    // --- [MỚI] LẤY AVATAR CHO CHI TIẾT USER ---
+    $avatarUrl = null;
+    if ($user->hasField('field_avatar_url') && !$user->get('field_avatar_url')->isEmpty()) {
+      $avatarUrl = $user->get('field_avatar_url')->value;
+    }
+    // ------------------------------------------
+
+    // Lấy thông tin cơ bản người dùng
     $user_info = [
       'uid' => $user->id(),
       'name' => $user->getAccountName(),
@@ -225,9 +247,10 @@ class AdminController extends ControllerBase {
       'login' => $user->getLastLoginTime(),
       'status' => $user->isActive(),
       'roles' => $user->getRoles(),
+      'avatarUrl' => $avatarUrl, // Thêm avatarUrl vào mảng info
     ];
 
-    // Get comprehensive statistics
+    // Lấy thống kê chi tiết
     $stats = [
       'friends_count' => $this->getUserFriendCount($uid),
       'pending_sent' => $this->getUserPendingRequestsSent($uid),
@@ -237,14 +260,14 @@ class AdminController extends ControllerBase {
         floor((time() - $user->getLastAccessedTime()) / 86400) : null,
     ];
 
-    // Get user's friends list
+    // Lấy danh sách bạn bè của người dùng
     $friends = $this->getUserFriends($uid, 10);
 
-    // Get pending friend requests (sent and received)
+    // Lấy các lời mời kết bạn (gửi đi và nhận về)
     $pending_sent = $this->getUserPendingRequestsList($uid, 'sent', 5);
     $pending_received = $this->getUserPendingRequestsList($uid, 'received', 5);
 
-    // Get recent activity
+    // Lấy hoạt động gần đây
     $recent_activity = $this->getUserRecentActivity($uid, 10);
 
     $build = [
@@ -256,11 +279,7 @@ class AdminController extends ControllerBase {
       '#pending_received' => $pending_received,
       '#recent_activity' => $recent_activity,
       '#attached' => [
-        'library' => ['chat_api/admin', 'chat_api/user-detail'],
-      ],
-      '#cache' => [
-        'contexts' => ['url.path', 'user.permissions'],
-        'tags' => ['user:' . $uid],
+        'library' => ['chat_api/listing', 'chat_api/user-detail'],
       ],
     ];
     
@@ -268,7 +287,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get friend requests sent by user.
+   * Lấy số lời mời kết bạn ĐÃ GỬI bởi người dùng.
    */
   private function getUserPendingRequestsSent($uid) {
     return (int) $this->database->select('chat_friend_request', 'cfr')
@@ -280,7 +299,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get friend requests received by user.
+   * Lấy số lời mời kết bạn ĐÃ NHẬN bởi người dùng.
    */
   private function getUserPendingRequestsReceived($uid) {
     return (int) $this->database->select('chat_friend_request', 'cfr')
@@ -292,12 +311,12 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get user's friends with details.
+   * Lấy danh sách bạn bè của người dùng với chi tiết.
    */
   private function getUserFriends($uid, $limit = 10) {
     $friends = [];
 
-    // Get friends where user is user_a
+    // Lấy bạn bè khi người dùng là user_a
     $query_a = $this->database->select('chat_friend', 'cf')
       ->fields('cf', ['user_b', 'created'])
       ->condition('cf.user_a', $uid)
@@ -318,7 +337,7 @@ class AdminController extends ControllerBase {
       }
     }
 
-    // Get friends where user is user_b
+    // Lấy bạn bè khi người dùng là user_b (nếu chưa đủ limit)
     if (count($friends) < $limit) {
       $query_b = $this->database->select('chat_friend', 'cf')
         ->fields('cf', ['user_a', 'created'])
@@ -345,7 +364,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get pending friend requests list (sent or received).
+   * Lấy danh sách lời mời kết bạn (đã gửi hoặc đã nhận).
    */
   private function getUserPendingRequestsList($uid, $type = 'sent', $limit = 5) {
     $requests = [];
@@ -382,12 +401,12 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get user's recent activity.
+   * Lấy hoạt động gần đây của người dùng.
    */
   private function getUserRecentActivity($uid, $limit = 10) {
     $activities = [];
 
-    // Get recent friendships
+    // Lấy các kết bạn gần đây
     $friends_query = $this->database->select('chat_friend', 'cf')
       ->fields('cf')
       ->range(0, 5)
@@ -406,14 +425,14 @@ class AdminController extends ControllerBase {
       if ($friend) {
         $activities[] = [
           'type' => 'friendship',
-          'description' => $this->t('Became friends with @name', ['@name' => $friend->getAccountName()]),
+          'description' => $this->t('Đã kết bạn với @name', ['@name' => $friend->getAccountName()]),
           'timestamp' => $row->created,
           'icon' => 'fa-user-friends',
         ];
       }
     }
 
-    // Get recent friend requests
+    // Lấy các lời mời kết bạn gần đây
     $requests_query = $this->database->select('chat_friend_request', 'cfr')
       ->fields('cfr')
       ->range(0, 5)
@@ -435,15 +454,15 @@ class AdminController extends ControllerBase {
         $activities[] = [
           'type' => 'friend_request',
           'description' => $is_sender ? 
-            $this->t('Sent friend request to @name', ['@name' => $other_user->getAccountName()]) :
-            $this->t('Received friend request from @name', ['@name' => $other_user->getAccountName()]),
+            $this->t('Đã gửi lời mời đến @name', ['@name' => $other_user->getAccountName()]) :
+            $this->t('Nhận lời mời từ @name', ['@name' => $other_user->getAccountName()]),
           'timestamp' => $row->created,
           'icon' => 'fa-user-plus',
         ];
       }
     }
 
-    // Sort all activities by timestamp
+    // Sắp xếp tất cả hoạt động theo thời gian
     usort($activities, function($a, $b) {
       return $b['timestamp'] - $a['timestamp'];
     });
@@ -452,13 +471,13 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Conversations list page.
+   * Trang danh sách cuộc trò chuyện.
    */
   public function conversationsList() {
-    // Fetch real-time data from MongoDB via Node.js API
+    // Lấy dữ liệu thời gian thực từ MongoDB qua API Node.js
     $node_api_url = 'http://localhost:5001/api/conversations/admin/conversations';
     
-    \Drupal::logger('chat_api')->info('📊 [AdminController] Attempting to fetch from: @url', [
+    \Drupal::logger('chat_api')->info('📊 [AdminController] Đang lấy dữ liệu từ: @url', [
       '@url' => $node_api_url,
     ]);
     
@@ -477,13 +496,13 @@ class AdminController extends ControllerBase {
       ]);
       
       if (!$data['success']) {
-        throw new \Exception('Failed to fetch conversations from MongoDB');
+        throw new \Exception('Không thể lấy cuộc trò chuyện từ MongoDB');
       }
       
       $conversations = $data['data'] ?? [];
       $api_stats = $data['stats'] ?? [];
       
-      // Convert API stats (camelCase) to template format (snake_case)
+      // Chuyển đổi API stats (camelCase) sang định dạng template (snake_case)
       $stats = [
         'total_conversations' => $api_stats['totalConversations'] ?? 0,
         'private_conversations' => $api_stats['privateConversations'] ?? 0,
@@ -493,15 +512,15 @@ class AdminController extends ControllerBase {
         'avg_participants' => $api_stats['avgParticipants'] ?? 0,
       ];
       
-      \Drupal::logger('chat_api')->notice('✅ Fetched @count conversations from MongoDB', [
+      \Drupal::logger('chat_api')->notice('✅ Đã lấy @count cuộc trò chuyện từ MongoDB', [
         '@count' => count($conversations),
       ]);
     } catch (\Exception $e) {
-      \Drupal::logger('chat_api')->error('❌ Failed to fetch conversations: @error', [
+      \Drupal::logger('chat_api')->error('❌ Lỗi khi lấy cuộc trò chuyện: @error', [
         '@error' => $e->getMessage(),
       ]);
       
-      // Fallback to empty data if API fails
+      // Fallback về dữ liệu rỗng nếu API lỗi
       $conversations = [];
       $stats = [
         'total_conversations' => 0,
@@ -522,7 +541,7 @@ class AdminController extends ControllerBase {
         'drupalSettings' => [
           'chatAdminLive' => [
             'apiUrl' => $node_api_url,
-            'refreshInterval' => 5000, // 5 seconds for real-time feel
+            'refreshInterval' => 5000, // 5 giây làm mới để có cảm giác thời gian thực
             'wsUrl' => 'ws://localhost:5001',
             'debug' => [
               'initialConversationsCount' => count($conversations),
@@ -533,7 +552,7 @@ class AdminController extends ControllerBase {
         ],
       ],
       '#cache' => [
-        'max-age' => 0, // No caching - always fresh
+        'max-age' => 0, // Không cache - luôn tươi mới
         'contexts' => ['user.permissions'],
       ],
     ];
@@ -542,10 +561,10 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * View conversation details.
+   * Xem chi tiết cuộc trò chuyện.
    */
   public function conversationView($conversation_id) {
-    // Fetch conversation from database
+    // Lấy cuộc trò chuyện từ database
     $conversation = $this->database->select('chat_conversation', 'cc')
       ->fields('cc')
       ->condition('cc.conversation_id', $conversation_id)
@@ -553,18 +572,18 @@ class AdminController extends ControllerBase {
       ->fetchObject();
     
     if (!$conversation) {
-      $this->messenger()->addError($this->t('Conversation not found.'));
+      $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện.'));
       return $this->redirect('chat_api.admin_conversations');
     }
     
-    // Get participants
+    // Lấy người tham gia
     $participants = $this->database->select('chat_conversation_participant', 'ccp')
       ->fields('ccp', ['user_id', 'joined_at'])
       ->condition('ccp.conversation_id', $conversation_id)
       ->execute()
       ->fetchAll();
     
-    // Enrich with user details
+    // Bổ sung chi tiết người dùng
     foreach ($participants as $participant) {
       $user = \Drupal\user\Entity\User::load($participant->user_id);
       if ($user) {
@@ -590,41 +609,41 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Delete conversation.
-   * Deletes conversation metadata from Drupal database.
-   * Note: Messages in MongoDB need to be deleted via Node.js API.
+   * Xóa cuộc trò chuyện.
+   * Xóa metadata cuộc trò chuyện khỏi Database Drupal.
+   * Lưu ý: Tin nhắn trong MongoDB cần xóa qua API Backend Node.js.
    */
   public function conversationDelete($conversation_id) {
-    // Delete from Drupal database
+    // Xóa khỏi database Drupal
     try {
-      // Delete participants first (foreign key)
+      // Xóa người tham gia trước (khóa ngoại)
       $this->database->delete('chat_conversation_participant')
         ->condition('conversation_id', $conversation_id)
         ->execute();
       
-      // Delete conversation
+      // Xóa cuộc trò chuyện
       $deleted = $this->database->delete('chat_conversation')
         ->condition('conversation_id', $conversation_id)
         ->execute();
       
       if ($deleted > 0) {
-        $this->messenger()->addStatus($this->t('Conversation metadata deleted from Drupal database.'));
-        $this->messenger()->addWarning($this->t('Note: Messages in MongoDB need to be deleted separately via Node.js backend API.'));
+        $this->messenger()->addStatus($this->t('Metadata cuộc trò chuyện đã bị xóa khỏi Database Drupal.'));
+        $this->messenger()->addWarning($this->t('Lưu ý: Tin nhắn trong MongoDB cần được xóa riêng qua API backend Node.js.'));
       } else {
-        $this->messenger()->addError($this->t('Conversation not found.'));
+        $this->messenger()->addError($this->t('Không tìm thấy cuộc trò chuyện.'));
       }
     } catch (\Exception $e) {
-      $this->messenger()->addError($this->t('Error deleting conversation: @error', ['@error' => $e->getMessage()]));
+      $this->messenger()->addError($this->t('Lỗi khi xóa cuộc trò chuyện: @error', ['@error' => $e->getMessage()]));
     }
     
     return new RedirectResponse(Url::fromRoute('chat_api.admin_conversations')->toString());
   }
 
   /**
-   * Friends list page - Display all friendships.
+   * Trang danh sách bạn bè - Hiển thị tất cả quan hệ bạn bè.
    */
   public function friendsList() {
-    // Query all friendships with pagination
+    // Query tất cả bạn bè có phân trang
     $query = $this->database->select('chat_friend', 'cf')
       ->fields('cf')
       ->orderBy('cf.created', 'DESC')
@@ -633,7 +652,7 @@ class AdminController extends ControllerBase {
     
     $friendships = $query->execute()->fetchAll();
     
-    // Enrich with user details
+    // Bổ sung chi tiết người dùng
     foreach ($friendships as $friendship) {
       // Load user A
       $user_a = \Drupal\user\Entity\User::load($friendship->user_a);
@@ -649,18 +668,18 @@ class AdminController extends ControllerBase {
         $friendship->user_b_email = $user_b->getEmail();
       }
       
-      // Calculate time ago
+      // Tính thời gian trôi qua
       $diff = time() - $friendship->created;
       if ($diff < 3600) {
-        $friendship->time_ago = floor($diff / 60) . ' minutes ago';
+        $friendship->time_ago = floor($diff / 60) . ' phút trước';
       } elseif ($diff < 86400) {
-        $friendship->time_ago = floor($diff / 3600) . ' hours ago';
+        $friendship->time_ago = floor($diff / 3600) . ' giờ trước';
       } else {
-        $friendship->time_ago = floor($diff / 86400) . ' days ago';
+        $friendship->time_ago = floor($diff / 86400) . ' ngày trước';
       }
     }
     
-    // Get summary stats
+    // Lấy thống kê tóm tắt
     $stats = [
       'total_friends' => $this->getTotalFriendships(),
       'new_friendships_today' => $this->getNewFriendshipsToday(),
@@ -689,10 +708,10 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Friend requests list with full user details.
+   * Danh sách lời mời kết bạn với đầy đủ chi tiết người dùng.
    */
   public function friendRequestsList() {
-    // Query all friend requests with pagination
+    // Query tất cả lời mời kết bạn có phân trang
     $query = $this->database->select('chat_friend_request', 'cfr')
       ->fields('cfr')
       ->orderBy('created', 'DESC')
@@ -701,34 +720,34 @@ class AdminController extends ControllerBase {
     
     $requests = $query->execute()->fetchAll();
     
-    // Enrich with user details
+    // Bổ sung chi tiết người dùng
     foreach ($requests as $request) {
-      // Load sender user
+      // Load người gửi
       $from_user = \Drupal\user\Entity\User::load($request->from_user);
       if ($from_user) {
         $request->from_name = $from_user->getAccountName();
         $request->from_email = $from_user->getEmail();
       }
       
-      // Load receiver user
+      // Load người nhận
       $to_user = \Drupal\user\Entity\User::load($request->to_user);
       if ($to_user) {
         $request->to_name = $to_user->getAccountName();
         $request->to_email = $to_user->getEmail();
       }
       
-      // Calculate time ago
+      // Tính thời gian trôi qua
       $diff = time() - $request->created;
       if ($diff < 3600) {
-        $request->time_ago = floor($diff / 60) . ' minutes ago';
+        $request->time_ago = floor($diff / 60) . ' phút trước';
       } elseif ($diff < 86400) {
-        $request->time_ago = floor($diff / 3600) . ' hours ago';
+        $request->time_ago = floor($diff / 3600) . ' giờ trước';
       } else {
-        $request->time_ago = floor($diff / 86400) . ' days ago';
+        $request->time_ago = floor($diff / 86400) . ' ngày trước';
       }
     }
     
-    // Get summary stats
+    // Lấy thống kê tóm tắt
     $stats = [
       'total_requests' => $this->database->select('chat_friend_request', 'cfr')
         ->countQuery()->execute()->fetchField(),
@@ -757,18 +776,17 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Reports & Analytics main page.
-   * 
-   * TODO: Implement charts, statistics
+   * Trang chính Báo cáo & Phân tích.
+   * * TODO: Triển khai biểu đồ, thống kê chi tiết
    */
   public function reports() {
-    // TODO: Implement full analytics dashboard
+    // TODO: Triển khai dashboard phân tích đầy đủ
     
     $stats = [
       'total_users' => $this->getTotalUsers(),
       'active_users_today' => $this->getActiveUsersToday(),
       'new_users_this_week' => $this->getNewUsersThisWeek(),
-      // TODO: Add more statistics
+      // TODO: Thêm nhiều thống kê hơn
     ];
     
     $build = [
@@ -783,41 +801,39 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * User statistics report.
-   * 
-   * TODO: Detailed user analytics
+   * Báo cáo thống kê người dùng.
+   * * TODO: Phân tích người dùng chi tiết
    */
   public function reportsUsers() {
-    // TODO: Implement user statistics
+    // TODO: Triển khai thống kê người dùng
     
     $build = [
-      '#markup' => '<h1>User Statistics</h1><p>TODO: Implement user statistics</p>',
+      '#markup' => '<h1>Thống kê Người dùng</h1><p>TODO: Triển khai thống kê người dùng</p>',
     ];
     
     return $build;
   }
 
   /**
-   * Message statistics report.
-   * 
-   * TODO: Fetch from Node.js, show charts
+   * Báo cáo thống kê tin nhắn.
+   * * TODO: Lấy từ Node.js, hiển thị biểu đồ
    */
   public function reportsMessages() {
-    // TODO: Implement message statistics
+    // TODO: Triển khai thống kê tin nhắn
     
     $build = [
-      '#markup' => '<h1>Message Statistics</h1><p>TODO: Fetch data from Node.js backend</p>',
+      '#markup' => '<h1>Thống kê Tin nhắn</h1><p>TODO: Lấy dữ liệu từ backend Node.js</p>',
     ];
     
     return $build;
   }
 
   // ========================================================================
-  // Helper methods
+  // Các phương thức Helper (Hỗ trợ)
   // ========================================================================
 
   /**
-   * Get total number of users.
+   * Lấy tổng số người dùng.
    */
   private function getTotalUsers() {
     return $this->database->select('users', 'u')
@@ -829,7 +845,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get active users today.
+   * Lấy số người dùng hoạt động hôm nay.
    */
   private function getActiveUsersToday() {
     $today = strtotime('today');
@@ -841,7 +857,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get total friendships.
+   * Lấy tổng số tình bạn.
    */
   private function getTotalFriendships() {
     return $this->database->select('chat_friend', 'cf')
@@ -851,7 +867,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get pending friend requests.
+   * Lấy số lời mời kết bạn đang chờ.
    */
   private function getPendingRequests() {
     return $this->database->select('chat_friend_request', 'cfr')
@@ -862,7 +878,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get new users this week.
+   * Lấy số người dùng mới trong tuần này.
    */
   private function getNewUsersThisWeek() {
     $week_ago = strtotime('-7 days');
@@ -875,7 +891,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get new users today.
+   * Lấy số người dùng mới hôm nay.
    */
   private function getNewUsersToday() {
     $today = strtotime('today');
@@ -888,7 +904,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get active users this week.
+   * Lấy số người dùng hoạt động trong tuần này.
    */
   private function getActiveUsersThisWeek() {
     $week_ago = strtotime('-7 days');
@@ -902,7 +918,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get blocked users count.
+   * Lấy số người dùng bị chặn.
    */
   private function getBlockedUsers() {
     return $this->database->select('users_field_data', 'u')
@@ -914,7 +930,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get activity trends for last 7 days.
+   * Lấy xu hướng hoạt động trong 7 ngày qua.
    */
   private function getActivityTrends() {
     $trends = [
@@ -924,7 +940,7 @@ class AdminController extends ControllerBase {
       'friend_requests' => [],
     ];
 
-    // Get data for last 7 days
+    // Lấy dữ liệu cho 7 ngày qua
     for ($i = 6; $i >= 0; $i--) {
       $date = strtotime("-{$i} days");
       $date_start = strtotime('today', $date);
@@ -932,7 +948,7 @@ class AdminController extends ControllerBase {
       
       $trends['labels'][] = date('D', $date); // Mon, Tue, etc.
       
-      // New users per day
+      // Người dùng mới mỗi ngày
       $new_users = $this->database->select('users_field_data', 'u')
         ->fields('u', ['uid'])
         ->condition('u.created', $date_start, '>=')
@@ -942,7 +958,7 @@ class AdminController extends ControllerBase {
         ->fetchField();
       $trends['new_users'][] = (int) $new_users;
       
-      // Active users per day
+      // Người dùng hoạt động mỗi ngày
       $active_users = $this->database->select('users_field_data', 'u')
         ->fields('u', ['uid'])
         ->condition('u.uid', 0, '>')
@@ -953,7 +969,7 @@ class AdminController extends ControllerBase {
         ->fetchField();
       $trends['active_users'][] = (int) $active_users;
       
-      // Friend requests per day
+      // Lời mời kết bạn mỗi ngày
       $requests = $this->database->select('chat_friend_request', 'cfr')
         ->fields('cfr', ['id'])
         ->condition('cfr.created', $date_start, '>=')
@@ -968,7 +984,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get recent users.
+   * Lấy người dùng gần đây.
    */
   private function getRecentUsers($limit = 5) {
     $query = $this->database->select('users_field_data', 'u')
@@ -981,7 +997,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get recent friend requests.
+   * Lấy lời mời kết bạn gần đây.
    */
   private function getRecentFriendRequests($limit = 5) {
     $query = $this->database->select('chat_friend_request', 'cfr')
@@ -991,7 +1007,7 @@ class AdminController extends ControllerBase {
     
     $requests = $query->execute()->fetchAll();
     
-    // Get user names
+    // Lấy tên người dùng
     foreach ($requests as $request) {
       $sender = $this->database->select('users_field_data', 'u')
         ->fields('u', ['name'])
@@ -1013,7 +1029,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get new friendships today.
+   * Lấy số kết bạn mới hôm nay.
    */
   private function getNewFriendshipsToday() {
     $today = strtotime('today');
@@ -1026,7 +1042,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get new friendships this week.
+   * Lấy số kết bạn mới tuần này.
    */
   private function getNewFriendshipsThisWeek() {
     $week_ago = strtotime('-7 days');
@@ -1039,7 +1055,7 @@ class AdminController extends ControllerBase {
   }
 
   /**
-   * Get average friends per user.
+   * Lấy trung bình số bạn bè mỗi người dùng.
    */
   private function getAverageFriendsPerUser() {
     $total_users = (int) $this->getTotalUsers();
@@ -1048,7 +1064,7 @@ class AdminController extends ControllerBase {
     }
     
     $total_friendships = (int) $this->getTotalFriendships();
-    // Each friendship is counted twice (user_a + user_b), so total friend count is friendships * 2
+    // Mỗi tình bạn được tính 2 lần (user_a + user_b), nên tổng số kết nối là friendship * 2
     $total_friend_connections = $total_friendships * 2;
     
     return round($total_friend_connections / $total_users, 2);

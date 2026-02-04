@@ -32,7 +32,7 @@ const ChatWindowLayout = () => {
     };
 
     markSeen();
-  }, [markAsSeen, selectedConvo]);
+  }, [selectedConvo?._id]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;

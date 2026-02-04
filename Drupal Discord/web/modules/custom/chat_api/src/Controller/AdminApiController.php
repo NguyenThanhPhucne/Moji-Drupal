@@ -162,6 +162,110 @@ class AdminApiController extends ControllerBase {
   }
 
   /**
+   * Get user detail data as JSON for auto-refresh.
+   * Used by user-detail-refresh.js to check for real-time updates.
+   */
+  public function getUserDetailJson($uid) {
+    try {
+      // Load user
+      $user = User::load($uid);
+      if (!$user) {
+        return new JsonResponse([
+          'success' => false,
+          'message' => 'User not found',
+        ], 404);
+      }
+
+      // Get avatar
+      $avatarUrl = null;
+      if ($user->hasField('field_avatar_url') && !$user->get('field_avatar_url')->isEmpty()) {
+        $avatarUrl = $user->get('field_avatar_url')->value;
+      }
+
+      // Get basic user info
+      $user_info = [
+        'uid' => $user->id(),
+        'name' => $user->getAccountName(),
+        'email' => $user->getEmail(),
+        'created' => $user->getCreatedTime(),
+        'access' => $user->getLastAccessedTime(),
+        'login' => $user->getLastLoginTime(),
+        'status' => $user->isActive(),
+        'avatarUrl' => $avatarUrl,
+      ];
+
+      // Get stats - reuse logic from AdminController
+      $stats = [
+        'friends_count' => $this->getUserFriendCount($uid),
+        'pending_sent' => $this->getUserPendingRequestsSent($uid),
+        'pending_received' => $this->getUserPendingRequestsReceived($uid),
+        'days_registered' => floor((time() - $user->getCreatedTime()) / 86400),
+        'last_seen_days' => $user->getLastAccessedTime() > 0 ? 
+          floor((time() - $user->getLastAccessedTime()) / 86400) : null,
+      ];
+
+      return new JsonResponse([
+        'success' => true,
+        'user_info' => $user_info,
+        'stats' => $stats,
+      ]);
+
+    } catch (\Exception $e) {
+      return new JsonResponse([
+        'success' => false,
+        'message' => 'Error: ' . $e->getMessage(),
+      ], 500);
+    }
+  }
+
+  /**
+   * Get friend count for a user.
+   */
+  private function getUserFriendCount($uid) {
+    // Count user_a cases
+    $count_a = $this->database->select('chat_friend', 'cf')
+      ->fields('cf', ['id'])
+      ->condition('cf.user_a', $uid)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+      
+    // Count user_b cases
+    $count_b = $this->database->select('chat_friend', 'cf')
+      ->fields('cf', ['id'])
+      ->condition('cf.user_b', $uid)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+      
+    return (int) $count_a + (int) $count_b;
+  }
+
+  /**
+   * Get pending requests sent by user.
+   */
+  private function getUserPendingRequestsSent($uid) {
+    return (int) $this->database->select('chat_friend_request', 'cfr')
+      ->fields('cfr', ['id'])
+      ->condition('cfr.from_user', $uid)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
+  /**
+   * Get pending requests received by user.
+   */
+  private function getUserPendingRequestsReceived($uid) {
+    return (int) $this->database->select('chat_friend_request', 'cfr')
+      ->fields('cfr', ['id'])
+      ->condition('cfr.to_user', $uid)
+      ->countQuery()
+      ->execute()
+      ->fetchField();
+  }
+
+  /**
    * Get statistics data for dashboard.
    */
   public function getStats() {
