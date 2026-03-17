@@ -84,25 +84,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // new group chat - from other members
     socket.on("new-group", (conversation) => {
-      console.log("📨 Received new-group event:", conversation);
+      console.log("Received new-group event:", conversation);
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
       toast.success(
-        `Bạn đã được thêm vào nhóm "${conversation.group?.name || "Nhóm mới"}"! 🎉`,
+        `Bạn đã được thêm vào nhóm "${conversation.group?.name || "Nhóm mới"}"!`,
       );
     });
 
     // new direct conversation - from other participant
     socket.on("new-conversation", (conversation) => {
-      console.log("📨 Received new-conversation event:", conversation);
+      console.log("Received new-conversation event:", conversation);
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
-      toast.success(`Bạn có cuộc trò chuyện mới! 💬`);
+      toast.success("Bạn có cuộc trò chuyện mới!");
     });
 
     // conversation deleted - from other participants
     socket.on("conversation-deleted", ({ conversationId }) => {
-      console.log("🗑️ Received conversation-deleted event:", conversationId);
+      console.log("Received conversation-deleted event:", conversationId);
       // Only remove from store (don't call API again)
       set((state) => ({
         // This will be handled by chat store, just log it
@@ -126,7 +126,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // Friend request received - real-time notification
     socket.on("friend-request-received", ({ request, message }) => {
-      console.log("💌 Received friend request:", request);
+      console.log("Received friend request:", request);
       useNotificationStore.getState().addPendingRequest(request);
       toast.success(message, {
         description: `${request.from.displayName} (@${request.from.username}) gửi lời mời kết bạn`,
@@ -141,8 +141,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // Friend request accepted - notification when someone accepts your request
     socket.on("friend-request-accepted", ({ from, message }) => {
-      console.log("✅ Friend request accepted:", from);
-      console.log("📦 Adding to notification store...");
+      console.log("Friend request accepted:", from);
+      console.log("Adding to notification store...");
       try {
         useNotificationStore.getState().addAcceptanceNotification({
           type: "friend-accepted",
@@ -151,14 +151,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           createdAt: new Date(),
         });
         console.log(
-          "✅ Notification stored:",
+          "Notification stored:",
           useNotificationStore.getState().acceptanceNotifications,
         );
       } catch (error) {
-        console.error("❌ Error adding notification:", error);
+        console.error("Error adding notification:", error);
       }
       toast.success(message, {
-        description: `${from?.displayName} bây giờ là bạn bè của bạn! 🎉`,
+        description: `${from?.displayName} bây giờ là bạn bè của bạn!`,
       });
     });
   },

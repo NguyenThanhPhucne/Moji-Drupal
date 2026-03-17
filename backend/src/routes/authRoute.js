@@ -5,6 +5,7 @@ import {
   signOut,
   signUp,
   googleAuth,
+  drupalSso,
 } from "../controllers/authController.js";
 
 const router = express.Router();
@@ -18,5 +19,7 @@ router.post("/signout", signOut);
 router.post("/refresh", refreshToken);
 
 router.post("/google", googleAuth);
+
+router.post("/drupal-sso", drupalSso);
 
 export default router;

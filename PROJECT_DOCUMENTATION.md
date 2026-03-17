@@ -1135,7 +1135,7 @@ Drupal Discord/web/modules/custom/chat_api/
   - Total users
   - Active users today/week
   - New users this week/month
-- 💬 Message statistics (TODO: Fetch from Node.js)
+- Message statistics (TODO: Fetch from Node.js)
 - 📊 Charts visualization (TODO: Integrate Chart.js)
   - Messages per day
   - New users per day
@@ -1380,7 +1380,7 @@ drush cr
 │  └──────┘ └──────┘ └──────┘ └──────┘          │
 │                                                 │
 │  🚀 Quick Actions                               │
-│  [👤 Manage Users] [💬 Conversations]          │
+│  [Manage Users] [Conversations]                │
 │  [📊 View Reports] [⚙️ Settings]               │
 │                                                 │
 │  📈 Activity Overview (TODO: Charts)            │

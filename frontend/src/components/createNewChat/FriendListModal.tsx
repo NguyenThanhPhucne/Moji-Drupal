@@ -25,7 +25,7 @@ const FriendListModal = () => {
       if (success) {
         const friend = friends.find((f) => f._id === friendId);
         toast.success(
-          `Tạo cuộc trò chuyện với ${friend?.displayName} thành công! 💬`,
+          `Tạo cuộc trò chuyện với ${friend?.displayName} thành công!`,
         );
       } else {
         toast.error("Không thể tạo cuộc trò chuyện. Vui lòng thử lại!");

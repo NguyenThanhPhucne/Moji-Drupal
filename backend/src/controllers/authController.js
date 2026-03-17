@@ -2,7 +2,7 @@
 import bcrypt from "bcrypt";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import Session from "../models/Session.js";
 import { OAuth2Client } from "google-auth-library";
 
@@ -252,6 +252,121 @@ export const googleAuth = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi gọi googleAuth", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+const findOrCreateDrupalUser = async ({
+  uid,
+  username,
+  email,
+  displayName,
+}) => {
+  const drupalId = Number(uid);
+  const normalizedUsername = String(username).toLowerCase();
+  const normalizedEmail = email ? String(email).toLowerCase() : "";
+
+  let user = await User.findOne({ drupalId });
+  if (!user) {
+    user = await User.findOne({ username: normalizedUsername });
+  }
+  if (!user && normalizedEmail) {
+    user = await User.findOne({ email: normalizedEmail });
+  }
+
+  if (user) {
+    if (!user.drupalId && Number.isFinite(drupalId)) {
+      user.drupalId = drupalId;
+    }
+    if (displayName && user.displayName !== displayName) {
+      user.displayName = String(displayName);
+    }
+    await user.save();
+    return user;
+  }
+
+  return User.create({
+    username: normalizedUsername,
+    email: normalizedEmail || `${normalizedUsername}@drupal.local`,
+    displayName: String(displayName || username),
+    drupalId,
+    hashedPassword: crypto.randomBytes(32).toString("hex"),
+    avatarUrl: null,
+  });
+};
+
+// Drupal CRM SSO: verify signed payload and issue chat tokens.
+export const drupalSso = async (req, res) => {
+  try {
+    const { uid, username, email, displayName, ts, sig } = req.body || {};
+
+    if (!uid || !username || !ts || !sig) {
+      return res.status(400).json({ message: "Thiếu thông tin SSO" });
+    }
+
+    const secret =
+      process.env.DRUPAL_SSO_SECRET || "open-crm-chat-sso-dev-secret";
+    const payload = [uid, username, email || "", displayName || "", ts].join(
+      "|",
+    );
+    const expectedSig = crypto
+      .createHmac("sha256", secret)
+      .update(payload)
+      .digest("hex");
+
+    const expectedBuffer = Buffer.from(expectedSig);
+    const providedBuffer = Buffer.from(String(sig));
+    if (
+      expectedBuffer.length !== providedBuffer.length ||
+      !crypto.timingSafeEqual(expectedBuffer, providedBuffer)
+    ) {
+      return res.status(401).json({ message: "SSO signature không hợp lệ" });
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const tsNumber = Number(ts);
+    if (!Number.isFinite(tsNumber) || Math.abs(now - tsNumber) > 120) {
+      return res.status(401).json({ message: "SSO token đã hết hạn" });
+    }
+
+    const user = await findOrCreateDrupalUser({
+      uid,
+      username,
+      email,
+      displayName,
+    });
+
+    const accessToken = jwt.sign(
+      {
+        userId: user._id,
+        username: user.username,
+        email: user.email,
+        displayName: user.displayName,
+      },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: ACCESS_TOKEN_TTL },
+    );
+
+    const refreshToken = crypto.randomBytes(64).toString("hex");
+    await Session.create({
+      userId: user._id,
+      refreshToken,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL),
+    });
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: REFRESH_TOKEN_TTL,
+    });
+
+    return res.status(200).json({
+      message: "SSO đăng nhập thành công",
+      accessToken,
+    });
+  } catch (error) {
+    console.error("Lỗi khi gọi drupalSso", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

@@ -35,6 +35,18 @@ export const authService = {
     return res.data;
   },
 
+  drupalSso: async (payload: {
+    uid: string;
+    username: string;
+    email?: string;
+    displayName?: string;
+    ts: string;
+    sig: string;
+  }) => {
+    const res = await api.post("/auth/drupal-sso", payload);
+    return res.data;
+  },
+
   signOut: async () => {
     return api.post("/auth/signout");
   },

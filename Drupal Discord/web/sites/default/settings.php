@@ -286,7 +286,7 @@ $databases = [];
  *   $settings['hash_salt'] = file_get_contents('/home/example/salt.txt');
  * @endcode
  */
-$settings['hash_salt'] = '6sJs8KoFKSFJSFPkGhvmeq_xd80yIskeLco4Ge78-WGI7zJQLXtvDVJbdvIbYMrVLzNJBtLD7w';
+$settings['hash_salt'] = 'ERQNqw4a62TI2HG75mb1EjvxbDJjlFfEtYqf7PWGnRzdgtfx_Uj3-rRzRWnx0Jg1gPcv1poBQw';
 
 /**
  * Deployment identifier.
@@ -856,14 +856,10 @@ $settings['migrate_node_migrate_type_classic'] = FALSE;
  * Keep this code block at the end of this file to take full effect.
  */
 
-if (file_exists($app_root . '/' . $site_path . '/settings.local.php')) {
-   include $app_root . '/' . $site_path . '/settings.local.php';
-}
-
 $databases['default']['default'] = array (
   'database' => 'training_phucnt_chatting_app',
-  'username' => 'training',
-  'password' => 'cIxdAPaq',
+  'username' => 'root',
+  'password' => '',
   'prefix' => '',
   'host' => '127.0.0.1',
   'port' => '3306',
