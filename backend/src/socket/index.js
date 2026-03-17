@@ -8,9 +8,25 @@ const app = express();
 
 const server = http.createServer(app);
 
+const getAllowedOrigins = () => {
+  const originsFromList = String(process.env.CLIENT_URLS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const singleOrigin = String(process.env.CLIENT_URL || "").trim();
+  if (singleOrigin) {
+    originsFromList.push(singleOrigin);
+  }
+
+  return [...new Set(originsFromList)];
+};
+
+const allowedOrigins = getAllowedOrigins();
+
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL,
+    origin: allowedOrigins,
     credentials: true,
   },
 });

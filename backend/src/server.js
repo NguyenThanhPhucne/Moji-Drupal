@@ -21,10 +21,43 @@ dotenv.config();
 // const app = express();
 const PORT = process.env.PORT || 5001;
 
+const getAllowedOrigins = () => {
+  const originsFromList = String(process.env.CLIENT_URLS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const singleOrigin = String(process.env.CLIENT_URL || "").trim();
+  if (singleOrigin) {
+    originsFromList.push(singleOrigin);
+  }
+
+  return [...new Set(originsFromList)];
+};
+
+const allowedOrigins = getAllowedOrigins();
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+};
+
 // middlewares
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
+app.use(cors(corsOptions));
 
 // CLOUDINARY Configuration
 cloudinary.config({

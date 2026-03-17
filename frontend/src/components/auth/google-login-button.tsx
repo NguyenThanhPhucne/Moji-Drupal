@@ -10,10 +10,16 @@ type CredentialResponse = {
   clientId?: string;
 };
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
 export function GoogleLoginButton() {
   const { setAccessToken, setUser } = useAuthStore();
   const navigate = useNavigate();
   const { fetchConversations } = useChatStore();
+
+  if (!GOOGLE_CLIENT_ID) {
+    return null;
+  }
 
   const handleGoogleLoginSuccess = async (
     credentialResponse: CredentialResponse,
@@ -61,7 +67,7 @@ export function GoogleLoginButton() {
       <GoogleLogin
         onSuccess={handleGoogleLoginSuccess}
         onError={handleGoogleLoginError}
-        theme="dark"
+        theme="filled_black"
         size="large"
       />
     </div>
