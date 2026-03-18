@@ -8,6 +8,10 @@ interface EmojiPickerProps {
   onChange: (value: string) => void;
 }
 
+interface EmojiSelectPayload {
+  native: string;
+}
+
 const EmojiPicker = ({ onChange }: EmojiPickerProps) => {
   const { isDark } = useThemeStore();
 
@@ -25,7 +29,7 @@ const EmojiPicker = ({ onChange }: EmojiPickerProps) => {
         <Picker
           theme={isDark ? "dark" : "light"}
           data={data}
-          onEmojiSelect={(emoji: any) => onChange(emoji.native)}
+          onEmojiSelect={(emoji: EmojiSelectPayload) => onChange(emoji.native)}
           emojiSize={24}
         />
       </PopoverContent>

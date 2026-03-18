@@ -12,14 +12,14 @@ const DirectMessageList = () => {
 
   if (directConversations.length === 0) {
     return (
-      <div className="p-2 text-center text-sm text-muted-foreground">
-        Không có cuộc trò chuyện trực tiếp
+      <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-center text-sm text-muted-foreground">
+        No direct conversations yet
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-2 space-y-2">
+    <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
       {directConversations.map((convo) => (
         <DirectMessageCard convo={convo} key={convo._id} />
       ))}

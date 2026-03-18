@@ -26,11 +26,11 @@ export function GoogleLoginButton() {
   ) => {
     try {
       if (!credentialResponse.credential) {
-        toast.error("Google credential không hợp lệ");
+        toast.error("Invalid Google credential");
         return;
       }
 
-      // Gửi token Google đến backend
+      // Send Google token to backend.
       const response = await api.post("/auth/google", {
         token: credentialResponse.credential,
       });
@@ -39,27 +39,27 @@ export function GoogleLoginButton() {
 
       // Validate both token and user are returned
       if (!accessToken || !user) {
-        toast.error("Phản hồi từ server không hợp lệ");
+        toast.error("Invalid server response");
         return;
       }
 
-      // Lưu token và user thông tin
+      // Persist access token and user info.
       setAccessToken(accessToken);
       setUser(user);
 
       // Fetch conversations
       await fetchConversations();
 
-      toast.success("Đăng nhập bằng Google thành công! 🎉");
+      toast.success("Signed in with Google successfully!");
       navigate("/");
     } catch (error) {
       console.error("Google login error:", error);
-      toast.error("Đăng nhập bằng Google thất bại. Vui lòng thử lại.");
+      toast.error("Google sign-in failed. Please try again.");
     }
   };
 
   const handleGoogleLoginError = () => {
-    toast.error("Đăng nhập bằng Google thất bại");
+    toast.error("Google sign-in failed");
   };
 
   return (

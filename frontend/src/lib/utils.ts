@@ -43,21 +43,21 @@ export const formatMessageTime = (date: Date) => {
     date.getMonth() === yesterday.getMonth() &&
     date.getFullYear() === yesterday.getFullYear();
 
-  const timeStr = date.toLocaleTimeString("vi-VN", {
+  const timeStr = date.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
 
   if (isToday) {
-    return timeStr; // ví dụ: "14:35"
+    return timeStr; // example: "14:35"
   } else if (isYesterday) {
-    return `Hôm qua ${timeStr}`; // ví dụ: "Hôm qua 23:10"
+    return `Yesterday ${timeStr}`; // example: "Yesterday 23:10"
   } else if (date.getFullYear() === now.getFullYear()) {
-    return `${date.getDate()}/${date.getMonth() + 1} ${timeStr}`; // ví dụ: "22/9 09:15"
+    return `${date.getDate()}/${date.getMonth() + 1} ${timeStr}`; // example: "22/9 09:15"
   } else {
     return `${date.getDate()}/${
       date.getMonth() + 1
-    }/${date.getFullYear()} ${timeStr}`; // ví dụ: "15/12/2023 18:40"
+    }/${date.getFullYear()} ${timeStr}`; // example: "15/12/2023 18:40"
   }
 };

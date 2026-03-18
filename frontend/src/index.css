@@ -18,7 +18,7 @@
     --popover: 200 100% 99%;
     --popover-foreground: 240 15% 15%;
 
-    /* Primary - Sky Blue Pastel (nam tính, chuyên nghiệp) */
+    /* Primary - Sky Blue Pastel (clean, professional) */
     --primary: 204 89% 51%;
     --primary-foreground: 210 40% 96.1%; /*slate-100*/
     /* Sky Blue Light */
@@ -32,7 +32,7 @@
     --muted: 210 30% 92%;
     --muted-foreground: 210 15% 50%;
 
-    /* Accent - Teal (bổ sung cho blue) */
+    /* Accent - Teal (complements blue) */
     --accent: 174 100% 45%;
     --accent-foreground: 210 100% 98%;
 
@@ -102,6 +102,7 @@
     --shadow-bubble: 0 4px 20px -4px hsl(204 89% 51% / 0.2);
 
     /* Sidebar */
+    --sidebar: 0 0% 100%;
     --sidebar-background: 0 0% 100%;
 
     --sidebar-foreground: 210 20% 30%; /*slate-700*/
@@ -134,7 +135,7 @@
     --popover: 210 25% 12%;
     --popover-foreground: 204 89% 85%;
 
-    /* Primary - Sky Blue (đậm hơn cho dark mode) */
+    /* Primary - Sky Blue (stronger for dark mode) */
     --primary: 204 89% 60%;
     --primary-foreground: 210 25% 8%;
     --primary-glow: 206 100% 70%;
@@ -203,6 +204,7 @@
     --shadow-glow: 0 0 40px hsl(var(--primary) / 0.4);
     --shadow-bubble: 0 4px 20px -4px hsl(204 89% 50% / 0.3);
 
+    --sidebar: 210 25% 15%;
     --sidebar-background: 210 25% 15%;
     --sidebar-foreground: 210 20% 90%;
     --sidebar-primary: 204 89% 60%;
@@ -221,11 +223,11 @@
 /* Chat App Utility Classes */
 @layer components {
   .glass {
-    @apply bg-gradient-to-br from-violet-200/10 to-pink-100/5 border-violet-300/30;
+    @apply border border-sky-200/60 bg-gradient-to-br from-white/90 via-sky-50/65 to-cyan-50/60 backdrop-blur-md;
   }
 
   .dark .glass {
-    @apply backdrop-blur-xl bg-gradient-to-br from-white/10 to-white/5 border border-white/20;
+    @apply border border-sky-300/20 bg-gradient-to-br from-slate-900/80 via-slate-900/70 to-sky-950/55 backdrop-blur-xl;
   }
 
   .glass-strong {
@@ -235,10 +237,12 @@
   /* Chat bubble variants */
   .chat-bubble-sent {
     @apply bg-primary/80! text-[hsl(var(--chat-bubble-sent-foreground))]! shadow-[var(--shadow-bubble)];
+    position: relative;
   }
 
   .chat-bubble-received {
     @apply bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-foreground))] border border-border/50;
+    position: relative;
   }
 
   .error-message {
@@ -316,48 +320,70 @@
     @apply absolute inset-0 rounded-full bg-primary/30 animate-ping duration-[2000ms];
   }
 
-  /* Message bounce in animation */
-  .message-bounce {
-    animation: messageSlideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)
-      forwards;
+  /* Message slide-in animation  */
+  .message-slide-in {
+    animation: msgSlideIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
 
-  @keyframes messageSlideIn {
+  @keyframes msgSlideIn {
     0% {
       opacity: 0;
-      transform: translateY(20px) scale(0.95);
+      transform: translateY(12px) scale(0.97);
     }
     100% {
       opacity: 1;
       transform: translateY(0) scale(1);
     }
   }
-}
 
-:root {
-  --sidebar: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-}
+  /* Reaction bounce */
+  .reaction-bounce {
+    animation: reactionBounce 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55)
+      forwards;
+  }
 
-.dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  @keyframes reactionBounce {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+    }
+    70% {
+      transform: scale(1.2);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Messenger-style chat bubble tails */
+  .chat-bubble-sent::after {
+    content: "";
+    position: absolute;
+    bottom: 6px;
+    right: -6px;
+    width: 12px;
+    height: 12px;
+    background: hsl(var(--primary) / 0.8);
+    clip-path: polygon(0 0, 0% 100%, 100% 100%);
+    border-radius: 0 0 2px 0;
+  }
+
+  .chat-bubble-received::after {
+    content: "";
+    position: absolute;
+    bottom: 6px;
+    left: -6px;
+    width: 12px;
+    height: 12px;
+    background: hsl(var(--chat-bubble-received));
+    clip-path: polygon(100% 0, 0 100%, 100% 100%);
+    border-radius: 0 0 0 2px;
+  }
 }
 
 @theme inline {
-  --color-sidebar: var(--sidebar);
+  --color-sidebar: var(--sidebar-background);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -370,8 +396,5 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }

@@ -3,7 +3,7 @@ import type { FriendState } from "@/types/store";
 import { create } from "zustand";
 import { useNotificationStore } from "./useNotificationStore";
 
-export const useFriendStore = create<FriendState>((set, get) => ({
+export const useFriendStore = create<FriendState>((set) => ({
   friends: [],
   loading: false,
   receivedList: [],
@@ -16,7 +16,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
 
       return user;
     } catch (error) {
-      console.error("Lỗi xảy ra khi tìm user bằng username", error);
+      console.error("Error searching user by username", error);
       return null;
     } finally {
       set({ loading: false });
@@ -28,8 +28,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       const resultMessage = await friendService.sendFriendRequest(to, message);
       return resultMessage;
     } catch (error) {
-      console.error("Lỗi xảy ra khi addFriend", error);
-      return "Lỗi xảy ra khi gửi kết bạn. Hãy thử lại";
+      console.error("Error adding friend", error);
+      return "Failed to send friend request. Please try again";
     } finally {
       set({ loading: false });
     }
@@ -46,10 +46,10 @@ export const useFriendStore = create<FriendState>((set, get) => ({
 
       set({ receivedList: received, sentList: sent });
 
-      // Cập nhật notification count (chỉ tính số lời mời chưa đọc từ received list)
+      // Update notification count (only unread received requests)
       useNotificationStore.getState().setUnreadCount(received.length);
     } catch (error) {
-      console.error("Lỗi xảy ra khi getAllFriendRequests", error);
+      console.error("Error fetching friend requests", error);
     } finally {
       set({ loading: false });
     }
@@ -63,10 +63,10 @@ export const useFriendStore = create<FriendState>((set, get) => ({
         receivedList: state.receivedList.filter((r) => r._id !== requestId),
       }));
 
-      // Giảm notification count
+      // Decrement notification count
       useNotificationStore.getState().decrementUnreadCount();
     } catch (error) {
-      console.error("Lỗi xảy ra khi acceptRequest", error);
+      console.error("Error accepting request", error);
     } finally {
       set({ loading: false });
     }
@@ -80,10 +80,10 @@ export const useFriendStore = create<FriendState>((set, get) => ({
         receivedList: state.receivedList.filter((r) => r._id !== requestId),
       }));
 
-      // Giảm notification count
+      // Decrement notification count
       useNotificationStore.getState().decrementUnreadCount();
     } catch (error) {
-      console.error("Lỗi xảy ra khi declineRequest", error);
+      console.error("Error declining request", error);
     } finally {
       set({ loading: false });
     }
@@ -92,11 +92,11 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     try {
       set({ loading: true });
       const friends = await friendService.getFriendList();
-      console.log("✅ [useFriendStore] Friends loaded:", friends);
-      console.log("🔍 [useFriendStore] First friend details:", friends[0]);
+      console.log("[useFriendStore][ok] Friends loaded:", friends);
+      console.log("[useFriendStore][debug] First friend details:", friends[0]);
       set({ friends: friends });
     } catch (error) {
-      console.error("Lỗi xảy ra khi load friends", error);
+      console.error("Error loading friends", error);
       set({ friends: [] });
     } finally {
       set({ loading: false });

@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise";
+import User from "../models/User.js";
 
 /**
  * Drupal Database Sync Service
@@ -124,22 +125,27 @@ async function syncParticipantsToDrupal(conversationId, participants) {
         ? Math.floor(participant.joinedAt.getTime() / 1000)
         : Math.floor(Date.now() / 1000);
 
-      // Note: In Drupal schema, user_id should be Drupal user ID (INT)
-      // This is a workaround - in production, should query User.findById(mongoUserId).drupalId
-      // For now, we're storing MongoDB ID as string to avoid type mismatch
       try {
+        // Fetch drupalId from MongoDB User model
+        const user = await User.findById(mongoUserId).select("drupalId");
+        if (!user || !user.drupalId) {
+          console.warn(`Could not sync participant ${mongoUserId}: No drupalId found`);
+          continue;
+        }
+
+        const drupalId = user.drupalId;
+
         await drupalDbPool.execute(
           `
           INSERT INTO chat_conversation_participant 
           (conversation_id, user_id, joined_at)
           VALUES (?, ?, ?)
         `,
-          [conversationId, mongoUserId, joinedAt],
+          [conversationId, drupalId, joinedAt],
         );
       } catch (insertError) {
-        // If insert fails (type mismatch), skip this participant
         console.warn(
-          `Could not sync participant ${mongoUserId} (likely schema type mismatch)`,
+          `Could not sync participant ${mongoUserId} (schema/db error):`, insertError.message
         );
       }
     }

@@ -22,14 +22,12 @@ import Logout from "../auth/Logout";
 import FriendRequestDialog from "../friendRequest/FriendRequestDialog";
 import ProfileDialog from "../profile/ProfileDialog";
 import { useFriendStore } from "@/stores/useFriendStore";
-import { useNotificationStore } from "@/stores/useNotificationStore";
 import { NotificationBadge } from "../notifications/NotificationBadge";
 
-export function NavUser({ user }: { user: User }) {
+export function NavUser({ user }: Readonly<{ user: User }>) {
   const { isMobile } = useSidebar();
   const [friendRequestOpen, setfriendRequestOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const { unreadFriendRequestCount } = useNotificationStore();
   const { getAllFriendRequests } = useFriendStore();
 
   // Load friend requests khi mở dialog
@@ -90,7 +88,7 @@ export function NavUser({ user }: { user: User }) {
               <DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => setProfileOpen(true)}>
                   <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
-                  Tài Khoản
+                  Account
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setfriendRequestOpen(true)}
@@ -98,7 +96,7 @@ export function NavUser({ user }: { user: User }) {
                 >
                   <div className="flex items-center">
                     <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
-                    <span className="ml-2">Thông Báo</span>
+                    <span className="ml-2">Notifications</span>
                   </div>
                   <NotificationBadge showBell={false} className="ml-auto" />
                 </DropdownMenuItem>

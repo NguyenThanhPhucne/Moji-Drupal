@@ -31,7 +31,7 @@ import { useNavigate } from "react-router-dom";
 import { chatService } from "@/services/chatService";
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
-  const { conversations, activeConversationId, loading } = useChatStore();
+  const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -51,17 +51,25 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   }
 
   if (chat.type === "direct") {
-    const otherUsers = chat.participants.filter((p) => p._id !== user?._id);
+    const otherUsers = chat.participants.filter(
+      (p) => String(p._id) !== String(user?._id),
+    );
     otherUser = otherUsers.length > 0 ? otherUsers[0] : null;
 
-    if (!user || !otherUser) return;
+    if (!user || !otherUser) return null;
+  }
+
+  let presenceText = `${chat.participants.length} members`;
+  if (chat.type === "direct") {
+    const isOnline = onlineUsers.includes(String(otherUser?._id ?? ""));
+    presenceText = isOnline ? "Active now" : "Offline";
   }
 
   const handleDeleteConversation = async () => {
     try {
       setIsDeleting(true);
       await chatService.deleteConversation(chat._id);
-      toast.success("Cuộc hội thoại đã bị xoá");
+      toast.success("Conversation deleted");
       setShowDeleteDialog(false);
       // Manually remove from store
       useChatStore.setState((state) => ({
@@ -71,7 +79,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
       navigate("/");
     } catch (error) {
       console.error("Error deleting conversation:", error);
-      toast.error("Không thể xoá cuộc hội thoại");
+      toast.error("Cannot delete conversation");
     } finally {
       setIsDeleting(false);
     }
@@ -79,7 +87,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-10 px-4 py-2 flex items-center bg-background">
+      <header className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur-sm">
         <div className="flex items-center gap-2 w-full justify-between">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1 text-foreground" />
@@ -88,7 +96,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
               className="mr-2 data-[orientation=vertical]:h-4"
             />
 
-            <div className="p-2 flex items-center gap-3">
+            <div className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40">
               {/* avatar */}
               <div className="relative">
                 {chat.type === "direct" ? (
@@ -98,10 +106,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                       name={otherUser?.displayName || "Coming"}
                       avatarUrl={otherUser?.avatarUrl || undefined}
                     />
-                    {/* todo: socket io */}
                     <StatusBadge
                       status={
-                        onlineUsers.includes(otherUser?._id ?? "")
+                        onlineUsers.includes(String(otherUser?._id ?? ""))
                           ? "online"
                           : "offline"
                       }
@@ -116,11 +123,14 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
               </div>
 
               {/* name */}
-              <h2 className="font-semibold text-foreground">
-                {chat.type === "direct"
-                  ? otherUser?.displayName
-                  : chat.group?.name}
-              </h2>
+              <div className="min-w-0">
+                <h2 className="truncate font-semibold text-foreground">
+                  {chat.type === "direct"
+                    ? otherUser?.displayName
+                    : chat.group?.name}
+                </h2>
+                <p className="text-xs text-muted-foreground">{presenceText}</p>
+              </div>
             </div>
           </div>
 
@@ -137,7 +147,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 className="text-destructive cursor-pointer"
               >
                 <Trash2 className="h-4 w-4 mr-2" />
-                Xoá cuộc hội thoại
+                Delete conversation
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -148,19 +158,19 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xoá cuộc hội thoại?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
             <AlertDialogDescription>
-              Hành động này không thể hoàn tác. Toàn bộ tin nhắn sẽ bị xoá.
+              This action cannot be undone. All messages will be deleted.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {loading ? "Đang xoá..." : "Xoá"}
+              {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

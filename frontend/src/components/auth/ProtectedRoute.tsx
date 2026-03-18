@@ -49,7 +49,7 @@ const ProtectedRoute = () => {
   };
 
   const init = async () => {
-    // có thể xảy ra khi refresh trang
+    // Can happen when the page is refreshed.
     if (!accessToken) {
       await tryDrupalSso();
     }
@@ -72,7 +72,7 @@ const ProtectedRoute = () => {
   if (starting || loading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        Đang tải trang...
+        Loading page...
       </div>
     );
   }

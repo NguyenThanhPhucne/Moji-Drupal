@@ -217,15 +217,27 @@ export const getConversations = async (req, res) => {
 
     const formatted = conversations.map((convo) => {
       const participants = (convo.participants || []).map((p) => ({
-        _id: p.userId?._id,
+        _id: p.userId?._id?.toString?.() || p.userId?.toString?.() || "",
         displayName: p.userId?.displayName,
         avatarUrl: p.userId?.avatarUrl ?? null,
         joinedAt: p.joinedAt,
       }));
 
+      const normalizedUnreadCounts =
+        convo.unreadCounts instanceof Map
+          ? Object.fromEntries(convo.unreadCounts)
+          : convo.unreadCounts || {};
+
+      const normalizedSeenBy = (convo.seenBy || []).map((seenUser) => ({
+        _id: seenUser?._id?.toString?.() || seenUser?.toString?.() || "",
+        displayName: seenUser?.displayName,
+        avatarUrl: seenUser?.avatarUrl ?? null,
+      }));
+
       return {
         ...convo.toObject(),
-        unreadCounts: convo.unreadCounts || {},
+        unreadCounts: normalizedUnreadCounts,
+        seenBy: normalizedSeenBy,
         participants,
       };
     });
@@ -321,13 +333,23 @@ export const markAsSeen = async (req, res) => {
     );
 
     io.to(conversationId).emit("read-message", {
-      conversation: updated,
+      conversation: {
+        _id: updated?._id?.toString?.() || updated?._id,
+        lastMessageAt: updated?.lastMessageAt,
+        unreadCounts:
+          updated?.unreadCounts instanceof Map
+            ? Object.fromEntries(updated.unreadCounts)
+            : updated?.unreadCounts || {},
+        seenBy: (updated?.seenBy || []).map((id) => id?.toString?.() || id),
+      },
       lastMessage: {
         _id: updated?.lastMessage._id,
         content: updated?.lastMessage.content,
         createdAt: updated?.lastMessage.createdAt,
         sender: {
-          _id: updated?.lastMessage.senderId,
+          _id:
+            updated?.lastMessage?.senderId?.toString?.() ||
+            updated?.lastMessage?.senderId,
         },
       },
     });

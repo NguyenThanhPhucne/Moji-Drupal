@@ -23,7 +23,7 @@ const Logout = () => {
       // Navigate after logout completes
       navigate("/signin");
     } catch (error) {
-      console.error("❌ Logout error:", error);
+      console.error("[auth][error] Logout error:", error);
       // Still navigate even if logout fails
       navigate("/signin");
     } finally {

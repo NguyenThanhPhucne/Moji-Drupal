@@ -1,6 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
+import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 
 // https://vite.dev/config/
@@ -28,6 +28,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api\/node/, "/api"),
+      },
+      // 3. Socket.IO proxy cho local dev (websocket + polling)
+      "/socket.io": {
+        target: "http://localhost:5001",
+        changeOrigin: true,
+        secure: false,
+        ws: true,
       },
     },
   },

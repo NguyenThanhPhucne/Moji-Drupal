@@ -3,12 +3,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useEffect } from "react";
 
 /**
- * Component hiển thị danh sách lời mời kết bạn chưa xem
+ * Shows the list of unseen friend requests.
  */
 export function PendingFriendRequests() {
   const { pendingRequests, clearPendingRequests } = useNotificationStore();
 
-  // Clear pending requests sau 5 giây
+  // Clear pending requests after 5 seconds.
   useEffect(() => {
     if (pendingRequests.length === 0) return;
 
@@ -26,7 +26,7 @@ export function PendingFriendRequests() {
   return (
     <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
       <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3">
-        Lời mời kết bạn mới
+        New friend request
       </p>
       <div className="space-y-2 max-h-40 overflow-y-auto">
         {pendingRequests.map((request) => (

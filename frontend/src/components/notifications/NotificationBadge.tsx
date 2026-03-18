@@ -8,8 +8,8 @@ interface NotificationBadgeProps {
 }
 
 /**
- * Component hiển thị badge thông báo
- * Hiện lên khi có lời mời kết bạn chưa xem hoặc thông báo chấp nhận lời mời
+ * Renders notification badge.
+ * Shows when there are unseen friend requests or acceptance notifications.
  */
 export function NotificationBadge({
   className,
@@ -18,12 +18,12 @@ export function NotificationBadge({
   const { unreadFriendRequestCount, acceptanceNotifications } =
     useNotificationStore();
 
-  // Tổng hợp notifications (pending requests + acceptance notifications)
+  // Aggregate notifications (pending requests + acceptance notifications)
   const totalNotifications =
     unreadFriendRequestCount + acceptanceNotifications.length;
 
   if (showBell) {
-    // Version với Bell icon (dùng cho standalone)
+    // Version with Bell icon (standalone usage)
     return (
       <div className={cn("relative inline-block", className)}>
         <Bell className="h-5 w-5" />
@@ -36,7 +36,7 @@ export function NotificationBadge({
     );
   }
 
-  // Version không có Bell icon (dùng khi Bell icon đã có ở đó)
+  // Version without Bell icon (when the parent already renders Bell)
   return (
     <>
       {totalNotifications > 0 && (

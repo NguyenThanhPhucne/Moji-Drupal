@@ -17,7 +17,7 @@ export const friendService = {
       const { sent, received } = res.data;
       return { sent, received };
     } catch (error) {
-      console.error("Lỗi khi gửi getAllFriendRequest", error);
+      console.error("Error while fetching all friend requests", error);
     }
   },
 
@@ -26,7 +26,7 @@ export const friendService = {
       const res = await api.post(`/friends/requests/${requestId}/accept`);
       return res.data.requestAcceptedBy;
     } catch (error) {
-      console.error("Lỗi khi gửi acceptRequest", error);
+      console.error("Error while accepting friend request", error);
     }
   },
 
@@ -34,7 +34,7 @@ export const friendService = {
     try {
       await api.post(`/friends/requests/${requestId}/decline`);
     } catch (error) {
-      console.error("Lỗi khi gửi declineRequest", error);
+      console.error("Error while declining friend request", error);
     }
   },
 

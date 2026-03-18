@@ -4,7 +4,7 @@ import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { DialogFooter } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { UserPlus } from "lucide-react";
+import { Sparkles, UserPlus } from "lucide-react";
 
 interface SendRequestProps {
   register: UseFormRegister<IFormValues>;
@@ -24,22 +24,20 @@ const SendFriendRequestForm = ({
   return (
     <form onSubmit={onSubmit}>
       <div className="space-y-4">
-        <span className="success-message">
-          Tìm thấy <span className="font-semibold">@{searchedUsername}</span> rồi nè
-          🎉
+        <span className="success-message inline-flex items-center gap-2">
+          <Sparkles className="size-4" />
+          Found <span className="font-semibold">@{searchedUsername}</span>{" "}
+          successfully
         </span>
 
         <div className="space-y-4">
-          <Label
-            htmlFor="message"
-            className="text-sm font-semibold"
-          >
-            Giới thiệu
+          <Label htmlFor="message" className="text-sm font-semibold">
+            Introduction
           </Label>
           <Textarea
             id="message"
             rows={3}
-            placeholder="Chào bạn ~ Có thể kết bạn được không?..."
+            placeholder="Hi! Can we be friends?..."
             className="glass border-border/50 focus:border-primary/50 transition-smooth resize-none"
             {...register("message")}
           />
@@ -52,19 +50,19 @@ const SendFriendRequestForm = ({
             className="flex-1 glass hover:text-destructive"
             onClick={onBack}
           >
-            Quay lại
+            Back
           </Button>
 
           <Button
             type="submit"
             disabled={loading}
-            className="flex-1 bg-gradient-chat text-white hover:opactity-90 transition-smooth"
+            className="flex-1 bg-gradient-chat text-white hover:opacity-90 transition-smooth"
           >
             {loading ? (
-              <span>Đang gửi...</span>
+              <span>Sending...</span>
             ) : (
               <>
-                <UserPlus className="size-4 mr-2" /> Kết Bạn
+                <UserPlus className="size-4 mr-2" /> Add Friend
               </>
             )}
           </Button>

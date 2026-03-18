@@ -5,7 +5,7 @@ import { useAuthStore } from "./useAuthStore";
 import { toast } from "sonner";
 import { useChatStore } from "./useChatStore";
 
-export const useUserStore = create<UserState>((set, get) => ({
+export const useUserStore = create<UserState>(() => ({
   updateAvatarUrl: async (formData) => {
     try {
       const { user, setUser } = useAuthStore.getState();
@@ -20,8 +20,8 @@ export const useUserStore = create<UserState>((set, get) => ({
         useChatStore.getState().fetchConversations();
       }
     } catch (error) {
-      console.error("Lỗi khi updateAvatarUrl", error);
-      toast.error("Upload avatar không thành công!");
+      console.error("Error updating avatar URL", error);
+      toast.error("Avatar upload failed!");
     }
   },
 }));

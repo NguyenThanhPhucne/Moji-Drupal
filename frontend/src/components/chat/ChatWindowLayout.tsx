@@ -27,7 +27,7 @@ const ChatWindowLayout = () => {
       try {
         await markAsSeen();
       } catch (error) {
-        console.error("Lỗi khi markSeen", error);
+        console.error("Error while marking messages as seen", error);
       }
     };
 
@@ -43,12 +43,12 @@ const ChatWindowLayout = () => {
   }
 
   return (
-    <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
+    <SidebarInset className="glass-strong flex h-full min-h-0 flex-1 overflow-hidden rounded-3xl border border-border/70 bg-background/90 shadow-soft">
       {/* Header */}
       <ChatWindowHeader chat={selectedConvo} />
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto bg-primary-foreground">
+      <div className="flex-1 min-h-0 bg-primary-foreground/85">
         <ChatWindowBody />
       </div>
 

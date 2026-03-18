@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthState>()(
         try {
           set({ loading: true });
 
-          //  gọi api
+          // Call API
           await authService.signUp(
             username,
             password,
@@ -42,11 +42,11 @@ export const useAuthStore = create<AuthState>()(
           );
 
           toast.success(
-            "Đăng ký thành công! Bạn sẽ được chuyển sang trang đăng nhập.",
+            "Sign-up successful! You will be redirected to sign-in.",
           );
         } catch (error) {
           console.error(error);
-          toast.error("Đăng ký không thành công");
+          toast.error("Sign-up failed");
         } finally {
           set({ loading: false });
         }
@@ -56,24 +56,24 @@ export const useAuthStore = create<AuthState>()(
           get().clearState();
           set({ loading: true });
 
-          // Lấy toàn bộ data trả về
+          // Get full response payload
           const data = await authService.signIn(username, password);
 
-          // Chỉ set token nếu có (đề phòng Drupal chỉ trả về Cookie mà không có token)
+          // Set token if present (Drupal may return only cookie in some cases)
           if (data.accessToken) {
             get().setAccessToken(data.accessToken);
           }
 
-          // Quan trọng: Gọi fetchMe để lấy thông tin user từ Cookie vừa nhận
+          // Important: call fetchMe to resolve user info from the fresh cookie
           await get().fetchMe();
 
-          // Sau khi có user, mới gọi chat
+          // Load chats after user is available
           useChatStore.getState().fetchConversations();
 
-          toast.success("Chào mừng bạn quay lại với Coming 🎉");
+          toast.success("Welcome back to Coming");
         } catch (error) {
           console.error(error);
-          toast.error("Đăng nhập không thành công!");
+          toast.error("Sign-in failed!");
         } finally {
           set({ loading: false });
         }
@@ -88,12 +88,10 @@ export const useAuthStore = create<AuthState>()(
           // Only clear state if API succeeded
           get().clearState();
 
-          toast.success("Logout thành công!");
-          return true;
+          toast.success("Logged out successfully!");
         } catch (error) {
-          console.error("❌ Logout error:", error);
-          toast.error("Lỗi xảy ra khi logout. Hãy thử lại!");
-          return false;
+          console.error("[auth][error] Logout error:", error);
+          toast.error("Logout failed. Please try again!");
         } finally {
           set({ loading: false });
         }
@@ -104,8 +102,8 @@ export const useAuthStore = create<AuthState>()(
           const user = await authService.fetchMe();
           set({ user });
         } catch (error) {
-          console.error("Chưa đăng nhập hoặc lỗi mạng:", error);
-          // Reset state lặng lẽ, KHÔNG HIỆN TOAST để tránh làm phiền user lúc mới vào trang
+          console.error("Not signed in or network error:", error);
+          // Quiet reset without toast to avoid noisy UX on initial load
           set({ user: null, accessToken: null });
         } finally {
           set({ loading: false });
@@ -124,7 +122,7 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (error) {
           console.error(error);
-          toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!");
+          toast.error("Your session has expired. Please sign in again!");
           get().clearState();
         } finally {
           set({ loading: false });
@@ -133,7 +131,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
-      partialize: (state) => ({ user: state.user }), // chỉ persist user
+      partialize: (state) => ({ user: state.user }), // persist user only
     },
   ),
 );

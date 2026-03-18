@@ -13,10 +13,10 @@ const PrivacySettings = () => (
     <CardHeader>
       <CardTitle className="flex items-center gap-2">
         <Shield className="h-5 w-5 text-primary" />
-        Quyền riêng tư & Bảo mật
+        Privacy & Security
       </CardTitle>
       <CardDescription>
-        Quản lý cài đặt quyền riêng tư và bảo mật của bạn
+        Manage your privacy and security preferences
       </CardDescription>
     </CardHeader>
 
@@ -27,7 +27,7 @@ const PrivacySettings = () => (
           className="w-full justify-start glass-light border-border/30 hover:text-warning"
         >
           <Shield className="h-4 w-4 mr-2" />
-          Đổi mật khẩu
+          Change password
         </Button>
 
         <Button
@@ -35,7 +35,7 @@ const PrivacySettings = () => (
           className="w-full justify-start glass-light border-border/30 hover:text-info"
         >
           <Bell className="h-4 w-4 mr-2" />
-          Cài đặt thông báo
+          Notification settings
         </Button>
 
         <Button
@@ -43,17 +43,14 @@ const PrivacySettings = () => (
           className="w-full justify-start glass-light border-border/30 hover:text-destructive"
         >
           <ShieldBan className="size-4 mr-2" />
-          Chặn & Báo cáo
+          Block & Report
         </Button>
       </div>
 
       <div className="pt-4 border-t border-border/30">
-        <h4 className="font-medium mb-3 text-destructive">Khu vực nguy hiểm</h4>
-        <Button
-          variant="destructive"
-          className="w-full"
-        >
-          Xoá tài khoản
+        <h4 className="font-medium mb-3 text-destructive">Danger zone</h4>
+        <Button variant="destructive" className="w-full">
+          Delete account
         </Button>
       </div>
     </CardContent>

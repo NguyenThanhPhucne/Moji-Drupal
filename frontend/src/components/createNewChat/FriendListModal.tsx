@@ -25,14 +25,14 @@ const FriendListModal = () => {
       if (success) {
         const friend = friends.find((f) => f._id === friendId);
         toast.success(
-          `Tạo cuộc trò chuyện với ${friend?.displayName} thành công!`,
+          `Conversation with ${friend?.displayName} created successfully!`,
         );
       } else {
-        toast.error("Không thể tạo cuộc trò chuyện. Vui lòng thử lại!");
+        toast.error("Cannot create conversation. Please try again!");
       }
     } catch (error) {
-      console.error("❌ [FriendListModal] Error:", error);
-      toast.error("Có lỗi xảy ra. Vui lòng thử lại!");
+      console.error("[FriendListModal][error] Error:", error);
+      toast.error("An error occurred. Please try again!");
     } finally {
       setCreatingFor(null);
     }
@@ -43,17 +43,17 @@ const FriendListModal = () => {
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2 text-xl capitalize">
           <MessageCircleMore className="size-5" />
-          bắt đầu hội thoại mới
+          start a new conversation
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Chọn bạn bè từ danh sách để bắt đầu cuộc trò chuyện
+          Select a friend from the list to start a conversation
         </DialogDescription>
       </DialogHeader>
 
       {/* friends list */}
       <div className="space-y-4">
         <h1 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-          danh sách bạn bè
+          friends list
         </h1>
 
         <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -90,7 +90,7 @@ const FriendListModal = () => {
                 {/* loading state */}
                 {loading && creatingFor === friend._id && (
                   <div className="text-xs text-muted-foreground">
-                    Đang tạo...
+                    Creating...
                   </div>
                 )}
               </div>
@@ -100,7 +100,7 @@ const FriendListModal = () => {
           {friends.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <Users className="size-12 mx-auto mb-3 opacity-50" />
-              Chưa có bạn bè. Thêm bạn vô để tám!
+              No friends yet. Add friends to start chatting!
             </div>
           )}
         </div>

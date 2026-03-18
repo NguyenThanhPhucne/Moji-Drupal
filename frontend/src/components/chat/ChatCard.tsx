@@ -1,6 +1,5 @@
 import { Card } from "@/components/ui/card";
 import { formatOnlineTime, cn } from "@/lib/utils";
-import { MoreHorizontal } from "lucide-react";
 
 interface ChatCardProps {
   convoId: string;
@@ -23,38 +22,67 @@ const ChatCard = ({
   leftSection,
   subtitle,
 }: ChatCardProps) => {
+  const hasUnread = (unreadCount ?? 0) > 0;
+
   return (
     <Card
       key={convoId}
       className={cn(
-        "border-none p-3 cursor-pointer transition-smooth glass hover:bg-muted/30",
-        isActive &&
-          "ring-2 ring-primary/50 bg-gradient-to-tr from-primary-glow/10 to-primary-foreground"
+        "cursor-pointer rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200",
+        "hover:border-border/70 hover:bg-muted/60 hover:shadow-sm",
+        "group select-none",
+        isActive
+          ? "border-primary/30 bg-gradient-to-r from-primary/10 to-primary-foreground ring-1 ring-primary/20 shadow-sm"
+          : "bg-transparent",
       )}
       onClick={() => onSelect(convoId)}
     >
       <div className="flex items-center gap-3">
-        <div className="relative">{leftSection}</div>
+        {/* Avatar */}
+        <div className="relative flex-shrink-0">{leftSection}</div>
 
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center justify-between mb-0.5">
             <h3
               className={cn(
-                "font-semibold text-sm truncate",
-                unreadCount && unreadCount > 0 && "text-foreground"
+                "text-sm truncate",
+                hasUnread
+                  ? "font-bold text-foreground"
+                  : "font-semibold text-foreground/90",
+                isActive && "text-primary",
               )}
             >
               {name}
             </h3>
-
-            <span className="text-xs text-muted-foreground">
+            <span
+              className={cn(
+                "text-[11px] flex-shrink-0 ml-2",
+                hasUnread
+                  ? "text-primary font-semibold"
+                  : "text-muted-foreground",
+              )}
+            >
               {timestamp ? formatOnlineTime(timestamp) : ""}
             </span>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 flex-1 min-w-0">{subtitle}</div>
-            <MoreHorizontal className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 hover:size-5 transition-smooth" />
+          <div className="flex items-center justify-between gap-2">
+            <div
+              className={cn(
+                "flex-1 min-w-0 text-xs truncate",
+                hasUnread
+                  ? "font-medium text-foreground"
+                  : "text-muted-foreground",
+              )}
+            >
+              {subtitle}
+            </div>
+            {hasUnread && (
+              <span className="flex-shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[10px] font-bold shadow-sm animate-in zoom-in duration-200">
+                {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
+              </span>
+            )}
           </div>
         </div>
       </div>

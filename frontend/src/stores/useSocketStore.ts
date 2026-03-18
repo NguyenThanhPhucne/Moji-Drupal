@@ -6,7 +6,47 @@ import { useChatStore } from "./useChatStore";
 import { useNotificationStore } from "./useNotificationStore";
 import { toast } from "sonner";
 
-const baseURL = import.meta.env.VITE_SOCKET_URL;
+const resolveSocketBaseUrl = () => {
+  const socketUrl = String(import.meta.env.VITE_SOCKET_URL || "").trim();
+  const nodeApiUrl = String(import.meta.env.VITE_NODE_API || "").trim();
+  const isDev = import.meta.env.DEV;
+
+  // If NODE API uses local proxy (/api/node) but socket points to a different host in dev,
+  // realtime can split-brain (API on one server, socket on another).
+  if (isDev && nodeApiUrl.startsWith("/") && socketUrl) {
+    try {
+      const socketHost = new URL(socketUrl).host;
+      const currentHost = globalThis.location.host;
+      if (socketHost !== currentHost) {
+        console.warn(
+          `[Socket] Ignoring VITE_SOCKET_URL=${socketUrl} in dev because VITE_NODE_API is local proxy (${nodeApiUrl}). Using same-origin socket via Vite proxy instead.`,
+        );
+        return undefined;
+      }
+    } catch {
+      // Invalid socketUrl -> fallback to same-origin.
+      return undefined;
+    }
+  }
+
+  if (socketUrl) {
+    return socketUrl;
+  }
+
+  // Fallback: if NODE API is absolute URL, use that origin for socket.
+  if (nodeApiUrl.startsWith("http://") || nodeApiUrl.startsWith("https://")) {
+    try {
+      return new URL(nodeApiUrl).origin;
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Local proxy or missing config -> same-origin.
+  return undefined;
+};
+
+const baseURL = resolveSocketBaseUrl();
 
 export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
@@ -15,7 +55,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;
 
-    if (existingSocket?.connected) return; // tránh tạo nhiều socket
+    // Avoid recreating socket if current socket is connected or reconnecting.
+    if (existingSocket && (existingSocket.connected || existingSocket.active)) {
+      return;
+    }
+
+    if (!accessToken) {
+      return;
+    }
 
     // Cleanup existing socket if any
     if (existingSocket) {
@@ -25,18 +72,83 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     const socket: Socket = io(baseURL, {
       auth: { token: accessToken },
-      transports: ["websocket"],
+      withCredentials: true,
+      path: "/socket.io",
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     set({ socket });
 
     socket.on("connect", () => {
-      console.log("Đã kết nối với socket");
+      console.log("Socket connected");
+
+      // Proactively join known rooms to reduce missed events
+      // while backend is still fetching conversations.
+      const conversations = useChatStore.getState().conversations || [];
+      conversations.forEach((conversationItem) => {
+        if (conversationItem?._id) {
+          socket.emit("join-conversation", conversationItem._id);
+        }
+      });
+
+      const activeConversationId = useChatStore.getState().activeConversationId;
+      if (activeConversationId) {
+        socket.emit("join-conversation", activeConversationId);
+      }
+    });
+
+    socket.on("reconnect_attempt", () => {
+      const latestToken = useAuthStore.getState().accessToken;
+      if (latestToken) {
+        socket.auth = { token: latestToken };
+      }
+    });
+
+    socket.on("connect_error", async (error) => {
+      console.error("Socket connect_error:", error?.message || error);
+
+      // If stale token is rejected during handshake, refresh and reconnect.
+      if (
+        String(error?.message || "")
+          .toLowerCase()
+          .includes("unauthorized")
+      ) {
+        try {
+          await useAuthStore.getState().refresh();
+          const refreshedToken = useAuthStore.getState().accessToken;
+          if (refreshedToken) {
+            socket.auth = { token: refreshedToken };
+            socket.connect();
+          }
+        } catch (refreshError) {
+          console.error("Socket refresh token failed:", refreshError);
+        }
+      }
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.warn("Socket disconnected:", reason);
+      set({ onlineUsers: [] });
+    });
+
+    socket.on("reconnect", () => {
+      const activeConversationId = useChatStore.getState().activeConversationId;
+      if (activeConversationId) {
+        socket.emit("join-conversation", activeConversationId);
+      }
     });
 
     // online users
     socket.on("online-users", (userIds) => {
-      set({ onlineUsers: userIds });
+      const normalizedUserIds = Array.isArray(userIds)
+        ? userIds.map(String)
+        : [];
+      set({ onlineUsers: normalizedUserIds });
     });
 
     // new message
@@ -57,8 +169,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const updatedConversation = {
         ...conversation,
         lastMessage,
-        unreadCounts,
+        unreadCounts: unreadCounts || {},
       };
+
+      const existingConversation = useChatStore
+        .getState()
+        .conversations.find((c) => c._id === conversation._id);
+
+      if (!existingConversation) {
+        useChatStore.getState().fetchConversations();
+      }
 
       if (
         useChatStore.getState().activeConversationId === message.conversationId
@@ -88,7 +208,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
       toast.success(
-        `Bạn đã được thêm vào nhóm "${conversation.group?.name || "Nhóm mới"}"!`,
+        `You were added to group "${conversation.group?.name || "New group"}"!`,
       );
     });
 
@@ -97,31 +217,56 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       console.log("Received new-conversation event:", conversation);
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
-      toast.success("Bạn có cuộc trò chuyện mới!");
+      toast.success("You have a new conversation!");
     });
 
     // conversation deleted - from other participants
     socket.on("conversation-deleted", ({ conversationId }) => {
       console.log("Received conversation-deleted event:", conversationId);
-      // Only remove from store (don't call API again)
-      set((state) => ({
-        // This will be handled by chat store, just log it
-      }));
-      useChatStore.getState().updateConversation({
-        _id: conversationId,
-        deleted: true,
-      });
-      // Remove from conversations list
-      useChatStore.setState((state) => ({
-        conversations: state.conversations.filter(
-          (c) => c._id !== conversationId,
-        ),
+      const currentState = useChatStore.getState();
+      const nextConversations = currentState.conversations.filter(
+        (conversationItem) => conversationItem._id !== conversationId,
+      );
+
+      useChatStore.setState({
+        conversations: nextConversations,
         activeConversationId:
-          state.activeConversationId === conversationId
+          currentState.activeConversationId === conversationId
             ? null
-            : state.activeConversationId,
-      }));
-      toast.info("Một cuộc hội thoại đã bị xoá");
+            : currentState.activeConversationId,
+      });
+
+      toast.info("A conversation was deleted");
+    });
+
+    // message modifications
+    socket.on("message-reacted", ({ conversationId, messageId, reactions }) => {
+      useChatStore
+        .getState()
+        .updateMessage(conversationId, messageId, { reactions });
+    });
+
+    socket.on("message-deleted", ({ conversationId, messageId }) => {
+      useChatStore.getState().updateMessage(conversationId, messageId, {
+        isDeleted: true,
+        content: "This message was removed",
+        imgUrl: null,
+      });
+    });
+
+    socket.on(
+      "message-edited",
+      ({ conversationId, messageId, content, editedAt }) => {
+        useChatStore
+          .getState()
+          .updateMessage(conversationId, messageId, { content, editedAt });
+      },
+    );
+
+    socket.on("message-read", ({ conversationId, messageId, readBy }) => {
+      useChatStore
+        .getState()
+        .updateMessage(conversationId, messageId, { readBy });
     });
 
     // Friend request received - real-time notification
@@ -129,11 +274,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       console.log("Received friend request:", request);
       useNotificationStore.getState().addPendingRequest(request);
       toast.success(message, {
-        description: `${request.from.displayName} (@${request.from.username}) gửi lời mời kết bạn`,
+        description: `${request.from.displayName} (@${request.from.username}) sent a friend request`,
         action: {
-          label: "Xem",
+          label: "View",
           onClick: () => {
-            // Có thể mở dialog ở đây nếu muốn
+            // Open a dialog here if needed.
           },
         },
       });
@@ -158,7 +303,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         console.error("Error adding notification:", error);
       }
       toast.success(message, {
-        description: `${from?.displayName} bây giờ là bạn bè của bạn!`,
+        description: `${from?.displayName} is now your friend!`,
       });
     });
   },
@@ -168,6 +313,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket.removeAllListeners(); // Remove all listeners before disconnect
       socket.disconnect();
       set({ socket: null, onlineUsers: [] });
+      return;
     }
+
+    set({ onlineUsers: [] });
   },
 }));

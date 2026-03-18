@@ -10,7 +10,7 @@ const IniviteSuggestionList = ({
   filteredFriends,
   onSelect,
 }: InviteSuggestionListProps) => {
-  console.log("🔍 [IniviteSuggestionList] Rendering:", {
+  console.log("[IniviteSuggestionList][debug] Rendering:", {
     count: filteredFriends.length,
     friends: filteredFriends,
   });
@@ -22,9 +22,10 @@ const IniviteSuggestionList = ({
   return (
     <div className="border rounded-lg mt-2 max-h-[180px] overflow-y-auto divide-y">
       {filteredFriends.map((friend) => (
-        <div
+        <button
+          type="button"
           key={friend._id}
-          className="flex items-center gap-3 p-2 cursor-pointer hover:bg-muted transition"
+          className="w-full flex items-center gap-3 p-2 text-left hover:bg-muted transition"
           onClick={() => onSelect(friend)}
         >
           <UserAvatar
@@ -36,7 +37,7 @@ const IniviteSuggestionList = ({
           <span className="font-medium">
             {friend.displayName || friend.username}
           </span>
-        </div>
+        </button>
       ))}
     </div>
   );

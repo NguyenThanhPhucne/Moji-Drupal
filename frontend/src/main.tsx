@@ -2,14 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
-import axios from "axios"; // 1. Thêm dòng này
+import axios from "axios";
 
-// 2. Thêm dòng này (QUAN TRỌNG NHẤT)
-// Dòng này ép buộc React luôn gửi Cookie đi kèm mỗi khi gọi API
+// Always send cookies with every API request.
 axios.defaults.withCredentials = true;
 
-// 3. Khôi phục theme preference từ localStorage trước khi render
-// Điều này tránh hiện tượng flash (chớp nháy) khi trang load
+// Restore saved theme before initial render to avoid flash on page load.
 const savedTheme = localStorage.getItem("theme-storage");
 if (savedTheme) {
   try {
@@ -20,7 +18,7 @@ if (savedTheme) {
       document.documentElement.classList.remove("dark");
     }
   } catch (e) {
-    // Nếu có lỗi parsing, bỏ qua
+    // Ignore invalid persisted theme payloads.
     console.error("Failed to restore theme:", e);
   }
 }

@@ -20,10 +20,12 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
 
   if (!user) return null;
 
-  const otherUser = convo.participants.find((p) => p._id !== user._id);
+  const otherUser = convo.participants.find(
+    (p) => String(p._id) !== String(user._id),
+  );
   if (!otherUser) return null;
 
-  const unreadCount = convo.unreadCounts[user._id];
+  const unreadCount = convo.unreadCounts?.[String(user._id)] ?? 0;
   const lastMessage = convo.lastMessage?.content ?? "";
 
   const handleSelectConversation = async (id: string) => {
@@ -54,7 +56,9 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
           />
           <StatusBadge
             status={
-              onlineUsers.includes(otherUser?._id ?? "") ? "online" : "offline"
+              onlineUsers.includes(String(otherUser?._id ?? ""))
+                ? "online"
+                : "offline"
             }
           />
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}

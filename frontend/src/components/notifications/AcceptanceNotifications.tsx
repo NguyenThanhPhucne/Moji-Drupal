@@ -7,15 +7,18 @@ export function AcceptanceNotifications() {
     useNotificationStore();
 
   console.log(
-    "🔔 [AcceptanceNotifications] Rendering, count:",
+    "[AcceptanceNotifications][debug] Rendering, count:",
     acceptanceNotifications.length,
   );
-  console.log("📋 [AcceptanceNotifications] Data:", acceptanceNotifications);
+  console.log(
+    "[AcceptanceNotifications][debug] Data:",
+    acceptanceNotifications,
+  );
 
   if (acceptanceNotifications.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-muted-foreground">
-        Bạn chưa có thông báo nào.
+        You have no notifications yet.
       </div>
     );
   }
@@ -45,14 +48,14 @@ export function AcceptanceNotifications() {
                 {notification.message}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {new Date(notification.createdAt).toLocaleString("vi-VN")}
+                {new Date(notification.createdAt).toLocaleString("en-US")}
               </p>
             </div>
           </div>
           <button
             onClick={() => removeAcceptanceNotification(index)}
             className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0"
-            aria-label="Xóa thông báo"
+            aria-label="Delete notification"
           >
             <X className="h-4 w-4 text-muted-foreground" />
           </button>

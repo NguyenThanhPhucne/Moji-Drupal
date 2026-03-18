@@ -27,10 +27,10 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
     const loadRequest = async () => {
       try {
         await getAllFriendRequests();
-        // Reset notification count khi mở dialog
+        // Reset notification count when opening the dialog.
         resetUnreadCount();
       } catch (error) {
-        console.error("Lỗi xảy ra khi load requests", error);
+        console.error("Error while loading requests", error);
       }
     };
 
@@ -43,17 +43,17 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Lời mời kết bạn</DialogTitle>
+          <DialogTitle>Friend requests</DialogTitle>
         </DialogHeader>
 
-        {/* Hiển thị lời mời mới */}
+        {/* Show new incoming requests */}
         <PendingFriendRequests />
 
         <Tabs value={tab} onValueChange={setTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="received">Đã nhận</TabsTrigger>
-            <TabsTrigger value="sent">Đã gửi</TabsTrigger>
-            <TabsTrigger value="notifications">Thông báo</TabsTrigger>
+            <TabsTrigger value="received">Received</TabsTrigger>
+            <TabsTrigger value="sent">Sent</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
           <TabsContent value="received">

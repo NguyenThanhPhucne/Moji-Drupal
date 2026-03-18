@@ -4,12 +4,13 @@ import { Button } from "../ui/button";
 import { toast } from "sonner";
 
 const ReceivedRequests = () => {
-  const { acceptRequest, declineRequest, loading, receivedList } = useFriendStore();
+  const { acceptRequest, declineRequest, loading, receivedList } =
+    useFriendStore();
 
   if (!receivedList || receivedList.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Bạn chưa có lời mời kết bạn nào.
+        You have no friend requests yet.
       </p>
     );
   }
@@ -17,7 +18,7 @@ const ReceivedRequests = () => {
   const handleAccept = async (requestId: string) => {
     try {
       await acceptRequest(requestId);
-      toast.success("Đã đồng ý kết bạn thành công");
+      toast.success("Friend request accepted successfully");
     } catch (error) {
       console.error(error);
     }
@@ -26,7 +27,7 @@ const ReceivedRequests = () => {
   const handleDecline = async (requestId: string) => {
     try {
       await declineRequest(requestId);
-      toast.info("Đã từ chối kết bạn");
+      toast.info("Friend request declined");
     } catch (error) {
       console.error(error);
     }
@@ -46,7 +47,7 @@ const ReceivedRequests = () => {
                 onClick={() => handleAccept(req._id)}
                 disabled={loading}
               >
-                Chấp nhận
+                Accept
               </Button>
               <Button
                 size="sm"
@@ -54,7 +55,7 @@ const ReceivedRequests = () => {
                 onClick={() => handleDecline(req._id)}
                 disabled={loading}
               >
-                Từ chối
+                Decline
               </Button>
             </div>
           }

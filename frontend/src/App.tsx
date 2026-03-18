@@ -26,12 +26,18 @@ function AppContent() {
   useEffect(() => {
     if (accessToken) {
       connectSocket();
-      // Load friend requests khi user đăng nhập
+      // Load friend requests when the user signs in.
       getAllFriendRequests();
+      return;
     }
 
-    return () => disconnectSocket();
+    disconnectSocket();
   }, [accessToken]);
+
+  // Only clean up when App unmounts.
+  useEffect(() => {
+    return () => disconnectSocket();
+  }, [disconnectSocket]);
 
   return (
     <>

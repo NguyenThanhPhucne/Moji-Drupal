@@ -12,16 +12,16 @@ interface ProfileCardProps {
 
 const ProfileCard = ({ user }: ProfileCardProps) => {
   const { onlineUsers } = useSocketStore();
-  if (!user) return;
+  if (!user) return null;
 
   if (!user.bio) {
-    user.bio = "Will code for food 💻";
+    user.bio = "Always learning, always building.";
   }
 
-  const isOnline = onlineUsers.includes(user._id) ? true : false;
+  const isOnline = onlineUsers.includes(String(user._id));
 
   return (
-    <Card className="overflow-hidden p-0 h-52 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+    <Card className="h-52 overflow-hidden bg-gradient-to-r from-sky-600 via-cyan-600 to-sky-700 p-0">
       <CardContent className="mt-20 pb-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
         <div className="relative">
           <UserAvatar
@@ -51,13 +51,15 @@ const ProfileCard = ({ user }: ProfileCardProps) => {
         <Badge
           className={cn(
             "flex items-center gap-1 capitalize",
-            isOnline ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-700"
+            isOnline
+              ? "bg-green-100 text-green-700"
+              : "bg-slate-100 text-slate-700",
           )}
         >
           <div
             className={cn(
               "size-2 rounded-full",
-              isOnline ? "bg-green-500 animate-pulse" : "bg-slate-500"
+              isOnline ? "bg-green-500 animate-pulse" : "bg-slate-500",
             )}
           />
 

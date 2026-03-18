@@ -1,5 +1,4 @@
-//
-import api from "@/lib/axios"; // Đảm bảo import đúng file vừa sửa ở trên
+import api from "@/lib/axios";
 
 export const authService = {
   signUp: async (
@@ -20,7 +19,7 @@ export const authService = {
   },
 
   signIn: async (username: string, password: string) => {
-    // Lưu ý: URL bắt đầu bằng dấu / để khớp với bộ lọc trong axios.ts
+    // Keep leading slash so request matching in axios interceptor works.
     const res = await api.post("/auth/signin", {
       username,
       password,
@@ -52,9 +51,9 @@ export const authService = {
   },
 
   fetchMe: async () => {
-    // API này sẽ tự động mang theo Cookie Session sang Drupal
+    // Session cookie is attached automatically when calling this endpoint.
     const res = await api.get("/users/me");
-    return res.data.user; // Hoặc res.data tùy vào cấu trúc trả về của bạn
+    return res.data.user;
   },
 
   refresh: async () => {

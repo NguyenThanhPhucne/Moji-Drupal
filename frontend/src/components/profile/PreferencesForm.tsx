@@ -14,7 +14,7 @@ import { useState } from "react";
 const PreferencesForm = () => {
   const { isDark, toggleTheme } = useThemeStore();
 
-  //   các bạn cần handle logic setOnlineStatus
+  // Wire online status preference to backend/user settings when available.
   const [onlineStatus, setOnlineStatus] = useState(false);
 
   return (
@@ -22,23 +22,20 @@ const PreferencesForm = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sun className="h-5 w-5 text-primary" />
-          Tuỳ chỉnh ứng dụng
+          App preferences
         </CardTitle>
-        <CardDescription>Cá nhân hoá trải nghiệm trò chuyện của bạn</CardDescription>
+        <CardDescription>Customize your chat experience</CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-6">
         {/* Dark Mode */}
         <div className="flex items-center justify-between">
           <div>
-            <Label
-              htmlFor="theme-toggle"
-              className="text-base font-medium"
-            >
-              Chế độ tối
+            <Label htmlFor="theme-toggle" className="text-base font-medium">
+              Dark mode
             </Label>
             <p className="text-sm text-muted-foreground">
-              Chuyển đổi giữa giao diện sáng và tối
+              Switch between light and dark appearance
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -56,14 +53,11 @@ const PreferencesForm = () => {
         {/* Online Status */}
         <div className="flex items-center justify-between">
           <div>
-            <Label
-              htmlFor="online-status"
-              className="text-base font-medium"
-            >
-              Hiển thị trạng thái online
+            <Label htmlFor="online-status" className="text-base font-medium">
+              Show online status
             </Label>
             <p className="text-sm text-muted-foreground">
-              Cho phép người khác thấy khi bạn đang online
+              Allow others to see when you are online
             </p>
           </div>
           <Switch

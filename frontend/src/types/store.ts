@@ -36,15 +36,17 @@ export interface ChatState {
     {
       items: Message[];
       hasMore: boolean; // infinite-scroll
-      nextCursor?: string | null; // phân trang
+      nextCursor?: string | null; // pagination cursor
     }
   >;
   activeConversationId: string | null;
   convoLoading: boolean;
   messageLoading: boolean;
   loading: boolean;
+  replyingTo: Message | null;
   reset: () => void;
 
+  setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
@@ -52,23 +54,46 @@ export interface ChatState {
     recipientId: string,
     content: string,
     imgUrl?: string,
+    conversationId?: string,
+    replyTo?: string,
   ) => Promise<void>;
   sendGroupMessage: (
     conversationId: string,
     content: string,
     imgUrl?: string,
+    replyTo?: string,
   ) => Promise<void>;
   // add message
-  addMessage: (message: Message) => Promise<void>;
+  addMessage: (message: Message) => void;
+  // modify message
+  updateMessage: (
+    conversationId: string,
+    messageId: string,
+    updates: Partial<Message>,
+  ) => void;
+  reactToMessage: (
+    conversationId: string,
+    messageId: string,
+    emoji: string,
+  ) => Promise<void>;
+  unsendMessage: (conversationId: string, messageId: string) => Promise<void>;
+  editMessage: (
+    conversationId: string,
+    messageId: string,
+    content: string,
+  ) => Promise<void>;
   // update convo
-  updateConversation: (conversation: unknown) => void;
+  updateConversation: (
+    conversation: Partial<Conversation> & { _id: string },
+  ) => void;
   markAsSeen: () => Promise<void>;
   addConvo: (convo: Conversation) => void;
   createConversation: (
     type: "group" | "direct",
     name: string,
     memberIds: string[],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
+  deleteConversation: (conversationId: string) => Promise<boolean>;
 }
 
 export interface SocketState {

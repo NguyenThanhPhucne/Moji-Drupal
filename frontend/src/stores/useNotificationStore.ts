@@ -13,10 +13,10 @@ interface AcceptanceNotification {
 }
 
 interface NotificationState {
-  // Dữ liệu
+  // Data
   unreadFriendRequestCount: number;
-  pendingRequests: FriendRequest[]; // Requests mới chưa được xem
-  acceptanceNotifications: AcceptanceNotification[]; // Notifications khi request được accept
+  pendingRequests: FriendRequest[]; // Unseen incoming requests
+  acceptanceNotifications: AcceptanceNotification[]; // Notifications when a request is accepted
 
   // Actions
   setUnreadCount: (count: number) => void;
