@@ -286,9 +286,8 @@ export const markMessageRead = async (req, res) => {
     const { messageId } = req.params;
     const userId = req.user._id;
 
-    const existingMessage = await Message.findById(messageId).select(
-      "conversationId",
-    );
+    const existingMessage =
+      await Message.findById(messageId).select("conversationId");
 
     if (!existingMessage)
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });

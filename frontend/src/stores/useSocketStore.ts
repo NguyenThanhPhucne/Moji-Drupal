@@ -18,8 +18,8 @@ const resolveSocketBaseUrl = () => {
       const socketHost = new URL(socketUrl).host;
       const currentHost = globalThis.location.host;
       if (socketHost !== currentHost) {
-        console.warn(
-          `[Socket] Ignoring VITE_SOCKET_URL=${socketUrl} in dev because VITE_NODE_API is local proxy (${nodeApiUrl}). Using same-origin socket via Vite proxy instead.`,
+        console.info(
+          `[Socket] Using same-origin socket via Vite proxy (VITE_NODE_API=${nodeApiUrl}).`,
         );
         return undefined;
       }

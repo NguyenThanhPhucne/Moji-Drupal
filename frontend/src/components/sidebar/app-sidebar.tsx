@@ -40,27 +40,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild className="shadow-soft">
-              <button type="button">
-                <div className="flex w-full items-center justify-between rounded-xl bg-gradient-primary px-2 py-2">
-                  <div>
-                    <h1 className="text-base font-bold text-white tracking-wide">
-                      Coming
-                    </h1>
-                    <p className="text-[11px] text-white/80">
-                      Realtime Messaging
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-full bg-white/20 px-2 py-1">
-                    <Sun className="size-3.5 text-white/80" />
-                    <Switch
-                      checked={isDark}
-                      onCheckedChange={toggleTheme}
-                      className="scale-90 data-[state=checked]:bg-background/80"
-                    />
-                    <Moon className="size-3.5 text-white/80" />
-                  </div>
+              <div className="flex w-full items-center justify-between rounded-xl bg-gradient-primary px-2 py-2">
+                <div>
+                  <h1 className="text-base font-bold text-white tracking-wide">
+                    Coming
+                  </h1>
+                  <p className="text-[11px] text-white/80">
+                    Realtime Messaging
+                  </p>
                 </div>
-              </button>
+                <div className="flex items-center gap-1.5 rounded-full bg-white/20 px-2 py-1">
+                  <Sun className="size-3.5 text-white/80" />
+                  <Switch
+                    checked={isDark}
+                    onCheckedChange={toggleTheme}
+                    className="scale-90 data-[state=checked]:bg-background/80"
+                  />
+                  <Moon className="size-3.5 text-white/80" />
+                </div>
+              </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
