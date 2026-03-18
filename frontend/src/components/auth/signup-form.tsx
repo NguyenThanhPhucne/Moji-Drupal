@@ -48,7 +48,7 @@ export function SignupForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="overflow-hidden border-border/70 bg-card/95 p-0 shadow-soft backdrop-blur-sm">
+      <Card className="overflow-hidden rounded-3xl border-border/70 bg-card/90 p-0 shadow-soft backdrop-blur-xl">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form
             className="p-6 md:p-8 lg:p-10"
@@ -61,11 +61,11 @@ export function SignupForm({
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
-                <h1 className="text-2xl font-bold">
+                <h1 className="text-3xl font-bold tracking-[-0.02em]">
                   Create your Coming account
                 </h1>
                 <p className="text-muted-foreground text-balance">
-                  Welcome! Sign up to get started.
+                  Create your workspace in less than a minute.
                 </p>
               </div>
 
@@ -158,7 +158,7 @@ export function SignupForm({
               {/* sign-up button */}
               <Button
                 type="submit"
-                className="w-full bg-gradient-chat text-white hover:opacity-95"
+                className="w-full rounded-xl bg-gradient-chat text-white shadow-soft hover:opacity-95"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Creating account..." : "Create account"}
@@ -172,12 +172,21 @@ export function SignupForm({
               </div>
             </div>
           </form>
-          <div className="bg-muted relative hidden md:block">
+          <div className="relative hidden overflow-hidden bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 md:block">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.24),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(255,255,255,0.18),transparent_34%)]" />
             <img
               src="/placeholderSignUp.png"
               alt="Sign-up illustration"
-              className="absolute top-1/2 -translate-y-1/2 object-cover"
+              className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
             />
+            <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
+                Professional Chat
+              </p>
+              <p className="mt-1 text-lg font-semibold leading-tight">
+                Collaborate with friends and teams in one focused inbox.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

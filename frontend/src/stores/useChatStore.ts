@@ -189,8 +189,15 @@ export const useChatStore = create<ChatState>()(
       reactToMessage: async (conversationId, messageId, emoji) => {
         try {
           const res = await chatService.reactToMessage(messageId, emoji);
+
+          // Backend may return either { message: {...} } or the message object directly.
+          const reactions = res?.message?.reactions ?? res?.reactions;
+          if (!Array.isArray(reactions)) {
+            throw new Error("Invalid reactToMessage response payload");
+          }
+
           get().updateMessage(conversationId, messageId, {
-            reactions: res.message.reactions,
+            reactions,
           });
         } catch (error) {
           console.error("Reaction error:", error);

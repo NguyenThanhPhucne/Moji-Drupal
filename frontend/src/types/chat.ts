@@ -1,7 +1,9 @@
 export interface Participant {
   _id: string;
   displayName: string;
+  username?: string;
   avatarUrl?: string | null;
+  bio?: string;
   joinedAt: string;
 }
 
@@ -67,4 +69,78 @@ export interface Message {
   isDeleted?: boolean;
   editedAt?: string | null;
   readBy?: string[];
+}
+
+export interface ProfileLite {
+  _id: string;
+  displayName: string;
+  username: string;
+  avatarUrl?: string | null;
+  bio?: string;
+  lastActiveAt?: string | null;
+  mutualGroupsCount: number;
+  mutualGroups: Array<{
+    _id: string;
+    name: string;
+  }>;
+}
+
+export interface SavedBookmark {
+  _id: string;
+  createdAt: string;
+  note?: string;
+  tags?: string[];
+  messageId: {
+    _id: string;
+    conversationId: string;
+    senderId: string;
+    content: string | null;
+    imgUrl?: string | null;
+    createdAt: string;
+    isDeleted?: boolean;
+  };
+  conversationId: Conversation;
+}
+
+export interface BookmarkPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
+export interface GlobalSearchPerson {
+  _id: string;
+  displayName: string;
+  username: string;
+  avatarUrl?: string | null;
+  bio?: string;
+  lastActiveAt?: string | null;
+  mutualGroupsCount: number;
+  conversationId?: string | null;
+  score: number;
+}
+
+export interface GlobalSearchGroup {
+  conversationId: string;
+  name: string;
+  membersCount: number;
+  score: number;
+}
+
+export interface GlobalSearchMessage {
+  messageId: string;
+  conversationId: string;
+  content: string;
+  createdAt: string;
+  senderId: string;
+  senderName: string;
+  score: number;
+}
+
+export interface GlobalSearchResponse {
+  people: GlobalSearchPerson[];
+  groups: GlobalSearchGroup[];
+  messages: GlobalSearchMessage[];
 }

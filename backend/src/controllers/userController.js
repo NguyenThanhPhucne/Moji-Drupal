@@ -1,4 +1,6 @@
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
 import User from "../models/User.js";
 
 export const authMe = async (req, res) => {
@@ -83,5 +85,51 @@ export const uploadAvatar = async (req, res) => {
       message: "Upload failed",
       error: error.message,
     });
+  }
+};
+
+export const getUserProfileLite = async (req, res) => {
+  try {
+    const viewerId = req.user._id;
+    const { userId } = req.params;
+
+    const user = await User.findById(userId)
+      .select("_id displayName username avatarUrl bio updatedAt")
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "Người dùng không tồn tại" });
+    }
+
+    const [mutualGroups, latestMessage] = await Promise.all([
+      Conversation.find({
+        type: "group",
+        "participants.userId": { $all: [viewerId, userId] },
+      })
+        .sort({ updatedAt: -1 })
+        .limit(5)
+        .select("_id group.name")
+        .lean(),
+      Message.findOne({ senderId: userId }).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    return res.status(200).json({
+      profile: {
+        _id: String(user._id),
+        displayName: user.displayName,
+        username: user.username,
+        avatarUrl: user.avatarUrl || null,
+        bio: user.bio || "",
+        lastActiveAt: latestMessage?.createdAt || user.updatedAt || null,
+        mutualGroupsCount: mutualGroups.length,
+        mutualGroups: mutualGroups.map((groupItem) => ({
+          _id: String(groupItem._id),
+          name: groupItem.group?.name || "Untitled group",
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi lấy profile-lite", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

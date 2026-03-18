@@ -217,6 +217,24 @@
 
   body {
     @apply text-slate-800 dark:text-slate-200 bg-background;
+    font-family:
+      "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", "Helvetica Neue",
+      Arial, sans-serif;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family:
+      "SF Pro Display", "Inter Tight", "Inter", "Segoe UI", sans-serif;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
   }
 }
 
@@ -232,6 +250,46 @@
 
   .glass-strong {
     @apply backdrop-blur-2xl bg-gradient-to-br from-card/90 to-card/60 border border-border/70;
+  }
+
+  .app-shell-bg {
+    @apply relative flex h-svh w-full overflow-hidden p-2 md:p-4;
+    @apply bg-gradient-to-br from-sky-100 via-cyan-50 to-sky-200/70 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950;
+  }
+
+  .app-shell-bg::before {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    background:
+      radial-gradient(
+        circle at 12% 14%,
+        rgba(14, 165, 233, 0.2),
+        transparent 36%
+      ),
+      radial-gradient(
+        circle at 86% 12%,
+        rgba(8, 145, 178, 0.16),
+        transparent 32%
+      ),
+      radial-gradient(
+        circle at 54% 92%,
+        rgba(56, 189, 248, 0.14),
+        transparent 42%
+      );
+  }
+
+  .app-shell-panel {
+    @apply relative z-10 flex h-full w-full overflow-hidden rounded-[1.75rem] border border-border/70 bg-background/85 backdrop-blur-xl;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .elevated-card {
+    @apply rounded-2xl border border-border/70 bg-card/85 backdrop-blur;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .section-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/90;
   }
 
   /* Chat bubble variants */

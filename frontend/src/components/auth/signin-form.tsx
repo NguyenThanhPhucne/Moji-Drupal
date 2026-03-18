@@ -48,7 +48,7 @@ export function SigninForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="overflow-hidden border-border/70 bg-card/95 p-0 shadow-soft backdrop-blur-sm">
+      <Card className="overflow-hidden rounded-3xl border-border/70 bg-card/90 p-0 shadow-soft backdrop-blur-xl">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form
             className="p-6 md:p-8 lg:p-10"
@@ -61,9 +61,11 @@ export function SigninForm({
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
-                <h1 className="text-2xl font-bold">Welcome back</h1>
+                <h1 className="text-2xl font-bold tracking-[-0.01em] md:text-3xl">
+                  Welcome back
+                </h1>
                 <p className="text-muted-foreground text-balance">
-                  Sign in to your Coming account
+                  Sign in to continue your conversations
                 </p>
               </div>
 
@@ -108,7 +110,7 @@ export function SigninForm({
               {/* sign-in button */}
               <Button
                 type="submit"
-                className="w-full bg-gradient-chat text-white hover:opacity-95"
+                className="w-full rounded-xl bg-gradient-chat text-white shadow-soft hover:opacity-95"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Signing in..." : "Sign in"}
@@ -135,12 +137,21 @@ export function SigninForm({
               </div>
             </div>
           </form>
-          <div className="bg-muted relative hidden md:block">
+          <div className="relative hidden overflow-hidden bg-gradient-to-br from-sky-400 via-cyan-400 to-sky-600 md:block">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,255,255,0.28),transparent_36%),radial-gradient(circle_at_74%_28%,rgba(255,255,255,0.2),transparent_32%)]" />
             <img
               src="/placeholder.png"
               alt="Sign-in illustration"
-              className="absolute top-1/2 -translate-y-1/2 object-cover"
+              className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
             />
+            <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
+                Team Workspace
+              </p>
+              <p className="mt-1 text-lg font-semibold leading-tight">
+                Stay connected with faster messaging and smarter search.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

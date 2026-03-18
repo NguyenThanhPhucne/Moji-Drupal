@@ -114,6 +114,7 @@ export interface FriendState {
   acceptRequest: (requestId: string) => Promise<void>;
   declineRequest: (requestId: string) => Promise<void>;
   getFriends: () => Promise<void>;
+  removeFriend: (friendId: string) => Promise<{ ok: boolean; message: string }>;
 }
 
 export interface UserState {

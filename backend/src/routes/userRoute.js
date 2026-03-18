@@ -1,6 +1,7 @@
 import express from "express";
 import {
   authMe,
+  getUserProfileLite,
   searchUserByUsername,
   uploadAvatar,
 } from "../controllers/userController.js";
@@ -11,6 +12,7 @@ const router = express.Router();
 
 router.get("/me", protectedRoute, authMe);
 router.get("/search", protectedRoute, searchUserByUsername);
+router.get("/:userId/profile-lite", protectedRoute, getUserProfileLite);
 router.post(
   "/uploadAvatar",
   protectedRoute,

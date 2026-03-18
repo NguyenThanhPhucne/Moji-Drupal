@@ -121,7 +121,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const hasSendable = value.trim() || imagePreview;
 
   return (
-    <div className="flex flex-col bg-background border-t border-border/50">
+    <div className="flex flex-col bg-background/95 border-t border-border/50 backdrop-blur-sm">
       {/* Reply preview */}
       {replyingTo && (
         <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b border-border/30 animate-in slide-in-from-bottom-2 fade-in duration-200">
@@ -162,12 +162,12 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
       )}
 
       {/* Input row */}
-      <div className="flex items-end gap-2 p-3 min-h-[56px]">
+      <div className="flex items-end gap-2.5 p-3 min-h-[64px]">
         {/* Attach */}
         <Button
           variant="ghost"
           size="icon"
-          className="hover:bg-primary/10 flex-shrink-0 mb-0.5"
+          className="mb-0.5 flex-shrink-0 rounded-xl border border-transparent hover:border-border/60 hover:bg-primary/10"
           onClick={() => fileInputRef.current?.click()}
           title="Send image"
         >
@@ -191,7 +191,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onKeyDown={handleKeyDown}
             placeholder="Type a message... (Shift+Enter for a new line)"
             className={cn(
-              "w-full resize-none overflow-hidden rounded-2xl bg-muted/50 border border-border/50",
+              "w-full resize-none overflow-hidden rounded-2xl bg-card/80 border border-border/60 shadow-sm",
               "px-4 py-2.5 pr-12 text-sm leading-relaxed",
               "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30",
               "transition-all duration-150 max-h-[120px]",
@@ -203,7 +203,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
               asChild
               variant="ghost"
               size="icon"
-              className="size-8 hover:bg-primary/10"
+              className="size-8 rounded-xl hover:bg-primary/10"
             >
               <div>
                 <EmojiPicker

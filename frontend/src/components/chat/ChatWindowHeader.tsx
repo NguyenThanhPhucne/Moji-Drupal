@@ -29,6 +29,9 @@ import {
 } from "../ui/dialog";
 import { useNavigate } from "react-router-dom";
 import { chatService } from "@/services/chatService";
+import GlobalSearchDialog from "./GlobalSearchDialog";
+import FriendProfileMiniCard from "./FriendProfileMiniCard";
+import { useFriendStore } from "@/stores/useFriendStore";
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const { conversations, activeConversationId } = useChatStore();
@@ -36,9 +39,13 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const { onlineUsers } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
   const navigate = useNavigate();
+  const { createConversation, setActiveConversation, fetchMessages } =
+    useChatStore();
+  const { removeFriend } = useFriendStore();
 
-  let otherUser;
+  let otherUser: Conversation["participants"][number] | null = null;
 
   chat = chat ?? conversations.find((c) => c._id === activeConversationId);
 
@@ -85,9 +92,41 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     }
   };
 
+  const handleQuickChat = async () => {
+    if (!otherUser?._id) {
+      return;
+    }
+
+    if (chat?.type === "direct") {
+      setActiveConversation(chat._id);
+      await fetchMessages(chat._id);
+      return;
+    }
+
+    await createConversation("direct", "", [String(otherUser._id)]);
+  };
+
+  const handleRemoveFriend = async () => {
+    if (!otherUser?._id) {
+      return;
+    }
+
+    try {
+      setIsFriendActionLoading(true);
+      const result = await removeFriend(String(otherUser._id));
+      if (result.ok) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } finally {
+      setIsFriendActionLoading(false);
+    }
+  };
+
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/95 px-4 py-2 backdrop-blur-sm">
+      <header className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/85 px-4 py-2.5 backdrop-blur-xl">
         <div className="flex items-center gap-2 w-full justify-between">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1 text-foreground" />
@@ -96,16 +135,25 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
               className="mr-2 data-[orientation=vertical]:h-4"
             />
 
-            <div className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40">
+            <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/65 px-3 py-2 shadow-sm transition-colors hover:bg-card/90">
               {/* avatar */}
               <div className="relative">
                 {chat.type === "direct" ? (
                   <>
-                    <UserAvatar
-                      type={"sidebar"}
-                      name={otherUser?.displayName || "Coming"}
+                    <FriendProfileMiniCard
+                      userId={String(otherUser?._id || "")}
+                      displayName={otherUser?.displayName || "Coming"}
                       avatarUrl={otherUser?.avatarUrl || undefined}
-                    />
+                      onChat={handleQuickChat}
+                      onRemove={handleRemoveFriend}
+                      disabled={isFriendActionLoading}
+                    >
+                      <UserAvatar
+                        type={"sidebar"}
+                        name={otherUser?.displayName || "Coming"}
+                        avatarUrl={otherUser?.avatarUrl || undefined}
+                      />
+                    </FriendProfileMiniCard>
                     <StatusBadge
                       status={
                         onlineUsers.includes(String(otherUser?._id ?? ""))
@@ -124,7 +172,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
               {/* name */}
               <div className="min-w-0">
-                <h2 className="truncate font-semibold text-foreground">
+                <h2 className="truncate font-semibold tracking-[-0.01em] text-foreground">
                   {chat.type === "direct"
                     ? otherUser?.displayName
                     : chat.group?.name}
@@ -134,10 +182,17 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             </div>
           </div>
 
+          <GlobalSearchDialog />
+
           {/* Delete Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" disabled={isDeleting}>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={isDeleting}
+                className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/60"
+              >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>

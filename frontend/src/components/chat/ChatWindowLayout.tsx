@@ -5,7 +5,7 @@ import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
 import { useEffect } from "react";
-import ChatWindowSkeleton from "../skeleton/ChatWindowSkeleton";
+import { Skeleton } from "../ui/skeleton";
 
 const ChatWindowLayout = () => {
   const {
@@ -38,18 +38,37 @@ const ChatWindowLayout = () => {
     return <ChatWelcomeScreen />;
   }
 
-  if (loading) {
-    return <ChatWindowSkeleton />;
-  }
-
   return (
-    <SidebarInset className="glass-strong flex h-full min-h-0 flex-1 overflow-hidden rounded-3xl border border-border/70 bg-background/90 shadow-soft">
+    <SidebarInset className="app-shell-panel glass-strong flex h-full min-h-0 flex-1">
       {/* Header */}
-      <ChatWindowHeader chat={selectedConvo} />
+      <div
+        key={`chat-header-${selectedConvo._id}`}
+        className="animate-in fade-in-0 duration-200"
+      >
+        <ChatWindowHeader chat={selectedConvo} />
+      </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 bg-primary-foreground/85">
-        <ChatWindowBody />
+      <div className="flex-1 min-h-0 bg-primary-foreground/80">
+        <div
+          key={`chat-body-${selectedConvo._id}-${loading ? "loading" : "ready"}`}
+          className="h-full animate-in fade-in-0 duration-200"
+        >
+          {loading ? (
+            <div className="h-full w-full px-4 py-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <Skeleton className="h-6 w-40 rounded-xl" />
+              </div>
+              <Skeleton className="h-14 w-2/3 rounded-2xl" />
+              <Skeleton className="h-14 w-1/2 rounded-2xl ml-auto" />
+              <Skeleton className="h-14 w-3/4 rounded-2xl" />
+              <Skeleton className="h-14 w-1/3 rounded-2xl ml-auto" />
+            </div>
+          ) : (
+            <ChatWindowBody />
+          )}
+        </div>
       </div>
 
       {/* Footer */}

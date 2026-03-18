@@ -92,12 +92,33 @@ export const useFriendStore = create<FriendState>((set) => ({
     try {
       set({ loading: true });
       const friends = await friendService.getFriendList();
-      console.log("[useFriendStore][ok] Friends loaded:", friends);
-      console.log("[useFriendStore][debug] First friend details:", friends[0]);
       set({ friends: friends });
     } catch (error) {
       console.error("Error loading friends", error);
       set({ friends: [] });
+    } finally {
+      set({ loading: false });
+    }
+  },
+  removeFriend: async (friendId) => {
+    try {
+      set({ loading: true });
+      const message = await friendService.removeFriend(friendId);
+
+      set((state) => ({
+        friends: state.friends.filter((friend) => friend._id !== friendId),
+      }));
+
+      return {
+        ok: true,
+        message,
+      };
+    } catch (error) {
+      console.error("Error removing friend", error);
+      return {
+        ok: false,
+        message: "Could not remove friend. Please try again.",
+      };
     } finally {
       set({ loading: false });
     }

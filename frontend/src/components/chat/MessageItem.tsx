@@ -3,19 +3,19 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import type { Conversation, Message } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
-import { vi } from "date-fns/locale";
 import {
-  Check,
-  CheckCheck,
   Reply,
   Smile,
   Trash2,
   Edit2,
   Copy,
   MoreHorizontal,
+  Bookmark,
 } from "lucide-react";
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { useBookmarkStore } from "@/stores/useBookmarkStore";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 
@@ -24,15 +24,15 @@ export function DateDivider({ date }: { date: Date }) {
   let label: string;
   if (isToday(date)) label = "Today";
   else if (isYesterday(date)) label = "Yesterday";
-  else label = format(date, "dd MMMM yyyy", { locale: vi });
+  else label = format(date, "MMM d, yyyy");
 
   return (
-    <div className="flex items-center gap-3 my-3 px-2 select-none">
-      <div className="flex-1 h-px bg-border/50" />
-      <span className="text-[11px] text-muted-foreground font-medium px-2 py-0.5 bg-muted/50 rounded-full">
+    <div className="flex items-center gap-2 my-4 px-2 select-none">
+      <div className="flex-1 h-px bg-border/60" />
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium px-2.5 py-1 bg-muted/60 rounded-full">
         {label}
       </span>
-      <div className="flex-1 h-px bg-border/50" />
+      <div className="flex-1 h-px bg-border/60" />
     </div>
   );
 }
@@ -185,6 +185,17 @@ interface MessageItemProps {
   messages: Message[];
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
+  lastOwnMessageId?: string | null;
+  seenUser?: {
+    _id: string;
+    displayName?: string;
+    avatarUrl?: string | null;
+  } | null;
+  seenUsers?: Array<{
+    _id: string;
+    displayName?: string;
+    avatarUrl?: string | null;
+  }>;
   showDateDivider?: boolean;
   isNew?: boolean; // only animate truly new messages
 }
@@ -195,6 +206,9 @@ const MessageItem = memo(function MessageItem({
   messages,
   selectedConvo,
   lastMessageStatus,
+  lastOwnMessageId,
+  seenUser,
+  seenUsers = [],
   showDateDivider,
   isNew = false,
 }: MessageItemProps) {
@@ -206,18 +220,25 @@ const MessageItem = memo(function MessageItem({
     setReplyingTo,
     activeConversationId,
   } = useChatStore();
+  const { isBookmarked, toggleBookmark } = useBookmarkStore();
 
   const [hovered, setHovered] = useState(false);
   const [reactBarVisible, setReactBarVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editValue, setEditValue] = useState(message.content ?? "");
+  const [tooltipDelay, setTooltipDelay] = useState(120);
+  const [maxSeenAvatars, setMaxSeenAvatars] = useState(3);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [seenJustUpdated, setSeenJustUpdated] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
   } | null>(null);
+  const lastStatusRef = useRef<"delivered" | "seen">(lastMessageStatus);
 
   const editInputRef = useRef<HTMLInputElement>(null);
   const isOwn = message.senderId === user?._id;
+  const bookmarked = isBookmarked(message._id);
 
   const canEdit = (() => {
     if (!message.createdAt) return false;
@@ -290,12 +311,103 @@ const MessageItem = memo(function MessageItem({
     [message, setReplyingTo],
   );
 
-  const isLastMessage = index === 0;
+  const handleToggleBookmark = useCallback(async () => {
+    const result = await toggleBookmark(message._id);
+    if (!result.ok) {
+      toast.error("Could not update bookmark");
+      return;
+    }
+
+    toast.success(result.bookmarked ? "Message saved" : "Bookmark removed");
+  }, [message._id, toggleBookmark]);
+
+  const isSeenAnchorMessage =
+    isOwn && !!lastOwnMessageId && message._id === lastOwnMessageId;
+
+  const seenUsersStackKey = useMemo(
+    () => seenUsers.map((seen) => seen._id).join("-"),
+    [seenUsers],
+  );
+
+  const visibleSeenUsers = useMemo(
+    () => seenUsers.slice(0, maxSeenAvatars),
+    [seenUsers, maxSeenAvatars],
+  );
+
+  const remainingSeenUsersCount = Math.max(
+    0,
+    seenUsers.length - maxSeenAvatars,
+  );
+  const hiddenSeenUsers = useMemo(
+    () => seenUsers.slice(maxSeenAvatars),
+    [seenUsers, maxSeenAvatars],
+  );
+  const hiddenSeenUserNames = useMemo(
+    () =>
+      hiddenSeenUsers
+        .map((seenUserItem) => seenUserItem.displayName || seenUserItem._id)
+        .join(", "),
+    [hiddenSeenUsers],
+  );
+
+  useEffect(() => {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(pointer: coarse)");
+    const viewportQuery = window.matchMedia("(max-width: 640px)");
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateTooltipDelay = () => {
+      setTooltipDelay(mediaQuery.matches ? 360 : 120);
+    };
+    const updateSeenAvatarLimit = () => {
+      setMaxSeenAvatars(viewportQuery.matches ? 2 : 3);
+    };
+    const updateReduceMotion = () => {
+      setReduceMotion(motionQuery.matches);
+    };
+
+    updateTooltipDelay();
+    updateSeenAvatarLimit();
+    updateReduceMotion();
+    mediaQuery.addEventListener("change", updateTooltipDelay);
+    viewportQuery.addEventListener("change", updateSeenAvatarLimit);
+    motionQuery.addEventListener("change", updateReduceMotion);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateTooltipDelay);
+      viewportQuery.removeEventListener("change", updateSeenAvatarLimit);
+      motionQuery.removeEventListener("change", updateReduceMotion);
+    };
+  }, []);
+
+  useEffect(() => {
+    const wasDelivered = lastStatusRef.current === "delivered";
+    const becameSeen = lastMessageStatus === "seen";
+
+    if (isSeenAnchorMessage && wasDelivered && becameSeen) {
+      setSeenJustUpdated(true);
+      const timer = window.setTimeout(
+        () => setSeenJustUpdated(false),
+        reduceMotion ? 0 : 700,
+      );
+      lastStatusRef.current = lastMessageStatus;
+      return () => window.clearTimeout(timer);
+    }
+
+    if (lastMessageStatus !== "seen") {
+      setSeenJustUpdated(false);
+    }
+
+    lastStatusRef.current = lastMessageStatus;
+  }, [isSeenAnchorMessage, lastMessageStatus, lastOwnMessageId]);
 
   return (
     <>
-      {showDateDivider && <DateDivider date={new Date(message.createdAt)} />}
-
       <div
         className={cn(
           "flex gap-2 px-2 py-0.5 group relative",
@@ -355,11 +467,17 @@ const MessageItem = memo(function MessageItem({
           {/* Bubble */}
           <div className="relative">
             {/* Hover action bar */}
-            {(hovered || reactBarVisible || contextMenu) && !editMode && (
+            {!editMode && (
               <div
                 className={cn(
-                  "absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-10 animate-in fade-in zoom-in-95 duration-100",
+                  "absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-10 transition-all duration-150 motion-reduce:transition-none",
                   isOwn ? "right-full mr-2" : "left-full ml-2",
+                  hovered || reactBarVisible || contextMenu
+                    ? "opacity-100 translate-x-0 pointer-events-auto"
+                    : cn(
+                        "opacity-0 pointer-events-none",
+                        isOwn ? "translate-x-1" : "-translate-x-1",
+                      ),
                 )}
               >
                 <div className="relative">
@@ -378,6 +496,17 @@ const MessageItem = memo(function MessageItem({
                   className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
                 >
                   <Reply className="size-3.5 text-muted-foreground" />
+                </button>
+                <button
+                  onClick={handleToggleBookmark}
+                  className={cn(
+                    "p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors",
+                    bookmarked && "text-amber-500",
+                  )}
+                >
+                  <Bookmark
+                    className={cn("size-3.5", bookmarked && "fill-current")}
+                  />
                 </button>
                 <button
                   onClick={
@@ -469,28 +598,153 @@ const MessageItem = memo(function MessageItem({
           {/* Meta */}
           <div
             className={cn(
-              "flex items-center gap-1.5 mt-0.5 px-1",
+              "flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 px-0.5 sm:px-1",
               isOwn ? "flex-row-reverse" : "flex-row",
             )}
           >
             {message.editedAt && !message.isDeleted && (
-              <span className="text-[10px] text-muted-foreground italic">
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground/90 italic leading-none">
                 edited
               </span>
             )}
-            <span className="text-[10px] text-muted-foreground">
-              {format(new Date(message.createdAt), "HH:mm")}
+            <span className="text-[10px] sm:text-[11px] text-muted-foreground/90 font-medium tabular-nums tracking-wide leading-none">
+              {format(new Date(message.createdAt), "hh:mm a")}
             </span>
-            {isOwn &&
-              isLastMessage &&
-              (lastMessageStatus === "seen" ? (
-                <CheckCheck className="size-3 text-primary" />
-              ) : (
-                <Check className="size-3 text-muted-foreground" />
-              ))}
           </div>
+
+          {isSeenAnchorMessage && lastMessageStatus === "seen" && (
+            <div
+              className={cn(
+                "mt-0.5 sm:mt-1 px-0.5 sm:px-1 flex items-center justify-end gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground/90",
+                !reduceMotion &&
+                  seenJustUpdated &&
+                  "animate-in zoom-in-95 fade-in-0 duration-300",
+              )}
+            >
+              <span
+                className={cn(
+                  "transition-all duration-300",
+                  reduceMotion && "transition-none",
+                  seenJustUpdated && "text-primary font-semibold",
+                )}
+              >
+                Seen
+              </span>
+              {selectedConvo.type === "direct" &&
+                seenUser &&
+                (seenUser.avatarUrl ? (
+                  <Tooltip delayDuration={tooltipDelay}>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <img
+                          src={seenUser.avatarUrl}
+                          alt={seenUser.displayName || "Seen user"}
+                          className="size-3.5 rounded-full border border-border/70 object-cover"
+                        />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side={isOwn ? "left" : "right"}
+                      sideOffset={6}
+                      collisionPadding={12}
+                    >
+                      {seenUser.displayName || "Seen user"}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Tooltip delayDuration={tooltipDelay}>
+                    <TooltipTrigger asChild>
+                      <span className="size-3.5 rounded-full bg-muted border border-border/70 text-[8px] leading-none flex items-center justify-center text-muted-foreground font-semibold">
+                        {(seenUser.displayName || "?")[0].toUpperCase()}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side={isOwn ? "left" : "right"}
+                      sideOffset={6}
+                      collisionPadding={12}
+                    >
+                      {seenUser.displayName || "Seen user"}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+
+              {selectedConvo.type === "group" && seenUsers.length > 0 && (
+                <div
+                  key={seenUsersStackKey}
+                  className={cn(
+                    "flex items-center ml-0.5 animate-in fade-in-0 zoom-in-95 duration-200",
+                    reduceMotion && "animate-none",
+                    !reduceMotion &&
+                      seenJustUpdated &&
+                      "animate-in slide-in-from-bottom-1 duration-300",
+                  )}
+                >
+                  {visibleSeenUsers.map((groupSeenUser, avatarIndex) => (
+                    <Tooltip
+                      key={groupSeenUser._id}
+                      delayDuration={tooltipDelay}
+                    >
+                      <TooltipTrigger asChild>
+                        {groupSeenUser.avatarUrl ? (
+                          <span
+                            className={cn(
+                              "inline-flex transition-all duration-200 motion-reduce:transition-none",
+                              avatarIndex > 0 && "-ml-1",
+                            )}
+                          >
+                            <img
+                              src={groupSeenUser.avatarUrl}
+                              alt={groupSeenUser.displayName || "Seen member"}
+                              className="size-3.5 rounded-full border border-background object-cover"
+                            />
+                          </span>
+                        ) : (
+                          <span
+                            className={cn(
+                              "size-3.5 rounded-full bg-muted border border-background text-[8px] leading-none flex items-center justify-center text-muted-foreground font-semibold transition-all duration-200 motion-reduce:transition-none",
+                              avatarIndex > 0 && "-ml-1",
+                            )}
+                          >
+                            {(groupSeenUser.displayName ||
+                              "?")[0].toUpperCase()}
+                          </span>
+                        )}
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side={isOwn ? "left" : "right"}
+                        sideOffset={6}
+                        collisionPadding={12}
+                      >
+                        {groupSeenUser.displayName || "Seen member"}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                  {remainingSeenUsersCount > 0 && (
+                    <Tooltip delayDuration={tooltipDelay}>
+                      <TooltipTrigger asChild>
+                        <span className="ml-1 text-[10px] sm:text-[11px] text-muted-foreground/90 font-medium tabular-nums cursor-default">
+                          +{remainingSeenUsersCount}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side={isOwn ? "left" : "right"}
+                        sideOffset={6}
+                        collisionPadding={12}
+                        className="max-w-[240px] leading-relaxed"
+                      >
+                        {hiddenSeenUserNames || "Other members have seen this"}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+
+      {/* In a reverse column layout, render divider after item so it appears above messages visually. */}
+      {showDateDivider && <DateDivider date={new Date(message.createdAt)} />}
 
       {/* Context Menu Portal */}
       {contextMenu && (

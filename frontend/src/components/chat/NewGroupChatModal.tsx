@@ -29,11 +29,9 @@ const NewGroupChatModal = () => {
 
   const handleGetFriends = async () => {
     await getFriends();
-    console.log("[NewGroupChatModal][debug] Friends loaded:", friends);
   };
 
   const handleSelectFriend = (friend: Friend) => {
-    console.log("[NewGroupChatModal][ok] Selected friend:", friend);
     setInvitedUsers([...invitedUsers, friend]);
     setSearch("");
   };
@@ -57,11 +55,6 @@ const NewGroupChatModal = () => {
       }
 
       const memberIds = invitedUsers.map((u) => u._id);
-      console.log("[NewGroupChatModal][debug] Creating group with:", {
-        groupName,
-        invitedUsers,
-        memberIds,
-      });
 
       const success = await createConversation("group", groupName, memberIds);
 
@@ -89,26 +82,14 @@ const NewGroupChatModal = () => {
     return matchesSearch && notInvited;
   });
 
-  // Debug logs
-  if (search) {
-    console.log("[NewGroupChatModal][debug] Filter:", {
-      search,
-      totalFriends: friends.length,
-      filteredCount: filteredFriends.length,
-      filteredFriends,
-      invitedUsers,
-      firstFriend: friends[0],
-      firstFriendDisplayName: friends[0]?.displayName,
-    });
-  }
-
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
+          variant="completeGhost"
+          size="icon-sm"
           onClick={handleGetFriends}
-          className="flex z-10 justify-center items-center size-5 rounded-full hover:bg-sidebar-accent transition cursor-pointer"
+          className="rounded-full text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors duration-150"
         >
           <Users className="size-4" />
           <span className="sr-only">Create group</span>

@@ -4,6 +4,7 @@ import MessageItem from "./MessageItem";
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useCallback,
@@ -37,9 +38,6 @@ const ChatWindowBody = () => {
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
 
-  const [lastMessageStatus, setLastMessageStatus] = useState<
-    "delivered" | "seen"
-  >("delivered");
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
@@ -50,6 +48,129 @@ const ChatWindowBody = () => {
     (c) => c._id === activeConversationId,
   );
   const key = `chat-scroll-${activeConversationId}`;
+
+  const myId = useMemo(
+    () => (currentUser?._id ? String(currentUser._id) : ""),
+    [currentUser?._id],
+  );
+
+  const lastOwnMessage = useMemo(() => {
+    if (!myId || messages.length === 0) {
+      return null;
+    }
+
+    return (
+      [...messages]
+        .reverse()
+        .find(
+          (messageItem) =>
+            messageItem.senderId === myId && !messageItem.isDeleted,
+        ) ?? null
+    );
+  }, [messages, myId]);
+
+  const lastMessageStatus = useMemo<"delivered" | "seen">(() => {
+    if (!myId || !lastOwnMessage) {
+      return "delivered";
+    }
+
+    const readByOthers = (lastOwnMessage.readBy ?? [])
+      .map(String)
+      .filter((readerId) => readerId !== myId);
+
+    if (readByOthers.length > 0) {
+      return "seen";
+    }
+
+    const seenByOthers = (selectedConvo?.seenBy ?? [])
+      .map((seenUser) =>
+        typeof seenUser === "string" ? seenUser : String(seenUser._id),
+      )
+      .filter((seenUserId) => seenUserId !== myId);
+
+    const isConversationLastMessage =
+      selectedConvo?.lastMessage?._id === lastOwnMessage._id;
+
+    return isConversationLastMessage && seenByOthers.length > 0
+      ? "seen"
+      : "delivered";
+  }, [
+    myId,
+    lastOwnMessage,
+    selectedConvo?.lastMessage?._id,
+    selectedConvo?.seenBy,
+  ]);
+
+  const directSeenUser = useMemo(() => {
+    if (!selectedConvo || selectedConvo.type !== "direct" || !myId) {
+      return null;
+    }
+
+    const partner = selectedConvo.participants.find(
+      (participant) => String(participant._id) !== myId,
+    );
+
+    if (!partner) {
+      return null;
+    }
+
+    const seenPartner = (selectedConvo.seenBy ?? []).find(
+      (seenUser) => String(seenUser._id) === String(partner._id),
+    );
+
+    return {
+      _id: String(partner._id),
+      displayName: seenPartner?.displayName || partner.displayName,
+      avatarUrl: seenPartner?.avatarUrl ?? partner.avatarUrl ?? null,
+    };
+  }, [selectedConvo, myId]);
+
+  const groupSeenUsers = useMemo(() => {
+    if (!selectedConvo || selectedConvo.type !== "group" || !myId) {
+      return [] as Array<{
+        _id: string;
+        displayName?: string;
+        avatarUrl?: string | null;
+      }>;
+    }
+
+    const participantsById = new Map(
+      (selectedConvo.participants ?? []).map((participant) => [
+        String(participant._id),
+        participant,
+      ]),
+    );
+
+    return (selectedConvo.seenBy ?? []).reduce<
+      Array<{
+        _id: string;
+        displayName?: string;
+        avatarUrl?: string | null;
+      }>
+    >((acc, seenUser) => {
+      const seenUserId =
+        typeof seenUser === "string" ? seenUser : String(seenUser._id);
+      const participant = participantsById.get(seenUserId);
+
+      if (seenUserId === myId || !participant) {
+        return acc;
+      }
+
+      acc.push({
+        _id: seenUserId,
+        displayName:
+          typeof seenUser === "string"
+            ? participant.displayName
+            : (seenUser.displayName ?? participant.displayName),
+        avatarUrl:
+          typeof seenUser === "string"
+            ? participant.avatarUrl
+            : (seenUser.avatarUrl ?? participant.avatarUrl),
+      });
+
+      return acc;
+    }, []);
+  }, [selectedConvo, myId]);
 
   // Fetch initial messages if not present
   useEffect(() => {
@@ -66,13 +187,28 @@ const ChatWindowBody = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Seen status
+  // Auto mark as seen when the latest incoming message is visible in active chat.
   useEffect(() => {
-    const lastMessage = selectedConvo?.lastMessage;
-    if (!lastMessage) return;
-    const seenBy = selectedConvo?.seenBy ?? [];
-    setLastMessageStatus(seenBy.length > 0 ? "seen" : "delivered");
-  }, [selectedConvo]);
+    if (!activeConversationId || !selectedConvo || !currentUser?._id) {
+      return;
+    }
+
+    const newestMessage = messages[messages.length - 1];
+    if (!newestMessage || newestMessage.senderId === currentUser._id) {
+      return;
+    }
+
+    const myUnread = selectedConvo.unreadCounts?.[currentUser._id] ?? 0;
+    if (myUnread <= 0) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      useChatStore.getState().markAsSeen();
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [activeConversationId, currentUser?._id, messages, selectedConvo]);
 
   // Typing indicator via socket
   useEffect(() => {
@@ -257,6 +393,9 @@ const ChatWindowBody = () => {
                 messages={reversedMessages}
                 selectedConvo={selectedConvo}
                 lastMessageStatus={lastMessageStatus}
+                lastOwnMessageId={lastOwnMessage?._id ?? null}
+                seenUser={directSeenUser}
+                seenUsers={groupSeenUsers}
                 showDateDivider={showDateDivider}
                 isNew={index === 0}
               />

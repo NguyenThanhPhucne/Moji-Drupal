@@ -94,7 +94,7 @@ export const acceptFriendRequest = async (req, res) => {
         .json({ message: "Bạn không có quyền chấp nhận lời mời này" });
     }
 
-    const friend = await Friend.create({
+    await Friend.create({
       userA: request.from,
       userB: request.to,
     });
@@ -204,6 +204,41 @@ export const getFriendRequests = async (req, res) => {
     res.status(200).json({ sent, received });
   } catch (error) {
     console.error("Lỗi khi lấy danh sách yêu cầu kết bạn", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const removeFriend = async (req, res) => {
+  try {
+    const userId = req.user._id.toString();
+    const friendId = String(req.params.friendId || "").trim();
+
+    if (!friendId) {
+      return res.status(400).json({ message: "Thiếu thông tin bạn bè" });
+    }
+
+    if (userId === friendId) {
+      return res.status(400).json({ message: "Không thể xoá chính mình" });
+    }
+
+    let userA = userId;
+    let userB = friendId;
+
+    if (userA > userB) {
+      [userA, userB] = [userB, userA];
+    }
+
+    const deleted = await Friend.findOneAndDelete({ userA, userB });
+
+    if (!deleted) {
+      return res.status(200).json({
+        message: "Người này không còn trong danh sách bạn bè",
+      });
+    }
+
+    return res.status(200).json({ message: "Đã xoá bạn thành công" });
+  } catch (error) {
+    console.error("Lỗi khi xoá bạn", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

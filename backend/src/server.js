@@ -7,6 +7,8 @@ import userRoute from "./routes/userRoute.js";
 import friendRoute from "./routes/friendRoute.js";
 import messageRoute from "./routes/messageRoute.js";
 import conversationRoute from "./routes/conversationRoute.js";
+import bookmarkRoute from "./routes/bookmarkRoute.js";
+import searchRoute from "./routes/searchRoute.js";
 import { getAdminConversations } from "./controllers/conversationController.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
@@ -87,6 +89,8 @@ app.use("/api/friends", friendRoute);
 app.use("/api/messages", messageRoute);
 // Conversation routes after protectedRoute - but admin route already handled above
 app.use("/api/conversations", conversationRoute);
+app.use("/api/bookmarks", bookmarkRoute);
+app.use("/api/search", searchRoute);
 
 connectDB().then(() => {
   // Initialize Drupal sync

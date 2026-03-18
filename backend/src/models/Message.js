@@ -47,7 +47,7 @@ const messageSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
-      }
+      },
     ],
   },
   {
@@ -56,6 +56,17 @@ const messageSchema = new mongoose.Schema(
 );
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ conversationId: 1, isDeleted: 1, createdAt: -1 });
+messageSchema.index(
+  { content: "text" },
+  {
+    name: "message_content_text_index",
+    partialFilterExpression: {
+      isDeleted: { $ne: true },
+      content: { $type: "string" },
+    },
+  },
+);
 
 // Update message count in Drupal after new message
 messageSchema.post("save", async function (doc) {

@@ -27,15 +27,27 @@ const ChatCard = ({
   return (
     <Card
       key={convoId}
+      data-chat-card="true"
+      role="button"
+      tabIndex={0}
+      aria-pressed={isActive}
+      aria-label={`Open conversation with ${name}`}
       className={cn(
         "cursor-pointer rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200",
         "hover:border-border/70 hover:bg-muted/60 hover:shadow-sm",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
         "group select-none",
         isActive
           ? "border-primary/30 bg-gradient-to-r from-primary/10 to-primary-foreground ring-1 ring-primary/20 shadow-sm"
           : "bg-transparent",
       )}
       onClick={() => onSelect(convoId)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect(convoId);
+        }
+      }}
     >
       <div className="flex items-center gap-3">
         {/* Avatar */}

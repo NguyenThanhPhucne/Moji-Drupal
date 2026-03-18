@@ -55,5 +55,18 @@ const userSchema = new mongoose.Schema(
   },
 );
 
+// Indexes for search workloads.
+userSchema.index({ displayName: 1 });
+userSchema.index(
+  { displayName: "text", username: "text" },
+  {
+    weights: {
+      displayName: 8,
+      username: 6,
+    },
+    name: "user_search_text_index",
+  },
+);
+
 const User = mongoose.model("User", userSchema);
 export default User;
