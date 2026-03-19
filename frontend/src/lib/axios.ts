@@ -1,9 +1,23 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios from "axios";
 
+const normalizeApiBase = (rawBase: string | undefined) => {
+  const value = String(rawBase || "").trim();
+  if (!value) {
+    return "/api/node";
+  }
+
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value.replace(/\/+$/, "");
+  }
+
+  const withLeadingSlash = value.startsWith("/") ? value : `/${value}`;
+  return withLeadingSlash.replace(/\/+$/, "");
+};
+
 // Proxy configuration (avoid hardcoding localhost URLs here).
 const api = axios.create({
-  baseURL: import.meta.env.VITE_NODE_API || "/api/node",
+  baseURL: normalizeApiBase(import.meta.env.VITE_NODE_API),
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",

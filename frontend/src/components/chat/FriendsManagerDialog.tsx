@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { MessageCircle, Trash2, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useChatStore } from "@/stores/useChatStore";
@@ -19,6 +20,7 @@ import UserAvatar from "./UserAvatar";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
 
 const FriendsManagerDialog = () => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [processingFriendId, setProcessingFriendId] = useState<string | null>(
@@ -129,6 +131,10 @@ const FriendsManagerDialog = () => {
                   userId={friend._id}
                   displayName={friend.displayName}
                   avatarUrl={friend.avatarUrl}
+                  onViewProfile={() => {
+                    setOpen(false);
+                    navigate(`/profile/${friend._id}`);
+                  }}
                   onChat={() => handleStartChat(friend._id)}
                   onRemove={() =>
                     handleRemoveFriend(friend._id, friend.displayName)

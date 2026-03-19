@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { MessageCircle, Trash2, Users } from "lucide-react";
+import { MessageCircle, Trash2, UserRound, Users } from "lucide-react";
 
 import { userService } from "@/services/userService";
 import type { ProfileLite } from "@/types/chat";
@@ -12,6 +12,7 @@ interface FriendProfileMiniCardProps {
   displayName: string;
   avatarUrl?: string;
   children: React.ReactNode;
+  onViewProfile?: () => void;
   onChat?: () => void;
   onRemove?: () => void;
   disabled?: boolean;
@@ -22,6 +23,7 @@ const FriendProfileMiniCard = ({
   displayName,
   avatarUrl,
   children,
+  onViewProfile,
   onChat,
   onRemove,
   disabled,
@@ -181,6 +183,19 @@ const FriendProfileMiniCard = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onViewProfile && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={onViewProfile}
+                disabled={disabled}
+              >
+                <UserRound className="size-4" />
+                Profile
+              </Button>
+            )}
             <Button
               type="button"
               size="sm"

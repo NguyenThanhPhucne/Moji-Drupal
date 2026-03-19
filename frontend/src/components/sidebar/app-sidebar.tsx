@@ -11,7 +11,15 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Bookmark, MessageSquare, Moon, Sun } from "lucide-react";
+import {
+  Bookmark,
+  Compass,
+  Home,
+  MessageSquare,
+  Moon,
+  Sun,
+  User,
+} from "lucide-react";
 import { Switch } from "../ui/switch";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
@@ -21,6 +29,7 @@ import DirectMessageList from "../chat/DirectMessageList";
 import FriendsManagerDialog from "../chat/FriendsManagerDialog";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 import ConversationSkeleton from "../skeleton/ConversationSkeleton";
 import { useChatStore } from "@/stores/useChatStore";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -28,6 +37,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isDark, toggleTheme } = useThemeStore();
   const { user } = useAuthStore();
+  const { unreadSocialCount } = useNotificationStore();
   const { convoLoading } = useChatStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,9 +62,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <h1 className="text-base font-bold text-white tracking-[0.02em]">
                     Coming
                   </h1>
-                  <p className="text-[11px] text-white/80">
-                    Realtime Messaging
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[11px] text-white/80">
+                      Realtime Messaging
+                    </p>
+                    {unreadSocialCount > 0 && (
+                      <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        {unreadSocialCount > 99 ? "99+" : unreadSocialCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-2 py-1">
                   <Sun className="size-3.5 text-white/80" />
@@ -79,6 +96,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <div className="grid grid-cols-2 gap-2 p-2">
               <button
                 type="button"
+                onClick={() => navigate("/feed")}
+                className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
+                  location.pathname === "/feed"
+                    ? "bg-primary text-primary-foreground shadow-soft"
+                    : "bg-muted/70 hover:bg-muted"
+                }`}
+              >
+                <Home className="size-3.5" />
+                Feed
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/explore")}
+                className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
+                  location.pathname === "/explore"
+                    ? "bg-primary text-primary-foreground shadow-soft"
+                    : "bg-muted/70 hover:bg-muted"
+                }`}
+              >
+                <Compass className="size-3.5" />
+                Explore
+              </button>
+              <button
+                type="button"
                 onClick={() => navigate("/")}
                 className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
                   location.pathname === "/"
@@ -100,6 +141,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <Bookmark className="size-3.5" />
                 Saved
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(user?._id ? `/profile/${user._id}` : "/profile")
+                }
+                className={`col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
+                  location.pathname.startsWith("/profile")
+                    ? "bg-primary text-primary-foreground shadow-soft"
+                    : "bg-muted/70 hover:bg-muted"
+                }`}
+              >
+                <User className="size-3.5" />
+                Profile
               </button>
             </div>
           </SidebarGroupContent>

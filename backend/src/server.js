@@ -9,18 +9,18 @@ import messageRoute from "./routes/messageRoute.js";
 import conversationRoute from "./routes/conversationRoute.js";
 import bookmarkRoute from "./routes/bookmarkRoute.js";
 import searchRoute from "./routes/searchRoute.js";
+import socialRoute from "./routes/socialRoute.js";
 import { getAdminConversations } from "./controllers/conversationController.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
-import fs from "fs";
+import fs from "node:fs";
 import { app, server } from "./socket/index.js";
 import { v2 as cloudinary } from "cloudinary";
 
 dotenv.config();
 
-// const app = express();
 const PORT = process.env.PORT || 5001;
 
 const getAllowedOrigins = () => {
@@ -91,8 +91,11 @@ app.use("/api/messages", messageRoute);
 app.use("/api/conversations", conversationRoute);
 app.use("/api/bookmarks", bookmarkRoute);
 app.use("/api/search", searchRoute);
+app.use("/api/social", socialRoute);
 
-connectDB().then(() => {
+try {
+  await connectDB();
+
   // Initialize Drupal sync
   initDrupalSync();
 
@@ -100,7 +103,10 @@ connectDB().then(() => {
     console.log(`Server started on port ${PORT}`);
     console.log("Real-time Drupal sync enabled");
   });
-});
+} catch (error) {
+  console.error("Failed to start server:", error);
+  process.exit(1);
+}
 
 // Graceful shutdown
 process.on("SIGINT", async () => {

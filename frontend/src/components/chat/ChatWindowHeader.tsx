@@ -144,6 +144,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                       userId={String(otherUser?._id || "")}
                       displayName={otherUser?.displayName || "Coming"}
                       avatarUrl={otherUser?.avatarUrl || undefined}
+                      onViewProfile={() =>
+                        navigate(`/profile/${String(otherUser?._id || "")}`)
+                      }
                       onChat={handleQuickChat}
                       onRemove={handleRemoveFriend}
                       disabled={isFriendActionLoading}

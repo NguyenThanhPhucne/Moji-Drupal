@@ -1,49 +1,58 @@
 import { BrowserRouter, Route, Routes } from "react-router";
-import SignInPage from "./pages/SignInPage";
-import ChatAppPage from "./pages/ChatAppPage";
-import SavedMessagesPage from "./pages/SavedMessagesPage";
 import { Toaster } from "sonner";
-import SignUpPage from "./pages/SignUpPage";
-import ProtectedRoute from "./components/auth/ProtectedRoute";
+import { useEffect, lazy, Suspense } from "react";
 import { useThemeStore } from "./stores/useThemeStore";
-import { useEffect } from "react";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
 import { useFriendStore } from "./stores/useFriendStore";
 import { useBookmarkStore } from "./stores/useBookmarkStore";
+import { useSocialStore } from "./stores/useSocialStore";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+
+const SignInPage = lazy(() => import("./pages/SignInPage"));
+const SignUpPage = lazy(() => import("./pages/SignUpPage"));
+const ChatAppPage = lazy(() => import("./pages/ChatAppPage"));
+const SavedMessagesPage = lazy(() => import("./pages/SavedMessagesPage"));
+const HomeFeedPage = lazy(() => import("./pages/HomeFeedPage"));
+const ExplorePage = lazy(() => import("./pages/ExplorePage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const ProtectedRoute = lazy(() => import("./components/auth/ProtectedRoute"));
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 function AppContent() {
   const { isDark, setTheme } = useThemeStore();
-  const { accessToken } = useAuthStore();
+  const { accessToken, user } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
   const { getAllFriendRequests, getFriends } = useFriendStore();
   const { fetchBookmarks } = useBookmarkStore();
+  const { fetchNotifications } = useSocialStore();
 
   useEffect(() => {
     setTheme(isDark);
   }, [isDark, setTheme]);
 
   useEffect(() => {
-    if (accessToken) {
+    if (accessToken && user) {
       connectSocket();
       // Load friend requests when the user signs in.
       getAllFriendRequests();
       getFriends();
       fetchBookmarks({ page: 1, limit: 30 });
+      fetchNotifications();
       return;
     }
 
     disconnectSocket();
   }, [
     accessToken,
+    user,
     connectSocket,
     disconnectSocket,
     getAllFriendRequests,
     getFriends,
     fetchBookmarks,
+    fetchNotifications,
   ]);
 
   // Only clean up when App unmounts.
@@ -55,17 +64,32 @@ function AppContent() {
     <>
       <Toaster richColors />
       <BrowserRouter>
-        <Routes>
-          {/* public routes */}
-          <Route path="/signin" element={<SignInPage />} />
-          <Route path="/signup" element={<SignUpPage />} />
+        <Suspense
+          fallback={
+            <div className="flex min-h-svh items-center justify-center bg-background px-4">
+              <div className="elevated-card flex items-center gap-3 px-5 py-3 text-sm text-muted-foreground">
+                <span className="size-2 rounded-full bg-primary animate-pulse" />{" "}
+                Loading workspace...
+              </div>
+            </div>
+          }
+        >
+          <Routes>
+            {/* public routes */}
+            <Route path="/signin" element={<SignInPage />} />
+            <Route path="/signup" element={<SignUpPage />} />
 
-          {/* protectect routes */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<ChatAppPage />} />
-            <Route path="/saved" element={<SavedMessagesPage />} />
-          </Route>
-        </Routes>
+            {/* protectect routes */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<ChatAppPage />} />
+              <Route path="/feed" element={<HomeFeedPage />} />
+              <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/profile/:userId" element={<ProfilePage />} />
+              <Route path="/saved" element={<SavedMessagesPage />} />
+            </Route>
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </>
   );
