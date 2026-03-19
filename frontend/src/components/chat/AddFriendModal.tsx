@@ -96,30 +96,26 @@ const AddFriendModal = () => {
         </DialogHeader>
 
         {!isFound && (
-          <>
-            <SearchForm
-              register={register}
-              errors={errors}
-              usernameValue={usernameValue}
-              loading={loading}
-              isFound={isFound}
-              searchedUsername={searchedUsername}
-              onSubmit={handleSearch}
-              onCancel={handleCancel}
-            />
-          </>
+          <SearchForm
+            register={register}
+            errors={errors}
+            usernameValue={usernameValue}
+            loading={loading}
+            isFound={isFound}
+            searchedUsername={searchedUsername}
+            onSubmit={handleSearch}
+            onCancel={handleCancel}
+          />
         )}
 
         {isFound && (
-          <>
-            <SendFriendRequestForm
-              register={register}
-              loading={loading}
-              searchedUsername={searchedUsername}
-              onSubmit={handleSend}
-              onBack={() => setIsFound(null)}
-            />
-          </>
+          <SendFriendRequestForm
+            register={register}
+            loading={loading}
+            searchedUsername={searchedUsername}
+            onSubmit={handleSend}
+            onBack={() => setIsFound(null)}
+          />
         )}
       </DialogContent>
     </Dialog>

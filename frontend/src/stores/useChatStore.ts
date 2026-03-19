@@ -193,7 +193,7 @@ export const useChatStore = create<ChatState>()(
           // Backend may return either { message: {...} } or the message object directly.
           const reactions = res?.message?.reactions ?? res?.reactions;
           if (!Array.isArray(reactions)) {
-            throw new Error("Invalid reactToMessage response payload");
+            throw new TypeError("Invalid reactToMessage response payload");
           }
 
           get().updateMessage(conversationId, messageId, {

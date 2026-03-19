@@ -32,7 +32,7 @@ const ChatWindowLayout = () => {
     };
 
     markSeen();
-  }, [selectedConvo?._id]);
+  }, [selectedConvo, markAsSeen]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
@@ -43,7 +43,7 @@ const ChatWindowLayout = () => {
       {/* Header */}
       <div
         key={`chat-header-${selectedConvo._id}`}
-        className="animate-in fade-in-0 duration-200"
+        className="conversation-fade"
       >
         <ChatWindowHeader chat={selectedConvo} />
       </div>
@@ -52,7 +52,7 @@ const ChatWindowLayout = () => {
       <div className="flex-1 min-h-0 bg-primary-foreground/80">
         <div
           key={`chat-body-${selectedConvo._id}-${loading ? "loading" : "ready"}`}
-          className="h-full animate-in fade-in-0 duration-200"
+          className="h-full conversation-fade"
         >
           {loading ? (
             <div className="h-full w-full px-4 py-4 space-y-3">

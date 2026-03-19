@@ -11,7 +11,7 @@ const getMongoUserIdFromDrupalId = async (drupalId) => {
   }
 
   // Convert to integer for Drupal ID lookup
-  const drupalIdInt = parseInt(drupalId);
+  const drupalIdInt = Number.parseInt(drupalId, 10);
 
   try {
     // 1. Tìm user theo drupalId field (RECOMMENDED)
@@ -42,7 +42,7 @@ const getMongoUserIdFromDrupalId = async (drupalId) => {
       email: `drupal_${drupalId}@temp.local`,
       displayName: `User ${drupalId}`,
       drupalId: drupalIdInt,
-      hashedPassword: "linked_with_drupal",
+      hashedPassword: `drupal-linked-${Date.now()}-${drupalId}`,
     });
 
     return user._id.toString();
@@ -267,7 +267,7 @@ export const getMessages = async (req, res) => {
     let nextCursor = null;
 
     if (messages.length > Number(limit)) {
-      const nextMessage = messages[messages.length - 1];
+      const nextMessage = messages.at(-1);
       nextCursor = nextMessage.createdAt.toISOString();
       messages.pop();
     }
@@ -466,7 +466,7 @@ export const getAdminConversations = async (req, res) => {
 
       // Filter out null/undefined participants
       const validParticipants = (conv.participants || [])
-        .filter((p) => p && p.userId)
+        .filter((p) => Boolean(p?.userId))
         .map((p) => ({
           userId: p.userId?._id || p.userId,
           displayName: p.userId?.displayName || "Unknown User",

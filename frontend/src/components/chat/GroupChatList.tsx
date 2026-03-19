@@ -1,5 +1,6 @@
 import { useChatStore } from "@/stores/useChatStore";
 import GroupChatCard from "./GroupChatCard";
+import type { CSSProperties } from "react";
 
 const GroupChatList = () => {
   const { conversations } = useChatStore();
@@ -18,8 +19,14 @@ const GroupChatList = () => {
 
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-      {groupchats.map((convo) => (
-        <GroupChatCard convo={convo} key={convo._id} />
+      {groupchats.map((convo, index) => (
+        <div
+          key={convo._id}
+          className="stagger-enter"
+          style={{ "--stagger-index": index % 10 } as CSSProperties}
+        >
+          <GroupChatCard convo={convo} />
+        </div>
       ))}
     </div>
   );

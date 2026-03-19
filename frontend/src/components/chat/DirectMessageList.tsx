@@ -1,5 +1,6 @@
 import { useChatStore } from "@/stores/useChatStore";
 import DirectMessageCard from "./DirectMessageCard";
+import type { CSSProperties } from "react";
 
 const DirectMessageList = () => {
   const { conversations } = useChatStore();
@@ -20,8 +21,14 @@ const DirectMessageList = () => {
 
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-      {directConversations.map((convo) => (
-        <DirectMessageCard convo={convo} key={convo._id} />
+      {directConversations.map((convo, index) => (
+        <div
+          key={convo._id}
+          className="stagger-enter"
+          style={{ "--stagger-index": index % 10 } as CSSProperties}
+        >
+          <DirectMessageCard convo={convo} />
+        </div>
       ))}
     </div>
   );

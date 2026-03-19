@@ -15,6 +15,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { ChevronDown, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import type { Message } from "@/types/chat";
 
 function isSameDay(a: string, b: string) {
   return (
@@ -27,6 +28,8 @@ interface TypingEventPayload {
   userId: string;
   displayName?: string;
 }
+
+const EMPTY_MESSAGES: Message[] = [];
 
 const ChatWindowBody = () => {
   const {
@@ -41,7 +44,13 @@ const ChatWindowBody = () => {
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
-  const messages = allMessages[activeConversationId!]?.items ?? [];
+  const messages = useMemo(() => {
+    if (!activeConversationId) {
+      return EMPTY_MESSAGES;
+    }
+
+    return allMessages[activeConversationId]?.items ?? EMPTY_MESSAGES;
+  }, [allMessages, activeConversationId]);
   const reversedMessages = [...messages].reverse();
   const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
   const selectedConvo = conversations.find(
@@ -76,7 +85,7 @@ const ChatWindowBody = () => {
 
     const readByOthers = (lastOwnMessage.readBy ?? [])
       .map(String)
-      .filter((readerId) => readerId !== myId);
+      .filter((readerId: string) => readerId !== myId);
 
     if (readByOthers.length > 0) {
       return "seen";
@@ -102,7 +111,7 @@ const ChatWindowBody = () => {
   ]);
 
   const directSeenUser = useMemo(() => {
-    if (!selectedConvo || selectedConvo.type !== "direct" || !myId) {
+    if (selectedConvo?.type !== "direct" || !myId) {
       return null;
     }
 
@@ -126,7 +135,7 @@ const ChatWindowBody = () => {
   }, [selectedConvo, myId]);
 
   const groupSeenUsers = useMemo(() => {
-    if (!selectedConvo || selectedConvo.type !== "group" || !myId) {
+    if (selectedConvo?.type !== "group" || !myId) {
       return [] as Array<{
         _id: string;
         displayName?: string;
@@ -193,7 +202,7 @@ const ChatWindowBody = () => {
       return;
     }
 
-    const newestMessage = messages[messages.length - 1];
+    const newestMessage = messages.at(-1);
     if (!newestMessage || newestMessage.senderId === currentUser._id) {
       return;
     }
@@ -203,11 +212,11 @@ const ChatWindowBody = () => {
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    const timer = globalThis.setTimeout(() => {
       useChatStore.getState().markAsSeen();
     }, 200);
 
-    return () => window.clearTimeout(timer);
+    return () => globalThis.clearTimeout(timer);
   }, [activeConversationId, currentUser?._id, messages, selectedConvo]);
 
   // Typing indicator via socket
@@ -265,7 +274,7 @@ const ChatWindowBody = () => {
       container.scrollTop = 0; // bottom in column-reverse
     }
     prevMsgLength.current = messages.length;
-  }, [activeConversationId, key]);
+  }, [activeConversationId, key, messages.length]);
 
   // Auto-scroll logic when new messages arrive
   const prevMsgLength = useRef(messages.length);
@@ -286,7 +295,7 @@ const ChatWindowBody = () => {
       }
     }
     prevMsgLength.current = messages.length;
-  }, [messages.length, currentUser]);
+  }, [messages, currentUser?._id]);
 
   const handleScrollSave = useCallback(() => {
     const container = containerRef.current;
@@ -336,7 +345,10 @@ const ChatWindowBody = () => {
   }
 
   return (
-    <div className="p-2 bg-primary-foreground h-full flex flex-col overflow-hidden relative">
+    <div
+      key={`chat-conversation-${activeConversationId}`}
+      className="conversation-fade p-2 bg-primary-foreground h-full flex flex-col overflow-hidden relative"
+    >
       <div
         id="scrollableDiv"
         ref={containerRef}

@@ -4,11 +4,20 @@ import axios from "axios";
 
 const pair = (a, b) => (a < b ? [a, b] : [b, a]);
 
+const shouldBypassFriendshipChecks = () => {
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const allowBypass = String(process.env.ALLOW_DEV_FRIENDSHIP_BYPASS || "")
+    .trim()
+    .toLowerCase();
+
+  return isDevelopment && allowBypass === "true";
+};
+
 // HYBRID: Check friendship from MongoDB (legacy) and Drupal
 const checkFriendshipStatus = async (userA, userB) => {
-  // Development mode: Skip all friend checks
-  if (process.env.NODE_ENV === "development") {
-    console.log("Development mode: Skipping friend check");
+  // Development-only explicit bypass to avoid accidental auth holes.
+  if (shouldBypassFriendshipChecks()) {
+    console.log("Development mode: Skipping friend check (explicit bypass)");
     return true;
   }
 

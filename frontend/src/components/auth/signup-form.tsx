@@ -54,17 +54,15 @@ export function SignupForm({
             className="p-6 md:p-8 lg:p-10"
             onSubmit={handleSubmit(onSubmit)}
           >
-            <div className="flex flex-col gap-6">
+            <div className="space-stack-lg">
               {/* header - logo */}
               <div className="flex flex-col items-center text-center gap-2">
                 <Link to="/" className="mx-auto block w-fit text-center">
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
-                <h1 className="text-3xl font-bold tracking-[-0.02em]">
-                  Create your Coming account
-                </h1>
-                <p className="text-muted-foreground text-balance">
+                <h1 className="text-title-1">Create your Coming account</h1>
+                <p className="text-body-sm text-muted-foreground text-balance">
                   Create your workspace in less than a minute.
                 </p>
               </div>

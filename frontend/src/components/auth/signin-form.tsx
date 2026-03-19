@@ -54,17 +54,15 @@ export function SigninForm({
             className="p-6 md:p-8 lg:p-10"
             onSubmit={handleSubmit(onSubmit)}
           >
-            <div className="flex flex-col gap-6">
+            <div className="space-stack-lg">
               {/* header - logo */}
               <div className="flex flex-col items-center text-center gap-2">
                 <Link to="/" className="mx-auto block w-fit text-center">
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
-                <h1 className="text-2xl font-bold tracking-[-0.01em] md:text-3xl">
-                  Welcome back
-                </h1>
-                <p className="text-muted-foreground text-balance">
+                <h1 className="text-title-1 md:text-3xl">Welcome back</h1>
+                <p className="text-body-sm text-muted-foreground text-balance">
                   Sign in to continue your conversations
                 </p>
               </div>

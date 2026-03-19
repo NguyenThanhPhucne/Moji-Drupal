@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 function Dialog({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+}: Readonly<React.ComponentProps<typeof DialogPrimitive.Root>>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
 }
 
@@ -21,7 +21,7 @@ function DialogTrigger({
 
 function DialogPortal({
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+}: Readonly<React.ComponentProps<typeof DialogPrimitive.Portal>>) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
 }
 
@@ -132,7 +132,7 @@ function DialogDescription({
 
 function AlertDialog({
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
+}: Readonly<React.ComponentProps<typeof AlertDialogPrimitive.Root>>) {
   return <AlertDialogPrimitive.Root {...props} />;
 }
 
@@ -144,7 +144,7 @@ function AlertDialogTrigger({
 
 function AlertDialogPortal({
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Portal>) {
+}: Readonly<React.ComponentProps<typeof AlertDialogPrimitive.Portal>>) {
   return <AlertDialogPrimitive.Portal {...props} />;
 }
 

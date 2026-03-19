@@ -11,6 +11,45 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return;
+          }
+
+          if (
+            id.includes("react") ||
+            id.includes("react-dom") ||
+            id.includes("react-router")
+          ) {
+            return "react-core";
+          }
+
+          if (id.includes("@radix-ui") || id.includes("lucide-react")) {
+            return "ui-kit";
+          }
+
+          if (
+            id.includes("zustand") ||
+            id.includes("socket.io-client") ||
+            id.includes("axios")
+          ) {
+            return "state-network";
+          }
+
+          if (
+            id.includes("date-fns") ||
+            id.includes("emoji-mart") ||
+            id.includes("@emoji-mart")
+          ) {
+            return "rich-utils";
+          }
+        },
+      },
+    },
+  },
   // --- THÊM PHẦN NÀY ĐỂ SỬA LỖI 401 ---
   server: {
     proxy: {
