@@ -77,6 +77,14 @@ export interface ChatState {
     emoji: string,
   ) => Promise<void>;
   unsendMessage: (conversationId: string, messageId: string) => Promise<void>;
+  removeMessageFromConversation: (
+    conversationId: string,
+    messageId: string,
+  ) => void;
+  removeMessageForMe: (
+    conversationId: string,
+    messageId: string,
+  ) => Promise<void>;
   editMessage: (
     conversationId: string,
     messageId: string,

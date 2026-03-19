@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Lock, UserRound } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -101,13 +102,7 @@ const ProfilePage = () => {
                       {profile.isFollowing ? "Following" : "Follow"}
                     </Button>
                   )}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => navigate("/")}
-                  >
-                    Back to chat
-                  </Button>
+                  <BackToChatCard onClick={() => navigate("/")} />
                 </div>
               </div>
             </div>

@@ -253,8 +253,12 @@ export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { limit = 50, cursor } = req.query;
+    const userId = req.user._id;
 
-    const query = { conversationId };
+    const query = {
+      conversationId,
+      hiddenFor: { $ne: userId },
+    };
 
     if (cursor) {
       query.createdAt = { $lt: new Date(cursor) };

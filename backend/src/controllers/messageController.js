@@ -221,7 +221,47 @@ export const unsendMessage = async (req, res) => {
   }
 };
 
-// Edit message — only within 15 minutes of sending
+export const removeMessageForMe = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
+
+    const isMember = await ensureConversationMembership(
+      message.conversationId,
+      userId,
+    );
+    if (!isMember) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
+
+    const userIdStr = userId.toString();
+    const alreadyHidden = message.hiddenFor.some(
+      (hiddenUserId) => hiddenUserId.toString() === userIdStr,
+    );
+
+    if (!alreadyHidden) {
+      message.hiddenFor.push(userId);
+      await message.save();
+    }
+
+    io.to(userIdStr).emit("message-hidden-for-user", {
+      conversationId: message.conversationId,
+      messageId: message._id,
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Lỗi khi gỡ tin nhắn ở phía bạn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+// Edit message — sender can edit own non-deleted message
 export const editMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -253,13 +293,6 @@ export const editMessage = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Không thể sửa tin nhắn đã bị gỡ" });
-    }
-
-    const fifteenMinutes = 15 * 60 * 1000;
-    if (Date.now() - new Date(message.createdAt).getTime() > fifteenMinutes) {
-      return res
-        .status(400)
-        .json({ message: "Chỉ có thể sửa tin nhắn trong vòng 15 phút" });
     }
 
     message.content = content.trim();

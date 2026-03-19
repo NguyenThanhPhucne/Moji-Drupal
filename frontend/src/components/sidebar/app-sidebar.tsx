@@ -8,7 +8,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import {
@@ -53,37 +52,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild className="shadow-soft">
-              <div className="flex w-full items-center justify-between rounded-2xl bg-gradient-primary px-3 py-2.5">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-white/70">
-                    Workspace
+            <div className="flex w-full items-center justify-between rounded-2xl bg-gradient-primary px-3 py-2.5 shadow-soft">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-white/70">
+                  Workspace
+                </p>
+                <h1 className="text-base font-bold text-white tracking-[0.02em]">
+                  Coming
+                </h1>
+                <div className="flex items-center gap-2">
+                  <p className="text-[11px] text-white/80">
+                    Realtime Messaging
                   </p>
-                  <h1 className="text-base font-bold text-white tracking-[0.02em]">
-                    Coming
-                  </h1>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] text-white/80">
-                      Realtime Messaging
-                    </p>
-                    {unreadSocialCount > 0 && (
-                      <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                        {unreadSocialCount > 99 ? "99+" : unreadSocialCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-2 py-1">
-                  <Sun className="size-3.5 text-white/80" />
-                  <Switch
-                    checked={isDark}
-                    onCheckedChange={toggleTheme}
-                    className="scale-90 data-[state=checked]:bg-background/80"
-                  />
-                  <Moon className="size-3.5 text-white/80" />
+                  {unreadSocialCount > 0 && (
+                    <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                      {unreadSocialCount > 99 ? "99+" : unreadSocialCount}
+                    </span>
+                  )}
                 </div>
               </div>
-            </SidebarMenuButton>
+              <div
+                data-keep-chat-open="true"
+                className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-2 py-1"
+              >
+                <Sun className="size-3.5 text-white/80" />
+                <Switch
+                  checked={isDark}
+                  onCheckedChange={toggleTheme}
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  className="scale-90 data-[state=checked]:bg-background/80"
+                />
+                <Moon className="size-3.5 text-white/80" />
+              </div>
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

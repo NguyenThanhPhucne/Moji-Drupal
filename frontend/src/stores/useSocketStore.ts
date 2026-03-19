@@ -255,6 +255,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       });
     });
 
+    socket.on("message-hidden-for-user", ({ conversationId, messageId }) => {
+      useChatStore
+        .getState()
+        .removeMessageFromConversation(conversationId, messageId);
+    });
+
     socket.on(
       "message-edited",
       ({ conversationId, messageId, content, editedAt }) => {

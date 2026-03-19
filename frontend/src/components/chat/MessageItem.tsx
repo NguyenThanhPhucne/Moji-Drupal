@@ -13,9 +13,17 @@ import {
   Bookmark,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 
@@ -105,7 +113,7 @@ const ContextMenu = memo(function ContextMenu({
   onReply,
   onCopy,
   onEdit,
-  onUnsend,
+  onOpenDeleteDialog,
   onClose,
 }: {
   x: number;
@@ -116,65 +124,66 @@ const ContextMenu = memo(function ContextMenu({
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
-  onUnsend: () => void;
+  onOpenDeleteDialog: () => void;
   onClose: () => void;
 }) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node))
-        onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onClose]);
-
   const items = [
     { icon: Reply, label: "Reply", onClick: onReply },
     { icon: Copy, label: "Copy", onClick: onCopy, disabled: isDeleted },
     ...(isOwn && canEdit && !isDeleted
       ? [{ icon: Edit2, label: "Edit", onClick: onEdit }]
       : []),
-    ...(isOwn && !isDeleted
-      ? [
+    ...(isDeleted
+      ? []
+      : [
           {
             icon: Trash2,
-            label: "Remove message",
-            onClick: onUnsend,
+            label: isOwn ? "Remove / Unsend..." : "Remove for me",
+            onClick: onOpenDeleteDialog,
             danger: true,
           },
-        ]
-      : []),
+        ]),
   ];
 
-  return (
-    <div
-      ref={menuRef}
-      style={{ position: "fixed", left: x, top: y, zIndex: 9999 }}
-      className="bg-popover border border-border/70 rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 fade-in duration-100 min-w-[160px]"
-    >
-      {items.map(({ icon: Icon, label, onClick, disabled, danger }) => (
-        <button
-          key={label}
-          disabled={disabled}
-          onClick={() => {
-            onClick();
-            onClose();
-          }}
-          className={cn(
-            "w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors",
-            danger
-              ? "text-destructive hover:bg-destructive/10"
-              : "hover:bg-muted",
-            "disabled:opacity-40 disabled:cursor-not-allowed",
-          )}
-        >
-          <Icon className="size-4" />
-          {label}
-        </button>
-      ))}
-    </div>
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9998]">
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={onClose}
+        className="absolute inset-0"
+      />
+      <div
+        role="menu"
+        style={{ position: "fixed", left: x, top: y, zIndex: 9999 }}
+        className="bg-popover border border-border/70 rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 fade-in duration-100 min-w-[160px]"
+      >
+        {items.map(({ icon: Icon, label, onClick, disabled, danger }) => (
+          <button
+            key={label}
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              onClick();
+              onClose();
+            }}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors",
+              danger
+                ? "text-destructive hover:bg-destructive/10"
+                : "hover:bg-muted",
+              "disabled:opacity-40 disabled:cursor-not-allowed",
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body,
   );
 });
 
@@ -389,6 +398,7 @@ const MessageItem = memo(function MessageItem({
   const {
     reactToMessage,
     unsendMessage,
+    removeMessageForMe,
     editMessage,
     setReplyingTo,
     activeConversationId,
@@ -402,6 +412,11 @@ const MessageItem = memo(function MessageItem({
   const [maxSeenAvatars, setMaxSeenAvatars] = useState(3);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [seenJustUpdated, setSeenJustUpdated] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteActionLoading, setDeleteActionLoading] = useState<
+    null | "for-me" | "for-everyone"
+  >(null);
+  const [isMessageHovered, setIsMessageHovered] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -412,10 +427,7 @@ const MessageItem = memo(function MessageItem({
   const isOwn = message.senderId === user?._id;
   const bookmarked = isBookmarked(message._id);
 
-  const canEdit = (() => {
-    if (!message.createdAt) return false;
-    return Date.now() - new Date(message.createdAt).getTime() < 15 * 60 * 1000;
-  })();
+  const canEdit = isOwn;
 
   const isLastFromSender =
     index === 0 || messages[index - 1]?.senderId !== message.senderId;
@@ -440,10 +452,26 @@ const MessageItem = memo(function MessageItem({
     [activeConversationId, message._id, reactToMessage],
   );
 
-  const handleUnsend = useCallback(async () => {
+  const handleOpenDeleteDialog = useCallback(() => {
+    setContextMenu(null);
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const handleConfirmRemoveForMe = useCallback(async () => {
     if (!activeConversationId) return;
+    setDeleteActionLoading("for-me");
+    await removeMessageForMe(activeConversationId, message._id);
+    setDeleteActionLoading(null);
+    setDeleteDialogOpen(false);
+  }, [activeConversationId, message._id, removeMessageForMe]);
+
+  const handleConfirmUnsendForEveryone = useCallback(async () => {
+    if (!activeConversationId || !isOwn) return;
+    setDeleteActionLoading("for-everyone");
     await unsendMessage(activeConversationId, message._id);
-  }, [activeConversationId, message._id, unsendMessage]);
+    setDeleteActionLoading(null);
+    setDeleteDialogOpen(false);
+  }, [activeConversationId, isOwn, message._id, unsendMessage]);
 
   const handleCopy = useCallback(() => {
     if (message.content) {
@@ -452,17 +480,30 @@ const MessageItem = memo(function MessageItem({
     }
   }, [message.content]);
 
-  const handleEditSave = useCallback(async () => {
-    if (
-      !editValue.trim() ||
-      editValue === message.content ||
-      !activeConversationId
-    ) {
+  const handleEditSave = useCallback(() => {
+    const normalizedEditValue = editValue.trim();
+
+    if (!normalizedEditValue || normalizedEditValue === message.content) {
       setEditMode(false);
+      setEditValue(message.content ?? "");
       return;
     }
-    await editMessage(activeConversationId, message._id, editValue);
+
+    if (!activeConversationId) {
+      toast.error("Unable to save edit right now");
+      return;
+    }
+
+    setEditValue(normalizedEditValue);
     setEditMode(false);
+
+    void editMessage(
+      activeConversationId,
+      message._id,
+      normalizedEditValue,
+    ).catch(() => {
+      toast.error("Couldn't save your edit. Restored previous content.");
+    });
   }, [
     editValue,
     message.content,
@@ -476,7 +517,42 @@ const MessageItem = memo(function MessageItem({
     setContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
+  const handleOpenContextFromButton = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const menuWidth = 176;
+      const viewportPadding = 8;
+      const rawX = isOwn ? rect.left - menuWidth + rect.width : rect.right;
+      const rawY = rect.bottom + 6;
+
+      const x = Math.max(
+        viewportPadding,
+        Math.min(
+          rawX,
+          globalThis.window.innerWidth - menuWidth - viewportPadding,
+        ),
+      );
+      const y = Math.max(
+        viewportPadding,
+        Math.min(rawY, globalThis.window.innerHeight - 220),
+      );
+
+      setContextMenu({ x, y });
+    },
+    [isOwn],
+  );
+
   const handleCloseContext = useCallback(() => setContextMenu(null), []);
+  const handleDeleteDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (deleteActionLoading) return;
+      setDeleteDialogOpen(open);
+    },
+    [deleteActionLoading],
+  );
   const handleEnterEditMode = useCallback(() => setEditMode(true), []);
   const handleReply = useCallback(
     () => setReplyingTo(message),
@@ -582,7 +658,8 @@ const MessageItem = memo(function MessageItem({
 
   const hiddenActionOffsetClass = isOwn ? "translate-x-1" : "-translate-x-1";
   const canOpenEditMode = isOwn && canEdit && !message.isDeleted;
-  const actionBarVisible = reactBarVisible || Boolean(contextMenu);
+  const actionBarVisible =
+    isMessageHovered || reactBarVisible || Boolean(contextMenu);
   const wrapperClassName = cn(
     "flex gap-2 px-2 py-0.5 group relative",
     isOwn ? "flex-row-reverse" : "flex-row",
@@ -673,7 +750,11 @@ const MessageItem = memo(function MessageItem({
     <>
       <article
         className={wrapperClassName}
-        onMouseLeave={() => setReactBarVisible(false)}
+        onMouseEnter={() => setIsMessageHovered(true)}
+        onMouseLeave={() => {
+          setIsMessageHovered(false);
+          setReactBarVisible(false);
+        }}
       >
         {/* Avatar */}
         {!isOwn && (
@@ -723,12 +804,14 @@ const MessageItem = memo(function MessageItem({
             {!editMode && (
               <div
                 className={cn(
-                  "absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-10 transition-all duration-150 motion-reduce:transition-none",
-                  isOwn ? "right-full mr-2" : "left-full ml-2",
+                  "absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-30 transition-all duration-150 motion-reduce:transition-none",
+                  isOwn
+                    ? "right-[calc(100%+0.35rem)]"
+                    : "left-[calc(100%+0.35rem)]",
                   actionBarVisible
                     ? "opacity-100 translate-x-0 pointer-events-auto"
                     : cn(
-                        "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:translate-x-0 group-hover:pointer-events-auto",
+                        "opacity-0 pointer-events-none",
                         hiddenActionOffsetClass,
                       ),
                 )}
@@ -738,6 +821,7 @@ const MessageItem = memo(function MessageItem({
                     <QuickReactBar onReact={handleReact} visible={true} />
                   )}
                   <button
+                    type="button"
                     onClick={() => setReactBarVisible((v) => !v)}
                     className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
                   >
@@ -745,12 +829,14 @@ const MessageItem = memo(function MessageItem({
                   </button>
                 </div>
                 <button
+                  type="button"
                   onClick={handleReply}
                   className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
                 >
                   <Reply className="size-3.5 text-muted-foreground" />
                 </button>
                 <button
+                  type="button"
                   onClick={handleToggleBookmark}
                   className={cn(
                     "p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors",
@@ -762,9 +848,8 @@ const MessageItem = memo(function MessageItem({
                   />
                 </button>
                 <button
-                  onClick={
-                    handleContextMenu as unknown as React.MouseEventHandler
-                  }
+                  type="button"
+                  onClick={handleOpenContextFromButton}
                   className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
                 >
                   <MoreHorizontal className="size-3.5 text-muted-foreground" />
@@ -831,10 +916,78 @@ const MessageItem = memo(function MessageItem({
           onReply={handleReply}
           onCopy={handleCopy}
           onEdit={handleEnterEditMode}
-          onUnsend={handleUnsend}
+          onOpenDeleteDialog={handleOpenDeleteDialog}
           onClose={handleCloseContext}
         />
       )}
+
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={handleDeleteDialogOpenChange}
+      >
+        <DialogContent
+          className="sm:max-w-xl"
+          showCloseButton={!deleteActionLoading}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              Who do you want to remove this message for?
+            </DialogTitle>
+            <DialogDescription>
+              Choose the scope that fits your intent. Some participants may have
+              already seen or forwarded this message.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3">
+            {isOwn && (
+              <button
+                type="button"
+                disabled={!!deleteActionLoading}
+                onClick={handleConfirmUnsendForEveryone}
+                className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <p className="text-sm font-semibold">Unsend for everyone</p>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                  This message will be removed for everyone in this chat. Others
+                  may have already seen or forwarded it. Unsent messages can
+                  still be reported.
+                </p>
+                {deleteActionLoading === "for-everyone" && (
+                  <p className="mt-2 text-xs text-primary">Processing...</p>
+                )}
+              </button>
+            )}
+
+            <button
+              type="button"
+              disabled={!!deleteActionLoading}
+              onClick={handleConfirmRemoveForMe}
+              className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <p className="text-sm font-semibold">Remove for you</p>
+              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                This message will be removed from your devices only. It will
+                remain visible to other chat participants.
+              </p>
+              {deleteActionLoading === "for-me" && (
+                <p className="mt-2 text-xs text-primary">Processing...</p>
+              )}
+            </button>
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={!!deleteActionLoading}
+              onClick={() => setDeleteDialogOpen(false)}
+              className="px-3 py-2 text-sm rounded-md border border-border/70 hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 });

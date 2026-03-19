@@ -492,29 +492,13 @@
     }
   }
 
-  /* Messenger-style chat bubble tails */
+  /* Keep sent bubble shape clean and color-consistent. */
   .chat-bubble-sent::after {
-    content: "";
-    position: absolute;
-    bottom: 6px;
-    right: -6px;
-    width: 12px;
-    height: 12px;
-    background: hsl(var(--primary) / 0.8);
-    clip-path: polygon(0 0, 0% 100%, 100% 100%);
-    border-radius: 0 0 2px 0;
+    content: none;
   }
 
   .chat-bubble-received::after {
-    content: "";
-    position: absolute;
-    bottom: 6px;
-    left: -6px;
-    width: 12px;
-    height: 12px;
-    background: hsl(var(--chat-bubble-received));
-    clip-path: polygon(100% 0, 0 100%, 100% 100%);
-    border-radius: 0 0 0 2px;
+    content: none;
   }
 }
 

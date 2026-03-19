@@ -5,6 +5,7 @@ import { Bookmark, PencilLine, Tags } from "lucide-react";
 import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import BackToChatCard from "@/components/chat/BackToChatCard";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -252,13 +253,7 @@ const SavedMessagesPage = () => {
                   Quickly find your bookmarked messages
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate("/")}
-              >
-                Back to chat
-              </Button>
+              <BackToChatCard onClick={() => navigate("/")} />
             </div>
 
             <div className="elevated-card grid grid-cols-1 gap-3 p-3 md:grid-cols-3">

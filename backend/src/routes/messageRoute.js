@@ -5,6 +5,7 @@ import {
   sendGroupMessage,
   reactToMessage,
   unsendMessage,
+  removeMessageForMe,
   editMessage,
   markMessageRead,
 } from "../controllers/messageController.js";
@@ -19,6 +20,7 @@ router.post("/direct", checkFriendship, sendDirectMessage);
 router.post("/group", checkGroupMembership, sendGroupMessage);
 router.post("/:messageId/react", reactToMessage);
 router.delete("/:messageId/unsend", unsendMessage);
+router.delete("/:messageId/remove-for-me", removeMessageForMe);
 router.put("/:messageId/edit", editMessage);
 router.post("/:messageId/read", markMessageRead);
 

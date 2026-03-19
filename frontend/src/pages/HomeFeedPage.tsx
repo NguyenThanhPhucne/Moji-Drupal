@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import BackToChatCard from "@/components/chat/BackToChatCard";
 import PostComposer from "@/components/social/PostComposer";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import SocialNotificationsPanel from "@/components/social/SocialNotificationsPanel";
@@ -63,13 +64,7 @@ const HomeFeedPage = () => {
                     Updates from people you follow
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => navigate("/")}
-                >
-                  Back to chat
-                </Button>
+                <BackToChatCard onClick={() => navigate("/")} />
               </div>
 
               <PostComposer onCreate={createPost} />

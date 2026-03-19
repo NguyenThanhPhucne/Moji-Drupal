@@ -30,6 +30,11 @@ const ChatAppPage = () => {
         return;
       }
 
+      // Keep selected conversation for theme toggle and other explicit controls.
+      if (target.closest("[data-keep-chat-open='true']")) {
+        return;
+      }
+
       setActiveConversation(null);
     };
 

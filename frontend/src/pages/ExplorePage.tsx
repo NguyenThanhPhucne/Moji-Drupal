@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Compass } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -58,13 +59,7 @@ const ExplorePage = () => {
                   Trending posts from the community
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate("/")}
-              >
-                Back to chat
-              </Button>
+              <BackToChatCard onClick={() => navigate("/")} />
             </div>
 
             <div className="space-stack-md">

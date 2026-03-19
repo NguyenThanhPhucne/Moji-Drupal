@@ -90,6 +90,11 @@ export const chatService = {
     return res.data;
   },
 
+  async removeMessageForMe(messageId: string) {
+    const res = await api.delete(`/messages/${messageId}/remove-for-me`);
+    return res.data;
+  },
+
   async editMessage(messageId: string, content: string) {
     const res = await api.put(`/messages/${messageId}/edit`, { content });
     return res.data;

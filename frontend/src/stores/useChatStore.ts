@@ -186,6 +186,22 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
+      removeMessageFromConversation: (conversationId, messageId) => {
+        set((state) => {
+          const prev = state.messages[conversationId]?.items;
+          if (!prev) return state;
+
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...state.messages[conversationId],
+                items: prev.filter((m) => m._id !== messageId),
+              },
+            },
+          };
+        });
+      },
       reactToMessage: async (conversationId, messageId, emoji) => {
         try {
           const res = await chatService.reactToMessage(messageId, emoji);
@@ -215,15 +231,38 @@ export const useChatStore = create<ChatState>()(
           console.error("Unsend error:", error);
         }
       },
-      editMessage: async (conversationId, messageId, content) => {
+      removeMessageForMe: async (conversationId, messageId) => {
         try {
-          await chatService.editMessage(messageId, content);
-          get().updateMessage(conversationId, messageId, {
-            content,
-            editedAt: new Date().toISOString(),
-          });
+          await chatService.removeMessageForMe(messageId);
+          get().removeMessageFromConversation(conversationId, messageId);
         } catch (error) {
+          console.error("Remove-for-me error:", error);
+        }
+      },
+      editMessage: async (conversationId, messageId, content) => {
+        const normalizedContent = content.trim();
+        const prevMessage =
+          get().messages[conversationId]?.items.find(
+            (messageItem) => messageItem._id === messageId,
+          ) ?? null;
+        const previousContent = prevMessage?.content ?? "";
+        const previousEditedAt = prevMessage?.editedAt ?? null;
+        const optimisticEditedAt = new Date().toISOString();
+
+        get().updateMessage(conversationId, messageId, {
+          content: normalizedContent,
+          editedAt: optimisticEditedAt,
+        });
+
+        try {
+          await chatService.editMessage(messageId, normalizedContent);
+        } catch (error) {
+          get().updateMessage(conversationId, messageId, {
+            content: previousContent,
+            editedAt: previousEditedAt,
+          });
           console.error("Edit error:", error);
+          throw error;
         }
       },
 
