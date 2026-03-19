@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { FriendRequest } from "@/types/user";
+import type { SocialNotification } from "@/types/social";
 
 interface AcceptanceNotification {
   type: "friend-accepted";
@@ -17,6 +18,8 @@ interface NotificationState {
   unreadFriendRequestCount: number;
   pendingRequests: FriendRequest[]; // Unseen incoming requests
   acceptanceNotifications: AcceptanceNotification[]; // Notifications when a request is accepted
+  socialNotifications: SocialNotification[];
+  unreadSocialCount: number;
 
   // Actions
   setUnreadCount: (count: number) => void;
@@ -29,12 +32,18 @@ interface NotificationState {
   addAcceptanceNotification: (notification: AcceptanceNotification) => void;
   removeAcceptanceNotification: (index: number) => void;
   clearAcceptanceNotifications: () => void;
+  setSocialNotifications: (notifications: SocialNotification[]) => void;
+  addSocialNotification: (notification: SocialNotification) => void;
+  markSocialNotificationRead: (notificationId: string) => void;
+  markAllSocialNotificationsRead: () => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
   unreadFriendRequestCount: 0,
   pendingRequests: [],
   acceptanceNotifications: [],
+  socialNotifications: [],
+  unreadSocialCount: 0,
 
   setUnreadCount: (count) => set({ unreadFriendRequestCount: count }),
 
@@ -76,4 +85,47 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     })),
 
   clearAcceptanceNotifications: () => set({ acceptanceNotifications: [] }),
+
+  setSocialNotifications: (notifications) =>
+    set({
+      socialNotifications: notifications,
+      unreadSocialCount: notifications.filter((item) => !item.isRead).length,
+    }),
+
+  addSocialNotification: (notification) =>
+    set((state) => ({
+      socialNotifications: [notification, ...state.socialNotifications],
+      unreadSocialCount:
+        state.unreadSocialCount + (notification.isRead ? 0 : 1),
+    })),
+
+  markSocialNotificationRead: (notificationId) =>
+    set((state) => {
+      let decrement = 0;
+      const next = state.socialNotifications.map((notification) => {
+        if (notification._id !== notificationId || notification.isRead) {
+          return notification;
+        }
+
+        decrement = 1;
+        return {
+          ...notification,
+          isRead: true,
+        };
+      });
+
+      return {
+        socialNotifications: next,
+        unreadSocialCount: Math.max(0, state.unreadSocialCount - decrement),
+      };
+    }),
+
+  markAllSocialNotificationsRead: () =>
+    set((state) => ({
+      socialNotifications: state.socialNotifications.map((notification) => ({
+        ...notification,
+        isRead: true,
+      })),
+      unreadSocialCount: 0,
+    })),
 }));

@@ -17,7 +17,7 @@ export function PendingFriendRequests() {
     }, 5000);
 
     return () => clearTimeout(timer);
-  }, [pendingRequests.length]);
+  }, [pendingRequests.length, clearPendingRequests]);
 
   if (pendingRequests.length === 0) {
     return null;

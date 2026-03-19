@@ -14,7 +14,7 @@ interface NotificationBadgeProps {
 export function NotificationBadge({
   className,
   showBell = true,
-}: NotificationBadgeProps) {
+}: Readonly<NotificationBadgeProps>) {
   const { unreadFriendRequestCount, acceptanceNotifications } =
     useNotificationStore();
 
@@ -37,18 +37,14 @@ export function NotificationBadge({
   }
 
   // Version without Bell icon (when the parent already renders Bell)
-  return (
-    <>
-      {totalNotifications > 0 && (
-        <span
-          className={cn(
-            "ml-2 inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500 text-white animate-pulse",
-            className,
-          )}
-        >
-          {totalNotifications > 9 ? "9+" : totalNotifications}
-        </span>
+  return totalNotifications > 0 ? (
+    <span
+      className={cn(
+        "ml-2 inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-500 text-white animate-pulse",
+        className,
       )}
-    </>
-  );
+    >
+      {totalNotifications > 9 ? "9+" : totalNotifications}
+    </span>
+  ) : null;
 }

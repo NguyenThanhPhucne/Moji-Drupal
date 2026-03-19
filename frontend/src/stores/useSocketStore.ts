@@ -4,6 +4,7 @@ import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
 import { useNotificationStore } from "./useNotificationStore";
+import { useSocialStore } from "./useSocialStore";
 import { toast } from "sonner";
 
 const resolveSocketBaseUrl = () => {
@@ -305,6 +306,43 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       toast.success(message, {
         description: `${from?.displayName} is now your friend!`,
       });
+    });
+
+    socket.on("social-notification", ({ notification }) => {
+      if (!notification) {
+        return;
+      }
+
+      useNotificationStore.getState().addSocialNotification(notification);
+      useSocialStore.setState((state) => ({
+        notifications: [notification, ...state.notifications],
+      }));
+
+      const actorName = notification.actorId?.displayName || "Someone";
+      const fallbackMessage = notification.message || "sent an update";
+
+      if (notification.type === "comment") {
+        toast.info(`${actorName} commented on your post`, {
+          description: fallbackMessage,
+        });
+        return;
+      }
+
+      if (notification.type === "like") {
+        toast.info(`${actorName} liked your post`, {
+          description: fallbackMessage,
+        });
+        return;
+      }
+
+      if (notification.type === "follow") {
+        toast.success(`${actorName} started following you`, {
+          description: fallbackMessage,
+        });
+        return;
+      }
+
+      toast.info(`${actorName} ${fallbackMessage}`);
     });
   },
   disconnectSocket: () => {

@@ -1,95 +1,125 @@
 import jwt from "jsonwebtoken";
+import { randomUUID } from "node:crypto";
 import User from "../models/User.js";
+
+const MONGO_ID_REGEX = /^[0-9a-fA-F]{24}$/;
+
+const isMongoObjectId = (value) => MONGO_ID_REGEX.test(String(value || ""));
+
+const isAdminConversationRoute = (path = "") =>
+  path.includes("/admin/conversations");
+
+const verifyAccessToken = (token) => {
+  try {
+    return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+  } catch (error) {
+    console.warn("Invalid access token:", error?.message || error);
+    return null;
+  }
+};
+
+const findUserByDecodedToken = async (decodedUser) => {
+  let user = null;
+
+  if (isMongoObjectId(decodedUser?.userId)) {
+    user = await User.findById(decodedUser?.userId).select("-hashedPassword");
+  }
+
+  if (!user && decodedUser?.username) {
+    user = await User.findOne({ username: decodedUser.username }).select(
+      "-hashedPassword",
+    );
+  }
+
+  const drupalIdNumber = Number(decodedUser?.userId);
+  if (!user && Number.isInteger(drupalIdNumber)) {
+    user = await User.findOne({ drupalId: drupalIdNumber }).select(
+      "-hashedPassword",
+    );
+  }
+
+  return user;
+};
+
+const syncDrupalUser = async (decodedUser) => {
+  if (!decodedUser?.username) {
+    return null;
+  }
+
+  const drupalIdNumber = Number(decodedUser?.userId);
+
+  try {
+    return await User.create({
+      username: decodedUser.username,
+      email: decodedUser.email || `${decodedUser.username}@drupal.local`,
+      displayName: decodedUser.displayName || decodedUser.username,
+      drupalId: Number.isInteger(drupalIdNumber) ? drupalIdNumber : undefined,
+      hashedPassword: `drupal-linked-${randomUUID()}`,
+      avatarUrl: null,
+    });
+  } catch (error) {
+    if (error?.code !== 11000) {
+      throw error;
+    }
+
+    return User.findOne({
+      $or: [
+        { username: decodedUser.username },
+        ...(Number.isInteger(drupalIdNumber)
+          ? [{ drupalId: drupalIdNumber }]
+          : []),
+      ],
+    }).select("-hashedPassword");
+  }
+};
 
 export const protectedRoute = async (req, res, next) => {
   // Skip auth for admin routes (Drupal has its own auth)
   const fullPath = req.originalUrl || req.path;
-  const pathToCheck = `${req.baseUrl || ""}${req.path}`;
 
   console.log(
     `[protectedRoute] fullPath: ${fullPath}, path: ${req.path}, baseUrl: ${req.baseUrl}`,
   );
 
   if (
-    fullPath.includes("/admin/conversations") ||
-    req.path.includes("/admin/conversations")
+    isAdminConversationRoute(fullPath) ||
+    isAdminConversationRoute(req.path)
   ) {
     console.log("[protectedRoute] Skipping auth for admin route");
     return next();
   }
 
   try {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
+    const token = req.headers["authorization"]?.split(" ")[1];
 
     if (!token) {
       return res.status(401).json({ message: "Không tìm thấy access token" });
     }
 
-    // 1. Giải mã Token
-    let decodedUser;
-    try {
-      decodedUser = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-    } catch (err) {
+    const decodedUser = verifyAccessToken(token);
+    if (!decodedUser) {
       return res
         .status(403)
         .json({ message: "Token không hợp lệ hoặc hết hạn" });
     }
 
-    let user = null;
+    let user = await findUserByDecodedToken(decodedUser);
 
-    // 2. Tìm User: Ưu tiên tìm theo ID MongoDB (cho user cũ)
-    if (
-      decodedUser.userId &&
-      decodedUser.userId.toString().match(/^[0-9a-fA-F]{24}$/)
-    ) {
-      user = await User.findById(decodedUser.userId).select("-hashedPassword");
-    }
-
-    // 3. Tìm theo Username (cho user từ Drupal)
-    if (!user && decodedUser.username) {
-      user = await User.findOne({ username: decodedUser.username }).select(
-        "-hashedPassword",
-      );
-    }
-
-    // 4. Tìm theo Drupal ID (QUAN TRỌNG cho hybrid architecture)
-    if (!user && decodedUser.userId && Number.isInteger(decodedUser.userId)) {
-      user = await User.findOne({ drupalId: decodedUser.userId }).select(
-        "-hashedPassword",
-      );
-    }
-
-    // 5. AUTO-SYNC: Nếu chưa có -> TỰ ĐỘNG TẠO MỚI (Khắc phục lỗi 500)
-    if (!user && decodedUser.username) {
+    if (!user && decodedUser?.username) {
       console.log(
         `[Sync] User mới từ Drupal: ${decodedUser.username} (ID: ${decodedUser.userId}). Đang tạo...`,
       );
+
       try {
-        user = await User.create({
-          username: decodedUser.username,
-          email: decodedUser.email || `${decodedUser.username}@drupal.local`,
-          displayName: decodedUser.displayName || decodedUser.username,
-          drupalId: decodedUser.userId, // Lưu Drupal ID
-          hashedPassword: "linked_with_drupal_jwt",
-          avatarUrl: null,
-        });
-      } catch (err) {
-        if (err.code === 11000) {
-          user = await User.findOne({
-            $or: [
-              { username: decodedUser.username },
-              { drupalId: decodedUser.userId },
-            ],
-          });
-        } else {
-          return res.status(500).json({ message: "Lỗi đồng bộ user" });
-        }
+        user = await syncDrupalUser(decodedUser);
+      } catch (error) {
+        console.error("User auto-sync failed:", error);
+        return res.status(500).json({ message: "Lỗi đồng bộ user" });
       }
     }
 
     if (!user) {
-      return res.status(404).json({ message: "User không tồn tại" });
+      return res.status(401).json({ message: "Phiên đăng nhập không hợp lệ" });
     }
 
     req.user = user;

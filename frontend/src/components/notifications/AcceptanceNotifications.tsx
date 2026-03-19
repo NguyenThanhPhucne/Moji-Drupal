@@ -6,15 +6,6 @@ export function AcceptanceNotifications() {
   const { acceptanceNotifications, removeAcceptanceNotification } =
     useNotificationStore();
 
-  console.log(
-    "[AcceptanceNotifications][debug] Rendering, count:",
-    acceptanceNotifications.length,
-  );
-  console.log(
-    "[AcceptanceNotifications][debug] Data:",
-    acceptanceNotifications,
-  );
-
   if (acceptanceNotifications.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-muted-foreground">
@@ -27,7 +18,7 @@ export function AcceptanceNotifications() {
     <div className="space-y-2">
       {acceptanceNotifications.map((notification, index) => (
         <div
-          key={index}
+          key={`${notification.from._id}-${String(notification.createdAt)}`}
           className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3 hover:bg-accent transition-colors"
         >
           <div className="flex items-start gap-3 flex-1 min-w-0">
