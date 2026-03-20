@@ -71,8 +71,11 @@ const ProtectedRoute = () => {
 
   if (starting || loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        Loading page...
+      <div className="flex min-h-svh items-center justify-center bg-background px-4">
+        <div className="elevated-card flex items-center gap-3 px-5 py-3 text-sm text-muted-foreground">
+          <span className="size-2 rounded-full bg-primary animate-pulse" />{" "}
+          Connecting to workspace...
+        </div>
       </div>
     );
   }
