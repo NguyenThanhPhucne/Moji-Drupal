@@ -255,6 +255,28 @@ export const getMessages = async (req, res) => {
     const { limit = 50, cursor } = req.query;
     const userId = req.user._id;
 
+    const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
+    const canAccessAll =
+      roles.includes("administrator") || roles.includes("sales_manager");
+
+    if (!canAccessAll) {
+      const conversation = await Conversation.findById(conversationId).select(
+        "participants.userId",
+      );
+
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+
+      const isParticipant = conversation.participants.some(
+        (p) => p.userId.toString() === userId.toString(),
+      );
+
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+    }
+
     const query = {
       conversationId,
       hiddenFor: { $ne: userId },
@@ -311,6 +333,18 @@ export const markAsSeen = async (req, res) => {
 
     if (!conversation) {
       return res.status(404).json({ message: "Conversation không tồn tại" });
+    }
+
+    const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
+    const canAccessAll =
+      roles.includes("administrator") || roles.includes("sales_manager");
+    if (!canAccessAll) {
+      const isParticipant = (conversation.participants || []).some(
+        (p) => p.userId?.toString?.() === userId,
+      );
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied" });
+      }
     }
 
     const last = conversation.lastMessage;
@@ -372,6 +406,9 @@ export const deleteConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const userId = req.user._id;
+    const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
+    const canDeleteAnyConversation =
+      roles.includes("administrator") || roles.includes("sales_manager");
 
     console.log(
       `[deleteConversation] Request: conversationId=${conversationId}, userId=${userId}`,
@@ -384,14 +421,16 @@ export const deleteConversation = async (req, res) => {
       return res.status(404).json({ message: "Conversation không tồn tại" });
     }
 
-    const isMember = conversation.participants.some(
-      (p) => p.userId.toString() === userId.toString(),
-    );
+    if (!canDeleteAnyConversation) {
+      const isMember = conversation.participants.some(
+        (p) => p.userId.toString() === userId.toString(),
+      );
 
-    if (!isMember) {
-      return res
-        .status(403)
-        .json({ message: "Bạn không có quyền xoá conversation này" });
+      if (!isMember) {
+        return res
+          .status(403)
+          .json({ message: "Bạn không có quyền xoá conversation này" });
+      }
     }
 
     // 2. Delete all messages in conversation
@@ -423,6 +462,14 @@ export const deleteConversation = async (req, res) => {
 export const getAdminConversations = async (req, res) => {
   try {
     console.log("[getAdminConversations] Fetching real data from MongoDB");
+
+    const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
+    const canAccessAdminConversations =
+      roles.includes("administrator") || roles.includes("sales_manager");
+
+    if (!canAccessAdminConversations) {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
     // Lấy tất cả conversations với populated data
     const conversations = await Conversation.find()
@@ -482,6 +529,7 @@ export const getAdminConversations = async (req, res) => {
       );
 
       return {
+        id: conv._id?.toString?.() || conv._id,
         _id: conv._id,
         type: conv.type,
         name: conv.group?.name || "Direct Chat",
@@ -528,6 +576,106 @@ export const getAdminConversations = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Không thể lấy dữ liệu conversations",
+      error: error.message,
+    });
+  }
+};
+
+// ADMIN API: Get a single conversation + latest messages (for Drupal admin)
+export const getAdminConversation = async (req, res) => {
+  try {
+    const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
+    const canAccessAdminConversations =
+      roles.includes("administrator") || roles.includes("sales_manager");
+
+    if (!canAccessAdminConversations) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const { conversationId } = req.params;
+
+    const conversationDoc = await Conversation.findById(conversationId)
+      .populate({
+        path: "participants.userId",
+        select: "_id displayName email avatarUrl drupalId",
+      })
+      .populate({
+        path: "lastMessage.senderId",
+        select: "_id displayName email avatarUrl drupalId",
+      })
+      .lean();
+
+    if (!conversationDoc) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const participants = (conversationDoc.participants || [])
+      .filter((p) => Boolean(p?.userId))
+      .map((p) => ({
+        userId: p.userId?._id || p.userId,
+        displayName: p.userId?.displayName || "Unknown User",
+        email: p.userId?.email || null,
+        avatarUrl: p.userId?.avatarUrl ?? null,
+        drupalId: p.userId?.drupalId || "N/A",
+        joinedAt: p.joinedAt,
+      }));
+
+    const conversation = {
+      id: conversationDoc._id?.toString?.() || conversationDoc._id,
+      _id: conversationDoc._id,
+      type: conversationDoc.type,
+      name: conversationDoc.group?.name || "Direct Chat",
+      messageCount: conversationDoc.messageCount || 0,
+      participantCount: participants.length,
+      participants,
+      createdAt: conversationDoc.createdAt,
+      lastMessageAt: conversationDoc.lastMessageAt || null,
+      lastMessage: conversationDoc.lastMessage?.content || "No messages",
+    };
+
+    const messages = await Message.find({
+      conversationId,
+      isDeleted: { $ne: true },
+    })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .populate({
+        path: "senderId",
+        select: "_id displayName email avatarUrl drupalId",
+      });
+
+    const formattedMessages = messages
+      .slice()
+      .reverse()
+      .map((m) => ({
+        _id: m._id,
+        senderId: m.senderId
+          ? {
+              _id: m.senderId._id,
+              displayName: m.senderId.displayName,
+              email: m.senderId.email,
+              avatarUrl: m.senderId.avatarUrl ?? null,
+              drupalId: m.senderId.drupalId ?? null,
+            }
+          : null,
+        content: m.content || "",
+        createdAt: m.createdAt,
+        attachments: m.imgUrl
+          ? [{ filename: "Attachment", url: m.imgUrl }]
+          : [],
+      }));
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        conversation,
+        messages: formattedMessages,
+      },
+    });
+  } catch (error) {
+    console.error("[getAdminConversation] Error:", error);
+    return res.status(500).json({
+      message: "Unable to fetch admin conversation",
       error: error.message,
     });
   }

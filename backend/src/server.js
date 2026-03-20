@@ -10,7 +10,11 @@ import conversationRoute from "./routes/conversationRoute.js";
 import bookmarkRoute from "./routes/bookmarkRoute.js";
 import searchRoute from "./routes/searchRoute.js";
 import socialRoute from "./routes/socialRoute.js";
-import { getAdminConversations } from "./controllers/conversationController.js";
+import {
+  getAdminConversations,
+  deleteConversation,
+  getAdminConversation,
+} from "./controllers/conversationController.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import cors from "cors";
@@ -78,16 +82,17 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 // public routes (no auth required)
 app.use("/api/auth", authRoute);
 
-// admin routes (no auth required - Drupal has its own auth)
-// MUST be BEFORE protectedRoute middleware
-app.get("/api/conversations/admin/conversations", getAdminConversations);
-
 // private routes (auth required)
 app.use(protectedRoute);
+
+// admin routes (protected; RBAC enforced by controller)
+app.get("/api/conversations/admin/conversations", getAdminConversations);
+app.get("/api/conversations/admin/:conversationId", getAdminConversation);
+app.delete("/api/conversations/admin/:conversationId", deleteConversation);
+
 app.use("/api/users", userRoute);
 app.use("/api/friends", friendRoute);
 app.use("/api/messages", messageRoute);
-// Conversation routes after protectedRoute - but admin route already handled above
 app.use("/api/conversations", conversationRoute);
 app.use("/api/bookmarks", bookmarkRoute);
 app.use("/api/search", searchRoute);

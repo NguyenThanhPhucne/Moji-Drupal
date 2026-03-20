@@ -6,9 +6,6 @@ const MONGO_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 const isMongoObjectId = (value) => MONGO_ID_REGEX.test(String(value || ""));
 
-const isAdminConversationRoute = (path = "") =>
-  path.includes("/admin/conversations");
-
 const verifyAccessToken = (token) => {
   try {
     return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
@@ -74,21 +71,6 @@ const syncDrupalUser = async (decodedUser) => {
 };
 
 export const protectedRoute = async (req, res, next) => {
-  // Skip auth for admin routes (Drupal has its own auth)
-  const fullPath = req.originalUrl || req.path;
-
-  console.log(
-    `[protectedRoute] fullPath: ${fullPath}, path: ${req.path}, baseUrl: ${req.baseUrl}`,
-  );
-
-  if (
-    isAdminConversationRoute(fullPath) ||
-    isAdminConversationRoute(req.path)
-  ) {
-    console.log("[protectedRoute] Skipping auth for admin route");
-    return next();
-  }
-
   try {
     const token = req.headers["authorization"]?.split(" ")[1];
 
@@ -123,6 +105,9 @@ export const protectedRoute = async (req, res, next) => {
     }
 
     req.user = user;
+    // Keep decoded token data for RBAC checks downstream.
+    req.decodedUser = decodedUser;
+    req.authRoles = Array.isArray(decodedUser?.roles) ? decodedUser.roles : [];
     next();
   } catch (error) {
     console.error("Lỗi authMiddleware:", error);
