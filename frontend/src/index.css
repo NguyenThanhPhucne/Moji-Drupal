@@ -532,7 +532,7 @@
 
   /* ─── Message action toolbar ─────────────────────────────────────── */
   .msg-action-bar {
-    @apply flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/95 backdrop-blur-sm shadow-soft p-0.5 opacity-0 scale-90 transition-all duration-150 pointer-events-none;
+    @apply flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/95 backdrop-blur-sm shadow-md p-0.5 opacity-0 scale-90 transition-all duration-150 pointer-events-none;
   }
   .group:hover .msg-action-bar,
   .msg-action-bar:focus-within {
@@ -547,7 +547,9 @@
     @apply flex flex-col items-center justify-center gap-4 h-full text-center px-6;
   }
   .chat-empty-icon {
-    @apply size-16 rounded-3xl bg-gradient-chat flex items-center justify-center shadow-bubble mb-2;
+    @apply size-16 rounded-3xl flex items-center justify-center mb-2;
+    background: var(--gradient-chat);
+    box-shadow: var(--shadow-bubble);
   }
 
   /* ─── Search result highlight ────────────────────────────────────── */
