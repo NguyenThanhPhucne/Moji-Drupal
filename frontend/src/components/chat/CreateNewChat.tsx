@@ -24,7 +24,7 @@ const CreateNewChat = () => {
                 <MessageCircle className="size-4 text-white" />
               </div>
               <span className="text-sm font-medium capitalize">
-                gửi tin nhắn mới
+                send a new message
               </span>
             </div>
           </DialogTrigger>
