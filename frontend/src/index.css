@@ -18,11 +18,11 @@
     --popover: 200 100% 99%;
     --popover-foreground: 240 15% 15%;
 
-    /* Primary - ClickUp Vibrant Purple */
-    --primary: 255 83% 65%;
+    /* Primary - Original Sky Blue */
+    --primary: 204 89% 51%;
     --primary-foreground: 0 0% 100%;
-    /* Purple Light */
-    --primary-glow: 255 90% 75%;
+    /* Blue Light */
+    --primary-glow: 206 100% 70%;
 
     /* Secondary - Indigo/Slate */
     --secondary: 230 70% 85%;
@@ -37,7 +37,7 @@
     --accent-foreground: 210 100% 98%;
 
     /* Chat colors */
-    --chat-bubble-sent: 255 83% 65%;
+    --chat-bubble-sent: 204 89% 51%;
     --chat-bubble-sent-foreground: 0 0% 100%;
     --chat-bubble-received: 0 0% 96%;
     --chat-bubble-received-foreground: 240 15% 15%;
@@ -82,13 +82,13 @@
     /* Gradients */
     --gradient-primary: linear-gradient(
       135deg,
-      hsl(255, 83%, 65%),
-      hsl(255, 90%, 75%)
+      hsl(204, 89%, 51%),
+      hsl(206, 100%, 70%)
     );
     --gradient-chat: linear-gradient(
       135deg,
-      hsl(255, 83%, 65%),
-      hsl(280, 80%, 65%)
+      hsl(204, 89%, 51%),
+      hsl(210, 80%, 65%)
     );
     --gradient-accent: linear-gradient(
       90deg,
@@ -110,9 +110,9 @@
     );
 
     /* Shadows */
-    --shadow-soft: 0 8px 32px -8px hsl(255 83% 65% / 0.15);
+    --shadow-soft: 0 8px 32px -8px hsl(204 89% 51% / 0.15);
     --shadow-glow: 0 0 40px hsl(var(--primary) / 0.3);
-    --shadow-bubble: 0 4px 20px -4px hsl(255 83% 65% / 0.25);
+    --shadow-bubble: 0 4px 20px -4px hsl(204 89% 51% / 0.25);
 
     /* Sidebar */
     --sidebar: 0 0% 100%;
@@ -120,7 +120,7 @@
 
     --sidebar-foreground: 210 20% 30%; /*slate-700*/
 
-    --sidebar-primary: 255 83% 65%;
+    --sidebar-primary: 204 89% 51%;
 
     --sidebar-primary-foreground: 0 0% 98%;
 
