@@ -319,7 +319,7 @@ const GlobalSearchDialog = () => {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="hidden md:flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/60"
+          className="hidden md:flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground"
         >
           <Search className="size-3.5" />
           Search people, groups, messages
@@ -358,7 +358,7 @@ const GlobalSearchDialog = () => {
                     key={item}
                     type="button"
                     onClick={() => setQuery(item)}
-                    className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted"
+                    className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/70"
                   >
                     {item}
                   </button>
@@ -376,7 +376,7 @@ const GlobalSearchDialog = () => {
                     <button
                       key={item.key}
                       type="button"
-                      className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/60"
+                      className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground"
                       onClick={() => {
                         if (item.conversationId) {
                           setActiveConversation(item.conversationId);

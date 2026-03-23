@@ -31,6 +31,8 @@
     /* Muted */
     --muted: 210 30% 92%;
     --muted-foreground: 210 15% 50%;
+    --surface-hover-bg: 210 32% 88%;
+    --surface-hover-foreground: 217 30% 18%;
 
     /* Accent - Teal (complements blue) */
     --accent: 174 100% 45%;
@@ -160,6 +162,8 @@
     /* Muted */
     --muted: 210 25% 20%;
     --muted-foreground: 210 20% 70%;
+    --surface-hover-bg: 210 24% 28%;
+    --surface-hover-foreground: 210 20% 96%;
 
     /* Accent - Teal */
     --accent: 174 100% 50%;
@@ -263,6 +267,15 @@
 
   .glass-strong {
     @apply backdrop-blur-2xl bg-gradient-to-br from-card/90 to-card/60 border border-border/70;
+  }
+
+  .glass-light {
+    @apply border border-border/60 bg-card/70 text-foreground/90 backdrop-blur-md transition-colors;
+  }
+
+  .glass-light:hover {
+    background-color: hsl(var(--surface-hover-bg));
+    color: hsl(var(--surface-hover-foreground));
   }
 
   .app-shell-bg {
@@ -370,6 +383,10 @@
   /* Status indicators */
   .status-online {
     @apply bg-[hsl(var(--online))] shadow-[0_0_8px_hsl(var(--online)/0.5)];
+  }
+
+  .status-recently-active {
+    @apply bg-amber-400 shadow-[0_0_8px_rgb(251_191_36/0.55)];
   }
 
   .status-offline {
@@ -511,13 +528,27 @@
     animation: typingBounce 1.4s ease-in-out infinite;
   }
 
-  .typing-dot:nth-child(1) { animation-delay: 0s; }
-  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  .typing-dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
 
   @keyframes typingBounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-    30% { transform: translateY(-6px); opacity: 1; }
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-6px);
+      opacity: 1;
+    }
   }
 
   /* ─── Unread count badge ─────────────────────────────────────────── */
@@ -525,7 +556,7 @@
     @apply relative;
   }
   .unread-badge-pulse::before {
-    content: '';
+    content: "";
     @apply absolute inset-0 rounded-full bg-primary/50 animate-ping;
     animation-duration: 2s;
   }
@@ -539,7 +570,7 @@
     @apply opacity-100 scale-100 pointer-events-auto;
   }
   .msg-action-btn {
-    @apply flex items-center justify-center size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors;
+    @apply flex items-center justify-center size-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors;
   }
 
   /* ─── Empty chat state ───────────────────────────────────────────── */
@@ -580,8 +611,14 @@
     animation: sendBtnPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   @keyframes sendBtnPop {
-    0% { transform: scale(0.75); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
+    0% {
+      transform: scale(0.75);
+      opacity: 0;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
   }
 
   /* ─── Notification toast (better than inline div) ────────────────── */
@@ -612,5 +649,30 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+
+  /* Dark mode fine-tune: increase hover overlay strength by ~5-10% for readability. */
+  .dark .hover\:bg-muted\/70:hover {
+    background-color: hsl(var(--muted) / 0.78);
+  }
+
+  .dark .hover\:bg-muted\/60:hover {
+    background-color: hsl(var(--muted) / 0.68);
+  }
+
+  .dark .hover\:bg-muted\/40:hover {
+    background-color: hsl(var(--muted) / 0.48);
+  }
+
+  .dark .hover\:bg-accent\/80:hover {
+    background-color: hsl(var(--accent) / 0.88);
+  }
+
+  .dark .hover\:bg-input\/60:hover {
+    background-color: hsl(var(--input) / 0.68);
+  }
+
+  .dark .hover\:bg-sidebar-accent\/80:hover {
+    background-color: hsl(var(--sidebar-accent) / 0.88);
   }
 }

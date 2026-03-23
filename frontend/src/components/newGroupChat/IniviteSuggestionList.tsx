@@ -25,7 +25,7 @@ const IniviteSuggestionList = ({
         <button
           type="button"
           key={friend._id}
-          className="w-full flex items-center gap-3 p-2 text-left hover:bg-muted transition"
+          className="w-full flex items-center gap-3 p-2 text-left hover:bg-muted/70 transition"
           onClick={() => onSelect(friend)}
         >
           <UserAvatar

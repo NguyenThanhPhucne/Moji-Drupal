@@ -49,6 +49,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       sparse: true, // cho phép null, nhưng không được trùng
     },
+    showOnlineStatus: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,

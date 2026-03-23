@@ -208,7 +208,7 @@ const SocialPostCard = ({
                   <button
                     key={`like-${user._id}`}
                     type="button"
-                    className="flex w-full items-center justify-between rounded-md border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                    className="flex w-full items-center justify-between rounded-md border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/60"
                     onClick={() => onOpenProfile?.(user._id)}
                   >
                     <span className="text-sm font-medium">

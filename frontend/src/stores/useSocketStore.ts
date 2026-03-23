@@ -48,10 +48,74 @@ const resolveSocketBaseUrl = () => {
 };
 
 const baseURL = resolveSocketBaseUrl();
+const RECENTLY_ACTIVE_WINDOW_MS = 4000;
+
+let recentActiveCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
+const scheduleRecentActiveCleanup = () => {
+  if (recentActiveCleanupTimer) {
+    clearTimeout(recentActiveCleanupTimer);
+    recentActiveCleanupTimer = null;
+  }
+
+  const recentValues = Object.values(
+    useSocketStore.getState().recentActiveUsers,
+  );
+  if (recentValues.length === 0) {
+    return;
+  }
+
+  const soonestExpiry = Math.min(...recentValues);
+  const delay = Math.max(0, soonestExpiry - Date.now()) + 50;
+
+  recentActiveCleanupTimer = setTimeout(() => {
+    const now = Date.now();
+    useSocketStore.setState((state) => {
+      const nextRecentActiveUsers = Object.fromEntries(
+        Object.entries(state.recentActiveUsers).filter(
+          ([, expiry]) => expiry > now,
+        ),
+      );
+
+      if (
+        Object.keys(nextRecentActiveUsers).length ===
+        Object.keys(state.recentActiveUsers).length
+      ) {
+        return state;
+      }
+
+      return { recentActiveUsers: nextRecentActiveUsers };
+    });
+
+    scheduleRecentActiveCleanup();
+  }, delay);
+};
 
 export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
   onlineUsers: [],
+  recentActiveUsers: {},
+  isUserOnline: (userId) => {
+    return get().getUserPresence(userId) === "online";
+  },
+  getUserPresence: (userId) => {
+    if (!userId) {
+      return "offline";
+    }
+
+    const normalized = String(userId);
+    const onlineSet = new Set(get().onlineUsers);
+    if (onlineSet.has(normalized)) {
+      return "online";
+    }
+
+    const expiry = get().recentActiveUsers[normalized];
+    if (expiry && expiry > Date.now()) {
+      return "recently-active";
+    }
+
+    return "offline";
+  },
   connectSocket: () => {
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;
@@ -76,6 +140,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       withCredentials: true,
       path: "/socket.io",
       transports: ["websocket", "polling"],
+      closeOnBeforeunload: true,
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -134,7 +199,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("disconnect", (reason) => {
       console.warn("Socket disconnected:", reason);
-      set({ onlineUsers: [] });
+      set({ onlineUsers: [], recentActiveUsers: {} });
     });
 
     socket.on("reconnect", () => {
@@ -149,7 +214,34 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const normalizedUserIds = Array.isArray(userIds)
         ? userIds.map(String)
         : [];
-      set({ onlineUsers: normalizedUserIds });
+
+      const now = Date.now();
+      const previousOnlineSet = new Set(get().onlineUsers);
+      const nextOnlineSet = new Set(normalizedUserIds);
+      const nextRecentActiveUsers = { ...get().recentActiveUsers };
+
+      previousOnlineSet.forEach((userId) => {
+        if (!nextOnlineSet.has(userId)) {
+          nextRecentActiveUsers[userId] = now + RECENTLY_ACTIVE_WINDOW_MS;
+        }
+      });
+
+      normalizedUserIds.forEach((userId) => {
+        delete nextRecentActiveUsers[userId];
+      });
+
+      Object.keys(nextRecentActiveUsers).forEach((userId) => {
+        if (nextRecentActiveUsers[userId] <= now) {
+          delete nextRecentActiveUsers[userId];
+        }
+      });
+
+      set({
+        onlineUsers: normalizedUserIds,
+        recentActiveUsers: nextRecentActiveUsers,
+      });
+
+      scheduleRecentActiveCleanup();
     });
 
     // new message
@@ -354,12 +446,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   disconnectSocket: () => {
     const socket = get().socket;
     if (socket) {
+      if (socket.connected) {
+        socket.emit("manual-offline");
+      }
       socket.removeAllListeners(); // Remove all listeners before disconnect
       socket.disconnect();
-      set({ socket: null, onlineUsers: [] });
+      set({ socket: null, onlineUsers: [], recentActiveUsers: {} });
       return;
     }
 
-    set({ onlineUsers: [] });
+    set({ onlineUsers: [], recentActiveUsers: {} });
   },
 }));

@@ -6,6 +6,23 @@ import { persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
 import { useSocketStore } from "./useSocketStore";
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+  const maybeAxios = error as {
+    response?: { data?: { message?: string } };
+    message?: string;
+  };
+
+  return maybeAxios?.response?.data?.message || maybeAxios?.message || fallback;
+};
+
+const getErrorStatus = (error: unknown) => {
+  const maybeAxios = error as {
+    response?: { status?: number };
+  };
+
+  return maybeAxios?.response?.status;
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -46,7 +63,8 @@ export const useAuthStore = create<AuthState>()(
           );
         } catch (error) {
           console.error(error);
-          toast.error("Sign-up failed");
+          toast.error(getErrorMessage(error, "Sign-up failed"));
+          throw error;
         } finally {
           set({ loading: false });
         }
@@ -73,7 +91,7 @@ export const useAuthStore = create<AuthState>()(
           toast.success("Welcome back to Coming");
         } catch (error) {
           console.error(error);
-          toast.error("Sign-in failed!");
+          toast.error(getErrorMessage(error, "Sign-in failed!"));
         } finally {
           set({ loading: false });
         }
@@ -121,8 +139,16 @@ export const useAuthStore = create<AuthState>()(
             await fetchMe();
           }
         } catch (error) {
+          const status = getErrorStatus(error);
+
+          // 401/403 means no usable refresh session; this is expected for signed-out users.
+          if (status === 401 || status === 403) {
+            get().clearState();
+            return;
+          }
+
           console.error(error);
-          toast.error("Your session has expired. Please sign in again!");
+          toast.error("Cannot restore your session. Please sign in again!");
           get().clearState();
         } finally {
           set({ loading: false });

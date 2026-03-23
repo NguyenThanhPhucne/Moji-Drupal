@@ -5,6 +5,28 @@ import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 
+const toTimestamp = (value?: string) => {
+  const ts = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(ts) ? ts : 0;
+};
+
+const sortMessagesChronologically = <
+  T extends { createdAt?: string; _id?: string },
+>(
+  input: T[],
+) => {
+  return [...input].sort((a, b) => {
+    const tsA = toTimestamp(a.createdAt);
+    const tsB = toTimestamp(b.createdAt);
+
+    if (tsA !== tsB) {
+      return tsA - tsB;
+    }
+
+    return String(a._id || "").localeCompare(String(b._id || ""));
+  });
+};
+
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -70,12 +92,13 @@ export const useChatStore = create<ChatState>()(
             const prev = state.messages[convoId]?.items ?? [];
             const merged =
               prev.length > 0 ? [...processed, ...prev] : processed;
+            const normalized = sortMessagesChronologically(merged);
 
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
-                  items: merged,
+                  items: normalized,
                   hasMore: !!cursor,
                   nextCursor: cursor ?? null,
                 },
@@ -151,12 +174,17 @@ export const useChatStore = create<ChatState>()(
               return state;
             }
 
+            const normalized = sortMessagesChronologically([
+              ...currentItems,
+              message,
+            ]);
+
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
                   ...state.messages[convoId],
-                  items: [...currentItems, message],
+                  items: normalized,
                   // Preserve pagination state if it exists, otherwise init it
                   hasMore: state.messages[convoId]?.hasMore ?? false,
                   nextCursor: state.messages[convoId]?.nextCursor ?? undefined,

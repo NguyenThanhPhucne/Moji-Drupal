@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet } from "react-router";
 import { authService } from "@/services/authService";
 
+const CRM_SSO_SESSION_KEY = "crm_sso_payload";
+
 // Add a timeout wrapper so we never hang forever waiting for a cold-start backend
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
@@ -23,30 +25,61 @@ const ProtectedRoute = () => {
   useEffect(() => {
     const tryDrupalSso = async () => {
       const params = new URLSearchParams(globalThis.location.search);
-      if (params.get("crm_sso") !== "1") return false;
+      const fromUrl = {
+        uid: params.get("uid") || "",
+        username: params.get("username") || "",
+        email: params.get("email") || "",
+        displayName: params.get("displayName") || "",
+        ts: params.get("ts") || "",
+        sig: params.get("sig") || "",
+      };
 
-      const uid = params.get("uid") || "";
-      const username = params.get("username") || "";
-      const email = params.get("email") || "";
-      const displayName = params.get("displayName") || "";
-      const ts = params.get("ts") || "";
-      const sig = params.get("sig") || "";
+      const hasSsoInUrl = params.get("crm_sso") === "1";
+      const hasAllRequiredFromUrl =
+        !!fromUrl.uid && !!fromUrl.username && !!fromUrl.ts && !!fromUrl.sig;
 
-      if (!uid || !username || !ts || !sig) return false;
+      if (hasSsoInUrl && hasAllRequiredFromUrl) {
+        sessionStorage.setItem(CRM_SSO_SESSION_KEY, JSON.stringify(fromUrl));
+      }
+
+      let ssoPayload = fromUrl;
+      if (!hasAllRequiredFromUrl) {
+        const cached = sessionStorage.getItem(CRM_SSO_SESSION_KEY);
+        if (cached) {
+          try {
+            ssoPayload = JSON.parse(cached);
+          } catch {
+            sessionStorage.removeItem(CRM_SSO_SESSION_KEY);
+          }
+        }
+      }
+
+      if (
+        !ssoPayload.uid ||
+        !ssoPayload.username ||
+        !ssoPayload.ts ||
+        !ssoPayload.sig
+      ) {
+        return false;
+      }
 
       try {
-        const data = await withTimeout(
-          authService.drupalSso({ uid, username, email, displayName, ts, sig }),
-          8000,
-        );
+        const data = await withTimeout(authService.drupalSso(ssoPayload), 8000);
         if (data?.accessToken) {
           setAccessToken(data.accessToken);
           await withTimeout(fetchMe(), 6000);
+          sessionStorage.removeItem(CRM_SSO_SESSION_KEY);
         }
       } catch (err) {
         console.error("Drupal SSO bootstrap failed:", err);
       } finally {
-        globalThis.history.replaceState({}, "", globalThis.location.pathname);
+        if (hasSsoInUrl) {
+          globalThis.history.replaceState(
+            {},
+            "",
+            `${globalThis.location.pathname}${globalThis.location.hash}`,
+          );
+        }
       }
 
       return Boolean(useAuthStore.getState().accessToken);
@@ -61,6 +94,13 @@ const ProtectedRoute = () => {
       const currentUser = useAuthStore.getState().user;
 
       if (!currentToken) {
+        // No token + no cached user usually means a first-time anonymous visit.
+        // Skip refresh to avoid expected 401/403 noise in this scenario.
+        if (!currentUser) {
+          setStarting(false);
+          return;
+        }
+
         // Run refresh (which internally calls fetchMe when no user) with a timeout
         try {
           await withTimeout(refresh(), 10000);

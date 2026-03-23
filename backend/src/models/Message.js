@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { updateMessageCountInDrupal } from "../libs/drupalSync.js";
+import { adjustMessageCountInDrupal } from "../libs/drupalSync.js";
 
 const messageSchema = new mongoose.Schema(
   {
@@ -63,6 +63,7 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, isDeleted: 1, createdAt: -1 });
+messageSchema.index({ senderId: 1, createdAt: -1 });
 messageSchema.index(
   { content: "text" },
   {
@@ -74,14 +75,21 @@ messageSchema.index(
   },
 );
 
-// Update message count in Drupal after new message
+// Keep track of create vs update so we only adjust counts for new documents.
+messageSchema.pre("save", function (next) {
+  this._wasNew = this.isNew;
+  next();
+});
+
+// Update message count in Drupal after new message.
 messageSchema.post("save", async function (doc) {
   try {
+    if (!doc._wasNew) {
+      return;
+    }
+
     const conversationId = doc.conversationId.toString();
-    const messageCount = await Message.countDocuments({
-      conversationId: doc.conversationId,
-    });
-    await updateMessageCountInDrupal(conversationId, messageCount);
+    await adjustMessageCountInDrupal(conversationId, 1);
   } catch (error) {
     console.error("Failed to update message count in Drupal:", error);
   }
@@ -93,10 +101,7 @@ messageSchema.post("deleteOne", async function () {
     const query = this.getQuery();
     if (query.conversationId) {
       const conversationId = query.conversationId.toString();
-      const messageCount = await Message.countDocuments({
-        conversationId: query.conversationId,
-      });
-      await updateMessageCountInDrupal(conversationId, messageCount);
+      await adjustMessageCountInDrupal(conversationId, -1);
     }
   } catch (error) {
     console.error("Failed to update message count in Drupal:", error);

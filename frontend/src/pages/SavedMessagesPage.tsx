@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
+import SavedMessageSkeleton from "@/components/skeleton/SavedMessageSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -308,6 +309,10 @@ const SavedMessagesPage = () => {
             </div>
 
             <div className="min-h-0 flex-1 flex flex-col gap-3">
+              {loading && bookmarks.length === 0 && (
+                <SavedMessageSkeleton count={4} />
+              )}
+
               {!loading && bookmarks.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-border/70 bg-card/60 p-8 text-center text-sm text-muted-foreground">
                   You have no saved messages in this filter.

@@ -31,6 +31,23 @@ interface TypingEventPayload {
 
 const EMPTY_MESSAGES: Message[] = [];
 
+const getMessageRenderKey = (message: Message) => {
+  if (message._id) {
+    return message._id;
+  }
+
+  return [
+    "pending",
+    message.conversationId,
+    message.senderId,
+    message.createdAt,
+    message.updatedAt ?? "",
+    message.imgUrl ?? "",
+    message.replyTo?._id ?? "",
+    message.content ?? "",
+  ].join("::");
+};
+
 const ChatWindowBody = () => {
   const {
     activeConversationId,
@@ -399,7 +416,7 @@ const ChatWindowBody = () => {
               !isSameDay(message.createdAt, prevMessage.createdAt);
             return (
               <MessageItem
-                key={message._id ?? index}
+                key={getMessageRenderKey(message)}
                 message={message}
                 index={index}
                 messages={reversedMessages}
@@ -420,7 +437,7 @@ const ChatWindowBody = () => {
       <button
         onClick={scrollToBottom}
         className={cn(
-          "absolute bottom-4 right-4 size-10 rounded-full bg-background border border-border/70 shadow-lg flex items-center justify-center transition-all duration-300 hover:bg-muted z-20",
+          "absolute bottom-4 right-4 size-10 rounded-full bg-background border border-border/70 shadow-lg flex items-center justify-center transition-all duration-300 hover:bg-muted/70 z-20",
           showScrollBtn
             ? "opacity-100 scale-100"
             : "opacity-0 scale-75 pointer-events-none",

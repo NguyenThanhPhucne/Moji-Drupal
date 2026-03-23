@@ -1,9 +1,11 @@
+import type { CSSProperties } from "react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Compass } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
+import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useSocialStore } from "@/stores/useSocialStore";
@@ -24,6 +26,9 @@ const ExplorePage = () => {
     fetchPostEngagement,
     addComment,
   } = useSocialStore();
+
+  const isInitialExploreLoading = loadingExplore && exploreFeed.length === 0;
+  const isLoadingMoreExplore = loadingExplore && exploreFeed.length > 0;
 
   useEffect(() => {
     if (!accessToken || !user) {
@@ -63,19 +68,31 @@ const ExplorePage = () => {
             </div>
 
             <div className="space-stack-md">
-              {exploreFeed.map((post) => (
-                <SocialPostCard
+              {isInitialExploreLoading && <SocialPostSkeleton count={3} />}
+              {exploreFeed.map((post, index) => (
+                <div
                   key={post._id}
-                  post={post}
-                  comments={postComments[post._id]}
-                  engagement={postEngagement[post._id]}
-                  onLike={toggleLike}
-                  onFetchComments={fetchComments}
-                  onFetchEngagement={fetchPostEngagement}
-                  onComment={addComment}
-                  onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
-                />
+                  className="stagger-enter"
+                  style={{ "--stagger-index": index } as CSSProperties}
+                >
+                  <SocialPostCard
+                    post={post}
+                    comments={postComments[post._id]}
+                    engagement={postEngagement[post._id]}
+                    onLike={toggleLike}
+                    onFetchComments={fetchComments}
+                    onFetchEngagement={fetchPostEngagement}
+                    onComment={addComment}
+                    onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+                  />
+                </div>
               ))}
+              {isLoadingMoreExplore && (
+                <SocialPostSkeleton
+                  count={2}
+                  staggerFrom={exploreFeed.length}
+                />
+              )}
               {!loadingExplore && exploreFeed.length === 0 && (
                 <div className="elevated-card p-8 text-center text-muted-foreground">
                   Explore is quiet right now.
@@ -85,8 +102,13 @@ const ExplorePage = () => {
 
             {explorePagination.hasNextPage && (
               <div className="flex justify-center">
-                <Button type="button" variant="outline" onClick={loadMore}>
-                  {loadingExplore ? "Loading..." : "Load more"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={loadMore}
+                  disabled={loadingExplore}
+                >
+                  {loadingExplore ? "Loading more..." : "Load more"}
                 </Button>
               </div>
             )}

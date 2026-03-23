@@ -154,7 +154,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           />
           <button
             onClick={() => setImagePreview(null)}
-            className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-0.5 shadow hover:bg-muted transition-colors"
+            className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-0.5 shadow hover:bg-muted/70 transition-colors"
           >
             <X className="size-3.5 text-muted-foreground" />
           </button>

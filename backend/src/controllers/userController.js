@@ -2,6 +2,33 @@ import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import bcrypt from "bcrypt";
+import crypto from "node:crypto";
+import { broadcastOnlineUsers } from "../socket/index.js";
+
+const isBcryptHash = (hash) => /^\$2[aby]\$\d{2}\$/.test(String(hash || ""));
+const isSha256Hex = (hash) => /^[a-f0-9]{64}$/i.test(String(hash || ""));
+
+const verifyPasswordWithFallback = async (plainPassword, storedHash) => {
+  const hash = String(storedHash || "");
+  if (!hash) {
+    return false;
+  }
+
+  if (isBcryptHash(hash)) {
+    return bcrypt.compare(plainPassword, hash);
+  }
+
+  if (isSha256Hex(hash)) {
+    const digest = crypto
+      .createHash("sha256")
+      .update(plainPassword)
+      .digest("hex");
+    return digest.toLowerCase() === hash.toLowerCase();
+  }
+
+  return false;
+};
 
 export const authMe = async (req, res) => {
   try {
@@ -130,6 +157,93 @@ export const getUserProfileLite = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi lấy profile-lite", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Thiếu currentPassword hoặc newPassword" });
+    }
+
+    if (String(newPassword).length < 5) {
+      return res
+        .status(400)
+        .json({ message: "Mật khẩu mới phải có ít nhất 5 ký tự" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    if (!user.hashedPassword) {
+      return res.status(400).json({
+        message:
+          "Tài khoản này không dùng mật khẩu cục bộ. Hãy đăng nhập bằng phương thức liên kết.",
+      });
+    }
+
+    const currentPasswordMatched = await verifyPasswordWithFallback(
+      currentPassword,
+      user.hashedPassword,
+    );
+
+    if (!currentPasswordMatched) {
+      return res.status(401).json({ message: "Mật khẩu hiện tại không đúng" });
+    }
+
+    if (String(currentPassword) === String(newPassword)) {
+      return res.status(400).json({
+        message: "Mật khẩu mới phải khác mật khẩu hiện tại",
+      });
+    }
+
+    user.hashedPassword = await bcrypt.hash(String(newPassword), 10);
+    await user.save();
+
+    return res.status(200).json({ message: "Đổi mật khẩu thành công" });
+  } catch (error) {
+    console.error("Lỗi khi đổi mật khẩu", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const updateOnlineStatusVisibility = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { showOnlineStatus } = req.body || {};
+
+    if (typeof showOnlineStatus !== "boolean") {
+      return res
+        .status(400)
+        .json({ message: "showOnlineStatus phải là kiểu boolean" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { showOnlineStatus },
+      { new: true },
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    await broadcastOnlineUsers();
+
+    return res.status(200).json({
+      message: "Cập nhật trạng thái hoạt động thành công",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật showOnlineStatus", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

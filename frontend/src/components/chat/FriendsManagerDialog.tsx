@@ -89,7 +89,7 @@ const FriendsManagerDialog = () => {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="flex items-center justify-center size-5 rounded-full hover:bg-sidebar-accent cursor-pointer"
+          className="flex items-center justify-center size-5 rounded-full hover:bg-sidebar-accent/80 cursor-pointer"
           aria-label="Open friends list"
           title="Friends"
         >

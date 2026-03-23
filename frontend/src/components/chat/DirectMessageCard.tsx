@@ -16,7 +16,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     messages,
     fetchMessages,
   } = useChatStore();
-  const { onlineUsers } = useSocketStore();
+  const { getUserPresence } = useSocketStore();
 
   if (!user) return null;
 
@@ -54,13 +54,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             name={otherUser.displayName ?? ""}
             avatarUrl={otherUser.avatarUrl ?? undefined}
           />
-          <StatusBadge
-            status={
-              onlineUsers.includes(String(otherUser?._id ?? ""))
-                ? "online"
-                : "offline"
-            }
-          />
+          <StatusBadge status={getUserPresence(otherUser?._id)} />
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
         </>
       }

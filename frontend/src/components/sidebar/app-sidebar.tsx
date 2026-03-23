@@ -102,7 +102,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
                   location.pathname === "/feed"
                     ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 hover:bg-muted"
+                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
                 }`}
               >
                 <Home className="size-3.5" />
@@ -114,7 +114,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
                   location.pathname === "/explore"
                     ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 hover:bg-muted"
+                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
                 }`}
               >
                 <Compass className="size-3.5" />
@@ -126,7 +126,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
                   location.pathname === "/"
                     ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 hover:bg-muted"
+                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
                 }`}
               >
                 <MessageSquare className="size-3.5" />
@@ -138,7 +138,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
                   location.pathname === "/saved"
                     ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 hover:bg-muted"
+                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
                 }`}
               >
                 <Bookmark className="size-3.5" />
@@ -152,7 +152,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 className={`col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
                   location.pathname.startsWith("/profile")
                     ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 hover:bg-muted"
+                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
                 }`}
               >
                 <User className="size-3.5" />

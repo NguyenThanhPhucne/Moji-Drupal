@@ -34,7 +34,7 @@ const ChatCard = ({
       aria-label={`Open conversation with ${name}`}
       className={cn(
         "cursor-pointer rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200",
-        "hover:border-border/70 hover:bg-muted/60 hover:shadow-sm",
+        "hover:border-border/70 hover:bg-muted/70 hover:text-foreground hover:shadow-sm",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
         "group select-none",
         isActive

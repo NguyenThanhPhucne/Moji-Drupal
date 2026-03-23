@@ -89,7 +89,7 @@ const NewGroupChatModal = () => {
           variant="completeGhost"
           size="icon-sm"
           onClick={handleGetFriends}
-          className="rounded-full text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors duration-150"
+          className="rounded-full text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground transition-colors duration-150"
         >
           <Users className="size-4" />
           <span className="sr-only">Create group</span>

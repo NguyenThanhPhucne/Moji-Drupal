@@ -17,4 +17,21 @@ export const userService = {
     const res = await api.get(`/users/${userId}/profile-lite`);
     return res.data.profile;
   },
+
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const res = await api.post("/users/change-password", {
+      currentPassword,
+      newPassword,
+    });
+
+    return res.data;
+  },
+
+  updateOnlineStatusVisibility: async (showOnlineStatus: boolean) => {
+    const res = await api.patch("/users/online-status-visibility", {
+      showOnlineStatus,
+    });
+
+    return res.data;
+  },
 };

@@ -61,7 +61,7 @@ const FriendListModal = () => {
             <Card
               onClick={() => handleAddConversation(friend._id)}
               key={friend._id}
-              className="p-3 cursor-pointer transition-smooth hover:shadow-soft glass hover:bg-muted/30 group/friendCard"
+              className="p-3 cursor-pointer transition-smooth hover:shadow-soft glass hover:bg-muted/40 group/friendCard"
               style={{
                 opacity: loading && creatingFor === friend._id ? 0.6 : 1,
                 pointerEvents: loading ? "none" : "auto",

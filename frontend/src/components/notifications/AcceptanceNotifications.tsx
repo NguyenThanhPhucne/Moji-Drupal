@@ -19,7 +19,7 @@ export function AcceptanceNotifications() {
       {acceptanceNotifications.map((notification, index) => (
         <div
           key={`${notification.from._id}-${String(notification.createdAt)}`}
-          className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3 hover:bg-accent transition-colors"
+          className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3 hover:bg-accent/80 transition-colors"
         >
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <Avatar className="h-10 w-10 mt-0.5 flex-shrink-0">
@@ -45,7 +45,7 @@ export function AcceptanceNotifications() {
           </div>
           <button
             onClick={() => removeAcceptanceNotification(index)}
-            className="p-1 hover:bg-muted rounded transition-colors flex-shrink-0"
+            className="p-1 hover:bg-muted/70 rounded transition-colors flex-shrink-0"
             aria-label="Delete notification"
           >
             <X className="h-4 w-4 text-muted-foreground" />

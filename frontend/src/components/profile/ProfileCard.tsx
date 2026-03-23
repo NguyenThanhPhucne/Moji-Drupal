@@ -11,14 +11,27 @@ interface ProfileCardProps {
 }
 
 const ProfileCard = ({ user }: ProfileCardProps) => {
-  const { onlineUsers } = useSocketStore();
+  const { getUserPresence } = useSocketStore();
   if (!user) return null;
 
   if (!user.bio) {
     user.bio = "Always learning, always building.";
   }
 
-  const isOnline = onlineUsers.includes(String(user._id));
+  const presence = getUserPresence(user._id);
+  let badgeClassName = "bg-slate-100 text-slate-700";
+  let dotClassName = "bg-slate-500";
+  let label = "offline";
+
+  if (presence === "online") {
+    badgeClassName = "bg-green-100 text-green-700";
+    dotClassName = "bg-green-500 animate-pulse";
+    label = "online";
+  } else if (presence === "recently-active") {
+    badgeClassName = "bg-amber-100 text-amber-700";
+    dotClassName = "bg-amber-500";
+    label = "recently active";
+  }
 
   return (
     <Card className="h-52 overflow-hidden bg-gradient-to-r from-sky-600 via-cyan-600 to-sky-700 p-0">
@@ -49,21 +62,11 @@ const ProfileCard = ({ user }: ProfileCardProps) => {
 
         {/* status */}
         <Badge
-          className={cn(
-            "flex items-center gap-1 capitalize",
-            isOnline
-              ? "bg-green-100 text-green-700"
-              : "bg-slate-100 text-slate-700",
-          )}
+          className={cn("flex items-center gap-1 capitalize", badgeClassName)}
         >
-          <div
-            className={cn(
-              "size-2 rounded-full",
-              isOnline ? "bg-green-500 animate-pulse" : "bg-slate-500",
-            )}
-          />
+          <div className={cn("size-2 rounded-full", dotClassName)} />
 
-          {isOnline ? "online" : "offline"}
+          {label}
         </Badge>
       </CardContent>
     </Card>

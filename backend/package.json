@@ -5,7 +5,9 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "db:health": "node scripts/db-health-check.mjs",
+    "db:health:fix": "node scripts/db-health-check.mjs --fix"
   },
   "type": "module",
   "keywords": [],

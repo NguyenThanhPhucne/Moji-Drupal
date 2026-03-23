@@ -39,12 +39,16 @@ export default defineConfig({
             return "state-network";
           }
 
-          if (
-            id.includes("date-fns") ||
-            id.includes("emoji-mart") ||
-            id.includes("@emoji-mart")
-          ) {
-            return "rich-utils";
+          if (id.includes("@emoji-mart/data")) {
+            return "emoji-data";
+          }
+
+          if (id.includes("@emoji-mart") || id.includes("emoji-mart")) {
+            return "emoji-react";
+          }
+
+          if (id.includes("date-fns")) {
+            return "date-utils";
           }
         },
       },

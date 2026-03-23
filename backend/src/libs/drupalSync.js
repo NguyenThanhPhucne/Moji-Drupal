@@ -115,26 +115,36 @@ async function syncParticipantsToDrupal(conversationId, participants) {
       [conversationId],
     );
 
-    // Insert new participants (map MongoDB ID to Drupal ID)
+    // Batch-fetch user mappings once to avoid N+1 Mongo queries.
+    const mongoUserIds = participants.map((participant) =>
+      participant.userId.toString(),
+    );
+    const users = await User.find({ _id: { $in: mongoUserIds } }).select(
+      "_id drupalId",
+    );
+
+    const drupalIdByMongoId = new Map(
+      users
+        .filter((user) => Number.isInteger(user.drupalId))
+        .map((user) => [user._id.toString(), user.drupalId]),
+    );
+
     for (const participant of participants) {
-      // participant.userId is MongoDB user object or ObjectId
-      // We need to get the drupalId from MongoDB User model
-      // For now, store MongoDB ID as string (will need User lookup in production)
       const mongoUserId = participant.userId.toString();
+      const drupalId = drupalIdByMongoId.get(mongoUserId);
+
+      if (!drupalId) {
+        console.warn(
+          `Could not sync participant ${mongoUserId}: No drupalId found`,
+        );
+        continue;
+      }
+
       const joinedAt = participant.joinedAt
         ? Math.floor(participant.joinedAt.getTime() / 1000)
         : Math.floor(Date.now() / 1000);
 
       try {
-        // Fetch drupalId from MongoDB User model
-        const user = await User.findById(mongoUserId).select("drupalId");
-        if (!user || !user.drupalId) {
-          console.warn(`Could not sync participant ${mongoUserId}: No drupalId found`);
-          continue;
-        }
-
-        const drupalId = user.drupalId;
-
         await drupalDbPool.execute(
           `
           INSERT INTO chat_conversation_participant 
@@ -145,7 +155,8 @@ async function syncParticipantsToDrupal(conversationId, participants) {
         );
       } catch (insertError) {
         console.warn(
-          `Could not sync participant ${mongoUserId} (schema/db error):`, insertError.message
+          `Could not sync participant ${mongoUserId} (schema/db error):`,
+          insertError.message,
         );
       }
     }
@@ -179,6 +190,26 @@ export async function updateMessageCountInDrupal(conversationId, messageCount) {
     );
   } catch (error) {
     console.error("Failed to update message count in Drupal:", error.message);
+  }
+}
+
+/**
+ * Adjust message count by delta (+1 / -1) to avoid expensive recount queries.
+ * @param {String} conversationId - Conversation ID
+ * @param {Number} delta - Increment/decrement amount
+ */
+export async function adjustMessageCountInDrupal(conversationId, delta) {
+  if (!drupalDbPool || !Number.isFinite(delta) || delta === 0) {
+    return;
+  }
+
+  try {
+    await drupalDbPool.execute(
+      "UPDATE chat_conversation SET message_count = GREATEST(COALESCE(message_count, 0) + ?, 0), updated = ? WHERE conversation_id = ?",
+      [delta, Math.floor(Date.now() / 1000), conversationId],
+    );
+  } catch (error) {
+    console.error("Failed to adjust message count in Drupal:", error.message);
   }
 }
 

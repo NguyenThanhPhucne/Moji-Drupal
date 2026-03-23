@@ -107,6 +107,11 @@ export interface ChatState {
 export interface SocketState {
   socket: Socket | null;
   onlineUsers: string[];
+  recentActiveUsers: Record<string, number>;
+  isUserOnline: (userId?: string | null) => boolean;
+  getUserPresence: (
+    userId?: string | null,
+  ) => "online" | "recently-active" | "offline";
   connectSocket: () => void;
   disconnectSocket: () => void;
 }

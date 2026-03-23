@@ -173,7 +173,7 @@ const ContextMenu = memo(function ContextMenu({
               "w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors",
               danger
                 ? "text-destructive hover:bg-destructive/10"
-                : "hover:bg-muted",
+                : "hover:bg-muted/70",
               "disabled:opacity-40 disabled:cursor-not-allowed",
             )}
           >
@@ -823,7 +823,7 @@ const MessageItem = memo(function MessageItem({
                   <button
                     type="button"
                     onClick={() => setReactBarVisible((v) => !v)}
-                    className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
+                    className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors"
                   >
                     <Smile className="size-3.5 text-muted-foreground" />
                   </button>
@@ -831,7 +831,7 @@ const MessageItem = memo(function MessageItem({
                 <button
                   type="button"
                   onClick={handleReply}
-                  className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
+                  className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors"
                 >
                   <Reply className="size-3.5 text-muted-foreground" />
                 </button>
@@ -839,7 +839,7 @@ const MessageItem = memo(function MessageItem({
                   type="button"
                   onClick={handleToggleBookmark}
                   className={cn(
-                    "p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors",
+                    "p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors",
                     bookmarked && "text-amber-500",
                   )}
                 >
@@ -850,7 +850,7 @@ const MessageItem = memo(function MessageItem({
                 <button
                   type="button"
                   onClick={handleOpenContextFromButton}
-                  className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted transition-colors"
+                  className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors"
                 >
                   <MoreHorizontal className="size-3.5 text-muted-foreground" />
                 </button>
@@ -945,7 +945,7 @@ const MessageItem = memo(function MessageItem({
                 type="button"
                 disabled={!!deleteActionLoading}
                 onClick={handleConfirmUnsendForEveryone}
-                className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+                className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted/70 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <p className="text-sm font-semibold">Unsend for everyone</p>
                 <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
@@ -963,7 +963,7 @@ const MessageItem = memo(function MessageItem({
               type="button"
               disabled={!!deleteActionLoading}
               onClick={handleConfirmRemoveForMe}
-              className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+              className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted/70 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <p className="text-sm font-semibold">Remove for you</p>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
@@ -981,7 +981,7 @@ const MessageItem = memo(function MessageItem({
               type="button"
               disabled={!!deleteActionLoading}
               onClick={() => setDeleteDialogOpen(false)}
-              className="px-3 py-2 text-sm rounded-md border border-border/70 hover:bg-muted disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-3 py-2 text-sm rounded-md border border-border/70 hover:bg-muted/70 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

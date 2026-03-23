@@ -36,7 +36,7 @@ import { useFriendStore } from "@/stores/useFriendStore";
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
-  const { onlineUsers } = useSocketStore();
+  const { getUserPresence } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
@@ -68,8 +68,14 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   let presenceText = `${chat.participants.length} members`;
   if (chat.type === "direct") {
-    const isOnline = onlineUsers.includes(String(otherUser?._id ?? ""));
-    presenceText = isOnline ? "Active now" : "Offline";
+    const presence = getUserPresence(otherUser?._id);
+    if (presence === "online") {
+      presenceText = "Active now";
+    } else if (presence === "recently-active") {
+      presenceText = "Recently active";
+    } else {
+      presenceText = "Offline";
+    }
   }
 
   const handleDeleteConversation = async () => {
@@ -157,13 +163,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                         avatarUrl={otherUser?.avatarUrl || undefined}
                       />
                     </FriendProfileMiniCard>
-                    <StatusBadge
-                      status={
-                        onlineUsers.includes(String(otherUser?._id ?? ""))
-                          ? "online"
-                          : "offline"
-                      }
-                    />
+                    <StatusBadge status={getUserPresence(otherUser?._id)} />
                   </>
                 ) : (
                   <GroupChatAvatar
@@ -194,7 +194,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 variant="ghost"
                 size="icon"
                 disabled={isDeleting}
-                className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/60"
+                className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-foreground"
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>

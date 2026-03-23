@@ -9,13 +9,45 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { useState } from "react";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { userService } from "@/services/userService";
+import { toast } from "sonner";
+import { useEffect, useState } from "react";
 
 const PreferencesForm = () => {
   const { isDark, toggleTheme } = useThemeStore();
+  const { user, setUser } = useAuthStore();
 
-  // Wire online status preference to backend/user settings when available.
-  const [onlineStatus, setOnlineStatus] = useState(false);
+  const [onlineStatus, setOnlineStatus] = useState(
+    user?.showOnlineStatus !== false,
+  );
+  const [updatingOnlineStatus, setUpdatingOnlineStatus] = useState(false);
+
+  useEffect(() => {
+    setOnlineStatus(user?.showOnlineStatus !== false);
+  }, [user?.showOnlineStatus]);
+
+  const handleOnlineStatusChange = async (checked: boolean) => {
+    const previous = onlineStatus;
+    setOnlineStatus(checked);
+
+    try {
+      setUpdatingOnlineStatus(true);
+      const response = await userService.updateOnlineStatusVisibility(checked);
+
+      if (response?.user) {
+        setUser(response.user);
+      }
+
+      toast.success("Online status preference updated");
+    } catch (error) {
+      console.error("Failed to update online status preference", error);
+      setOnlineStatus(previous);
+      toast.error("Could not update online status preference");
+    } finally {
+      setUpdatingOnlineStatus(false);
+    }
+  };
 
   return (
     <Card className="glass-strong border-border/30">
@@ -63,7 +95,8 @@ const PreferencesForm = () => {
           <Switch
             id="online-status"
             checked={onlineStatus}
-            onCheckedChange={setOnlineStatus}
+            onCheckedChange={handleOnlineStatusChange}
+            disabled={updatingOnlineStatus}
             className="data-[state=checked]:bg-primary-glow"
           />
         </div>

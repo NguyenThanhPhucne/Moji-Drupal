@@ -3,6 +3,7 @@ import http from "node:http";
 import express from "express";
 import { socketAuthMiddleware } from "../middlewares/socketMiddleware.js";
 import { getUserConversationsForSocketIO } from "../controllers/conversationController.js";
+import User from "../models/User.js";
 
 const app = express();
 
@@ -30,8 +31,8 @@ const io = new Server(server, {
     credentials: true,
   },
   // Giảm thời gian phát hiện mất kết nối để trạng thái online/offline mượt hơn.
-  pingInterval: 10000,
-  pingTimeout: 5000,
+  pingInterval: 6000,
+  pingTimeout: 3000,
   connectionStateRecovery: {
     maxDisconnectionDuration: 120000,
   },
@@ -40,6 +41,49 @@ const io = new Server(server, {
 io.use(socketAuthMiddleware);
 
 const onlineUsers = new Map(); // {userId: Set<socketId>}
+const ONLINE_USERS_RESYNC_MS = 15000;
+
+const removeSocketFromOnlineUsers = (userId, socketId) => {
+  const userSockets = onlineUsers.get(userId);
+  if (!userSockets) {
+    return;
+  }
+
+  userSockets.delete(socketId);
+  if (userSockets.size === 0) {
+    onlineUsers.delete(userId);
+  }
+};
+
+const getVisibleOnlineUserIds = async () => {
+  const onlineUserIds = Array.from(onlineUsers.keys());
+  if (onlineUserIds.length === 0) {
+    return [];
+  }
+
+  const users = await User.find({
+    _id: { $in: onlineUserIds },
+    showOnlineStatus: { $ne: false },
+  })
+    .select("_id")
+    .lean();
+
+  return users.map((user) => String(user._id));
+};
+
+export const broadcastOnlineUsers = async () => {
+  const visibleOnlineUserIds = await getVisibleOnlineUserIds();
+  io.emit("online-users", visibleOnlineUserIds);
+};
+
+// Periodic resync guards against rare missed disconnect broadcasts.
+setInterval(async () => {
+  try {
+    await broadcastOnlineUsers();
+  } catch (error) {
+    console.error("[Socket] periodic online-users resync failed", error);
+  }
+}, ONLINE_USERS_RESYNC_MS);
 
 io.on("connection", async (socket) => {
   const user = socket.user;
@@ -58,7 +102,7 @@ io.on("connection", async (socket) => {
   socket.join(userId);
   console.log(`[Socket] Joined user room: ${userId}`);
 
-  io.emit("online-users", Array.from(onlineUsers.keys()));
+  await broadcastOnlineUsers();
 
   const conversationIds = await getUserConversationsForSocketIO(user._id);
   console.log("[Socket] Joined conversation rooms:", conversationIds);
@@ -92,18 +136,31 @@ io.on("connection", async (socket) => {
     });
   });
 
-  socket.on("disconnect", () => {
+  socket.on("manual-offline", async () => {
+    removeSocketFromOnlineUsers(userId, socket.id);
+    try {
+      await broadcastOnlineUsers();
+    } catch (error) {
+      console.error(
+        "[Socket] broadcast online-users failed on manual-offline",
+        error,
+      );
+    }
+  });
+
+  socket.on("disconnect", async () => {
     console.log(
       `[Socket] User disconnected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
     );
-    const userSockets = onlineUsers.get(userId);
-    if (userSockets) {
-      userSockets.delete(socket.id);
-      if (userSockets.size === 0) {
-        onlineUsers.delete(userId);
-      }
+    removeSocketFromOnlineUsers(userId, socket.id);
+    try {
+      await broadcastOnlineUsers();
+    } catch (error) {
+      console.error(
+        "[Socket] broadcast online-users failed on disconnect",
+        error,
+      );
     }
-    io.emit("online-users", Array.from(onlineUsers.keys()));
   });
 });
 

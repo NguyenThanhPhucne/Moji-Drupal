@@ -47,7 +47,7 @@ const SendFriendRequestForm = ({
           <Button
             type="button"
             variant="outline"
-            className="flex-1 glass hover:text-destructive"
+            className="flex-1 glass"
             onClick={onBack}
           >
             Back

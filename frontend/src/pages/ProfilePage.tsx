@@ -1,9 +1,12 @@
+import type { CSSProperties } from "react";
 import { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Lock, UserRound } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
+import ProfileHeaderSkeleton from "@/components/skeleton/ProfileHeaderSkeleton";
+import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -58,6 +61,9 @@ const ProfilePage = () => {
     await fetchProfilePosts(profileUserId, profilePagination.page + 1, true);
   };
 
+  const isInitialProfileLoading = loadingProfile && profilePosts.length === 0;
+  const isLoadingMoreProfile = loadingProfile && profilePosts.length > 0;
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -65,47 +71,51 @@ const ProfilePage = () => {
       <div className="app-shell-bg">
         <div className="app-shell-panel p-4 md:p-6">
           <section className="w-full min-h-0 overflow-y-auto beautiful-scrollbar pr-1 space-stack-lg">
-            <div className="elevated-card p-4 md:p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
-                    <UserRound className="size-8" />
-                  </div>
-                  <div>
-                    <p className="section-eyebrow">Profile</p>
-                    <h1 className="text-title-1">
-                      {profile?.displayName || "Profile"}
-                    </h1>
-                    <p className="text-body-sm text-muted-foreground">
-                      @{profile?.username || "user"}
-                    </p>
-                    {profile?.bio && (
-                      <p className="mt-2 text-body-sm text-foreground/90">
-                        {profile.bio}
+            {loadingProfile && !profile ? (
+              <ProfileHeaderSkeleton />
+            ) : (
+              <div className="elevated-card p-4 md:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+                      <UserRound className="size-8" />
+                    </div>
+                    <div>
+                      <p className="section-eyebrow">Profile</p>
+                      <h1 className="text-title-1">
+                        {profile?.displayName || "Profile"}
+                      </h1>
+                      <p className="text-body-sm text-muted-foreground">
+                        @{profile?.username || "user"}
                       </p>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
-                      <span>{profile?.postCount || 0} posts</span>
-                      <span>{profile?.followerCount || 0} followers</span>
-                      <span>{profile?.followingCount || 0} following</span>
+                      {profile?.bio && (
+                        <p className="mt-2 text-body-sm text-foreground/90">
+                          {profile.bio}
+                        </p>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-3 text-sm text-muted-foreground">
+                        <span>{profile?.postCount || 0} posts</span>
+                        <span>{profile?.followerCount || 0} followers</span>
+                        <span>{profile?.followingCount || 0} following</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  {profile && user && profile._id !== user._id && (
-                    <Button
-                      type="button"
-                      variant={profile.isFollowing ? "outline" : "default"}
-                      onClick={() => toggleFollow(profile._id)}
-                    >
-                      {profile.isFollowing ? "Following" : "Follow"}
-                    </Button>
-                  )}
-                  <BackToChatCard onClick={() => navigate("/")} />
+                  <div className="flex items-center gap-2">
+                    {profile && user && profile._id !== user._id && (
+                      <Button
+                        type="button"
+                        variant={profile.isFollowing ? "outline" : "default"}
+                        onClick={() => toggleFollow(profile._id)}
+                      >
+                        {profile.isFollowing ? "Following" : "Follow"}
+                      </Button>
+                    )}
+                    <BackToChatCard onClick={() => navigate("/")} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {profileAccessDenied ? (
               <div className="elevated-card p-8 text-center">
@@ -121,19 +131,31 @@ const ProfilePage = () => {
               </div>
             ) : (
               <div className="space-stack-md">
-                {profilePosts.map((post) => (
-                  <SocialPostCard
+                {isInitialProfileLoading && <SocialPostSkeleton count={2} />}
+                {profilePosts.map((post, index) => (
+                  <div
                     key={post._id}
-                    post={post}
-                    comments={postComments[post._id]}
-                    engagement={postEngagement[post._id]}
-                    onLike={toggleLike}
-                    onFetchComments={fetchComments}
-                    onFetchEngagement={fetchPostEngagement}
-                    onComment={addComment}
-                    onOpenProfile={(id) => navigate(`/profile/${id}`)}
-                  />
+                    className="stagger-enter"
+                    style={{ "--stagger-index": index } as CSSProperties}
+                  >
+                    <SocialPostCard
+                      post={post}
+                      comments={postComments[post._id]}
+                      engagement={postEngagement[post._id]}
+                      onLike={toggleLike}
+                      onFetchComments={fetchComments}
+                      onFetchEngagement={fetchPostEngagement}
+                      onComment={addComment}
+                      onOpenProfile={(id) => navigate(`/profile/${id}`)}
+                    />
+                  </div>
                 ))}
+                {isLoadingMoreProfile && (
+                  <SocialPostSkeleton
+                    count={2}
+                    staggerFrom={profilePosts.length}
+                  />
+                )}
                 {!loadingProfile && profilePosts.length === 0 && (
                   <div className="elevated-card p-8 text-center text-muted-foreground">
                     No posts yet.
@@ -144,8 +166,13 @@ const ProfilePage = () => {
 
             {profilePagination.hasNextPage && !profileAccessDenied && (
               <div className="flex justify-center">
-                <Button type="button" variant="outline" onClick={loadMore}>
-                  {loadingProfile ? "Loading..." : "Load more"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={loadMore}
+                  disabled={loadingProfile}
+                >
+                  {loadingProfile ? "Loading more..." : "Load more"}
                 </Button>
               </div>
             )}
