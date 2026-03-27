@@ -38,3 +38,14 @@ dist-ssr
 backend/backend-log.txt
 frontend/.env.development
 frontend/.env.production
+
+# One-off maintenance/debug scripts (keep out of main branch)
+backend/check-*.js
+backend/debug-*.js
+backend/fix-*.js
+backend/test-*.js
+debug_*.sh
+deploy_*_fix.sh
+
+# Keep maintained ops scripts
+!backend/scripts/db-health-check.mjs
