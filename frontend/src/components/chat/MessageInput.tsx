@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { Conversation } from "@/types/chat";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "../ui/button";
 import { ImagePlus, Send, X } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
@@ -23,8 +23,6 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isSendingRef = useRef(false);
-
-  if (!user) return null;
 
   const stopTyping = () => {
     if (typing && socket?.connected) {
@@ -55,6 +53,21 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     }, 2000);
   };
 
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+
+      if (socket?.connected) {
+        socket.emit("stop_typing", selectedConvo._id);
+      }
+    };
+  }, [socket, selectedConvo._id]);
+
+  if (!user) return null;
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -83,7 +96,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     try {
       if (selectedConvo.type === "direct") {
         const otherUser = selectedConvo.participants.find(
-          (p) => p._id !== user._id,
+          (p) => String(p._id) !== String(user._id),
         );
         if (!otherUser) return;
         await sendDirectMessage(

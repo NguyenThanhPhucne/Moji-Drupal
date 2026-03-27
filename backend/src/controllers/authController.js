@@ -9,7 +9,8 @@ import { OAuth2Client } from "google-auth-library";
 
 const ACCESS_TOKEN_TTL = "30m"; // thuờng là dưới 15m
 const REFRESH_TOKEN_TTL = 14 * 24 * 60 * 60 * 1000; // 14 ngày
-const DRUPAL_AUTH_TIMEOUT_MS = 8000;
+// Keep fallback snappy so sign-in does not feel blocked on network latency.
+const DRUPAL_AUTH_TIMEOUT_MS = 2500;
 
 const isBcryptHash = (hash) => /^\$2[aby]\$\d{2}\$/.test(String(hash || ""));
 const isSha256Hex = (hash) => /^[a-f0-9]{64}$/i.test(String(hash || ""));
@@ -88,45 +89,55 @@ const authenticateAgainstDrupal = async (username, password) => {
     return null;
   }
 
-  for (const endpoint of candidates) {
-    try {
-      const response = await axios.post(
-        endpoint,
-        { username, password },
-        {
-          timeout: DRUPAL_AUTH_TIMEOUT_MS,
-          headers: { "Content-Type": "application/json" },
-          validateStatus: () => true,
-        },
-      );
-
-      if (response.status < 200 || response.status >= 300) {
-        continue;
-      }
-
-      const data = response.data || {};
-      if (data.user) {
-        return data.user;
-      }
-
-      if (data.username || data.uid || data._id) {
-        return {
-          uid: data.uid || data._id,
-          username: data.username || username,
-          email: data.email || "",
-          displayName:
-            data.displayName || data.name || data.username || username,
-        };
-      }
-    } catch (error) {
-      console.warn(
-        `Drupal auth fallback failed at ${endpoint}:`,
-        error?.message || error,
-      );
+  const resolvePayload = (payload) => {
+    const data = payload || {};
+    if (data.user) {
+      return data.user;
     }
-  }
 
-  return null;
+    if (data.username || data.uid || data._id) {
+      return {
+        uid: data.uid || data._id,
+        username: data.username || username,
+        email: data.email || "",
+        displayName: data.displayName || data.name || data.username || username,
+      };
+    }
+
+    return null;
+  };
+
+  try {
+    const drupalUser = await Promise.any(
+      candidates.map(async (endpoint) => {
+        const response = await axios.post(
+          endpoint,
+          { username, password },
+          {
+            timeout: DRUPAL_AUTH_TIMEOUT_MS,
+            headers: { "Content-Type": "application/json" },
+            validateStatus: () => true,
+          },
+        );
+
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`status_${response.status}`);
+        }
+
+        const parsed = resolvePayload(response.data);
+        if (!parsed) {
+          throw new Error("invalid_payload");
+        }
+
+        return parsed;
+      }),
+    );
+
+    return drupalUser;
+  } catch (error) {
+    console.warn("Drupal auth fallback failed:", error?.message || error);
+    return null;
+  }
 };
 
 export const signUp = async (req, res) => {
@@ -191,12 +202,12 @@ export const signIn = async (req, res) => {
     const usernameInput = String(username).trim();
     const normalizedUsername = usernameInput.toLowerCase();
 
-    let user = await User.findOne({ username: usernameInput }).collation({
-      locale: "en",
-      strength: 2,
-    });
-    if (!user && normalizedUsername) {
+    let user = null;
+    if (normalizedUsername) {
       user = await User.findOne({ username: normalizedUsername });
+    }
+    if (!user && usernameInput !== normalizedUsername) {
+      user = await User.findOne({ username: usernameInput });
     }
     let passwordCorrect = false;
 
@@ -234,9 +245,17 @@ export const signIn = async (req, res) => {
     const accessToken = await issueSessionTokens(res, user);
 
     // trả access token về trong res
-    return res
-      .status(200)
-      .json({ message: `User ${user.displayName} đã logged in!`, accessToken });
+    return res.status(200).json({
+      message: `User ${user.displayName} đã logged in!`,
+      accessToken,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl || null,
+      },
+    });
   } catch (error) {
     console.error("Lỗi khi gọi signIn", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });

@@ -131,9 +131,12 @@ export const useChatStore = create<ChatState>()(
           // Optimistically append the message immediately instead of waiting for socket
           addMessage(message);
 
+          const targetConversationId =
+            conversationIdOverride ?? message.conversationId ?? activeConversationId;
+
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id === activeConversationId ? { ...c, seenBy: [] } : c,
+              c._id === targetConversationId ? { ...c, seenBy: [] } : c,
             ),
           }));
         } catch (error) {
@@ -155,7 +158,7 @@ export const useChatStore = create<ChatState>()(
 
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id === get().activeConversationId ? { ...c, seenBy: [] } : c,
+              c._id === conversationId ? { ...c, seenBy: [] } : c,
             ),
           }));
         } catch (error) {
@@ -341,7 +344,8 @@ export const useChatStore = create<ChatState>()(
           console.error("Error calling markAsSeen in store", error);
         }
       },
-      addConvo: (convo) => {
+      addConvo: (convo, options) => {
+        const shouldSetActive = options?.setActive ?? false;
         set((state) => {
           const exists = state.conversations.some(
             (c) => c._id.toString() === convo._id.toString(),
@@ -351,7 +355,9 @@ export const useChatStore = create<ChatState>()(
             conversations: exists
               ? state.conversations
               : [convo, ...state.conversations],
-            activeConversationId: convo._id,
+            activeConversationId: shouldSetActive
+              ? convo._id
+              : state.activeConversationId,
           };
         });
       },
@@ -381,7 +387,7 @@ export const useChatStore = create<ChatState>()(
             "[useChatStore][ok] Conversation created:",
             conversation._id,
           );
-          get().addConvo(conversation);
+          get().addConvo(conversation, { setActive: true });
           get().setActiveConversation(conversation._id);
 
           // Join socket room

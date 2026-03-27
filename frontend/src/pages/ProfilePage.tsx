@@ -122,7 +122,7 @@ const ProfilePage = () => {
                 <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
                   <Lock className="size-6" />
                 </div>
-                <h2 className="text-title-3">
+                <h2 className="text-title-2">
                   Only friends can view this profile
                 </h2>
                 <p className="mt-2 text-body-sm text-muted-foreground">

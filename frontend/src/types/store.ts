@@ -17,7 +17,7 @@ export interface AuthState {
     firstName: string,
     lastName: string,
   ) => Promise<void>;
-  signIn: (username: string, password: string) => Promise<void>;
+  signIn: (username: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -95,7 +95,7 @@ export interface ChatState {
     conversation: Partial<Conversation> & { _id: string },
   ) => void;
   markAsSeen: () => Promise<void>;
-  addConvo: (convo: Conversation) => void;
+  addConvo: (convo: Conversation, options?: { setActive?: boolean }) => void;
   createConversation: (
     type: "group" | "direct",
     name: string,

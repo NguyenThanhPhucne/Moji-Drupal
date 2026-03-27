@@ -25,6 +25,15 @@ const ChatAppPage = () => {
         return;
       }
 
+      // Keep selected conversation when user interacts with actionable controls.
+      if (
+        target.closest(
+          "button, a, input, textarea, select, label, [role='button'], [role='menuitem']",
+        )
+      ) {
+        return;
+      }
+
       // Keep selected conversation when clicking on a conversation card.
       if (target.closest("[data-chat-card='true']")) {
         return;

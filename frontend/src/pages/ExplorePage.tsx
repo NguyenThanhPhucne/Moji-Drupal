@@ -53,7 +53,7 @@ const ExplorePage = () => {
       <div className="app-shell-bg">
         <div className="app-shell-panel p-4 md:p-6">
           <section className="w-full min-h-0 overflow-y-auto beautiful-scrollbar pr-1 space-stack-lg">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="section-eyebrow">Discover</p>
                 <h1 className="text-title-1 flex items-center gap-2">
@@ -64,7 +64,9 @@ const ExplorePage = () => {
                   Trending posts from the community
                 </p>
               </div>
-              <BackToChatCard onClick={() => navigate("/")} />
+              <div className="self-start sm:self-auto">
+                <BackToChatCard onClick={() => navigate("/")} />
+              </div>
             </div>
 
             <div className="space-stack-md">

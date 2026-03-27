@@ -298,7 +298,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     // new group chat - from other members
     socket.on("new-group", (conversation) => {
       console.log("Received new-group event:", conversation);
-      useChatStore.getState().addConvo(conversation);
+      useChatStore.getState().addConvo(conversation, { setActive: false });
       socket.emit("join-conversation", conversation._id);
       toast.success(
         `You were added to group "${conversation.group?.name || "New group"}"!`,
@@ -308,7 +308,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     // new direct conversation - from other participant
     socket.on("new-conversation", (conversation) => {
       console.log("Received new-conversation event:", conversation);
-      useChatStore.getState().addConvo(conversation);
+      useChatStore.getState().addConvo(conversation, { setActive: false });
       socket.emit("join-conversation", conversation._id);
       toast.success("You have a new conversation!");
     });

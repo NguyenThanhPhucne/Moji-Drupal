@@ -276,6 +276,11 @@ const ChatWindowBody = () => {
     };
   }, [socket, activeConversationId, currentUser]);
 
+  // Reset stale typing indicator when switching conversations.
+  useEffect(() => {
+    setTypingUsers({});
+  }, [activeConversationId]);
+
   // Scroll to bottom or saved position when conversation changes
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -383,7 +388,8 @@ const ChatWindowBody = () => {
               <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce" />
             </div>
             <span className="text-xs text-muted-foreground">
-              {Object.values(typingUsers).join(", ")} is typing...
+              {Object.values(typingUsers).join(", ")}{" "}
+              {Object.values(typingUsers).length > 1 ? "are typing..." : "is typing..."}
             </span>
           </div>
         )}

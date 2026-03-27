@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { Bookmark, PencilLine, Tags } from "lucide-react";
@@ -14,9 +14,6 @@ import { Card } from "@/components/ui/card";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-
-const ITEM_ESTIMATED_HEIGHT = 210;
-const OVERSCAN = 4;
 
 const SavedMessagesPage = () => {
   const navigate = useNavigate();
@@ -43,9 +40,6 @@ const SavedMessagesPage = () => {
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<string[]>([]);
   const [bulkTagToRemove, setBulkTagToRemove] = useState("");
 
-  const listContainerRef = useRef<HTMLDivElement | null>(null);
-  const [viewportHeight, setViewportHeight] = useState(640);
-  const [scrollTop, setScrollTop] = useState(0);
 
   useEffect(() => {
     fetchConversations();
@@ -61,26 +55,6 @@ const SavedMessagesPage = () => {
       append: false,
     });
   }, [fetchBookmarks, conversationFilter, fromDate, toDate]);
-
-  useEffect(() => {
-    const element = listContainerRef.current;
-    if (!element) {
-      return;
-    }
-
-    const updateViewport = () => {
-      setViewportHeight(element.clientHeight);
-    };
-
-    updateViewport();
-
-    const observer = new ResizeObserver(updateViewport);
-    observer.observe(element);
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
 
   const conversationOptions = useMemo(() => {
     return conversations.map((conversation) => ({
@@ -124,7 +98,7 @@ const SavedMessagesPage = () => {
   };
 
   const selectAllVisible = () => {
-    const visibleIds = visibleBookmarks.map((bookmark) => bookmark._id);
+    const visibleIds = bookmarks.map((bookmark) => bookmark._id);
     setSelectedBookmarkIds((current) => {
       const merged = new Set([...current, ...visibleIds]);
       return Array.from(merged);
@@ -226,16 +200,6 @@ const SavedMessagesPage = () => {
     setEditingBookmarkId(null);
   };
 
-  const totalHeight = bookmarks.length * ITEM_ESTIMATED_HEIGHT;
-  const visibleCount =
-    Math.ceil(viewportHeight / ITEM_ESTIMATED_HEIGHT) + OVERSCAN;
-  const startIndex = Math.max(
-    0,
-    Math.floor(scrollTop / ITEM_ESTIMATED_HEIGHT) - OVERSCAN,
-  );
-  const endIndex = Math.min(bookmarks.length, startIndex + visibleCount);
-  const visibleBookmarks = bookmarks.slice(startIndex, endIndex);
-
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -243,7 +207,7 @@ const SavedMessagesPage = () => {
       <div className="app-shell-bg">
         <div className="app-shell-panel p-4 md:p-6">
           <div className="w-full min-h-0 flex flex-col gap-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="section-eyebrow mb-1">Bookmarks</p>
                 <h1 className="text-2xl font-semibold flex items-center gap-2 tracking-[-0.02em]">
@@ -254,7 +218,9 @@ const SavedMessagesPage = () => {
                   Quickly find your bookmarked messages
                 </p>
               </div>
-              <BackToChatCard onClick={() => navigate("/")} />
+              <div className="self-start sm:self-auto">
+                <BackToChatCard onClick={() => navigate("/")} />
+              </div>
             </div>
 
             <div className="elevated-card grid grid-cols-1 gap-3 p-3 md:grid-cols-3">
@@ -330,36 +296,18 @@ const SavedMessagesPage = () => {
                 </Button>
               </div>
 
-              <div
-                ref={listContainerRef}
-                onScroll={(event) =>
-                  setScrollTop(event.currentTarget.scrollTop)
-                }
-                className="min-h-0 flex-1 overflow-y-auto pr-1"
-              >
-                <div
-                  style={{ height: `${totalHeight}px`, position: "relative" }}
-                >
-                  {visibleBookmarks.map((bookmark, index) => {
-                    const absoluteIndex = startIndex + index;
-                    const top = absoluteIndex * ITEM_ESTIMATED_HEIGHT;
+              <div className="min-h-0 flex-1 overflow-y-auto pr-1 space-y-3">
+                {bookmarks.map((bookmark) => {
+                  const conversationName =
+                    bookmark.conversationId?.type === "group"
+                      ? bookmark.conversationId.group?.name || "Untitled group"
+                      : bookmark.conversationId.participants?.find(
+                          (participant) =>
+                            String(participant._id) !== String(user?._id),
+                        )?.displayName || "Direct message";
 
-                    const conversationName =
-                      bookmark.conversationId?.type === "group"
-                        ? bookmark.conversationId.group?.name ||
-                          "Untitled group"
-                        : bookmark.conversationId.participants?.find(
-                            (participant) =>
-                              String(participant._id) !== String(user?._id),
-                          )?.displayName || "Direct message";
-
-                    return (
-                      <div
-                        key={bookmark._id}
-                        style={{ position: "absolute", top, left: 0, right: 0 }}
-                        className="pb-3"
-                      >
-                        <Card className="elevated-card p-4">
+                  return (
+                    <Card key={bookmark._id} className="elevated-card p-4">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <label className="mb-1 inline-flex items-center gap-2 text-xs text-muted-foreground">
@@ -472,11 +420,9 @@ const SavedMessagesPage = () => {
                               </Button>
                             )}
                           </div>
-                        </Card>
-                      </div>
-                    );
-                  })}
-                </div>
+                    </Card>
+                  );
+                })}
               </div>
 
               {pagination.hasNextPage && (

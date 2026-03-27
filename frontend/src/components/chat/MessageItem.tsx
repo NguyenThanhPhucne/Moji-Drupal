@@ -61,6 +61,7 @@ const ReactionBar = memo(function ReactionBar({
       {Object.entries(grouped).map(([emoji, count]) => (
         <button
           key={emoji}
+          type="button"
           onClick={() => onReact(emoji)}
           className="flex items-center gap-0.5 text-xs bg-muted hover:bg-primary/10 border border-border/60 rounded-full px-2 py-0.5 transition-colors hover:scale-105 active:scale-95"
         >
@@ -93,6 +94,7 @@ const QuickReactBar = memo(function QuickReactBar({
       {QUICK_REACTIONS.map((em) => (
         <button
           key={em}
+          type="button"
           onClick={() => onReact(em)}
           className="text-base hover:scale-125 active:scale-95 transition-transform duration-100 p-0.5"
         >
@@ -727,12 +729,14 @@ const MessageItem = memo(function MessageItem({
         className="flex-1 rounded-xl px-3 py-2 text-sm border border-primary outline-none bg-background focus:ring-2 focus:ring-primary/30"
       />
       <button
+        type="button"
         onClick={handleEditSave}
         className="px-2 py-1 text-xs bg-primary text-white rounded-lg hover:bg-primary/90"
       >
         Save
       </button>
       <button
+        type="button"
         onClick={() => {
           setEditMode(false);
           setEditValue(message.content ?? "");
@@ -770,7 +774,7 @@ const MessageItem = memo(function MessageItem({
         {/* Bubble container */}
         <div
           className={cn(
-            "flex flex-col max-w-[65%]",
+            "flex flex-col max-w-[82%] sm:max-w-[75%] md:max-w-[65%]",
             isOwn ? "items-end" : "items-start",
           )}
         >

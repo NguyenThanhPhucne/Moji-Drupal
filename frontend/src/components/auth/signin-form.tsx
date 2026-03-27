@@ -35,10 +35,9 @@ export function SigninForm({
   const onSubmit = async (data: SignInFormValues) => {
     const { username, password } = data;
     try {
-      await signIn(username, password);
-      // Check if user was set by store
-      const { user } = useAuthStore.getState();
-      if (user) {
+      const ok = await signIn(username, password);
+      const { user, accessToken } = useAuthStore.getState();
+      if (ok && (user || accessToken)) {
         navigate("/");
       }
     } catch (error) {

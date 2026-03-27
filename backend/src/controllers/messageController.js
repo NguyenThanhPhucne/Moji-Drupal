@@ -29,6 +29,13 @@ export const sendDirectMessage = async (req, res) => {
 
     if (conversationId) {
       conversation = await Conversation.findById(conversationId);
+      const isMember = conversation?.participants?.some(
+        (participant) => participant.userId.toString() === senderId.toString(),
+      );
+
+      if (conversation && !isMember) {
+        return res.status(403).json({ message: "Không có quyền gửi tin nhắn" });
+      }
     }
 
     if (!conversation) {

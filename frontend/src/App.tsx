@@ -20,6 +20,22 @@ const ProtectedRoute = lazy(() => import("./components/auth/ProtectedRoute"));
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
+const scheduleAfterFirstPaint = (callback: () => void) => {
+  let frameOne = 0;
+  let frameTwo = 0;
+
+  frameOne = globalThis.requestAnimationFrame(() => {
+    frameTwo = globalThis.requestAnimationFrame(() => {
+      callback();
+    });
+  });
+
+  return () => {
+    globalThis.cancelAnimationFrame(frameOne);
+    globalThis.cancelAnimationFrame(frameTwo);
+  };
+};
+
 function AppContent() {
   const { isDark, setTheme } = useThemeStore();
   const { accessToken, user } = useAuthStore();
@@ -35,12 +51,18 @@ function AppContent() {
   useEffect(() => {
     if (accessToken && user) {
       connectSocket();
-      // Load friend requests when the user signs in.
-      getAllFriendRequests();
-      getFriends();
-      fetchBookmarks({ page: 1, limit: 30 });
-      fetchNotifications();
-      return;
+
+      // Load non-critical data after first paint to improve TTI on sign-in.
+      const cancelDeferred = scheduleAfterFirstPaint(() => {
+        void getAllFriendRequests();
+        void getFriends();
+        void fetchBookmarks({ page: 1, limit: 30 });
+        void fetchNotifications();
+      });
+
+      return () => {
+        cancelDeferred();
+      };
     }
 
     disconnectSocket();

@@ -71,7 +71,9 @@ const HomeFeedPage = () => {
                     Updates from people you follow
                   </p>
                 </div>
-                <BackToChatCard onClick={() => navigate("/")} />
+                <div className="self-start sm:self-auto">
+                  <BackToChatCard onClick={() => navigate("/")} />
+                </div>
               </div>
 
               {isInitialHomeLoading ? (

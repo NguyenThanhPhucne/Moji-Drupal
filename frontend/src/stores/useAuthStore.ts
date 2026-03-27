@@ -5,6 +5,10 @@ import type { AuthState } from "@/types/store";
 import { persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
 import { useSocketStore } from "./useSocketStore";
+import { endPerfStep, startPerfStep } from "@/lib/performance";
+
+const APP_STORAGE_KEYS = ["auth-storage", "chat-storage", "theme-storage"];
+const CRM_SSO_SESSION_KEY = "crm_sso_payload";
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   const maybeAxios = error as {
@@ -42,8 +46,12 @@ export const useAuthStore = create<AuthState>()(
 
         set({ accessToken: null, user: null, loading: false });
         useChatStore.getState().reset();
-        localStorage.clear();
-        sessionStorage.clear();
+
+        // Only clear this app's persisted keys; preserve unrelated browser data.
+        for (const key of APP_STORAGE_KEYS) {
+          localStorage.removeItem(key);
+        }
+        sessionStorage.removeItem(CRM_SSO_SESSION_KEY);
       },
       signUp: async (username, password, email, firstName, lastName) => {
         try {
@@ -73,25 +81,45 @@ export const useAuthStore = create<AuthState>()(
         try {
           get().clearState();
           set({ loading: true });
+          const signInStart = startPerfStep("auth.signin");
 
           // Get full response payload
           const data = await authService.signIn(username, password);
+          endPerfStep("auth.signin", signInStart);
 
           // Set token if present (Drupal may return only cookie in some cases)
           if (data.accessToken) {
             get().setAccessToken(data.accessToken);
           }
 
-          // Important: call fetchMe to resolve user info from the fresh cookie
-          await get().fetchMe();
+          // Use user payload from sign-in response when available for faster UX.
+          if (data.user) {
+            get().setUser(data.user);
+            console.info("[perf] auth.fetchMe: skipped (user in signin payload)");
+          } else {
+            // Fallback for older backend payloads.
+            const fetchMeStart = startPerfStep("auth.fetchMe");
+            await get().fetchMe();
+            endPerfStep("auth.fetchMe", fetchMeStart);
+          }
 
-          // Load chats after user is available
-          useChatStore.getState().fetchConversations();
+          // Load chats in background after user is available.
+          const fetchConversationsStart = startPerfStep(
+            "auth.fetchConversations",
+          );
+          void useChatStore
+            .getState()
+            .fetchConversations()
+            .finally(() =>
+              endPerfStep("auth.fetchConversations", fetchConversationsStart),
+            );
 
           toast.success("Welcome back to Coming");
+          return true;
         } catch (error) {
           console.error(error);
           toast.error(getErrorMessage(error, "Sign-in failed!"));
+          return false;
         } finally {
           set({ loading: false });
         }
