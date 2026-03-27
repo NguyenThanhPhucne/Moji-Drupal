@@ -49,3 +49,7 @@ deploy_*_fix.sh
 
 # Keep maintained ops scripts
 !backend/scripts/db-health-check.mjs
+
+# Local-only debug workspace (do not track scripts)
+tools/local/*
+!tools/local/README.md
