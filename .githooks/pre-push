@@ -1,0 +1,53 @@
+#!/bin/sh
+set -eu
+
+# Allow explicit override when you intentionally need to push risky files.
+if [ "${ALLOW_RISKY_PUSH:-0}" = "1" ]; then
+  exit 0
+fi
+
+zero="0000000000000000000000000000000000000000"
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+append_if_blocked() {
+  file_path="$1"
+
+  case "$file_path" in
+    *.env.example|*.env.sample|*/.env.example|*/.env.sample)
+      return
+      ;;
+  esac
+
+  case "$file_path" in
+    *.env|*.env.*|*/.env|*/.env.*|*.log|*.sql|*.sql.gz|*.dump|*.sqlite|*.db|*.bak|*.tmp|*.swp|*.swo|*~|*.DS_Store|*/.DS_Store|node_modules/*|*/node_modules/*|dist/*|*/dist/*|build/*|*/build/*|coverage/*|*/coverage/*|.cache/*|*/.cache/*|vendor/*|*/vendor/*|backups/*|*/backups/*)
+      printf '%s\n' "$file_path" >> "$tmp_file"
+      ;;
+  esac
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  git diff --name-only --diff-filter=ACMRT "$range" | while IFS= read -r changed; do
+    [ -z "$changed" ] && continue
+    append_if_blocked "$changed"
+  done
+done
+
+if [ -s "$tmp_file" ]; then
+  echo "ERROR: Push blocked because it includes high-risk/non-essential files:"
+  sort -u "$tmp_file" | sed 's/^/  - /'
+  echo ""
+  echo "Review staged commits and remove these files from the push."
+  echo "If this is intentional, run with: ALLOW_RISKY_PUSH=1 git push ..."
+  exit 1
+fi
+
+exit 0

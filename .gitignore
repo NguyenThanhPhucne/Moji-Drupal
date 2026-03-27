@@ -1,6 +1,8 @@
 node_modules/
 .env
 !.env.example
+.env.*
+!.env.sample
 jsconfig.json
 
 # REACT
@@ -33,4 +35,6 @@ dist-ssr
 *.txt
 !README.md
 !.env.example
-!
+backend/backend-log.txt
+frontend/.env.development
+frontend/.env.production
