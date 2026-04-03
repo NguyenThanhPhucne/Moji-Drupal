@@ -43,10 +43,10 @@ interface SocialState {
     page?: number,
     append?: boolean,
   ) => Promise<void>;
-  toggleLike: (postId: string) => Promise<void>;
+  toggleLike: (postId: string) => Promise<boolean>;
   fetchComments: (postId: string) => Promise<void>;
   fetchPostEngagement: (postId: string) => Promise<void>;
-  addComment: (postId: string, content: string) => Promise<void>;
+  addComment: (postId: string, content: string) => Promise<boolean>;
   toggleFollow: (userId: string) => Promise<boolean>;
   fetchNotifications: () => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
@@ -230,9 +230,11 @@ export const useSocialStore = create<SocialState>((set) => ({
           result.likesCount,
         ),
       }));
+      return true;
     } catch (error) {
       console.error("[social] toggleLike error", error);
       toast.error("Cannot like this post");
+      return false;
     }
   },
 
@@ -290,9 +292,11 @@ export const useSocialStore = create<SocialState>((set) => ({
             : post,
         ),
       }));
+      return true;
     } catch (error) {
       console.error("[social] addComment error", error);
       toast.error("Cannot add comment");
+      return false;
     }
   },
 

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const MAX_FILE_SIZE_MB = 5;
+const MAX_MESSAGE_LENGTH = 1200;
 
 const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const { user } = useAuthStore();
@@ -19,6 +20,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const [value, setValue] = useState("");
   const [typing, setTyping] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,7 +34,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
+    const newValue = e.target.value.slice(0, MAX_MESSAGE_LENGTH);
     setValue(newValue);
 
     // Auto-resize textarea
@@ -132,6 +134,23 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   };
 
   const hasSendable = value.trim() || imagePreview;
+  const charsLeft = MAX_MESSAGE_LENGTH - value.length;
+  const showActionChips = focused || value.length > 0 || Boolean(imagePreview);
+
+  const injectTemplate = (type: "code" | "spoiler" | "mention") => {
+    const trimmed = value.trim();
+    if (type === "code") {
+      setValue(trimmed ? `${value}\n\`\`\`\n\n\`\`\`` : "```\n\n```");
+      return;
+    }
+
+    if (type === "spoiler") {
+      setValue(trimmed ? `${value} ||spoiler||` : "||spoiler||");
+      return;
+    }
+
+    setValue(trimmed ? `${value} @` : "@");
+  };
 
   return (
     <div className="flex flex-col bg-background/95 border-t border-border/50 backdrop-blur-sm">
@@ -196,12 +215,50 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
 
         {/* Textarea */}
         <div className="flex-1 relative">
+          {showActionChips && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => injectTemplate("mention")}
+                className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/85 transition-colors hover:bg-muted/75"
+              >
+                @ Mention
+              </button>
+              <button
+                type="button"
+                onClick={() => injectTemplate("code")}
+                className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/85 transition-colors hover:bg-muted/75"
+              >
+                Code
+              </button>
+              <button
+                type="button"
+                onClick={() => injectTemplate("spoiler")}
+                className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/85 transition-colors hover:bg-muted/75"
+              >
+                Spoiler
+              </button>
+              <span
+                className={cn(
+                  "ml-auto text-[10px] tabular-nums",
+                  charsLeft < 120
+                    ? "text-amber-500"
+                    : "text-muted-foreground/80",
+                )}
+              >
+                {charsLeft}
+              </span>
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             rows={1}
             value={value}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             placeholder="Type a message... (Shift+Enter for a new line)"
             className={cn(
               "w-full resize-none overflow-hidden rounded-2xl bg-card/80 border border-border/60 shadow-sm",
@@ -235,7 +292,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           className={cn(
             "flex-shrink-0 mb-0.5 transition-all duration-200",
             hasSendable
-              ? "bg-gradient-chat shadow-md hover:shadow-glow hover:scale-105"
+              ? "send-btn-ready bg-gradient-chat"
               : "bg-muted text-muted-foreground",
           )}
           title="Send (Enter)"

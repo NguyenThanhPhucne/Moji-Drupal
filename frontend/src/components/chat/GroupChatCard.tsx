@@ -4,6 +4,7 @@ import type { Conversation } from "@/types/chat";
 import ChatCard from "./ChatCard";
 import UnreadCountBadge from "./UnreadCountBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
@@ -13,13 +14,34 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
     messages,
     fetchMessages,
   } = useChatStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   if (!user) return null;
 
   const unreadCount = convo.unreadCounts[user._id];
+  const normalizedLastMessage = String(
+    convo.lastMessage?.content || "",
+  ).toLowerCase();
+  const mentionPatterns = [
+    `@${(user.username || "").toLowerCase()}`,
+    `@${(user.displayName || "").toLowerCase()}`,
+    "@all",
+    "@everyone",
+  ].filter(Boolean);
+  const mentionCount =
+    unreadCount > 0 &&
+    mentionPatterns.some((pattern) => normalizedLastMessage.includes(pattern))
+      ? 1
+      : 0;
   const name = convo.group?.name ?? "";
   const handleSelectConversation = async (id: string) => {
     setActiveConversation(id);
+
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+
     if (!messages[id]) {
       await fetchMessages(id);
     }
@@ -37,6 +59,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
       isActive={activeConversationId === convo._id}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
+      mentionCount={mentionCount}
       leftSection={
         <>
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}

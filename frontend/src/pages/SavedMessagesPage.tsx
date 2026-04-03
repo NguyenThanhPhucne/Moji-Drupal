@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SavedMessageSkeleton from "@/components/skeleton/SavedMessageSkeleton";
+import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -427,14 +428,17 @@ const SavedMessagesPage = () => {
 
               {pagination.hasNextPage && (
                 <div className="flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={loadMoreBookmarks}
-                    disabled={loading}
-                  >
-                    {loading ? "Loading..." : "Load more"}
-                  </Button>
+                  {loading ? (
+                    <LoadingMoreSkeleton />
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={loadMoreBookmarks}
+                    >
+                      Load more
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

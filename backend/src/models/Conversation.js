@@ -90,16 +90,51 @@ const conversationSchema = new mongoose.Schema(
       of: Number,
       default: {},
     },
+    // Deterministic key for one-to-one chat pairs to prevent duplicate direct rooms.
+    directKey: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     timestamps: true,
   },
 );
 
+conversationSchema.pre("validate", function (next) {
+  if (this.type !== "direct") {
+    this.directKey = null;
+    return next();
+  }
+
+  const participantIds = (this.participants || [])
+    .map((participant) => participant?.userId?.toString?.())
+    .filter(Boolean)
+    .sort();
+
+  if (participantIds.length === 2 && participantIds[0] !== participantIds[1]) {
+    this.directKey = `${participantIds[0]}:${participantIds[1]}`;
+  }
+
+  next();
+});
+
 conversationSchema.index({
   "participants.userId": 1,
   lastMessageAt: -1,
 });
+
+conversationSchema.index(
+  { directKey: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      type: "direct",
+      directKey: { $type: "string" },
+    },
+  },
+);
 
 // Real-time sync to Drupal after save/update
 conversationSchema.post("save", async function (doc) {

@@ -8,6 +8,7 @@ import {
   removeMessageForMe,
   editMessage,
   markMessageRead,
+  getLinkPreview,
 } from "../controllers/messageController.js";
 import {
   checkFriendship,
@@ -23,5 +24,6 @@ router.delete("/:messageId/unsend", unsendMessage);
 router.delete("/:messageId/remove-for-me", removeMessageForMe);
 router.put("/:messageId/edit", editMessage);
 router.post("/:messageId/read", markMessageRead);
+router.get("/link-preview/meta", getLinkPreview);
 
 export default router;

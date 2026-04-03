@@ -108,10 +108,12 @@ export interface SocketState {
   socket: Socket | null;
   onlineUsers: string[];
   recentActiveUsers: Record<string, number>;
+  lastActiveByUser: Record<string, number>;
   isUserOnline: (userId?: string | null) => boolean;
   getUserPresence: (
     userId?: string | null,
   ) => "online" | "recently-active" | "offline";
+  getLastActiveAt: (userId?: string | null) => number | null;
   connectSocket: () => void;
   disconnectSocket: () => void;
 }

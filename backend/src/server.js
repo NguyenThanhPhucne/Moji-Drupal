@@ -61,7 +61,9 @@ const corsOptions = {
 };
 
 // middlewares
-app.use(express.json());
+// Chat image messages are sent as base64 data URLs, which are larger than default 100kb.
+app.use(express.json({ limit: "12mb" }));
+app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 app.use(cookieParser());
 app.use(cors(corsOptions));
 

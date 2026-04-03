@@ -1,18 +1,21 @@
 import type { CSSProperties } from "react";
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Compass } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
+import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 const ExplorePage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { accessToken, user } = useAuthStore();
   const {
     exploreFeed,
@@ -29,6 +32,30 @@ const ExplorePage = () => {
 
   const isInitialExploreLoading = loadingExplore && exploreFeed.length === 0;
   const isLoadingMoreExplore = loadingExplore && exploreFeed.length > 0;
+  const [activeTag, setActiveTag] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    const tagFromQuery = searchParams.get("tag") || "";
+    if (tagFromQuery) {
+      setActiveTag(tagFromQuery.toLowerCase());
+    }
+  }, [searchParams]);
+
+  const filteredExploreFeed = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    return exploreFeed.filter((post) => {
+      const matchesTag =
+        !activeTag ||
+        post.tags.some((tag) => tag.toLowerCase() === activeTag.toLowerCase());
+
+      const caption = post.caption?.toLowerCase() || "";
+      const matchesQuery = !normalizedQuery || caption.includes(normalizedQuery);
+
+      return matchesTag && matchesQuery;
+    });
+  }, [activeTag, searchQuery, exploreFeed]);
 
   useEffect(() => {
     if (!accessToken || !user) {
@@ -70,8 +97,41 @@ const ExplorePage = () => {
             </div>
 
             <div className="space-stack-md">
+              <div className="elevated-card p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search captions in explore"
+                    className="sm:max-w-sm"
+                  />
+                  {activeTag && (
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+                        #{activeTag}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setActiveTag("");
+                          setSearchParams((params) => {
+                            const next = new URLSearchParams(params);
+                            next.delete("tag");
+                            return next;
+                          });
+                        }}
+                      >
+                        Clear tag
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {isInitialExploreLoading && <SocialPostSkeleton count={3} />}
-              {exploreFeed.map((post, index) => (
+              {filteredExploreFeed.map((post, index) => (
                 <div
                   key={post._id}
                   className="stagger-enter"
@@ -86,6 +146,14 @@ const ExplorePage = () => {
                     onFetchEngagement={fetchPostEngagement}
                     onComment={addComment}
                     onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+                    onSelectTag={(tag) => {
+                      setActiveTag(tag);
+                      setSearchParams((params) => {
+                        const next = new URLSearchParams(params);
+                        next.set("tag", tag);
+                        return next;
+                      });
+                    }}
                   />
                 </div>
               ))}
@@ -95,23 +163,26 @@ const ExplorePage = () => {
                   staggerFrom={exploreFeed.length}
                 />
               )}
-              {!loadingExplore && exploreFeed.length === 0 && (
+              {!loadingExplore && filteredExploreFeed.length === 0 && (
                 <div className="elevated-card p-8 text-center text-muted-foreground">
-                  Explore is quiet right now.
+                  No posts match your current filters.
                 </div>
               )}
             </div>
 
             {explorePagination.hasNextPage && (
               <div className="flex justify-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={loadMore}
-                  disabled={loadingExplore}
-                >
-                  {loadingExplore ? "Loading more..." : "Load more"}
-                </Button>
+                {loadingExplore ? (
+                  <LoadingMoreSkeleton />
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={loadMore}
+                  >
+                    Load more
+                  </Button>
+                )}
               </div>
             )}
           </section>

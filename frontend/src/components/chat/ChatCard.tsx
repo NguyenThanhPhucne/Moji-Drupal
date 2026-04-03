@@ -8,6 +8,7 @@ interface ChatCardProps {
   isActive: boolean;
   onSelect: (id: string) => void;
   unreadCount?: number;
+  mentionCount?: number;
   leftSection: React.ReactNode;
   subtitle: React.ReactNode;
 }
@@ -19,10 +20,12 @@ const ChatCard = ({
   isActive,
   onSelect,
   unreadCount,
+  mentionCount,
   leftSection,
   subtitle,
 }: ChatCardProps) => {
   const hasUnread = (unreadCount ?? 0) > 0;
+  const hasMention = (mentionCount ?? 0) > 0;
 
   return (
     <Card
@@ -36,7 +39,7 @@ const ChatCard = ({
         "cursor-pointer rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200",
         "hover:border-border/70 hover:bg-muted/70 hover:text-foreground hover:shadow-sm",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
-        "group select-none",
+        "group select-none relative overflow-hidden",
         isActive
           ? "border-primary/30 bg-gradient-to-r from-primary/10 to-primary-foreground ring-1 ring-primary/20 shadow-sm"
           : "bg-transparent",
@@ -49,9 +52,13 @@ const ChatCard = ({
         }
       }}
     >
+      {isActive && (
+        <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+      )}
+
       <div className="flex items-center gap-3">
         {/* Avatar */}
-        <div className="relative flex-shrink-0">{leftSection}</div>
+        <div className="chat-card-avatar-wrap relative flex-shrink-0">{leftSection}</div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
@@ -90,11 +97,19 @@ const ChatCard = ({
             >
               {subtitle}
             </div>
-            {hasUnread && (
-              <span className="flex-shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-primary text-white text-[10px] font-bold shadow-sm animate-in zoom-in duration-200">
-                {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
-              </span>
-            )}
+
+            <div className="flex flex-shrink-0 items-center gap-1.5">
+              {hasMention && (
+                <span className="unread-badge-entry inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white shadow-sm">
+                  @{(mentionCount ?? 0) > 9 ? "9+" : mentionCount}
+                </span>
+              )}
+              {hasUnread && (
+                <span className="unread-badge-entry inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow-sm">
+                  {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogOverlay,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { UserPlus, Users } from "lucide-react";
@@ -96,8 +97,13 @@ const NewGroupChatModal = () => {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[425px] border-none">
-        <DialogHeader>
+      <DialogOverlay className="modal-overlay" />
+      <DialogContent
+        className="modal-content-shell sm:max-w-[425px] border-none"
+        dismissible={!loading}
+        showCloseButton={!loading}
+      >
+        <DialogHeader className="modal-stagger-item">
           <DialogTitle className="capitalize">
             create a new group chat
           </DialogTitle>
@@ -106,7 +112,7 @@ const NewGroupChatModal = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        <form className="space-y-4 modal-stagger-item" onSubmit={handleSubmit}>
           {/* group name */}
           <div className="space-y-2">
             <Label htmlFor="groupName" className="text-sm font-semibold">
@@ -114,6 +120,7 @@ const NewGroupChatModal = () => {
             </Label>
             <Input
               id="groupName"
+              data-autofocus="true"
               placeholder="Enter group name..."
               className="glass border-border/50 focus:border-primary/50 transition-smooth"
               value={groupName}
@@ -153,7 +160,7 @@ const NewGroupChatModal = () => {
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="modal-stagger-item">
             <Button
               type="submit"
               disabled={loading || invitedUsers.length === 0}

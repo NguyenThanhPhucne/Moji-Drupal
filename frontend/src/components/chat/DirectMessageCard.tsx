@@ -7,6 +7,7 @@ import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import UnreadCountBadge from "./UnreadCountBadge";
 import { useSocketStore } from "@/stores/useSocketStore";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
@@ -17,6 +18,8 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     fetchMessages,
   } = useChatStore();
   const { getUserPresence } = useSocketStore();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   if (!user) return null;
 
@@ -27,9 +30,24 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
 
   const unreadCount = convo.unreadCounts?.[String(user._id)] ?? 0;
   const lastMessage = convo.lastMessage?.content ?? "";
+  const normalizedLastMessage = lastMessage.toLowerCase();
+  const directMentionPatterns = [
+    user.username ? `@${user.username.toLowerCase()}` : "",
+    user.displayName ? `@${user.displayName.toLowerCase()}` : "",
+  ].filter(Boolean);
+  const mentionCount =
+    unreadCount > 0 &&
+    directMentionPatterns.some((pattern) => normalizedLastMessage.includes(pattern))
+      ? 1
+      : 0;
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversation(id);
+
+    if (location.pathname !== "/") {
+      navigate("/");
+    }
+
     if (!messages[id]) {
       await fetchMessages(id);
     }
@@ -47,6 +65,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
       isActive={activeConversationId === convo._id}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
+      mentionCount={mentionCount}
       leftSection={
         <>
           <UserAvatar
@@ -54,7 +73,10 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             name={otherUser.displayName ?? ""}
             avatarUrl={otherUser.avatarUrl ?? undefined}
           />
-          <StatusBadge status={getUserPresence(otherUser?._id)} />
+          <StatusBadge
+            status={getUserPresence(otherUser?._id)}
+            userId={otherUser?._id}
+          />
           {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
         </>
       }

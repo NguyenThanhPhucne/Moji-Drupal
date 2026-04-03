@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
+import { toast } from "sonner";
 
 const toTimestamp = (value?: string) => {
   const ts = value ? new Date(value).getTime() : 0;
@@ -118,8 +119,38 @@ export const useChatStore = create<ChatState>()(
         conversationIdOverride,
         replyTo,
       ) => {
+        const { activeConversationId, user } = {
+          activeConversationId: get().activeConversationId,
+          user: useAuthStore.getState().user,
+        };
+        const targetConversationId =
+          conversationIdOverride ?? activeConversationId;
+
+        // Build an optimistic message to show immediately
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const optimisticMessage = {
+          _id: tempId,
+          conversationId: targetConversationId ?? "",
+          senderId: user?._id ?? "",
+          content: content ?? "",
+          imgUrl: imgUrl ?? null,
+          replyTo: replyTo ? { _id: replyTo } : null,
+          reactions: [],
+          isDeleted: false,
+          editedAt: null,
+          readBy: [],
+          hiddenFor: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isOwn: true,
+        };
+
+        if (targetConversationId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          get().addMessage(optimisticMessage as any);
+        }
+
         try {
-          const { activeConversationId, addMessage } = get();
           const message = await chatService.sendDirectMessage(
             recipientId,
             content,
@@ -128,22 +159,54 @@ export const useChatStore = create<ChatState>()(
             replyTo,
           );
 
-          // Optimistically append the message immediately instead of waiting for socket
-          addMessage(message);
+          // Replace temp message with real one from server
+          if (targetConversationId) {
+            get().removeMessageFromConversation(targetConversationId, tempId);
+          }
+          get().addMessage(message);
 
-          const targetConversationId =
+          const realConvoId =
             conversationIdOverride ?? message.conversationId ?? activeConversationId;
 
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id === targetConversationId ? { ...c, seenBy: [] } : c,
+              c._id === realConvoId ? { ...c, seenBy: [] } : c,
             ),
           }));
         } catch (error) {
+          // Rollback: remove the optimistic message
+          if (targetConversationId) {
+            get().removeMessageFromConversation(targetConversationId, tempId);
+          }
+          toast.error("Failed to send message. Please try again.");
           console.error("Error sending direct message", error);
         }
       },
       sendGroupMessage: async (conversationId, content, imgUrl, replyTo) => {
+        const user = useAuthStore.getState().user;
+
+        // Optimistic message
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const optimisticMessage = {
+          _id: tempId,
+          conversationId,
+          senderId: user?._id ?? "",
+          content: content ?? "",
+          imgUrl: imgUrl ?? null,
+          replyTo: replyTo ? { _id: replyTo } : null,
+          reactions: [],
+          isDeleted: false,
+          editedAt: null,
+          readBy: [],
+          hiddenFor: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isOwn: true,
+        };
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get().addMessage(optimisticMessage as any);
+
         try {
           const { addMessage } = get();
           const message = await chatService.sendGroupMessage(
@@ -153,7 +216,8 @@ export const useChatStore = create<ChatState>()(
             replyTo,
           );
 
-          // Optimistically append the message immediately
+          // Replace temp with real
+          get().removeMessageFromConversation(conversationId, tempId);
           addMessage(message);
 
           set((state) => ({
@@ -162,6 +226,9 @@ export const useChatStore = create<ChatState>()(
             ),
           }));
         } catch (error) {
+          // Rollback
+          get().removeMessageFromConversation(conversationId, tempId);
+          toast.error("Failed to send message. Please try again.");
           console.error("Error sending group message", error);
         }
       },
@@ -234,6 +301,34 @@ export const useChatStore = create<ChatState>()(
         });
       },
       reactToMessage: async (conversationId, messageId, emoji) => {
+        const { user } = useAuthStore.getState();
+        const currentUserId = user?._id ?? "";
+
+        // Optimistic update: toggle the reaction immediately
+        const prevItems = get().messages[conversationId]?.items ?? [];
+        const prevMessage = prevItems.find((m) => m._id === messageId);
+        if (prevMessage) {
+          const existingIdx = (prevMessage.reactions ?? []).findIndex(
+            (r) => r.userId === currentUserId && r.emoji === emoji,
+          );
+          let optimisticReactions;
+          if (existingIdx > -1) {
+            // Toggle off
+            optimisticReactions = [...(prevMessage.reactions ?? [])].filter(
+              (_, i) => i !== existingIdx,
+            );
+          } else {
+            // Toggle on (replace any existing reaction from this user)
+            const filtered = (prevMessage.reactions ?? []).filter(
+              (r) => r.userId !== currentUserId,
+            );
+            optimisticReactions = [...filtered, { userId: currentUserId, emoji }];
+          }
+          get().updateMessage(conversationId, messageId, {
+            reactions: optimisticReactions,
+          });
+        }
+
         try {
           const res = await chatService.reactToMessage(messageId, emoji);
 
@@ -243,31 +338,75 @@ export const useChatStore = create<ChatState>()(
             throw new TypeError("Invalid reactToMessage response payload");
           }
 
-          get().updateMessage(conversationId, messageId, {
-            reactions,
-          });
+          // Reconcile with server canonical state
+          get().updateMessage(conversationId, messageId, { reactions });
         } catch (error) {
+          // Rollback to previous reactions on failure
+          if (prevMessage) {
+            get().updateMessage(conversationId, messageId, {
+              reactions: prevMessage.reactions ?? [],
+            });
+          }
           console.error("Reaction error:", error);
         }
       },
       unsendMessage: async (conversationId, messageId) => {
+        const previousMessage =
+          get().messages[conversationId]?.items.find(
+            (messageItem) => messageItem._id === messageId,
+          ) ?? null;
+
+        if (!previousMessage) {
+          return;
+        }
+
+        get().updateMessage(conversationId, messageId, {
+          isDeleted: true,
+          content: "This message was removed",
+          imgUrl: null,
+        });
+
         try {
           await chatService.unsendMessage(messageId);
-          get().updateMessage(conversationId, messageId, {
-            isDeleted: true,
-            content: "This message was removed",
-            imgUrl: null,
-          });
         } catch (error) {
+          get().updateMessage(conversationId, messageId, {
+            isDeleted: previousMessage.isDeleted ?? false,
+            content: previousMessage.content,
+            imgUrl: previousMessage.imgUrl ?? null,
+            editedAt: previousMessage.editedAt ?? null,
+          });
+          toast.error("Could not remove message for everyone. Restored.");
           console.error("Unsend error:", error);
+          throw error;
         }
       },
       removeMessageForMe: async (conversationId, messageId) => {
+        const previousItems = get().messages[conversationId]?.items ?? [];
+        const hasTargetMessage = previousItems.some(
+          (messageItem) => messageItem._id === messageId,
+        );
+
+        if (!hasTargetMessage) {
+          return;
+        }
+
+        get().removeMessageFromConversation(conversationId, messageId);
+
         try {
           await chatService.removeMessageForMe(messageId);
-          get().removeMessageFromConversation(conversationId, messageId);
         } catch (error) {
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...state.messages[conversationId],
+                items: previousItems,
+              },
+            },
+          }));
+          toast.error("Could not remove message. Restored.");
           console.error("Remove-for-me error:", error);
+          throw error;
         }
       },
       editMessage: async (conversationId, messageId, content) => {
@@ -364,11 +503,6 @@ export const useChatStore = create<ChatState>()(
       createConversation: async (type, name, memberIds) => {
         try {
           set({ loading: true });
-          console.log("[useChatStore][debug] createConversation:", {
-            type,
-            name,
-            memberIds,
-          });
           const conversation = await chatService.createConversation(
             type,
             name,
@@ -377,16 +511,12 @@ export const useChatStore = create<ChatState>()(
 
           if (!conversation?._id) {
             console.error(
-              "[useChatStore][error] Invalid conversation response:",
+              "[useChatStore] Invalid conversation response:",
               conversation,
             );
             return false;
           }
 
-          console.log(
-            "[useChatStore][ok] Conversation created:",
-            conversation._id,
-          );
           get().addConvo(conversation, { setActive: true });
           get().setActiveConversation(conversation._id);
 
@@ -394,50 +524,43 @@ export const useChatStore = create<ChatState>()(
           const socket = useSocketStore.getState().socket;
           if (socket?.connected) {
             socket.emit("join-conversation", conversation._id);
-            console.log(
-              "[useChatStore][ok] Joined socket room:",
-              conversation._id,
-            );
           }
 
           return true;
         } catch (error) {
-          console.error(
-            "[useChatStore][error] Error creating conversation:",
-            error,
-          );
+          console.error("[useChatStore] Error creating conversation:", error);
           return false;
         } finally {
           set({ loading: false });
         }
       },
       deleteConversation: async (conversationId) => {
+        // Optimistic: remove from UI immediately
+        const previousConversations = get().conversations;
+        const previousActiveId = get().activeConversationId;
+
+        set((state) => ({
+          conversations: state.conversations.filter(
+            (c) => c._id !== conversationId,
+          ),
+          activeConversationId:
+            state.activeConversationId === conversationId
+              ? null
+              : state.activeConversationId,
+        }));
+
         try {
           set({ loading: true });
-          console.log(
-            "[useChatStore][debug] Deleting conversation:",
-            conversationId,
-          );
           await chatService.deleteConversation(conversationId);
-
-          // Remove from store
-          set((state) => ({
-            conversations: state.conversations.filter(
-              (c) => c._id !== conversationId,
-            ),
-            activeConversationId:
-              state.activeConversationId === conversationId
-                ? null
-                : state.activeConversationId,
-          }));
-
-          console.log("[useChatStore][ok] Conversation deleted");
           return true;
         } catch (error) {
-          console.error(
-            "[useChatStore][error] Error deleting conversation:",
-            error,
-          );
+          // Rollback on failure
+          set({
+            conversations: previousConversations,
+            activeConversationId: previousActiveId,
+          });
+          toast.error("Failed to delete conversation. Please try again.");
+          console.error("[useChatStore] Error deleting conversation:", error);
           return false;
         } finally {
           set({ loading: false });
@@ -446,7 +569,9 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: "chat-storage",
-      partialize: (state) => ({ conversations: state.conversations }),
+      // Only persist the active conversation ID to restore focus on reload.
+      // Conversations list is always fetched fresh from the server to avoid stale data.
+      partialize: (state) => ({ activeConversationId: state.activeConversationId }),
     },
   ),
 );

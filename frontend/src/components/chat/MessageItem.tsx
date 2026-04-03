@@ -11,21 +11,28 @@ import {
   Copy,
   MoreHorizontal,
   Bookmark,
+  Link2,
+  Quote,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
+import { chatService, type LinkPreviewPayload } from "@/services/chatService";
+import { useLinkPreviewStore } from "@/stores/useLinkPreviewStore";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogOverlay,
 } from "../ui/dialog";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
+
+const URL_PATTERN = /(https?:\/\/[^\s]+)/i;
 
 /* ---------- Date divider ---------- */
 export function DateDivider({ date }: Readonly<{ date: Date }>) {
@@ -406,6 +413,7 @@ const MessageItem = memo(function MessageItem({
     activeConversationId,
   } = useChatStore();
   const { isBookmarked, toggleBookmark } = useBookmarkStore();
+  const { getPreview, setPreview } = useLinkPreviewStore();
 
   const [reactBarVisible, setReactBarVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -418,6 +426,9 @@ const MessageItem = memo(function MessageItem({
   const [deleteActionLoading, setDeleteActionLoading] = useState<
     null | "for-me" | "for-everyone"
   >(null);
+  const [linkPreview, setLinkPreview] = useState<LinkPreviewPayload | null>(
+    null,
+  );
   const [isMessageHovered, setIsMessageHovered] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -453,6 +464,14 @@ const MessageItem = memo(function MessageItem({
     },
     [activeConversationId, message._id, reactToMessage],
   );
+
+  const handleDoubleClickBubble = useCallback(() => {
+    if (message.isDeleted) {
+      return;
+    }
+
+    void handleReact("❤️");
+  }, [handleReact, message.isDeleted]);
 
   const handleOpenDeleteDialog = useCallback(() => {
     setContextMenu(null);
@@ -574,6 +593,62 @@ const MessageItem = memo(function MessageItem({
   const isSeenAnchorMessage =
     isOwn && !!lastOwnMessageId && message._id === lastOwnMessageId;
 
+  const messageText = message.content ?? "";
+  const urlMatch = URL_PATTERN.exec(messageText);
+  const previewUrl = urlMatch?.[1] ?? null;
+  const previewHost = useMemo(() => {
+    if (!previewUrl) {
+      return "";
+    }
+
+    try {
+      return new URL(previewUrl).hostname.replace(/^www\./, "");
+    } catch {
+      return "";
+    }
+  }, [previewUrl]);
+
+  useEffect(() => {
+    if (!previewUrl) {
+      setLinkPreview(null);
+      return;
+    }
+
+    const cachedPreview = getPreview(previewUrl);
+    if (cachedPreview) {
+      setLinkPreview(cachedPreview);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      try {
+        const preview = await chatService.getLinkPreview(previewUrl);
+        setPreview(previewUrl, preview);
+        if (!cancelled) {
+          setLinkPreview(preview);
+        }
+      } catch {
+        if (!cancelled) {
+          setLinkPreview({
+            url: previewUrl,
+            siteName: previewHost,
+            title: previewHost || previewUrl,
+            description: "Preview unavailable",
+            image: "",
+          });
+        }
+      }
+    };
+
+    void loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [getPreview, previewHost, previewUrl, setPreview]);
+
   const seenUsersStackKey = useMemo(
     () => seenUsers.map((seen) => seen._id).join("-"),
     [seenUsers],
@@ -671,11 +746,12 @@ const MessageItem = memo(function MessageItem({
   const renderReadOnlyBubble = () => (
     <div
       className={cn(
-        "rounded-2xl px-4 py-2.5 relative",
+        "rounded-2xl px-4 py-2.5 relative transition-transform duration-150 motion-reduce:transition-none",
         isOwn
           ? "chat-bubble-sent rounded-br-md"
           : "chat-bubble-received rounded-bl-md",
         message.isDeleted && "opacity-50 italic",
+        isMessageHovered && !message.isDeleted && "-translate-y-0.5",
         "select-text",
       )}
     >
@@ -701,7 +777,7 @@ const MessageItem = memo(function MessageItem({
   const readOnlyBubbleNode = (
     <button
       type="button"
-      onDoubleClick={canOpenEditMode ? handleEnterEditMode : undefined}
+      onDoubleClick={handleDoubleClickBubble}
       onContextMenu={handleContextMenu}
       aria-label="Message bubble"
       className={cn("text-left", !canOpenEditMode && "cursor-default")}
@@ -789,11 +865,12 @@ const MessageItem = memo(function MessageItem({
           {message.replyTo && !message.isDeleted && (
             <div
               className={cn(
-                "mb-1 rounded-lg px-3 py-2 max-w-full border-l-2 bg-muted/50",
-                isOwn ? "border-primary/60" : "border-muted-foreground/40",
+                "mb-1 max-w-full rounded-xl border border-border/60 px-3 py-2 bg-gradient-to-r from-muted/55 to-muted/25",
+                isOwn ? "ring-1 ring-primary/15" : "",
               )}
             >
-              <p className="text-[11px] text-muted-foreground font-medium mb-0.5">
+              <p className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+                <Quote className="size-3" />
                 Replying to
               </p>
               <p className="text-xs truncate text-muted-foreground max-w-[200px]">
@@ -863,6 +940,45 @@ const MessageItem = memo(function MessageItem({
 
             {/* Main bubble */}
             {bubbleNode}
+
+            {!message.isDeleted && previewUrl && (
+              <a
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className={cn(
+                  "mt-1.5 block max-w-[320px] rounded-xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-sm transition-colors hover:bg-card",
+                  isOwn ? "ml-auto" : "mr-auto",
+                )}
+              >
+                <div className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-primary/85">
+                  <Link2 className="size-3" />
+                  Link Preview
+                </div>
+
+                {linkPreview?.image && (
+                  <img
+                    src={linkPreview.image}
+                    alt={linkPreview.title || "Link preview"}
+                    className="mb-2 h-28 w-full rounded-lg border border-border/60 object-cover"
+                  />
+                )}
+
+                <p className="line-clamp-2 text-sm font-semibold text-foreground">
+                  {linkPreview?.title || previewHost || previewUrl}
+                </p>
+
+                {linkPreview?.description && (
+                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    {linkPreview.description}
+                  </p>
+                )}
+
+                <p className="mt-1 truncate text-[11px] text-muted-foreground/85">
+                  {linkPreview?.siteName || previewHost || previewUrl}
+                </p>
+              </a>
+            )}
           </div>
 
           {/* Reactions */}
@@ -929,11 +1045,13 @@ const MessageItem = memo(function MessageItem({
         open={deleteDialogOpen}
         onOpenChange={handleDeleteDialogOpenChange}
       >
+        <DialogOverlay className="modal-overlay" />
         <DialogContent
-          className="sm:max-w-xl"
+          className="modal-content-shell sm:max-w-xl"
           showCloseButton={!deleteActionLoading}
+          dismissible={!deleteActionLoading}
         >
-          <DialogHeader>
+          <DialogHeader className="modal-stagger-item">
             <DialogTitle>
               Who do you want to remove this message for?
             </DialogTitle>
@@ -943,7 +1061,7 @@ const MessageItem = memo(function MessageItem({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3">
+          <div className="grid gap-3 modal-stagger-item">
             {isOwn && (
               <button
                 type="button"
@@ -980,7 +1098,7 @@ const MessageItem = memo(function MessageItem({
             </button>
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end modal-stagger-item">
             <button
               type="button"
               disabled={!!deleteActionLoading}

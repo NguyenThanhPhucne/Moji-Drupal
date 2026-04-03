@@ -36,6 +36,7 @@ const SendFriendRequestForm = ({
           </Label>
           <Textarea
             id="message"
+            data-autofocus="true"
             rows={3}
             placeholder="Hi! Can we be friends?..."
             className="glass border-border/50 focus:border-primary/50 transition-smooth resize-none"
@@ -48,6 +49,7 @@ const SendFriendRequestForm = ({
             type="button"
             variant="outline"
             className="flex-1 glass"
+            disabled={loading}
             onClick={onBack}
           >
             Back

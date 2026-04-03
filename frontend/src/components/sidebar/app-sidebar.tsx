@@ -19,6 +19,7 @@ import {
   Sun,
   User,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Switch } from "../ui/switch";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
@@ -40,6 +41,84 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { convoLoading } = useChatStore();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const quickNavItems: Array<{
+    key: string;
+    label: string;
+    icon: LucideIcon;
+    to: string;
+    isActive: boolean;
+    badge?: number;
+    wide?: boolean;
+  }> = [
+    {
+      key: "feed",
+      label: "Feed",
+      icon: Home,
+      to: "/feed",
+      isActive: location.pathname === "/feed",
+      badge: unreadSocialCount,
+    },
+    {
+      key: "explore",
+      label: "Explore",
+      icon: Compass,
+      to: "/explore",
+      isActive: location.pathname === "/explore",
+    },
+    {
+      key: "chats",
+      label: "Chats",
+      icon: MessageSquare,
+      to: "/",
+      isActive: location.pathname === "/",
+    },
+    {
+      key: "saved",
+      label: "Saved",
+      icon: Bookmark,
+      to: "/saved",
+      isActive: location.pathname === "/saved",
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: User,
+      to: user?._id ? `/profile/${user._id}` : "/profile",
+      isActive: location.pathname.startsWith("/profile"),
+      wide: true,
+    },
+  ];
+
+  const railItems: Array<{
+    key: string;
+    icon: LucideIcon;
+    to: string;
+    title: string;
+    isActive: boolean;
+  }> = [
+    {
+      key: "rail-chats",
+      icon: MessageSquare,
+      to: "/",
+      title: "Chats",
+      isActive: location.pathname === "/",
+    },
+    {
+      key: "rail-feed",
+      icon: Home,
+      to: "/feed",
+      title: "Feed",
+      isActive: location.pathname === "/feed",
+    },
+    {
+      key: "rail-explore",
+      icon: Compass,
+      to: "/explore",
+      title: "Explore",
+      isActive: location.pathname === "/explore",
+    },
+  ];
 
   return (
     <Sidebar
@@ -95,69 +174,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* New Chat */}
         <SidebarGroup>
           <SidebarGroupContent>
+            <div className="mb-2 flex items-center gap-2 rounded-2xl border border-border/60 bg-background/55 p-2">
+              {railItems.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    title={item.title}
+                    onClick={() => navigate(item.to)}
+                    className={`relative inline-flex size-9 items-center justify-center rounded-xl border transition-all duration-200 ${
+                      item.isActive
+                        ? "nav-rail-active border-primary/60 bg-primary text-primary-foreground"
+                        : "border-border/50 bg-muted/40 text-foreground/80 hover:bg-muted/75"
+                    }`}
+                  >
+                    {item.isActive && (
+                      <span className="absolute -left-1.5 h-4 w-1 rounded-full bg-primary" />
+                    )}
+                    <Icon className="size-4" />
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="grid grid-cols-2 gap-2 p-2">
-              <button
-                type="button"
-                onClick={() => navigate("/feed")}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
-                  location.pathname === "/feed"
-                    ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
-                }`}
-              >
-                <Home className="size-3.5" />
-                Feed
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/explore")}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
-                  location.pathname === "/explore"
-                    ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
-                }`}
-              >
-                <Compass className="size-3.5" />
-                Explore
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/")}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
-                  location.pathname === "/"
-                    ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
-                }`}
-              >
-                <MessageSquare className="size-3.5" />
-                Chats
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/saved")}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
-                  location.pathname === "/saved"
-                    ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
-                }`}
-              >
-                <Bookmark className="size-3.5" />
-                Saved
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(user?._id ? `/profile/${user._id}` : "/profile")
-                }
-                className={`col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
-                  location.pathname.startsWith("/profile")
-                    ? "bg-primary text-primary-foreground shadow-soft"
-                    : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
-                }`}
-              >
-                <User className="size-3.5" />
-                Profile
-              </button>
+              {quickNavItems.map((item) => {
+                const Icon = item.icon;
+
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => navigate(item.to)}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all ${
+                      item.isActive
+                        ? "bg-primary text-primary-foreground shadow-soft"
+                        : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground"
+                    } ${item.wide ? "col-span-2" : ""}`}
+                  >
+                    <Icon className="size-3.5" />
+                    {item.label}
+                    {item.badge && item.badge > 0 && (
+                      <span className="rounded-full bg-background/85 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                        {item.badge > 99 ? "99+" : item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </SidebarGroupContent>
 

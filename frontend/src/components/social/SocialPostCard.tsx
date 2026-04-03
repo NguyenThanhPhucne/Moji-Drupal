@@ -1,6 +1,6 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Heart, MessageCircle } from "lucide-react";
+import { Heart, MessageCircle, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -10,6 +10,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type {
   SocialComment,
   SocialPost,
@@ -20,11 +22,12 @@ interface SocialPostCardProps {
   post: SocialPost;
   comments?: SocialComment[];
   engagement?: SocialPostEngagement;
-  onLike: (postId: string) => Promise<void>;
+  onLike: (postId: string) => Promise<boolean>;
   onFetchComments: (postId: string) => Promise<void>;
   onFetchEngagement: (postId: string) => Promise<void>;
-  onComment: (postId: string, content: string) => Promise<void>;
+  onComment: (postId: string, content: string) => Promise<boolean>;
   onOpenProfile?: (userId: string) => void;
+  onSelectTag?: (tag: string) => void;
 }
 
 const SocialPostCard = ({
@@ -36,11 +39,34 @@ const SocialPostCard = ({
   onFetchEngagement,
   onComment,
   onOpenProfile,
+  onSelectTag,
 }: SocialPostCardProps) => {
   const [showComments, setShowComments] = useState(false);
   const [showEngagement, setShowEngagement] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
+  const [displayLiked, setDisplayLiked] = useState(post.isLiked);
+  const [displayLikesCount, setDisplayLikesCount] = useState(post.likesCount);
+  const [displayCommentsCount, setDisplayCommentsCount] = useState(
+    post.commentsCount,
+  );
+  const [likePending, setLikePending] = useState(false);
+  const [commentPending, setCommentPending] = useState(false);
+  const [likeAnimTick, setLikeAnimTick] = useState(0);
+  const [commentAnimTick, setCommentAnimTick] = useState(0);
   const engagementDescriptionId = useId();
+
+  useEffect(() => {
+    if (!likePending) {
+      setDisplayLiked(post.isLiked);
+      setDisplayLikesCount(post.likesCount);
+    }
+  }, [post.isLiked, post.likesCount, likePending]);
+
+  useEffect(() => {
+    if (!commentPending) {
+      setDisplayCommentsCount(post.commentsCount);
+    }
+  }, [post.commentsCount, commentPending]);
 
   const postedAgo = useMemo(
     () => formatDistanceToNow(new Date(post.createdAt), { addSuffix: true }),
@@ -58,12 +84,48 @@ const SocialPostCard = ({
 
   const submitComment = async () => {
     const normalized = commentDraft.trim();
-    if (!normalized) {
+    if (!normalized || commentPending) {
       return;
     }
 
-    await onComment(post._id, normalized);
-    setCommentDraft("");
+    const previousCommentsCount = displayCommentsCount;
+    setCommentPending(true);
+    setDisplayCommentsCount((current) => current + 1);
+    setCommentAnimTick((value) => value + 1);
+
+    const ok = await onComment(post._id, normalized);
+    if (ok) {
+      setCommentDraft("");
+    } else {
+      setDisplayCommentsCount(previousCommentsCount);
+    }
+
+    setCommentPending(false);
+  };
+
+  const handleLike = async () => {
+    if (likePending) {
+      return;
+    }
+
+    const previousLiked = displayLiked;
+    const previousLikesCount = displayLikesCount;
+    const nextLiked = !displayLiked;
+
+    setLikePending(true);
+    setDisplayLiked(nextLiked);
+    setDisplayLikesCount((current) =>
+      nextLiked ? current + 1 : Math.max(0, current - 1),
+    );
+    setLikeAnimTick((value) => value + 1);
+
+    const ok = await onLike(post._id);
+    if (!ok) {
+      setDisplayLiked(previousLiked);
+      setDisplayLikesCount(previousLikesCount);
+    }
+
+    setLikePending(false);
   };
 
   const openEngagement = async () => {
@@ -71,6 +133,98 @@ const SocialPostCard = ({
     if (!engagement) {
       await onFetchEngagement(post._id);
     }
+  };
+
+  const captionParts = useMemo(() => {
+    if (!post.caption) {
+      return [] as Array<{ type: "text" | "tag"; value: string }>;
+    }
+
+    return post.caption
+      .split(/(#\w+)/g)
+      .filter(Boolean)
+      .map(
+        (part): { type: "text" | "tag"; value: string } => ({
+          type: /^#\w+$/.test(part) ? "tag" : "text",
+          value: part,
+        }),
+      );
+  }, [post.caption]);
+
+  const sharePost = async () => {
+    const shareUrl = `${globalThis.location.origin}/post/${post._id}`;
+    const text = `${post.authorId.displayName}: ${post.caption || "New post"}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: "Shared post",
+          text,
+          url: shareUrl,
+        });
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("Post link copied");
+    } catch (error) {
+      console.error("[social] share post error", error);
+      toast.error("Could not share this post");
+    }
+  };
+
+  const renderCaptionPart = (
+    part: { type: "text" | "tag"; value: string },
+    index: number,
+  ) => {
+    const key = `${part.value}-${index}`;
+    if (part.type !== "tag") {
+      return <span key={key}>{part.value}</span>;
+    }
+
+    if (!onSelectTag) {
+      return (
+        <span key={key} className="font-medium text-primary">
+          {part.value}
+        </span>
+      );
+    }
+
+    return (
+      <button
+        key={key}
+        type="button"
+        className="font-medium text-primary transition-colors hover:text-primary/80"
+        onClick={() => onSelectTag(part.value.slice(1).toLowerCase())}
+      >
+        {part.value}
+      </button>
+    );
+  };
+
+  const renderTagChip = (tag: string) => {
+    const key = `${post._id}-${tag}`;
+    if (!onSelectTag) {
+      return (
+        <span
+          key={key}
+          className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
+        >
+          #{tag}
+        </span>
+      );
+    }
+
+    return (
+      <button
+        key={key}
+        type="button"
+        className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+        onClick={() => onSelectTag(tag.toLowerCase())}
+      >
+        #{tag}
+      </button>
+    );
   };
 
   return (
@@ -96,7 +250,9 @@ const SocialPostCard = ({
       </header>
 
       {post.caption && (
-        <p className="text-body-md whitespace-pre-wrap">{post.caption}</p>
+        <p className="text-body-md whitespace-pre-wrap break-words">
+          {captionParts.map((part, index) => renderCaptionPart(part, index))}
+        </p>
       )}
 
       {post.mediaUrls?.[0] && (
@@ -115,7 +271,12 @@ const SocialPostCard = ({
           className="font-medium transition-colors hover:text-foreground"
           onClick={openEngagement}
         >
-          {post.likesCount} likes
+          <span
+            key={`likes-count-${likeAnimTick}`}
+            className={cn("inline-block", likeAnimTick > 0 && "social-count-bump")}
+          >
+            {displayLikesCount} likes
+          </span>
         </button>
         <span>·</span>
         <button
@@ -123,7 +284,15 @@ const SocialPostCard = ({
           className="font-medium transition-colors hover:text-foreground"
           onClick={openEngagement}
         >
-          {post.commentsCount} comments
+          <span
+            key={`comments-count-${commentAnimTick}`}
+            className={cn(
+              "inline-block",
+              commentAnimTick > 0 && "social-count-bump",
+            )}
+          >
+            {displayCommentsCount} comments
+          </span>
         </button>
         <span>·</span>
         <span className="uppercase">{post.privacy}</span>
@@ -132,13 +301,17 @@ const SocialPostCard = ({
       <div className="mt-3 flex items-center gap-2">
         <Button
           type="button"
-          variant={post.isLiked ? "default" : "outline"}
+          variant={displayLiked ? "default" : "outline"}
           size="sm"
           className="gap-2"
-          onClick={() => onLike(post._id)}
+          onClick={handleLike}
+          disabled={likePending}
         >
-          <Heart className="size-4" />
-          {post.isLiked ? "Liked" : "Like"}
+          <Heart
+            key={`heart-${likeAnimTick}`}
+            className={cn("size-4", likeAnimTick > 0 && "social-heart-pop")}
+          />
+          {displayLiked ? "Liked" : "Like"}
         </Button>
         <Button
           type="button"
@@ -150,7 +323,23 @@ const SocialPostCard = ({
           <MessageCircle className="size-4" />
           Comment
         </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-2"
+          onClick={sharePost}
+        >
+          <Share2 className="size-4" />
+          Share
+        </Button>
       </div>
+
+      {post.tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {post.tags.map(renderTagChip)}
+        </div>
+      )}
 
       {showComments && (
         <div className="mt-3 space-y-2">
@@ -160,8 +349,13 @@ const SocialPostCard = ({
               onChange={(event) => setCommentDraft(event.target.value)}
               placeholder="Write a comment"
             />
-            <Button type="button" size="sm" onClick={submitComment}>
-              Send
+            <Button
+              type="button"
+              size="sm"
+              onClick={submitComment}
+              disabled={commentPending}
+            >
+              {commentPending ? "Sending..." : "Send"}
             </Button>
           </div>
 

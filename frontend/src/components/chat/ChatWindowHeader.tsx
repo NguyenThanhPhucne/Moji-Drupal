@@ -26,9 +26,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogOverlay,
 } from "../ui/dialog";
 import { useNavigate } from "react-router-dom";
-import { chatService } from "@/services/chatService";
 import GlobalSearchDialog from "./GlobalSearchDialog";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
 import { useFriendStore } from "@/stores/useFriendStore";
@@ -41,8 +41,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
   const navigate = useNavigate();
-  const { createConversation, setActiveConversation, fetchMessages } =
-    useChatStore();
+  const {
+    createConversation,
+    setActiveConversation,
+    fetchMessages,
+    deleteConversation,
+  } = useChatStore();
   const { removeFriend } = useFriendStore();
 
   let otherUser: Conversation["participants"][number] | null = null;
@@ -81,18 +85,14 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const handleDeleteConversation = async () => {
     try {
       setIsDeleting(true);
-      await chatService.deleteConversation(chat._id);
-      toast.success("Conversation deleted");
-      setShowDeleteDialog(false);
-      // Manually remove from store
-      useChatStore.setState((state) => ({
-        conversations: state.conversations.filter((c) => c._id !== chat._id),
-        activeConversationId: null,
-      }));
-      navigate("/");
-    } catch (error) {
-      console.error("Error deleting conversation:", error);
-      toast.error("Cannot delete conversation");
+      const ok = await deleteConversation(chat._id);
+      if (ok) {
+        toast.success("Conversation deleted");
+        setShowDeleteDialog(false);
+        navigate("/");
+      } else {
+        toast.error("Cannot delete conversation");
+      }
     } finally {
       setIsDeleting(false);
     }
@@ -163,7 +163,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                         avatarUrl={otherUser?.avatarUrl || undefined}
                       />
                     </FriendProfileMiniCard>
-                    <StatusBadge status={getUserPresence(otherUser?._id)} />
+                    <StatusBadge
+                      status={getUserPresence(otherUser?._id)}
+                      userId={otherUser?._id}
+                    />
                   </>
                 ) : (
                   <GroupChatAvatar
@@ -173,8 +176,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 )}
               </div>
 
-              {/* name */}
-              <div className="min-w-0">
+              {/* name + presence */}
+              <div key={chat._id} className="header-info-enter min-w-0">
                 <h2 className="truncate font-semibold tracking-[-0.01em] text-foreground">
                   {chat.type === "direct"
                     ? otherUser?.displayName
@@ -214,21 +217,38 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this conversation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. All messages will be deleted.
+        <AlertDialogOverlay className="modal-overlay" />
+        <AlertDialogContent className="modal-content-shell max-w-sm">
+          <AlertDialogHeader className="items-center text-center modal-stagger-item">
+            <div className="dialog-danger-icon">
+              <Trash2 className="size-6" />
+            </div>
+            <AlertDialogTitle className="text-base font-semibold">
+              Delete this conversation?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              This will permanently remove all messages for{" "}
+              <span className="font-medium text-foreground">
+                {chat.type === "direct"
+                  ? otherUser?.displayName ?? "this contact"
+                  : chat.group?.name ?? "this group"}
+              </span>.
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="sm:flex-col-reverse gap-2 modal-stagger-item">
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="w-full"
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? "Deleting..." : "Yes, delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

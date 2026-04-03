@@ -95,6 +95,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
   onlineUsers: [],
   recentActiveUsers: {},
+  lastActiveByUser: {},
   isUserOnline: (userId) => {
     return get().getUserPresence(userId) === "online";
   },
@@ -115,6 +116,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
 
     return "offline";
+  },
+  getLastActiveAt: (userId) => {
+    if (!userId) {
+      return null;
+    }
+
+    return get().lastActiveByUser[String(userId)] || null;
   },
   connectSocket: () => {
     const accessToken = useAuthStore.getState().accessToken;
@@ -151,8 +159,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     set({ socket });
 
     socket.on("connect", () => {
-      console.log("Socket connected");
-
       // Proactively join known rooms to reduce missed events
       // while backend is still fetching conversations.
       const conversations = useChatStore.getState().conversations || [];
@@ -199,7 +205,24 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("disconnect", (reason) => {
       console.warn("Socket disconnected:", reason);
-      set({ onlineUsers: [], recentActiveUsers: {} });
+
+      const now = Date.now();
+      const offlineSnapshot = get().onlineUsers.reduce<Record<string, number>>(
+        (acc, userId) => {
+          acc[userId] = now;
+          return acc;
+        },
+        {},
+      );
+
+      set((state) => ({
+        onlineUsers: [],
+        recentActiveUsers: {},
+        lastActiveByUser: {
+          ...state.lastActiveByUser,
+          ...offlineSnapshot,
+        },
+      }));
     });
 
     socket.on("reconnect", () => {
@@ -219,15 +242,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const previousOnlineSet = new Set(get().onlineUsers);
       const nextOnlineSet = new Set(normalizedUserIds);
       const nextRecentActiveUsers = { ...get().recentActiveUsers };
+      const nextLastActiveByUser = { ...get().lastActiveByUser };
 
       previousOnlineSet.forEach((userId) => {
         if (!nextOnlineSet.has(userId)) {
           nextRecentActiveUsers[userId] = now + RECENTLY_ACTIVE_WINDOW_MS;
+          nextLastActiveByUser[userId] = now;
         }
       });
 
       normalizedUserIds.forEach((userId) => {
         delete nextRecentActiveUsers[userId];
+        nextLastActiveByUser[userId] = now;
       });
 
       Object.keys(nextRecentActiveUsers).forEach((userId) => {
@@ -239,6 +265,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       set({
         onlineUsers: normalizedUserIds,
         recentActiveUsers: nextRecentActiveUsers,
+        lastActiveByUser: nextLastActiveByUser,
       });
 
       scheduleRecentActiveCleanup();
@@ -297,7 +324,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // new group chat - from other members
     socket.on("new-group", (conversation) => {
-      console.log("Received new-group event:", conversation);
       useChatStore.getState().addConvo(conversation, { setActive: false });
       socket.emit("join-conversation", conversation._id);
       toast.success(
@@ -307,7 +333,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // new direct conversation - from other participant
     socket.on("new-conversation", (conversation) => {
-      console.log("Received new-conversation event:", conversation);
       useChatStore.getState().addConvo(conversation, { setActive: false });
       socket.emit("join-conversation", conversation._id);
       toast.success("You have a new conversation!");
@@ -315,7 +340,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // conversation deleted - from other participants
     socket.on("conversation-deleted", ({ conversationId }) => {
-      console.log("Received conversation-deleted event:", conversationId);
       const currentState = useChatStore.getState();
       const nextConversations = currentState.conversations.filter(
         (conversationItem) => conversationItem._id !== conversationId,
@@ -339,12 +363,16 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         .updateMessage(conversationId, messageId, { reactions });
     });
 
-    socket.on("message-deleted", ({ conversationId, messageId }) => {
+    socket.on("message-deleted", ({ conversationId, messageId, conversation }) => {
       useChatStore.getState().updateMessage(conversationId, messageId, {
         isDeleted: true,
         content: "This message was removed",
         imgUrl: null,
       });
+
+      if (conversation?._id) {
+        useChatStore.getState().updateConversation(conversation);
+      }
     });
 
     socket.on("message-hidden-for-user", ({ conversationId, messageId }) => {
@@ -370,7 +398,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // Friend request received - real-time notification
     socket.on("friend-request-received", ({ request, message }) => {
-      console.log("Received friend request:", request);
       useNotificationStore.getState().addPendingRequest(request);
       toast.success(message, {
         description: `${request.from.displayName} (@${request.from.username}) sent a friend request`,
@@ -385,8 +412,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // Friend request accepted - notification when someone accepts your request
     socket.on("friend-request-accepted", ({ from, message }) => {
-      console.log("Friend request accepted:", from);
-      console.log("Adding to notification store...");
       try {
         useNotificationStore.getState().addAcceptanceNotification({
           type: "friend-accepted",
@@ -394,10 +419,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           message,
           createdAt: new Date(),
         });
-        console.log(
-          "Notification stored:",
-          useNotificationStore.getState().acceptanceNotifications,
-        );
       } catch (error) {
         console.error("Error adding notification:", error);
       }
@@ -451,7 +472,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       }
       socket.removeAllListeners(); // Remove all listeners before disconnect
       socket.disconnect();
-      set({ socket: null, onlineUsers: [], recentActiveUsers: {} });
+
+      const now = Date.now();
+      const offlineSnapshot = get().onlineUsers.reduce<Record<string, number>>(
+        (acc, userId) => {
+          acc[userId] = now;
+          return acc;
+        },
+        {},
+      );
+
+      set((state) => ({
+        socket: null,
+        onlineUsers: [],
+        recentActiveUsers: {},
+        lastActiveByUser: {
+          ...state.lastActiveByUser,
+          ...offlineSnapshot,
+        },
+      }));
       return;
     }
 

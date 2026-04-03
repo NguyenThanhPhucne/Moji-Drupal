@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -235,7 +236,7 @@
   body {
     @apply text-slate-800 dark:text-slate-200 bg-background;
     font-family:
-      "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", "Helvetica Neue",
+      "Inter", "SF Pro Text", "SF Pro Display", "Segoe UI", "Helvetica Neue",
       Arial, sans-serif;
     text-rendering: optimizeLegibility;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
@@ -385,6 +386,13 @@
     @apply bg-[hsl(var(--online))] shadow-[0_0_8px_hsl(var(--online)/0.5)];
   }
 
+  .status-online::after {
+    content: "";
+    @apply absolute inset-0 rounded-full;
+    background: hsl(var(--online) / 0.45);
+    animation: statusPulse 1.8s ease-out infinite;
+  }
+
   .status-recently-active {
     @apply bg-amber-400 shadow-[0_0_8px_rgb(251_191_36/0.55)];
   }
@@ -523,6 +531,12 @@
     @apply flex items-center gap-1 px-4 py-3 rounded-2xl rounded-bl-md bg-[hsl(var(--chat-bubble-received))] border border-border/50 w-fit;
   }
 
+  .typing-avatar-pulse {
+    @apply pointer-events-none absolute -inset-0.5 rounded-full;
+    border: 1px solid hsl(var(--primary) / 0.5);
+    animation: typingAvatarPulse 1.45s ease-out infinite;
+  }
+
   .typing-dot {
     @apply size-2 rounded-full bg-muted-foreground/60;
     animation: typingBounce 1.4s ease-in-out infinite;
@@ -548,6 +562,28 @@
     30% {
       transform: translateY(-6px);
       opacity: 1;
+    }
+  }
+
+  @keyframes statusPulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+  }
+
+  @keyframes typingAvatarPulse {
+    0% {
+      transform: scale(0.95);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(1.35);
+      opacity: 0;
     }
   }
 
@@ -610,6 +646,42 @@
   .send-btn-active {
     animation: sendBtnPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
+
+  .social-heart-pop {
+    animation: socialHeartPop 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .social-count-bump {
+    animation: socialCountBump 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes socialHeartPop {
+    0% {
+      transform: scale(0.88);
+    }
+    55% {
+      transform: scale(1.22);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes socialCountBump {
+    0% {
+      transform: translateY(0);
+      opacity: 0.75;
+    }
+    50% {
+      transform: translateY(-2px);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
   @keyframes sendBtnPop {
     0% {
       transform: scale(0.75);
@@ -633,7 +705,315 @@
   .sidebar-divider {
     @apply mx-3 h-px bg-border/50 my-1;
   }
-}
+
+  /* ─── Skeleton shimmer ───────────────────────────────────────────── */
+  .skeleton-shimmer {
+    @apply bg-muted/80 rounded-lg;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted) / 0.7) 25%,
+      hsl(var(--muted) / 1) 50%,
+      hsl(var(--muted) / 0.7) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* ─── Dialog / Modal smooth entry ───────────────────────────────── */
+  .dialog-backdrop {
+    animation: backdropFadeIn 0.2s ease forwards;
+  }
+
+  .modal-overlay {
+    background:
+      radial-gradient(
+        circle at 20% 15%,
+        hsl(var(--primary) / 0.15),
+        transparent 38%
+      ),
+      radial-gradient(
+        circle at 80% 10%,
+        hsl(var(--accent) / 0.12),
+        transparent 34%
+      ),
+      hsl(222 30% 6% / 0.62);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .modal-overlay[data-state="open"] {
+    animation: modalOverlayIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .modal-overlay[data-state="closed"] {
+    animation: modalOverlayOut 0.16s ease forwards;
+  }
+
+  .modal-content-shell[data-state="open"] {
+    animation: modalContentIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .modal-content-shell[data-state="closed"] {
+    animation: modalContentOut 0.14s ease forwards;
+  }
+
+  .modal-stagger-item {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  .modal-content-shell[data-state="open"] .modal-stagger-item {
+    animation: modalStaggerIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .modal-content-shell[data-state="open"] .modal-stagger-item:nth-of-type(1) {
+    animation-delay: 0.03s;
+  }
+
+  .modal-content-shell[data-state="open"] .modal-stagger-item:nth-of-type(2) {
+    animation-delay: 0.07s;
+  }
+
+  .modal-content-shell[data-state="open"] .modal-stagger-item:nth-of-type(3) {
+    animation-delay: 0.11s;
+  }
+
+  @keyframes backdropFadeIn {
+    from {
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+    to {
+      opacity: 1;
+      backdrop-filter: blur(4px);
+    }
+  }
+
+  @keyframes modalOverlayIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes modalOverlayOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes modalContentIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.96);
+      filter: saturate(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: saturate(1);
+    }
+  }
+
+  @keyframes modalContentOut {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+  }
+
+  @keyframes modalStaggerIn {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .modal-overlay[data-state="open"],
+    .modal-overlay[data-state="closed"],
+    .modal-content-shell[data-state="open"],
+    .modal-content-shell[data-state="closed"] {
+      animation-duration: 1ms;
+      animation-iteration-count: 1;
+    }
+
+    .modal-stagger-item,
+    .modal-content-shell[data-state="open"] .modal-stagger-item {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ─── Smooth page-level fade for route transitions ──────────────── */
+  .page-enter {
+    animation: pageFadeIn 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes pageFadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Hover lift card ────────────────────────────────────────────── */
+  .hover-lift {
+    transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px -6px hsl(var(--primary) / 0.18);
+  }
+
+  /* ─── Focus ring override (accessible + premium) ─────────────────── */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2;
+  }
+
+  /* ─── Chat card hover: avatar subtle scale ───────────────────────── */
+  .chat-card-avatar-wrap {
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  [data-chat-card]:hover .chat-card-avatar-wrap,
+  [data-chat-card]:focus-within .chat-card-avatar-wrap {
+    transform: scale(1.06);
+  }
+
+  /* ─── Chat card unread badge pop-in ─────────────────────────────── */
+  .unread-badge-entry {
+    animation: unreadBadgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  @keyframes unreadBadgePop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    70%  { transform: scale(1.15); }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+
+  /* ─── Conversation switch: content fade+slide ────────────────────── */
+  .chat-window-enter {
+    animation: chatWindowEnter 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  }
+  @keyframes chatWindowEnter {
+    from { opacity: 0; transform: translateX(8px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* ─── Header info block transition on convo switch ───────────────── */
+  .header-info-enter {
+    animation: headerInfoIn 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+  @keyframes headerInfoIn {
+    from { opacity: 0; transform: translateY(-3px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Scroll-to-bottom button slide up/down ──────────────────────── */
+  .scroll-btn-enter {
+    animation: scrollBtnSlideUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  .scroll-btn-exit {
+    animation: scrollBtnSlideDown 0.16s ease forwards;
+  }
+  @keyframes scrollBtnSlideUp {
+    from { opacity: 0; transform: translateY(12px) scale(0.88); }
+    to   { opacity: 1; transform: translateY(0)   scale(1); }
+  }
+  @keyframes scrollBtnSlideDown {
+    from { opacity: 1; transform: translateY(0)   scale(1); }
+    to   { opacity: 0; transform: translateY(8px) scale(0.9); }
+  }
+
+  /* ─── Send button: active glow state ────────────────────────────── */
+  .send-btn-ready {
+    box-shadow: 0 2px 12px -2px hsl(var(--primary) / 0.45);
+  }
+  .send-btn-ready:hover {
+    box-shadow: 0 4px 20px -4px hsl(var(--primary) / 0.6);
+    transform: scale(1.06) translateY(-1px);
+  }
+  .send-btn-ready:active {
+    transform: scale(0.95);
+    box-shadow: none;
+  }
+
+  /* ─── Sidebar active nav glow ────────────────────────────────────── */
+  .nav-rail-active {
+    box-shadow:
+      0 0 0 2px hsl(var(--primary) / 0.25),
+      0 4px 12px -4px hsl(var(--primary) / 0.5);
+  }
+
+  /* ─── Reaction optimistic pop ────────────────────────────────────── */
+  .reaction-optimistic-pop {
+    animation: reactionOptimisticPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes reactionOptimisticPop {
+    0%   { transform: scale(0.7); }
+    65%  { transform: scale(1.18); }
+    100% { transform: scale(1); }
+  }
+
+  /* ─── Dropdown / Context menu entry ─────────────────────────────── */
+  .dropdown-enter {
+    animation: dropdownIn 0.14s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  }
+  @keyframes dropdownIn {
+    from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* ─── Delete confirmation dialog accent ──────────────────────────── */
+  .dialog-danger-icon {
+    @apply flex items-center justify-center size-12 rounded-2xl mb-1;
+    background: hsl(var(--destructive) / 0.12);
+    color: hsl(var(--destructive));
+  }
+
+  /* ─── Message typing status fade ────────────────────────────────── */
+  .typing-status-enter {
+    animation: typingStatusIn 0.18s ease forwards;
+  }
+  @keyframes typingStatusIn {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Reduced motion global override ────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .chat-card-avatar-wrap,
+    .unread-badge-entry,
+    .chat-window-enter,
+    .header-info-enter,
+    .scroll-btn-enter,
+    .scroll-btn-exit,
+    .send-btn-ready,
+    .reaction-optimistic-pop,
+    .dropdown-enter,
+    .typing-status-enter {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+} /* end @layer components */
 
 @theme inline {
   --color-sidebar: var(--sidebar-background);

@@ -1,8 +1,13 @@
 import { useFriendStore } from "@/stores/useFriendStore";
 import FriendRequestItem from "./FriendRequestItem";
+import FriendRequestSkeleton from "../skeleton/FriendRequestSkeleton";
 
 const SentRequests = () => {
-  const { sentList } = useFriendStore();
+  const { sentList, loading } = useFriendStore();
+
+  if (loading && (!sentList || sentList.length === 0)) {
+    return <FriendRequestSkeleton count={2} />;
+  }
 
   if (!sentList || sentList.length === 0) {
     return (

@@ -37,6 +37,7 @@ const SearchForm = ({
 
         <Input
           id="username"
+          data-autofocus="true"
           placeholder="Enter a username..."
           className="glass border-border/50 focus:border-primary/50 transition-smooth"
           {...register("username", {
@@ -60,6 +61,7 @@ const SearchForm = ({
             type="button"
             variant="outline"
             className="flex-1 glass"
+            disabled={loading}
             onClick={onCancel}
           >
             Cancel

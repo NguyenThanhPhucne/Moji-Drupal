@@ -39,7 +39,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        "modal-overlay fixed inset-0 z-50",
         className,
       )}
       {...props}
@@ -51,32 +51,92 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  dismissible = true,
+  onOpenAutoFocus,
+  onEscapeKeyDown,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
+  dismissible?: boolean;
 }) {
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handleOpenAutoFocus = React.useCallback(
+    (event: Event) => {
+      onOpenAutoFocus?.(event);
+
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      const root = contentRef.current;
+      if (!root) {
+        return;
+      }
+
+      const firstFocusable = root.querySelector<HTMLElement>(
+        '[data-autofocus="true"], [autofocus], button:not([disabled]), [href], input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+
+      event.preventDefault();
+      (firstFocusable ?? root).focus();
+    },
+    [onOpenAutoFocus],
+  );
+
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
-      <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
-          >
-            <XIcon />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Content>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+        <DialogPrimitive.Content
+          data-slot="dialog-content"
+          ref={contentRef}
+          tabIndex={-1}
+          onOpenAutoFocus={handleOpenAutoFocus}
+          onEscapeKeyDown={(event) => {
+            if (!dismissible) {
+              event.preventDefault();
+              return;
+            }
+
+            onEscapeKeyDown?.(event);
+          }}
+          onPointerDownOutside={(event) => {
+            if (!dismissible) {
+              event.preventDefault();
+              return;
+            }
+
+            onPointerDownOutside?.(event);
+          }}
+          onInteractOutside={(event) => {
+            if (!dismissible) {
+              event.preventDefault();
+              return;
+            }
+
+            onInteractOutside?.(event);
+          }}
+          className={cn(
+            "modal-content-shell pointer-events-auto bg-background relative z-10 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-2xl border border-border/80 p-6 shadow-xl outline-none sm:max-w-lg",
+            className,
+          )}
+          {...props}
+        >
+          {children}
+          {showCloseButton && (
+            <DialogPrimitive.Close
+              data-slot="dialog-close"
+              className="ring-offset-background focus:ring-ring absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/85 text-muted-foreground opacity-90 transition-colors hover:bg-accent/70 hover:text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
+            >
+              <XIcon />
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          )}
+        </DialogPrimitive.Content>
+      </div>
     </DialogPortal>
   );
 }
@@ -155,7 +215,7 @@ function AlertDialogOverlay({
   return (
     <AlertDialogPrimitive.Overlay
       className={cn(
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
+        "modal-overlay fixed inset-0 z-50",
         className,
       )}
       {...props}
@@ -165,18 +225,61 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  dismissible = false,
+  onOpenAutoFocus,
+  onEscapeKeyDown,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+}: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
+  dismissible?: boolean;
+}) {
+  const contentRef = React.useRef<HTMLDivElement | null>(null);
+
+  const handleOpenAutoFocus = React.useCallback(
+    (event: Event) => {
+      onOpenAutoFocus?.(event);
+
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      const root = contentRef.current;
+      if (!root) {
+        return;
+      }
+
+      const preferredAction = root.querySelector<HTMLElement>(
+        '[data-autofocus="true"], [autofocus], button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      );
+
+      event.preventDefault();
+      (preferredAction ?? root).focus();
+    },
+    [onOpenAutoFocus],
+  );
+
   return (
     <AlertDialogPortal>
       <AlertDialogOverlay />
-      <AlertDialogPrimitive.Content
-        className={cn(
-          "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
-          className,
-        )}
-        {...props}
-      />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
+        <AlertDialogPrimitive.Content
+          ref={contentRef}
+          tabIndex={-1}
+          onOpenAutoFocus={handleOpenAutoFocus}
+          onEscapeKeyDown={(event) => {
+            if (!dismissible) {
+              event.preventDefault();
+              return;
+            }
+
+            onEscapeKeyDown?.(event);
+          }}
+          className={cn(
+            "modal-content-shell pointer-events-auto bg-background relative z-10 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-2xl border border-border/80 p-6 shadow-xl outline-none sm:max-w-lg",
+            className,
+          )}
+          {...props}
+        />
+      </div>
     </AlertDialogPortal>
   );
 }

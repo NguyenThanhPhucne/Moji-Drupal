@@ -101,8 +101,11 @@ const PrivacySettings = () => {
                 Change password
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
+            <DialogContent
+              dismissible={!isSubmitting}
+              showCloseButton={!isSubmitting}
+            >
+              <DialogHeader className="modal-stagger-item">
                 <DialogTitle>Change password</DialogTitle>
                 <DialogDescription>
                   Enter your current password and choose a new one.
@@ -110,7 +113,7 @@ const PrivacySettings = () => {
               </DialogHeader>
 
               <form
-                className="space-y-4"
+                className="space-y-4 modal-stagger-item"
                 onSubmit={handleChangePassword}
                 autoComplete="on"
               >
@@ -129,6 +132,7 @@ const PrivacySettings = () => {
                   <Label htmlFor="current-password">Current password</Label>
                   <Input
                     id="current-password"
+                    data-autofocus="true"
                     type="password"
                     autoComplete="current-password"
                     value={currentPassword}
@@ -158,7 +162,7 @@ const PrivacySettings = () => {
                   />
                 </div>
 
-                <DialogFooter>
+                <DialogFooter className="modal-stagger-item">
                   <Button
                     type="button"
                     variant="outline"

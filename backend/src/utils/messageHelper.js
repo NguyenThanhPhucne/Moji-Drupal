@@ -3,12 +3,16 @@ export const updateConversationAfterCreateMessage = (
   message,
   senderId,
 ) => {
+  const previewContent =
+    String(message.content || "").trim() ||
+    (message.imgUrl ? "📷 Photo" : "");
+
   conversation.set({
     seenBy: [],
     lastMessageAt: message.createdAt,
     lastMessage: {
       _id: message._id,
-      content: message.content,
+      content: previewContent,
       senderId,
       createdAt: message.createdAt,
     },

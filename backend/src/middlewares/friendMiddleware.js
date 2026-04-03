@@ -59,23 +59,10 @@ export const checkFriendship = async (req, res, next) => {
     const memberIds = req.body?.memberIds ?? [];
     const type = req.body?.type;
 
-    console.log("[checkFriendship] Request body:", {
-      type,
-      memberIds,
-      recipientId,
-      userId: me,
-    });
-
     // Nếu là direct chat và chỉ có 1 member, kiểm tra friendship với member đó
     if (type === "direct" && memberIds.length === 1) {
       const [userA, userB] = pair(me, memberIds[0]);
-      console.log("[checkFriendship] Checking direct chat friendship:", {
-        userA,
-        userB,
-      });
-
       const isFriend = await checkFriendshipStatus(userA, userB);
-      console.log("[checkFriendship] Friend found:", isFriend ? "Yes" : "No");
 
       if (!isFriend) {
         return res
@@ -83,7 +70,6 @@ export const checkFriendship = async (req, res, next) => {
           .json({ message: "Bạn chưa kết bạn với người này" });
       }
 
-      console.log("[checkFriendship] Friendship verified, proceeding...");
       return next();
     }
 

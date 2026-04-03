@@ -45,6 +45,11 @@ export const socialService = {
     return res.data;
   },
 
+  getPostById: async (postId: string): Promise<SocialPost> => {
+    const res = await api.get(`/social/posts/${postId}`);
+    return res.data.post;
+  },
+
   getProfile: async (userId: string): Promise<SocialProfile> => {
     const res = await api.get(`/social/profiles/${userId}`);
     return res.data.profile;

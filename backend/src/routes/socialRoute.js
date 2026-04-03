@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createPost,
+  getPostById,
   getHomeFeed,
   getExploreFeed,
   getProfile,
@@ -18,6 +19,7 @@ import {
 const router = express.Router();
 
 router.post("/posts", createPost);
+router.get("/posts/:postId", getPostById);
 router.get("/feed/home", getHomeFeed);
 router.get("/feed/explore", getExploreFeed);
 router.get("/profiles/:userId", getProfile);

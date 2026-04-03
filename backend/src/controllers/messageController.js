@@ -1,10 +1,120 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import { v2 as cloudinary } from "cloudinary";
 import {
   emitNewMessage,
   updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
 import { io } from "../socket/index.js";
+
+const buildDirectConversationKey = (userA, userB) => {
+  return [String(userA), String(userB)]
+    .sort((left, right) => left.localeCompare(right))
+    .join(":");
+};
+
+const createHttpError = (status, message) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const ensureDirectConversationForSend = async ({
+  conversationId,
+  senderId,
+  recipientId,
+}) => {
+  let conversation = null;
+  let isNewConversation = false;
+
+  if (conversationId) {
+    conversation = await Conversation.findById(conversationId);
+
+    const isMember = conversation?.participants?.some(
+      (participant) => participant.userId.toString() === senderId.toString(),
+    );
+
+    if (conversation && !isMember) {
+      throw createHttpError(403, "Không có quyền gửi tin nhắn");
+    }
+  }
+
+  if (conversation) {
+    return { conversation, isNewConversation };
+  }
+
+  const directKey = buildDirectConversationKey(senderId, recipientId);
+
+  conversation = await Conversation.findOne({
+    type: "direct",
+    directKey,
+  });
+
+  if (conversation) {
+    return { conversation, isNewConversation };
+  }
+
+  try {
+    conversation = await Conversation.create({
+      type: "direct",
+      directKey,
+      participants: [
+        { userId: senderId, joinedAt: new Date() },
+        { userId: recipientId, joinedAt: new Date() },
+      ],
+      lastMessageAt: new Date(),
+      unreadCounts: new Map(),
+    });
+
+    isNewConversation = true;
+  } catch (createError) {
+    if (createError?.code !== 11000) {
+      throw createError;
+    }
+
+    conversation = await Conversation.findOne({
+      type: "direct",
+      directKey,
+    });
+  }
+
+  if (!conversation) {
+    throw createHttpError(500, "Không thể tạo cuộc trò chuyện trực tiếp");
+  }
+
+  return { conversation, isNewConversation };
+};
+
+const emitDirectConversationCreated = async ({
+  conversation,
+  senderId,
+}) => {
+  await conversation.populate([
+    { path: "participants.userId", select: "displayName avatarUrl" },
+    { path: "seenBy", select: "displayName avatarUrl" },
+    { path: "lastMessage.senderId", select: "displayName avatarUrl" },
+  ]);
+
+  const participants = (conversation.participants || []).map((p) => ({
+    _id: p.userId?._id,
+    displayName: p.userId?.displayName,
+    avatarUrl: p.userId?.avatarUrl ?? null,
+    joinedAt: p.joinedAt,
+  }));
+
+  const formattedConversation = {
+    ...conversation.toObject(),
+    participants,
+    unreadCounts: conversation.unreadCounts || {},
+  };
+
+  conversation.participants.forEach((participant) => {
+    const participantId = participant.userId?._id || participant.userId;
+    if (participantId && participantId.toString() !== senderId.toString()) {
+      io.to(participantId.toString()).emit("new-conversation", formattedConversation);
+    }
+  });
+};
 
 const ensureConversationMembership = async (conversationId, userId) => {
   const membership = await Conversation.exists({
@@ -15,46 +125,161 @@ const ensureConversationMembership = async (conversationId, userId) => {
   return Boolean(membership);
 };
 
+const uploadMessageImage = async (rawImgUrl) => {
+  const normalized = String(rawImgUrl || "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  // If already an http(s) URL, trust and keep it as-is.
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
+  }
+
+  if (!normalized.startsWith("data:image/")) {
+    throw createHttpError(400, "Unsupported image format");
+  }
+
+  let result;
+  try {
+    result = await cloudinary.uploader.upload(normalized, {
+      folder: "coming_chat/messages",
+      resource_type: "image",
+    });
+  } catch (error) {
+    const rawMessage = String(error?.message || error?.error?.message || "");
+    const normalizedMessage = rawMessage.toLowerCase();
+    const cloudinaryHttpCode = Number(
+      error?.http_code || error?.error?.http_code || 0,
+    );
+
+    const isCredentialError =
+      normalizedMessage.includes("invalid signature") ||
+      normalizedMessage.includes("api_secret mismatch") ||
+      normalizedMessage.includes("api key") ||
+      normalizedMessage.includes("cloud name") ||
+      cloudinaryHttpCode === 401;
+
+    if (isCredentialError) {
+      throw createHttpError(
+        500,
+        "Cloudinary credentials mismatch. Please verify CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.",
+      );
+    }
+
+    throw createHttpError(502, "Image upload provider is temporarily unavailable");
+  }
+
+  return result.secure_url;
+};
+
+const sanitizeMetaValue = (input) => {
+  return String(input || "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+};
+
+const extractMetaContent = (html, matcher) => {
+  const match = html.match(matcher);
+  return sanitizeMetaValue(match?.[1] || "");
+};
+
+const resolveLinkMetadata = async (rawUrl) => {
+  const normalized = String(rawUrl || "").trim();
+  if (!normalized) {
+    throw createHttpError(400, "Missing url query param");
+  }
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(normalized);
+  } catch {
+    throw createHttpError(400, "Invalid URL");
+  }
+
+  if (!["http:", "https:"].includes(targetUrl.protocol)) {
+    throw createHttpError(400, "Only http/https URLs are supported");
+  }
+
+  const response = await fetch(targetUrl.toString(), {
+    method: "GET",
+    redirect: "follow",
+    headers: {
+      "user-agent": "OpenCRM-LinkPreview/1.0",
+      accept: "text/html,application/xhtml+xml",
+    },
+  });
+
+  if (!response.ok) {
+    throw createHttpError(502, "Failed to fetch target URL");
+  }
+
+  const contentType = String(response.headers.get("content-type") || "");
+  if (!contentType.includes("text/html")) {
+    return {
+      url: targetUrl.toString(),
+      siteName: targetUrl.hostname,
+      title: targetUrl.hostname,
+      description: "Preview is available for HTML pages only.",
+      image: "",
+    };
+  }
+
+  const html = await response.text();
+  const title =
+    extractMetaContent(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+    extractMetaContent(html, /<title[^>]*>([^<]+)<\/title>/i) ||
+    targetUrl.hostname;
+
+  const description =
+    extractMetaContent(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
+    extractMetaContent(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+
+  const image =
+    extractMetaContent(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+    "";
+
+  const siteName =
+    extractMetaContent(html, /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i) ||
+    targetUrl.hostname;
+
+  return {
+    url: targetUrl.toString(),
+    siteName,
+    title,
+    description,
+    image,
+  };
+};
+
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export const sendDirectMessage = async (req, res) => {
   try {
-    const { recipientId, content, conversationId, replyTo } = req.body;
+    const { recipientId, content, imgUrl, conversationId, replyTo } = req.body;
     const senderId = req.user._id;
+    const normalizedContent = String(content || "").trim();
+    const uploadedImgUrl = await uploadMessageImage(imgUrl);
 
-    let conversation;
-    let isNewConversation = false;
-
-    if (!content) {
-      return res.status(400).json({ message: "Thiếu nội dung" });
+    if (!normalizedContent && !uploadedImgUrl) {
+      return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
     }
 
-    if (conversationId) {
-      conversation = await Conversation.findById(conversationId);
-      const isMember = conversation?.participants?.some(
-        (participant) => participant.userId.toString() === senderId.toString(),
-      );
-
-      if (conversation && !isMember) {
-        return res.status(403).json({ message: "Không có quyền gửi tin nhắn" });
-      }
+    if (String(recipientId) === String(senderId)) {
+      return res.status(400).json({ message: "Không thể tự nhắn cho chính mình" });
     }
 
-    if (!conversation) {
-      conversation = await Conversation.create({
-        type: "direct",
-        participants: [
-          { userId: senderId, joinedAt: new Date() },
-          { userId: recipientId, joinedAt: new Date() },
-        ],
-        lastMessageAt: new Date(),
-        unreadCounts: new Map(),
+    const { conversation, isNewConversation } =
+      await ensureDirectConversationForSend({
+        conversationId,
+        senderId,
+        recipientId,
       });
-      isNewConversation = true;
-    }
 
     let message = await Message.create({
       conversationId: conversation._id,
       senderId,
-      content,
+      content: normalizedContent,
+      imgUrl: uploadedImgUrl,
       replyTo: replyTo || null,
     });
 
@@ -69,40 +294,17 @@ export const sendDirectMessage = async (req, res) => {
     // Người nhận chưa chắc đã join room của conversation mới,
     // nên cần gửi sự kiện new-conversation vào user room trước.
     if (isNewConversation) {
-      await conversation.populate([
-        { path: "participants.userId", select: "displayName avatarUrl" },
-        { path: "seenBy", select: "displayName avatarUrl" },
-        { path: "lastMessage.senderId", select: "displayName avatarUrl" },
-      ]);
-
-      const participants = (conversation.participants || []).map((p) => ({
-        _id: p.userId?._id,
-        displayName: p.userId?.displayName,
-        avatarUrl: p.userId?.avatarUrl ?? null,
-        joinedAt: p.joinedAt,
-      }));
-
-      const formattedConversation = {
-        ...conversation.toObject(),
-        participants,
-        unreadCounts: conversation.unreadCounts || {},
-      };
-
-      conversation.participants.forEach((participant) => {
-        const participantId = participant.userId?._id || participant.userId;
-        if (participantId && participantId.toString() !== senderId.toString()) {
-          io.to(participantId.toString()).emit(
-            "new-conversation",
-            formattedConversation,
-          );
-        }
-      });
+      await emitDirectConversationCreated({ conversation, senderId });
     }
 
     emitNewMessage(io, conversation, message);
 
     return res.status(201).json({ message });
   } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
     console.error("Lỗi xảy ra khi gửi tin nhắn trực tiếp", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
@@ -110,18 +312,21 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { conversationId, content, replyTo } = req.body;
+    const { conversationId, content, imgUrl, replyTo } = req.body;
     const senderId = req.user._id;
     const conversation = req.conversation;
+    const normalizedContent = String(content || "").trim();
+    const uploadedImgUrl = await uploadMessageImage(imgUrl);
 
-    if (!content) {
-      return res.status(400).json("Thiếu nội dung");
+    if (!normalizedContent && !uploadedImgUrl) {
+      return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
     }
 
     let message = await Message.create({
       conversationId,
       senderId,
-      content,
+      content: normalizedContent,
+      imgUrl: uploadedImgUrl,
       replyTo: replyTo || null,
     });
 
@@ -211,17 +416,56 @@ export const unsendMessage = async (req, res) => {
     }
 
     message.isDeleted = true;
-    message.content = "Tin nhắn đã bị gỡ";
+    message.content = "";
     message.imgUrl = null;
     await message.save();
+
+    const updatedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: message.conversationId,
+        "lastMessage._id": message._id.toString(),
+      },
+      {
+        $set: {
+          "lastMessage.content": "This message was removed",
+          "lastMessage.createdAt": message.createdAt,
+        },
+      },
+      { new: true },
+    );
 
     io.to(message.conversationId.toString()).emit("message-deleted", {
       conversationId: message.conversationId,
       messageId: message._id,
       content: message.content,
+      conversation: updatedConversation
+        ? {
+            _id: updatedConversation._id,
+            lastMessage: {
+              _id: updatedConversation.lastMessage?._id,
+              content: updatedConversation.lastMessage?.content,
+              createdAt: updatedConversation.lastMessage?.createdAt,
+              sender: {
+                _id:
+                  updatedConversation.lastMessage?.senderId?.toString?.() ||
+                  updatedConversation.lastMessage?.senderId,
+                displayName: "",
+                avatarUrl: null,
+              },
+            },
+            lastMessageAt: updatedConversation.lastMessageAt,
+            unreadCounts:
+              updatedConversation.unreadCounts instanceof Map
+                ? Object.fromEntries(updatedConversation.unreadCounts)
+                : updatedConversation.unreadCounts || {},
+            seenBy: (updatedConversation.seenBy || []).map(
+              (id) => id?.toString?.() || id,
+            ),
+          }
+        : null,
     });
 
-    return res.status(200).json(message);
+    return res.status(200).json({ message, conversation: updatedConversation });
   } catch (error) {
     console.error("Lỗi khi gỡ tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -359,5 +603,19 @@ export const markMessageRead = async (req, res) => {
   } catch (error) {
     console.error("Lỗi khi đánh dấu đã đọc:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const getLinkPreview = async (req, res) => {
+  try {
+    const preview = await resolveLinkMetadata(req.query.url);
+    return res.status(200).json({ preview });
+  } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    console.error("Link preview error:", error);
+    return res.status(500).json({ message: "System error" });
   }
 };

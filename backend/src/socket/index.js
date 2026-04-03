@@ -100,12 +100,10 @@ io.on("connection", async (socket) => {
 
   // Join user room ngay để không bỏ lỡ các sự kiện private-user ngay sau connect.
   socket.join(userId);
-  console.log(`[Socket] Joined user room: ${userId}`);
 
   await broadcastOnlineUsers();
 
   const conversationIds = await getUserConversationsForSocketIO(user._id);
-  console.log("[Socket] Joined conversation rooms:", conversationIds);
   conversationIds.forEach((id) => {
     socket.join(id);
   });
@@ -115,9 +113,6 @@ io.on("connection", async (socket) => {
       return;
     }
 
-    console.log(
-      `[Socket] join-conversation: ${user.displayName} joined room ${conversationId}`,
-    );
     socket.join(conversationId);
   });
 

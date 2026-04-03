@@ -29,6 +29,38 @@ interface TypingEventPayload {
   displayName?: string;
 }
 
+interface TypingEntry {
+  displayName: string;
+  expiresAt: number;
+}
+
+const pruneExpiredTypingUsers = (
+  typingMap: Record<string, TypingEntry>,
+  now: number,
+) => {
+  return Object.fromEntries(
+    Object.entries(typingMap).filter(([, entry]) => entry.expiresAt > now),
+  );
+};
+
+const buildTypingSummary = (names: string[]) => {
+  const normalizedNames = names.filter(Boolean);
+  if (normalizedNames.length === 0) {
+    return "";
+  }
+
+  if (normalizedNames.length === 1) {
+    return `${normalizedNames[0]} is typing...`;
+  }
+
+  if (normalizedNames.length === 2) {
+    return `${normalizedNames[0]}, ${normalizedNames[1]} are typing...`;
+  }
+
+  const othersCount = normalizedNames.length - 2;
+  return `${normalizedNames[0]}, ${normalizedNames[1]} and ${othersCount} others are typing...`;
+};
+
 const EMPTY_MESSAGES: Message[] = [];
 
 const getMessageRenderKey = (message: Message) => {
@@ -58,7 +90,9 @@ const ChatWindowBody = () => {
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
 
-  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [typingUsers, setTypingUsers] = useState<Record<string, TypingEntry>>(
+    {},
+  );
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const messages = useMemo(() => {
@@ -198,6 +232,33 @@ const ChatWindowBody = () => {
     }, []);
   }, [selectedConvo, myId]);
 
+  const participantMap = useMemo(() => {
+    return new Map(
+      (selectedConvo?.participants || []).map((participant) => [
+        String(participant._id),
+        participant,
+      ]),
+    );
+  }, [selectedConvo?.participants]);
+
+  const typingUserList = useMemo(() => {
+    const now = Date.now();
+
+    return Object.entries(typingUsers)
+      .filter(([, entry]) => entry.expiresAt > now)
+      .map(([userId, entry]) => ({
+        userId,
+        displayName: entry.displayName,
+        avatarUrl: participantMap.get(userId)?.avatarUrl,
+      }));
+  }, [typingUsers, participantMap]);
+
+  const typingSummaryText = useMemo(() => {
+    return buildTypingSummary(
+      typingUserList.map((typingUser) => typingUser.displayName),
+    );
+  }, [typingUserList]);
+
   // Fetch initial messages if not present
   useEffect(() => {
     if (
@@ -245,13 +306,13 @@ const ChatWindowBody = () => {
       userId,
       displayName,
     }: TypingEventPayload) => {
-      if (
-        conversationId === activeConversationId &&
-        userId !== currentUser?._id
-      ) {
+      if (conversationId === activeConversationId && userId !== currentUser?._id) {
         setTypingUsers((prev) => ({
           ...prev,
-          [userId]: displayName || "Someone",
+          [userId]: {
+            displayName: displayName || "Someone",
+            expiresAt: Date.now() + 2600,
+          },
         }));
       }
     };
@@ -262,7 +323,12 @@ const ChatWindowBody = () => {
       if (conversationId === activeConversationId) {
         setTypingUsers((prev) => {
           const next = { ...prev };
-          delete next[userId];
+          if (next[userId]) {
+            next[userId] = {
+              ...next[userId],
+              expiresAt: Date.now() + 450,
+            };
+          }
           return next;
         });
       }
@@ -280,6 +346,25 @@ const ChatWindowBody = () => {
   useEffect(() => {
     setTypingUsers({});
   }, [activeConversationId]);
+
+  useEffect(() => {
+    const interval = globalThis.setInterval(() => {
+      const now = Date.now();
+      setTypingUsers((prev) => {
+        const next = pruneExpiredTypingUsers(prev, now);
+
+        if (Object.keys(next).length === Object.keys(prev).length) {
+          return prev;
+        }
+
+        return next;
+      });
+    }, 320);
+
+    return () => {
+      globalThis.clearInterval(interval);
+    };
+  }, []);
 
   // Scroll to bottom or saved position when conversation changes
   useLayoutEffect(() => {
@@ -380,16 +465,35 @@ const ChatWindowBody = () => {
         <div ref={messagesEndRef} />
 
         {/* Typing indicator */}
-        {Object.values(typingUsers).length > 0 && (
+        {typingUserList.length > 0 && (
           <div className="flex items-center gap-2 px-4 py-1 mb-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex bg-muted/70 rounded-2xl rounded-bl-sm px-3 py-2 gap-1.5 items-center w-fit shadow-sm">
+            <div className="flex -space-x-1">
+              {typingUserList.slice(0, 3).map((typingUser) => (
+                <div key={typingUser.userId} className="relative">
+                  {typingUser.avatarUrl ? (
+                    <img
+                      src={typingUser.avatarUrl}
+                      alt={typingUser.displayName}
+                      className="size-6 rounded-full border border-background object-cover"
+                    />
+                  ) : (
+                    <div className="size-6 rounded-full border border-background bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
+                      {typingUser.displayName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="typing-avatar-pulse" />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex rounded-2xl rounded-bl-sm bg-muted/70 px-3 py-2 gap-1.5 items-center w-fit shadow-sm">
               <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.3s]" />
               <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.15s]" />
               <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce" />
             </div>
+
             <span className="text-xs text-muted-foreground">
-              {Object.values(typingUsers).join(", ")}{" "}
-              {Object.values(typingUsers).length > 1 ? "are typing..." : "is typing..."}
+              {typingSummaryText}
             </span>
           </div>
         )}
@@ -443,10 +547,10 @@ const ChatWindowBody = () => {
       <button
         onClick={scrollToBottom}
         className={cn(
-          "absolute bottom-4 right-4 size-10 rounded-full bg-background border border-border/70 shadow-lg flex items-center justify-center transition-all duration-300 hover:bg-muted/70 z-20",
+          "absolute bottom-4 right-4 size-10 rounded-full bg-background border border-border/70 shadow-lg flex items-center justify-center transition-colors hover:bg-muted/70 z-20",
           showScrollBtn
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-75 pointer-events-none",
+            ? "scroll-btn-enter pointer-events-auto"
+            : "scroll-btn-exit pointer-events-none",
         )}
         title="Scroll down"
       >

@@ -15,9 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogOverlay,
 } from "../ui/dialog";
 import UserAvatar from "./UserAvatar";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
+import DialogFriendListSkeleton from "@/components/skeleton/DialogFriendListSkeleton";
 
 const FriendsManagerDialog = () => {
   const navigate = useNavigate();
@@ -27,8 +29,10 @@ const FriendsManagerDialog = () => {
     null,
   );
 
-  const { friends, getFriends, removeFriend } = useFriendStore();
+  const { friends, getFriends, removeFriend, loading: friendLoading } =
+    useFriendStore();
   const { createConversation, loading: chatLoading } = useChatStore();
+  const isInitialFriendsLoading = friendLoading && friends.length === 0;
 
   useEffect(() => {
     if (open) {
@@ -97,8 +101,9 @@ const FriendsManagerDialog = () => {
         </button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogOverlay className="modal-overlay" />
+      <DialogContent className="modal-content-shell sm:max-w-xl">
+        <DialogHeader className="modal-stagger-item">
           <DialogTitle>Friends</DialogTitle>
           <DialogDescription>
             View your friends, start a chat, or remove a friend.
@@ -109,81 +114,88 @@ const FriendsManagerDialog = () => {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search by name or username"
+          className="modal-stagger-item"
         />
 
-        <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
-          {filteredFriends.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border/80 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-              No friends found.
-            </div>
+        <div className="max-h-[420px] min-h-[320px] space-y-2 overflow-y-auto pr-1 modal-stagger-item">
+          {isInitialFriendsLoading ? (
+            <DialogFriendListSkeleton count={6} showActions />
+          ) : (
+            <>
+              {filteredFriends.length === 0 && (
+                <div className="rounded-lg border border-dashed border-border/80 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                  No friends found.
+                </div>
+              )}
+
+              {filteredFriends.map((friend) => {
+                const busy = processingFriendId === friend._id;
+                const disabled = busy || chatLoading;
+
+                return (
+                  <Card
+                    key={friend._id}
+                    className="flex items-center gap-3 rounded-xl border border-border/70 p-3"
+                  >
+                    <FriendProfileMiniCard
+                      userId={friend._id}
+                      displayName={friend.displayName}
+                      avatarUrl={friend.avatarUrl}
+                      onViewProfile={() => {
+                        setOpen(false);
+                        navigate(`/profile/${friend._id}`);
+                      }}
+                      onChat={() => handleStartChat(friend._id)}
+                      onRemove={() =>
+                        handleRemoveFriend(friend._id, friend.displayName)
+                      }
+                      disabled={disabled}
+                    >
+                      <UserAvatar
+                        type="sidebar"
+                        name={friend.displayName}
+                        avatarUrl={friend.avatarUrl}
+                      />
+                    </FriendProfileMiniCard>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">
+                        {friend.displayName}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        @{friend.username}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleStartChat(friend._id)}
+                        disabled={disabled}
+                      >
+                        <MessageCircle className="size-4" />
+                        Chat
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          handleRemoveFriend(friend._id, friend.displayName)
+                        }
+                        disabled={disabled}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                        Remove
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </>
           )}
-
-          {filteredFriends.map((friend) => {
-            const busy = processingFriendId === friend._id;
-            const disabled = busy || chatLoading;
-
-            return (
-              <Card
-                key={friend._id}
-                className="flex items-center gap-3 rounded-xl border border-border/70 p-3"
-              >
-                <FriendProfileMiniCard
-                  userId={friend._id}
-                  displayName={friend.displayName}
-                  avatarUrl={friend.avatarUrl}
-                  onViewProfile={() => {
-                    setOpen(false);
-                    navigate(`/profile/${friend._id}`);
-                  }}
-                  onChat={() => handleStartChat(friend._id)}
-                  onRemove={() =>
-                    handleRemoveFriend(friend._id, friend.displayName)
-                  }
-                  disabled={disabled}
-                >
-                  <UserAvatar
-                    type="sidebar"
-                    name={friend.displayName}
-                    avatarUrl={friend.avatarUrl}
-                  />
-                </FriendProfileMiniCard>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {friend.displayName}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    @{friend.username}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={() => handleStartChat(friend._id)}
-                    disabled={disabled}
-                  >
-                    <MessageCircle className="size-4" />
-                    Chat
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleRemoveFriend(friend._id, friend.displayName)
-                    }
-                    disabled={disabled}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                    Remove
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
         </div>
       </DialogContent>
     </Dialog>

@@ -6,6 +6,14 @@ interface FetchMessageProps {
   cursor?: string;
 }
 
+export interface LinkPreviewPayload {
+  url: string;
+  siteName: string;
+  title: string;
+  description: string;
+  image?: string;
+}
+
 const pageLimit = 50;
 
 export const chatService = {
@@ -65,13 +73,7 @@ export const chatService = {
     name: string,
     memberIds: string[],
   ) {
-    console.log("[chatService][debug] POST /conversations:", {
-      type,
-      name,
-      memberIds,
-    });
     const res = await api.post("/conversations", { type, name, memberIds });
-    console.log("[chatService][ok] Response:", res.data);
     return res.data.conversation;
   },
 
@@ -103,5 +105,12 @@ export const chatService = {
   async markMessageRead(messageId: string) {
     const res = await api.post(`/messages/${messageId}/read`);
     return res.data;
+  },
+
+  async getLinkPreview(url: string): Promise<LinkPreviewPayload> {
+    const res = await api.get("/messages/link-preview/meta", {
+      params: { url },
+    });
+    return res.data.preview;
   },
 };

@@ -7,6 +7,7 @@ import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import ProfileHeaderSkeleton from "@/components/skeleton/ProfileHeaderSkeleton";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
+import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -166,14 +167,13 @@ const ProfilePage = () => {
 
             {profilePagination.hasNextPage && !profileAccessDenied && (
               <div className="flex justify-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={loadMore}
-                  disabled={loadingProfile}
-                >
-                  {loadingProfile ? "Loading more..." : "Load more"}
-                </Button>
+                {loadingProfile ? (
+                  <LoadingMoreSkeleton />
+                ) : (
+                  <Button type="button" variant="outline" onClick={loadMore}>
+                    Load more
+                  </Button>
+                )}
               </div>
             )}
           </section>

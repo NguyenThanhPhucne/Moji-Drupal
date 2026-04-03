@@ -73,19 +73,7 @@ export const uploadAvatar = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    console.log("Uploading file to Cloudinary:", {
-      fieldname: file.fieldname,
-      mimetype: file.mimetype,
-      size: file.size,
-      userId,
-    });
-
     const result = await uploadImageFromBuffer(file.buffer);
-
-    console.log("Cloudinary upload successful:", {
-      secure_url: result.secure_url,
-      public_id: result.public_id,
-    });
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,

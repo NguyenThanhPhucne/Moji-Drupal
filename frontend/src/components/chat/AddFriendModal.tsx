@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogOverlay,
 } from "../ui/dialog";
 import { UserPlus } from "lucide-react";
 import type { User } from "@/types/user";
@@ -21,6 +22,7 @@ export interface IFormValues {
 }
 
 const AddFriendModal = () => {
+  const [open, setOpen] = useState(false);
   const [isFound, setIsFound] = useState<boolean | null>(null);
   const [searchUser, setSearchUser] = useState<User>();
   const [searchedUsername, setSearchedUsername] = useState("");
@@ -76,10 +78,25 @@ const AddFriendModal = () => {
     reset();
     setSearchedUsername("");
     setIsFound(null);
+    setOpen(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (loading && !nextOpen) {
+      return;
+    }
+
+    if (!nextOpen) {
+      reset();
+      setSearchedUsername("");
+      setIsFound(null);
+    }
+
+    setOpen(nextOpen);
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <div className="flex justify-center items-center size-5 rounded-full hover:bg-sidebar-accent/80 cursor-pointer z-10">
           <UserPlus className="size-4" />
@@ -87,8 +104,13 @@ const AddFriendModal = () => {
         </div>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[425px] border-none">
-        <DialogHeader>
+      <DialogOverlay className="modal-overlay" />
+      <DialogContent
+        className="modal-content-shell sm:max-w-[425px] border-none"
+        dismissible={!loading}
+        showCloseButton={!loading}
+      >
+        <DialogHeader className="modal-stagger-item">
           <DialogTitle>Add Friend</DialogTitle>
           <DialogDescription className="sr-only">
             Search and send a friend request
@@ -96,26 +118,30 @@ const AddFriendModal = () => {
         </DialogHeader>
 
         {!isFound && (
-          <SearchForm
-            register={register}
-            errors={errors}
-            usernameValue={usernameValue}
-            loading={loading}
-            isFound={isFound}
-            searchedUsername={searchedUsername}
-            onSubmit={handleSearch}
-            onCancel={handleCancel}
-          />
+          <div className="modal-stagger-item">
+            <SearchForm
+              register={register}
+              errors={errors}
+              usernameValue={usernameValue}
+              loading={loading}
+              isFound={isFound}
+              searchedUsername={searchedUsername}
+              onSubmit={handleSearch}
+              onCancel={handleCancel}
+            />
+          </div>
         )}
 
         {isFound && (
-          <SendFriendRequestForm
-            register={register}
-            loading={loading}
-            searchedUsername={searchedUsername}
-            onSubmit={handleSend}
-            onBack={() => setIsFound(null)}
-          />
+          <div className="modal-stagger-item">
+            <SendFriendRequestForm
+              register={register}
+              loading={loading}
+              searchedUsername={searchedUsername}
+              onSubmit={handleSend}
+              onBack={() => setIsFound(null)}
+            />
+          </div>
         )}
       </DialogContent>
     </Dialog>

@@ -8,6 +8,7 @@ import { useFriendStore } from "./stores/useFriendStore";
 import { useBookmarkStore } from "./stores/useBookmarkStore";
 import { useSocialStore } from "./stores/useSocialStore";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import WorkspaceLoadingSkeleton from "./components/skeleton/WorkspaceLoadingSkeleton";
 
 const SignInPage = lazy(() => import("./pages/SignInPage"));
 const SignUpPage = lazy(() => import("./pages/SignUpPage"));
@@ -16,6 +17,7 @@ const SavedMessagesPage = lazy(() => import("./pages/SavedMessagesPage"));
 const HomeFeedPage = lazy(() => import("./pages/HomeFeedPage"));
 const ExplorePage = lazy(() => import("./pages/ExplorePage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const PostDetailPage = lazy(() => import("./pages/PostDetailPage"));
 const ProtectedRoute = lazy(() => import("./components/auth/ProtectedRoute"));
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -86,16 +88,7 @@ function AppContent() {
     <>
       <Toaster richColors />
       <BrowserRouter>
-        <Suspense
-          fallback={
-            <div className="flex min-h-svh items-center justify-center bg-background px-4">
-              <div className="elevated-card flex items-center gap-3 px-5 py-3 text-sm text-muted-foreground">
-                <span className="size-2 rounded-full bg-primary animate-pulse" />{" "}
-                Loading workspace...
-              </div>
-            </div>
-          }
-        >
+        <Suspense fallback={<WorkspaceLoadingSkeleton />}>
           <Routes>
             {/* public routes */}
             <Route path="/signin" element={<SignInPage />} />
@@ -106,6 +99,7 @@ function AppContent() {
               <Route path="/" element={<ChatAppPage />} />
               <Route path="/feed" element={<HomeFeedPage />} />
               <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/post/:postId" element={<PostDetailPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/profile/:userId" element={<ProfilePage />} />
               <Route path="/saved" element={<SavedMessagesPage />} />

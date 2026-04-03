@@ -2,10 +2,15 @@ import { useFriendStore } from "@/stores/useFriendStore";
 import FriendRequestItem from "./FriendRequestItem";
 import { Button } from "../ui/button";
 import { toast } from "sonner";
+import FriendRequestSkeleton from "../skeleton/FriendRequestSkeleton";
 
 const ReceivedRequests = () => {
   const { acceptRequest, declineRequest, loading, receivedList } =
     useFriendStore();
+
+  if (loading && (!receivedList || receivedList.length === 0)) {
+    return <FriendRequestSkeleton count={3} />;
+  }
 
   if (!receivedList || receivedList.length === 0) {
     return (

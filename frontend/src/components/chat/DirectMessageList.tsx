@@ -21,6 +21,15 @@ const DirectMessageList = () => {
 
   return (
     <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+      <div className="mb-1 flex items-center justify-between px-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/85">
+          Direct Messages
+        </p>
+        <span className="rounded-full border border-border/60 bg-muted/45 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+          {directConversations.length}
+        </span>
+      </div>
+
       {directConversations.map((convo, index) => (
         <div
           key={convo._id}

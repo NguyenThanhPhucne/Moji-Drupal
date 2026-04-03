@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pin, Search, Star, Users, MessagesSquare } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,7 +7,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
+  DialogOverlay,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -15,6 +17,9 @@ import { searchService } from "@/services/searchService";
 import axios from "axios";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import GlobalSearchResultsSkeleton from "@/components/skeleton/GlobalSearchResultsSkeleton";
+import GlobalSearchMetaSkeleton from "@/components/skeleton/GlobalSearchMetaSkeleton";
+import { cn } from "@/lib/utils";
 import type {
   GlobalSearchGroup,
   GlobalSearchMessage,
@@ -88,23 +93,42 @@ const GlobalSearchDialog = () => {
   const [query, setQuery] = useState("");
   const [recent, setRecent] = useState<string[]>([]);
   const [pinned, setPinned] = useState<PinnedSearchItem[]>([]);
+  const [isMetaLoading, setIsMetaLoading] = useState(false);
+  const [isSearchingRemote, setIsSearchingRemote] = useState(false);
   const [remoteResult, setRemoteResult] = useState<GlobalSearchResponse>({
     people: [],
     groups: [],
     messages: [],
   });
 
+  const hasLoadedMetaRef = useRef(false);
+
   useEffect(() => {
-    try {
-      const savedRecent = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
-      const savedPinned = JSON.parse(localStorage.getItem(PINNED_KEY) || "[]");
-      setRecent(Array.isArray(savedRecent) ? savedRecent : []);
-      setPinned(Array.isArray(savedPinned) ? savedPinned : []);
-    } catch {
-      setRecent([]);
-      setPinned([]);
+    if (!open || hasLoadedMetaRef.current) {
+      return;
     }
-  }, []);
+
+    setIsMetaLoading(true);
+
+    const timer = globalThis.setTimeout(() => {
+      try {
+        const savedRecent = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+        const savedPinned = JSON.parse(localStorage.getItem(PINNED_KEY) || "[]");
+        setRecent(Array.isArray(savedRecent) ? savedRecent : []);
+        setPinned(Array.isArray(savedPinned) ? savedPinned : []);
+      } catch {
+        setRecent([]);
+        setPinned([]);
+      } finally {
+        hasLoadedMetaRef.current = true;
+        setIsMetaLoading(false);
+      }
+    }, 120);
+
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [open]);
 
   useEffect(() => {
     const handleGlobalShortcut = (event: KeyboardEvent) => {
@@ -202,10 +226,13 @@ const GlobalSearchDialog = () => {
     const normalized = query.trim();
     if (normalized.length < 2) {
       setRemoteResult({ people: [], groups: [], messages: [] });
+      setIsSearchingRemote(false);
       return;
     }
 
+    setIsSearchingRemote(true);
     const controller = new AbortController();
+    let cancelled = false;
 
     const timer = globalThis.setTimeout(async () => {
       try {
@@ -224,10 +251,15 @@ const GlobalSearchDialog = () => {
         }
 
         console.error("Global search error", error);
+      } finally {
+        if (!cancelled) {
+          setIsSearchingRemote(false);
+        }
       }
     }, 260);
 
     return () => {
+      cancelled = true;
       controller.abort();
       globalThis.clearTimeout(timer);
     };
@@ -313,6 +345,7 @@ const GlobalSearchDialog = () => {
   };
 
   const hasPinned = pinned.length > 0;
+  const hasSearchResults = mergedResults.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -329,143 +362,173 @@ const GlobalSearchDialog = () => {
         </button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
+      <DialogOverlay className="modal-overlay" />
+      <DialogContent className="modal-content-shell sm:max-w-3xl">
+        <DialogHeader className="modal-stagger-item">
           <DialogTitle>Global search</DialogTitle>
+          <DialogDescription className="sr-only">
+            Search for people, groups, or messages across the platform
+          </DialogDescription>
         </DialogHeader>
 
         <Input
+          data-autofocus="true"
           autoFocus
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search people, groups, messages..."
+          className="modal-stagger-item"
         />
 
         {query.trim().length < 2 && (
-          <div className="space-y-3">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Recent searches
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {recent.length === 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    No recent searches yet.
-                  </span>
-                )}
-                {recent.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setQuery(item)}
-                    className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/70"
-                  >
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {hasPinned && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Pinned results
-                </p>
-                <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                  {pinned.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground"
-                      onClick={() => {
-                        if (item.conversationId) {
-                          setActiveConversation(item.conversationId);
-                          navigate("/");
-                          setOpen(false);
-                        }
-                      }}
-                    >
-                      <span className="text-sm truncate">{item.label}</span>
-                      <Pin className="size-3.5 text-amber-500" />
-                    </button>
-                  ))}
+          <div className="space-y-3 modal-stagger-item">
+            {isMetaLoading ? (
+              <GlobalSearchMetaSkeleton />
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Recent searches
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {recent.length === 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        No recent searches yet.
+                      </span>
+                    )}
+                    {recent.map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setQuery(item)}
+                        className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/70"
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                {hasPinned && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Pinned results
+                    </p>
+                    <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                      {pinned.map((item) => (
+                        <button
+                          key={item.key}
+                          type="button"
+                          className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground"
+                          onClick={() => {
+                            if (item.conversationId) {
+                              setActiveConversation(item.conversationId);
+                              navigate("/");
+                              setOpen(false);
+                            }
+                          }}
+                        >
+                          <span className="text-sm truncate">{item.label}</span>
+                          <Pin className="size-3.5 text-amber-500" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
         {query.trim().length >= 2 && (
-          <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1">
-            {mergedResults.length === 0 && (
-              <div className="rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground">
-                No results found.
-              </div>
-            )}
-
-            {mergedResults.map((item) => {
-              const pinnedState = pinned.some(
-                (entry) => entry.key === toResultKey(item),
-              );
-
-              let resultTitle = "";
-              if (item.type === "people") {
-                resultTitle = item.displayName;
-              } else if (item.type === "groups") {
-                resultTitle = item.name;
-              } else {
-                resultTitle = item.content;
-              }
-
-              let resultSubtitle = "";
-              if (item.type === "people") {
-                resultSubtitle = `@${item.username} • ${item.mutualGroupsCount} mutual groups`;
-              } else if (item.type === "groups") {
-                resultSubtitle = `${item.membersCount} members`;
-              } else {
-                resultSubtitle = `in conversation ${item.conversationId}`;
-              }
-
-              return (
+          <div className="max-h-[420px] min-h-[320px] overflow-y-auto space-y-2 pr-1 modal-stagger-item">
+            {isSearchingRemote && mergedResults.length === 0 ? (
+              <GlobalSearchResultsSkeleton />
+            ) : (
+              <>
                 <div
-                  key={toResultKey(item)}
-                  className="flex items-center gap-3 rounded-lg border border-border/70 p-2.5 hover:bg-muted/40"
+                  className={cn(
+                    "rounded-lg border border-dashed border-border/70 p-6 text-center text-sm text-muted-foreground transition-opacity duration-200",
+                    hasSearchResults
+                      ? "opacity-0 h-0 overflow-hidden p-0 border-transparent"
+                      : "opacity-100",
+                  )}
                 >
-                  <div className="size-8 rounded-full bg-muted flex items-center justify-center">
-                    {item.type === "people" && <Users className="size-4" />}
-                    {item.type === "groups" && (
-                      <MessagesSquare className="size-4" />
-                    )}
-                    {item.type === "messages" && <Search className="size-4" />}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => onSelectResult(item)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="truncate text-sm font-medium">
-                      {resultTitle}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {resultSubtitle}
-                    </p>
-                  </button>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => togglePin(item)}
-                    title={pinnedState ? "Unpin" : "Pin"}
-                  >
-                    <Star
-                      className={`size-4 ${pinnedState ? "fill-amber-400 text-amber-500" : "text-muted-foreground"}`}
-                    />
-                  </Button>
+                  No results found.
                 </div>
-              );
-            })}
+
+                <div
+                  className={cn(
+                    "space-y-2 transition-opacity duration-200",
+                    hasSearchResults ? "opacity-100" : "opacity-0",
+                  )}
+                >
+                  {mergedResults.map((item) => {
+                    const pinnedState = pinned.some(
+                      (entry) => entry.key === toResultKey(item),
+                    );
+
+                    let resultTitle = "";
+                    if (item.type === "people") {
+                      resultTitle = item.displayName;
+                    } else if (item.type === "groups") {
+                      resultTitle = item.name;
+                    } else {
+                      resultTitle = item.content;
+                    }
+
+                    let resultSubtitle = "";
+                    if (item.type === "people") {
+                      resultSubtitle = `@${item.username} • ${item.mutualGroupsCount} mutual groups`;
+                    } else if (item.type === "groups") {
+                      resultSubtitle = `${item.membersCount} members`;
+                    } else {
+                      resultSubtitle = `in conversation ${item.conversationId}`;
+                    }
+
+                    return (
+                      <div
+                        key={toResultKey(item)}
+                        className="flex items-center gap-3 rounded-lg border border-border/70 p-2.5 hover:bg-muted/40"
+                      >
+                        <div className="size-8 rounded-full bg-muted flex items-center justify-center">
+                          {item.type === "people" && <Users className="size-4" />}
+                          {item.type === "groups" && (
+                            <MessagesSquare className="size-4" />
+                          )}
+                          {item.type === "messages" && <Search className="size-4" />}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => onSelectResult(item)}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <p className="truncate text-sm font-medium">
+                            {resultTitle}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {resultSubtitle}
+                          </p>
+                        </button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => togglePin(item)}
+                          title={pinnedState ? "Unpin" : "Pin"}
+                        >
+                          <Star
+                            className={`size-4 ${pinnedState ? "fill-amber-400 text-amber-500" : "text-muted-foreground"}`}
+                          />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
       </DialogContent>

@@ -239,6 +239,46 @@ export const getExploreFeed = async (req, res) => {
   }
 };
 
+export const getPostById = async (req, res) => {
+  try {
+    const currentUserId = req.user._id;
+    const { postId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ message: "Invalid post id" });
+    }
+
+    const post = await Post.findById(postId).populate(
+      "authorId",
+      "displayName username avatarUrl",
+    );
+
+    if (!post || post.isDeleted) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const authorUserId = post.authorId?._id || post.authorId;
+    const access = await resolveProfileAccess(currentUserId, authorUserId);
+    const isOwner = String(authorUserId) === String(currentUserId);
+    const canViewPost =
+      isOwner ||
+      post.privacy === "public" ||
+      access.canViewProfile ||
+      access.isFollowing;
+
+    if (!canViewPost) {
+      return res.status(403).json({ message: "You cannot view this post" });
+    }
+
+    return res.status(200).json({
+      post: toPostPayload(post, currentUserId),
+    });
+  } catch (error) {
+    console.error("[social] getPostById error", error);
+    return res.status(500).json({ message: "System error" });
+  }
+};
+
 export const getProfile = async (req, res) => {
   try {
     const currentUserId = req.user._id;

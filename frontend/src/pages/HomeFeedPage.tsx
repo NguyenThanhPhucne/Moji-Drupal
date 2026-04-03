@@ -8,6 +8,7 @@ import SocialPostCard from "@/components/social/SocialPostCard";
 import SocialNotificationsPanel from "@/components/social/SocialNotificationsPanel";
 import PostComposerSkeleton from "@/components/skeleton/PostComposerSkeleton";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
+import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useSocialStore } from "@/stores/useSocialStore";
@@ -121,14 +122,13 @@ const HomeFeedPage = () => {
 
               {homePagination.hasNextPage && (
                 <div className="flex justify-center">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={loadMore}
-                    disabled={loadingHome}
-                  >
-                    {loadingHome ? "Loading more..." : "Load more"}
-                  </Button>
+                  {loadingHome ? (
+                    <LoadingMoreSkeleton />
+                  ) : (
+                    <Button type="button" variant="outline" onClick={loadMore}>
+                      Load more
+                    </Button>
+                  )}
                 </div>
               )}
             </section>

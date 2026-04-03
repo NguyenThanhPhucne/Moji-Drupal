@@ -1,283 +1,122 @@
 {
   "openapi": "3.0.0",
   "info": {
-    "title": "Coming",
+    "title": "Moji Chat & Social CMS API",
     "version": "1.0.0",
-    "description": ""
+    "description": "Tài liệu API tiêu chuẩn OpenAPI 3.0 dành cho hệ thống Backend của Moji. \nCung cấp giao thức giao tiếp thời gian thực cho ứng dụng Chat (REST + Socket) và dữ liệu quản trị Social CRM.",
+    "contact": {
+      "name": "Moji Developer Team",
+      "email": "dev@moji.vn"
+    }
   },
   "servers": [
     {
-      "url": "http://localhost:5001/api"
+      "url": "http://localhost:5001/api",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://api.moji.vn/v1",
+      "description": "Production Server"
     }
   ],
-  "paths": {
-    "/auth/signup": {
-      "post": {
-        "summary": "SignUp",
-        "tags": ["Authentication"],
-        "responses": {},
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "username": {
-                    "type": "string"
-                  },
-                  "password": {
-                    "type": "string",
-                    "format": "color"
-                  },
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "firstName": {
-                    "type": "string"
-                  },
-                  "lastName": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Các phương thức xác thực người dùng (Local JWT, Google OAuth, Drupal SSO)"
     },
-    "/auth/signin": {
-      "post": {
-        "summary": "SignIn",
-        "description": "Log in với username và password. Trả về access token trong res và refresh token trong cookie.",
-        "tags": ["Authentication"],
-        "responses": {
-          "200": {
-            "description": "User successfully signed in",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "User Hai User đã logged in!"
-                    },
-                    "accessToken": {
-                      "type": "string",
-                      "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    }
-                  },
-                  "required": ["message", "accessToken"]
-                }
-              }
-            }
-          },
-          "400": { "description": "Invalid input" },
-          "401": { "description": "Unauthorized" },
-          "500": { "description": "Internal server error" }
-        },
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "username": {
-                    "type": "string"
-                  },
-                  "password": {
-                    "type": "string",
-                    "format": "color"
-                  }
-                },
-                "required": ["username", "password"]
-              }
-            }
-          }
-        }
-      }
+    {
+      "name": "Users",
+      "description": "Quản lý Profile cá nhân và trạng thái hoạt động"
     },
-    "/auth/signout": {
-      "post": {
-        "summary": "SignOut",
-        "tags": ["Authentication"],
-        "responses": {
-          "200": { "description": "Success" },
-          "500": { "description": "Internal server error" }
-        }
-      }
+    {
+      "name": "Conversations",
+      "description": "Quản lý các luồng hội thoại Group và Direct Message"
     },
-    "/auth/refresh": {
-      "post": {
-        "summary": "RefreshToken",
-        "tags": ["Authentication"],
-        "responses": {}
-      }
+    {
+      "name": "Messages",
+      "description": "Tính năng truyền tải tin nhắn, thu hồi, ghim và tương tác (Reactions)"
     },
-    "/users/me": {
-      "get": {
-        "summary": "AuthMe",
-        "tags": ["Authentication"],
-        "responses": {}
-      }
-    },
-    "/friends/requests": {
-      "post": {
-        "summary": "SendFriendRequest",
-        "tags": ["Friends"],
-        "responses": {},
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "to": {
-                    "type": "string"
-                  },
-                  "message": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "summary": "GetFriendRequests",
-        "tags": ["Friends"],
-        "responses": {}
-      }
-    },
-    "/friends/requests/68faed19defb37e90657d7d6/accept": {
-      "post": {
-        "summary": "AcceptFriendRequest",
-        "tags": ["Friends"],
-        "responses": {}
-      }
-    },
-    "/friends/requests/68fb124874f8418a6bc83ed1/decline": {
-      "post": {
-        "summary": "DeclineFriendRequest",
-        "tags": ["Friends"],
-        "responses": {},
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          }
-        }
-      }
-    },
-    "/friends/": {
-      "get": {
-        "summary": "GetAllFriends",
-        "tags": ["Friends"],
-        "responses": {}
-      }
-    },
-    "/messages/direct": {
-      "post": {
-        "summary": "SendDirectMessage",
-        "tags": ["Messages"],
-        "responses": {},
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "recipientId": {
-                    "type": "string"
-                  },
-                  "content": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/conversations/": {
-      "post": {
-        "summary": "CreateConversation",
-        "tags": ["Conversations"],
-        "responses": {},
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "memberIds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "summary": "GetConversations",
-        "tags": ["Conversations"],
-        "responses": {}
-      }
-    },
-    "/conversations/68fb2e6a19c501587577291c/messages": {
-      "get": {
-        "summary": "GetMessage",
-        "tags": ["Conversations"],
-        "responses": {}
-      }
-    },
-    "/messages/group": {
-      "post": {
-        "summary": "SendGroupMessage",
-        "tags": ["Messages"],
-        "responses": {},
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "conversationId": {
-                    "type": "string"
-                  },
-                  "content": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+    {
+      "name": "Social & Feed",
+      "description": "Quản trị nội dung bài viết và tương tác mạng xã hội (CMS)"
     }
-  },
+  ],
   "components": {
     "securitySchemes": {
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "JWT"
+        "bearerFormat": "JWT",
+        "description": "Sử dụng chuỗi JWT Access Token (bắt đầu bằng lệnh Bearer) để truy cập."
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Thông báo lỗi chi tiết từ máy chủ",
+            "example": "Không tìm thấy dữ liệu hoặc quyền truy cập bị từ chối"
+          }
+        }
+      },
+      "UserLite": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string", "example": "651a2b..."},
+          "displayName": { "type": "string", "example": "Moji Admin" },
+          "avatarUrl": { "type": "string", "example": "https://img.com/avatar.png" }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string", "example": "msg_001" },
+          "conversationId": { "type": "string" },
+          "senderId": { "$ref": "#/components/schemas/UserLite" },
+          "content": { "type": "string", "example": "Tài liệu API bản v1.0 đã hoàn thiện!" },
+          "isDeleted": { "type": "boolean", "example": false },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "userId": { "type": "string" },
+                "emoji": { "type": "string", "example": "🔥" }
+              }
+            }
+          }
+        }
+      },
+      "Conversation": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string", "example": "conv_123" },
+          "type": { "type": "string", "enum": ["direct", "group"], "example": "group" },
+          "group": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "example": "Moji Frontend Team" },
+              "createdBy": { "type": "string" }
+            }
+          },
+          "participants": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserLite" }
+          },
+          "seenBy": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserLite" }
+          },
+          "unreadCounts": {
+            "type": "object",
+            "additionalProperties": { "type": "integer" },
+            "example": { "user1": 0, "user2": 5 }
+          },
+          "lastMessage": { "$ref": "#/components/schemas/Message" }
+        }
       }
     }
   },
@@ -285,5 +124,353 @@
     {
       "bearerAuth": []
     }
-  ]
+  ],
+  "paths": {
+    "/auth/signin": {
+      "post": {
+        "summary": "Đăng nhập Local",
+        "description": "Cấp phát **Access Token** dạng chuỗi sau khi xác thực hợp lệ.",
+        "tags": ["Authentication"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": { "type": "string", "example": "phucnguyen" },
+                  "password": { "type": "string", "example": "Moji123!" }
+                },
+                "required": ["username", "password"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { 
+            "description": "Trả về Access Token",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "User phucnguyen logged in!",
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Lỗi xác thực (Từ chối truy cập)",
+            "content": {
+               "application/json": {
+                 "schema": { "$ref": "#/components/schemas/ErrorResponse" },
+                 "example": { "message": "Sai tài khoản hoặc mật khẩu" }
+               }
+            }
+          }
+        }
+      }
+    },
+    "/auth/google": {
+      "post": {
+        "summary": "Đăng nhập / Đăng ký Google OAuth",
+        "tags": ["Authentication"],
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": { "type": "string", "description": "Google JWT Bearer", "example": "ya29.a0AfB_byBd7..." }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Đăng nhập thành công và khởi tạo Session" }
+        }
+      }
+    },
+    "/users/me": {
+      "get": {
+        "summary": "Lấy thông tin tài khoản hiện tại (Auth Check)",
+        "description": "Lấy Profile đầy đủ của người dùng dựa trên JWT Token. Token phải không bị hết hạn.",
+        "tags": ["Users"],
+        "responses": {
+          "200": { 
+            "description": "Object User hoàn chỉnh",
+            "content": {
+              "application/json": {
+                "example": {
+                  "user": {
+                    "_id": "64fb2bc1e3f8a4b2c1d9e7a8",
+                    "username": "hoangmai",
+                    "email": "mai@moji.vn",
+                    "displayName": "Hoàng Mai",
+                    "avatarUrl": "https://img.com/avatar.png",
+                    "showOnlineStatus": true
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Token không hợp lệ hoặc đã hết hạn" }
+        }
+      }
+    },
+    "/users/{userId}/profile-lite": {
+      "get": {
+        "summary": "Xem Mini Profile của người dùng khác",
+        "tags": ["Users"],
+        "parameters": [
+          { "in": "path", "name": "userId", "schema": { "type": "string", "example": "651a2bc1e3f8a4b2c1d9e2b1" }, "required": true }
+        ],
+        "responses": {
+          "200": { 
+            "description": "Dữ liệu dạng rút gọn bao gồm các nhóm chung (Mutual Groups)",
+            "content": {
+              "application/json": {
+                "example": {
+                   "profile": {
+                      "_id": "651a2bc1e...",
+                      "displayName": "Tuấn Ngọc",
+                      "username": "ngoctuan_dev",
+                      "avatarUrl": "https://img",
+                      "bio": "Keep evolving.",
+                      "lastActiveAt": "2026-04-04T12:00:20Z",
+                      "mutualGroupsCount": 2,
+                      "mutualGroups": [
+                         { "_id": "65fa...", "name": "Moji Frontend Team" },
+                         { "_id": "65fa...", "name": "UI/UX Designers" }
+                      ]
+                   }
+                }
+              }
+            } 
+          },
+          "404": { "description": "Người dùng không tồn tại" }
+        }
+      }
+    },
+    "/conversations": {
+      "get": {
+        "summary": "Truy xuất danh sách Chat (Sidebar)",
+        "description": "Trả về mọi cuộc trò chuyện hiện có của User (Groups + DMs), tự động được sắp xếp theo `lastMessageAt`.",
+        "tags": ["Conversations"],
+        "responses": {
+          "200": { 
+            "description": "Mảng Conversation Data Models",
+            "content": {
+              "application/json": {
+                "schema": {
+                   "type": "object",
+                   "properties": {
+                      "conversations": {
+                         "type": "array",
+                         "items": { "$ref": "#/components/schemas/Conversation" }
+                      }
+                   }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Khởi tạo một Box Chat Mới",
+        "tags": ["Conversations"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["direct", "group"], "example": "group" },
+                  "name": { "type": "string", "example": "Dự án Drupal V2" },
+                  "memberIds": { 
+                    "type": "array", 
+                    "items": { "type": "string", "example": "12" },
+                    "description": "Danh sách ID bạn bè. Ở Backend sẽ gọi Drupal SDK để convert sang chuỗi Mongo ObjectId."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { 
+             "description": "Box Chat được render và emit Socket thành công",
+             "content": {
+                "application/json": {
+                   "schema": {
+                      "type": "object",
+                      "properties": {
+                         "conversation": { "$ref": "#/components/schemas/Conversation" }
+                      }
+                   }
+                }
+             }
+          }
+        }
+      }
+    },
+    "/conversations/{conversationId}/messages": {
+      "get": {
+        "summary": "Lazy Load dữ liệu Tin nhắn (Infinite Scroll)",
+        "description": "Cursor-based pagination để load tin nhắn ngược chiều thời gian cũ hơn.",
+        "tags": ["Conversations"],
+        "parameters": [
+          { "in": "path", "name": "conversationId", "schema": { "type": "string", "example": "67bb90..." }, "required": true },
+          { "in": "query", "name": "cursor", "schema": { "type": "string", "example": "cursor_payload" }, "description": "Token của tin nhắn cuối cùng trang trước" },
+          { "in": "query", "name": "limit", "schema": { "type": "integer", "example": 50 } }
+        ],
+        "responses": {
+          "200": { 
+            "description": "Array tin nhắn + con trỏ Next (Cursor)",
+            "content": {
+               "application/json": {
+                  "schema": {
+                     "type": "object",
+                     "properties": {
+                        "messages": {
+                           "type": "array",
+                           "items": { "$ref": "#/components/schemas/Message" }
+                        },
+                        "nextCursor": { "type": "string", "nullable": true }
+                     }
+                  }
+               }
+            } 
+          }
+        }
+      }
+    },
+    "/messages/direct": {
+      "post": {
+        "summary": "Gửi API Tin Nhắn Trực Tiếp",
+        "description": "Gửi payload lên Server REST, sau khi Validation sẽ broadcast (emit) qua WebSocket.",
+        "tags": ["Messages"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "recipientId": { "type": "string", "example": "651a2bc..." },
+                  "content": { "type": "string", "example": "Bản UI đẹp quá nha team!" },
+                  "imgUrl": { "type": "string", "example": "https://cdn/image.png" },
+                  "replyTo": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { 
+              "description": "REST Trả về Document của Message",
+              "content": {
+                 "application/json": {
+                    "schema": {
+                       "type": "object",
+                       "properties": {
+                          "message": { "$ref": "#/components/schemas/Message" }
+                       }
+                    }
+                 }
+              }
+          }
+        }
+      }
+    },
+    "/messages/{messageId}/react": {
+      "post": {
+        "summary": "Tương tác Emoji Reactions vào tin nhắn",
+        "tags": ["Messages"],
+        "parameters": [
+          { "in": "path", "name": "messageId", "schema": { "type": "string", "example": "67ee..." }, "required": true }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "emoji": { "type": "string", "example": "❤️" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Toggles (Thêm/Bớt) Emoji thành công" }
+        }
+      }
+    },
+    "/messages/{messageId}/unsend": {
+      "delete": {
+        "summary": "Thu hồi tin nhắn từ mọi phía",
+        "tags": ["Messages"],
+        "parameters": [
+          { "in": "path", "name": "messageId", "schema": { "type": "string" }, "required": true }
+        ],
+        "responses": {
+          "200": { "description": "Mongoose Middleware sẽ cập nhật flag `isDeleted = true` và báo Socket" }
+        }
+      }
+    },
+    "/search/global": {
+      "get": {
+        "summary": "Tra cứu toàn cục Global Search Window",
+        "description": "Query Multi-Models. Dùng chung cho Thanh tìm kiếm (Cmd+K). Tự động xếp hạng độ liên quan (Score Indexing).",
+        "tags": ["Users"],
+        "parameters": [
+           { "in": "query", "name": "q", "schema": { "type": "string", "example": "admin" }, "required": true }
+        ],
+        "responses": {
+          "200": { 
+            "description": "Trọng số trả về cho 3 Collection chính kết hợp: Mọi người, Nhóm và Nội dung chat.",
+            "content": {
+               "application/json": {
+                  "example": {
+                     "people": [ { "_id": "usr1", "displayName": "Admin Moji", "score": 2.5 } ],
+                     "groups": [ { "conversationId": "grp2", "name": "Quản trị viên", "score": 1.2 } ],
+                     "messages": []
+                  }
+               }
+            }
+          }
+        }
+      }
+    },
+    "/social/feed/home": {
+      "get": {
+        "summary": "Cung cấp New Feed Động Tối Ưu (Home Activity)",
+        "tags": ["Social & Feed"],
+        "responses": {
+          "200": { 
+             "description": "Lấy danh sách các bài viết cá nhân và người đang follow",
+             "content": {
+                "application/json": {
+                   "example": {
+                      "posts": [
+                         {
+                            "_id": "post_01",
+                            "author": { "_id": "usr2", "displayName": "Tuấn Ngọc" },
+                            "content": "Chào mừng ra mắt MVP!",
+                            "media": ["https://img.com/launch.jpg"],
+                            "likesCount": 105,
+                            "commentsCount": 12,
+                            "createdAt": "2026-04-05T01:00:00Z"
+                         }
+                      ]
+                   }
+                }
+             }
+          }
+        }
+      }
+    }
+  }
 }

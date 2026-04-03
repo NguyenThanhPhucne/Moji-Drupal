@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ImagePlus, SendHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,32 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
   const [privacy, setPrivacy] = useState<"public" | "followers">("public");
   const [submitting, setSubmitting] = useState(false);
 
+  const extractedCaptionTags = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (caption.match(/#\w+/g) || []).map((tag) =>
+            tag.slice(1).toLowerCase(),
+          ),
+        ),
+      ),
+    [caption],
+  );
+
+  const manualTags = useMemo(
+    () =>
+      tags
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean),
+    [tags],
+  );
+
+  const mergedTags = useMemo(
+    () => Array.from(new Set([...manualTags, ...extractedCaptionTags])),
+    [manualTags, extractedCaptionTags],
+  );
+
   const submit = async () => {
     if (!caption.trim() && !mediaUrl.trim()) {
       return;
@@ -30,10 +56,7 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
       const ok = await onCreate({
         caption,
         mediaUrls: mediaUrl.trim() ? [mediaUrl.trim()] : [],
-        tags: tags
-          .split(",")
-          .map((item) => item.trim().toLowerCase())
-          .filter(Boolean),
+        tags: mergedTags,
         privacy,
       });
 
@@ -70,9 +93,22 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
         <Input
           value={tags}
           onChange={(event) => setTags(event.target.value)}
-          placeholder="tags, comma separated"
+          placeholder="extra tags, comma separated"
         />
       </div>
+
+      {mergedTags.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {mergedTags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
+            >
+              #{tag}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <select

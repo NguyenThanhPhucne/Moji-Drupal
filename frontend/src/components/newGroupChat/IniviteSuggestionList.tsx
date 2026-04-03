@@ -10,11 +10,6 @@ const IniviteSuggestionList = ({
   filteredFriends,
   onSelect,
 }: InviteSuggestionListProps) => {
-  console.log("[IniviteSuggestionList][debug] Rendering:", {
-    count: filteredFriends.length,
-    friends: filteredFriends,
-  });
-
   if (filteredFriends.length === 0) {
     return;
   }

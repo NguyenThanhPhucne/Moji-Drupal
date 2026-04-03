@@ -42,34 +42,45 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+        <DialogHeader className="modal-stagger-item">
           <DialogTitle>Friend requests</DialogTitle>
         </DialogHeader>
 
         {/* Show new incoming requests */}
         <PendingFriendRequests />
 
-        <Tabs value={tab} onValueChange={setTab} className="w-full">
+        <Tabs value={tab} onValueChange={setTab} className="w-full modal-stagger-item">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="received">Received</TabsTrigger>
             <TabsTrigger value="sent">Sent</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="received">
-            <ReceivedRequests />
-          </TabsContent>
+          <div className="mt-3 min-h-[300px]">
+            <TabsContent
+              value="received"
+              forceMount
+              className="mt-0 max-h-[300px] overflow-y-auto data-[state=inactive]:hidden"
+            >
+              <ReceivedRequests />
+            </TabsContent>
 
-          <TabsContent value="sent">
-            <SentRequests />
-          </TabsContent>
+            <TabsContent
+              value="sent"
+              forceMount
+              className="mt-0 max-h-[300px] overflow-y-auto data-[state=inactive]:hidden"
+            >
+              <SentRequests />
+            </TabsContent>
 
-          <TabsContent
-            value="notifications"
-            className="max-h-96 overflow-y-auto"
-          >
-            <AcceptanceNotifications />
-          </TabsContent>
+            <TabsContent
+              value="notifications"
+              forceMount
+              className="mt-0 max-h-[300px] overflow-y-auto data-[state=inactive]:hidden"
+            >
+              <AcceptanceNotifications />
+            </TabsContent>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>

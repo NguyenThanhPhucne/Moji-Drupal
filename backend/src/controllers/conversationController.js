@@ -2,6 +2,14 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { io } from "../socket/index.js";
+import mongoose from "mongoose";
+import { deleteConversationFromDrupal } from "../libs/drupalSync.js";
+
+const buildDirectConversationKey = (userA, userB) => {
+  return [String(userA), String(userB)]
+    .sort((left, right) => left.localeCompare(right))
+    .join(":");
+};
 
 // Helper to get MongoDB user ID from Drupal ID
 const getMongoUserIdFromDrupalId = async (drupalId) => {
@@ -14,15 +22,14 @@ const getMongoUserIdFromDrupalId = async (drupalId) => {
   const drupalIdInt = Number.parseInt(drupalId, 10);
 
   try {
-    // 1. Tìm user theo drupalId field (RECOMMENDED)
+    // 1. Find user by drupalId field (preferred)
     let user = await User.findOne({ drupalId: drupalIdInt });
 
     if (user) {
-      console.log(`Found user by drupalId: ${drupalId} -> ${user._id}`);
       return user._id.toString();
     }
 
-    // 2. Tìm theo pattern cũ (fallback)
+    // 2. Fallback: find by legacy username/email pattern
     user = await User.findOne({
       $or: [
         { username: `drupal_${drupalId}` },
@@ -31,38 +38,24 @@ const getMongoUserIdFromDrupalId = async (drupalId) => {
     });
 
     if (user) {
-      console.log(`Found user by pattern: ${drupalId} -> ${user._id}`);
       return user._id.toString();
     }
 
-    // 3. Nếu không tìm thấy, tạo placeholder (KHÔNG NÊN XẢY RA nếu auth đúng)
-    console.log(`Creating placeholder for Drupal ID: ${drupalId}`);
-    user = await User.create({
-      username: `drupal_${drupalId}`,
-      email: `drupal_${drupalId}@temp.local`,
-      displayName: `User ${drupalId}`,
-      drupalId: drupalIdInt,
-      hashedPassword: `drupal-linked-${Date.now()}-${drupalId}`,
-    });
-
-    return user._id.toString();
+    // 3. User not found — fail loudly instead of creating garbage records
+    throw new Error(
+      `User with Drupal ID "${drupalId}" not found in MongoDB. Ensure the user is properly synced before creating conversations.`,
+    );
   } catch (error) {
-    console.error("Error mapping Drupal ID to MongoDB:", error);
-    throw new Error(`Cannot map Drupal ID ${drupalId} to MongoDB user`);
+    console.error("Error mapping Drupal ID to MongoDB:", error.message);
+    throw error;
   }
 };
 
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export const createConversation = async (req, res) => {
   try {
     const { type, name, memberIds } = req.body;
     const userId = req.user._id;
-
-    console.log("[createConversation] Request:", {
-      type,
-      name,
-      memberIds,
-      userId,
-    });
 
     // Validation
     if (
@@ -71,16 +64,12 @@ export const createConversation = async (req, res) => {
       !Array.isArray(memberIds) ||
       memberIds.length === 0
     ) {
-      console.log(
-        "[createConversation] Validation failed: missing type or memberIds",
-      );
       return res.status(400).json({
         message: "Loại cuộc trò chuyện và danh sách thành viên là bắt buộc",
       });
     }
 
     if (type === "group" && !name) {
-      console.log("[createConversation] Validation failed: group without name");
       return res.status(400).json({ message: "Tên nhóm là bắt buộc" });
     }
 
@@ -92,38 +81,57 @@ export const createConversation = async (req, res) => {
       // Convert Drupal ID to MongoDB ObjectId
       const mongoParticipantId =
         await getMongoUserIdFromDrupalId(participantId);
-      console.log(
-        `Mapped participant: ${participantId} -> ${mongoParticipantId}`,
-      );
+
+      if (String(mongoParticipantId) === String(userId)) {
+        return res
+          .status(400)
+          .json({ message: "Không thể tạo cuộc trò chuyện với chính mình" });
+      }
+
+      const directKey = buildDirectConversationKey(userId, mongoParticipantId);
 
       conversation = await Conversation.findOne({
         type: "direct",
-        "participants.userId": { $all: [userId, mongoParticipantId] },
+        directKey,
       });
 
       if (!conversation) {
-        conversation = new Conversation({
-          type: "direct",
-          participants: [{ userId }, { userId: mongoParticipantId }],
-          lastMessageAt: new Date(),
-        });
-
-        await conversation.save();
+        try {
+          conversation = await Conversation.create({
+            type: "direct",
+            directKey,
+            participants: [{ userId }, { userId: mongoParticipantId }],
+            lastMessageAt: new Date(),
+            unreadCounts: new Map(),
+          });
+        } catch (createError) {
+          if (createError?.code === 11000) {
+            conversation = await Conversation.findOne({
+              type: "direct",
+              directKey,
+            });
+          } else {
+            throw createError;
+          }
+        }
       }
     }
 
     if (type === "group") {
       // Convert all Drupal IDs to MongoDB ObjectIds
-      const mongoMemberIds = await Promise.all(
+      const mongoMemberIdsRaw = await Promise.all(
         memberIds.map((id) => getMongoUserIdFromDrupalId(id)),
       );
-      console.log(`Mapped group members:`, memberIds, "->", mongoMemberIds);
+
+      const uniqueMemberIds = [...new Set(mongoMemberIdsRaw.map(String))].filter(
+        (id) => id !== String(userId),
+      );
 
       conversation = new Conversation({
         type: "group",
         participants: [
           { userId },
-          ...mongoMemberIds.map((id) => ({ userId: id })),
+          ...uniqueMemberIds.map((id) => ({ userId: id })),
         ],
         group: {
           name,
@@ -161,29 +169,17 @@ export const createConversation = async (req, res) => {
 
     // Emit to participants using MongoDB user IDs (NOT Drupal IDs)
     if (type === "group") {
-      // Emit to all invited members (NOT creator)
-      console.log(
-        `[createConversation] Participants:`,
-        conversation.participants.map((p) => ({
-          userId: p.userId._id || p.userId,
-          displayName: p.userId.displayName,
-        })),
-      );
-
       conversation.participants.forEach((p) => {
         const participantId = p.userId._id || p.userId;
         if (participantId.toString() !== userId.toString()) {
           io.to(participantId.toString()).emit("new-group", formatted);
-          console.log(`Emitted new-group to user ${participantId}`);
         }
       });
     } else if (type === "direct") {
-      // Direct chat: emit to the other participant
       conversation.participants.forEach((p) => {
         const participantId = p.userId._id || p.userId;
         if (participantId.toString() !== userId.toString()) {
           io.to(participantId.toString()).emit("new-conversation", formatted);
-          console.log(`Emitted new-conversation to user ${participantId}`);
         }
       });
     }
@@ -355,7 +351,7 @@ export const markAsSeen = async (req, res) => {
         .json({ message: "Không có tin nhắn để mark as seen" });
     }
 
-    if (last.senderId.toString() === userId) {
+    if (last.senderId?.toString?.() === userId) {
       return res.status(200).json({ message: "Sender không cần mark as seen" });
     }
 
@@ -402,6 +398,7 @@ export const markAsSeen = async (req, res) => {
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export const deleteConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -410,43 +407,105 @@ export const deleteConversation = async (req, res) => {
     const canDeleteAnyConversation =
       roles.includes("administrator") || roles.includes("sales_manager");
 
-    console.log(
-      `[deleteConversation] Request: conversationId=${conversationId}, userId=${userId}`,
-    );
+    const canUseTransactions =
+      typeof mongoose?.connection?.startSession === "function";
 
-    // 1. Check if user is member of conversation
-    const conversation = await Conversation.findById(conversationId);
+    const verifyPermission = (conversationDoc) => {
+      if (!canDeleteAnyConversation) {
+        const isMember = conversationDoc.participants.some(
+          (participant) => participant.userId.toString() === userId.toString(),
+        );
 
-    if (!conversation) {
-      return res.status(404).json({ message: "Conversation không tồn tại" });
+        if (!isMember) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+    let conversation;
+    let deletedWithTransaction = false;
+
+    if (canUseTransactions) {
+      const session = await mongoose.connection.startSession();
+
+      try {
+        await session.withTransaction(async () => {
+          const scopedConversation = await Conversation.findById(
+            conversationId,
+          ).session(session);
+
+          if (!scopedConversation) {
+            throw new Error("NOT_FOUND");
+          }
+
+          if (!verifyPermission(scopedConversation)) {
+            throw new Error("FORBIDDEN");
+          }
+
+          await Message.deleteMany({ conversationId }).session(session);
+          await Conversation.findOneAndDelete(
+            { _id: scopedConversation._id },
+          ).session(session);
+
+          conversation = scopedConversation;
+        });
+
+        deletedWithTransaction = true;
+      } catch (transactionError) {
+        if (transactionError?.message === "NOT_FOUND") {
+          return res.status(404).json({ message: "Conversation không tồn tại" });
+        }
+
+        if (transactionError?.message === "FORBIDDEN") {
+          return res
+            .status(403)
+            .json({ message: "Bạn không có quyền xoá conversation này" });
+        }
+
+        const message = String(transactionError?.message || "").toLowerCase();
+        const shouldFallbackToNonTx =
+          message.includes("transaction numbers are only allowed") ||
+          message.includes("replica set") ||
+          message.includes("not supported");
+
+        if (!shouldFallbackToNonTx) {
+          throw transactionError;
+        }
+      } finally {
+        await session.endSession();
+      }
     }
 
-    if (!canDeleteAnyConversation) {
-      const isMember = conversation.participants.some(
-        (p) => p.userId.toString() === userId.toString(),
-      );
+    if (!deletedWithTransaction) {
+      conversation = await Conversation.findById(conversationId);
 
-      if (!isMember) {
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation không tồn tại" });
+      }
+
+      if (!verifyPermission(conversation)) {
         return res
           .status(403)
           .json({ message: "Bạn không có quyền xoá conversation này" });
       }
+
+      await Message.deleteMany({ conversationId });
+      await Conversation.findOneAndDelete({ _id: conversation._id });
     }
 
-    // 2. Delete all messages in conversation
-    await Message.deleteMany({ conversationId });
-    console.log(`  Deleted all messages for conversation ${conversationId}`);
-
-    // 3. Delete conversation
-    await Conversation.findByIdAndDelete(conversationId);
-    console.log(`  Deleted conversation ${conversationId}`);
+    try {
+      await deleteConversationFromDrupal(conversationId);
+    } catch (drupalError) {
+      console.error("[deleteConversation] Drupal sync delete failed:", drupalError);
+    }
 
     // 4. Emit to all participants that conversation was deleted
     conversation.participants.forEach((p) => {
       io.to(p.userId.toString()).emit("conversation-deleted", {
         conversationId,
       });
-      console.log(`  Emitted conversation-deleted to user ${p.userId}`);
     });
 
     return res.status(200).json({
@@ -461,8 +520,6 @@ export const deleteConversation = async (req, res) => {
 // ADMIN API: Get all conversations with real data from MongoDB (for Drupal admin)
 export const getAdminConversations = async (req, res) => {
   try {
-    console.log("[getAdminConversations] Fetching real data from MongoDB");
-
     const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
     const canAccessAdminConversations =
       roles.includes("administrator") || roles.includes("sales_manager");
@@ -471,7 +528,7 @@ export const getAdminConversations = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // Lấy tất cả conversations với populated data
+    // Get all conversations with populated data
     const conversations = await Conversation.find()
       .populate({
         path: "participants.userId",
@@ -483,16 +540,6 @@ export const getAdminConversations = async (req, res) => {
       })
       .sort({ lastMessageAt: -1 })
       .lean();
-
-    console.log(
-      `[getAdminConversations] Found ${conversations.length} conversations`,
-    );
-    if (conversations.length > 0) {
-      console.log(
-        `Sample conversation:`,
-        JSON.stringify(conversations[0], null, 2),
-      );
-    }
 
     // Enrich data
     const enriched = conversations.map((conv) => {
@@ -523,10 +570,6 @@ export const getAdminConversations = async (req, res) => {
           displayName: p.userId?.displayName || "Unknown User",
           drupalId: p.userId?.drupalId || "N/A",
         }));
-
-      console.log(
-        `Conversation ${conv._id}: ${validParticipants.length} valid participants out of ${(conv.participants || []).length}`,
-      );
 
       return {
         id: conv._id?.toString?.() || conv._id,
@@ -562,9 +605,6 @@ export const getAdminConversations = async (req, res) => {
         ) / 100,
     };
 
-    console.log(
-      `[getAdminConversations] Found ${enriched.length} conversations`,
-    );
     return res.status(200).json({
       success: true,
       data: enriched,
