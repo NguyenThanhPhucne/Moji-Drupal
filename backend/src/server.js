@@ -61,11 +61,13 @@ const corsOptions = {
 };
 
 // middlewares
-// Chat image messages are sent as base64 data URLs, which are larger than default 100kb.
-app.use(express.json({ limit: "12mb" }));
-app.use(express.urlencoded({ extended: true, limit: "12mb" }));
-app.use(cookieParser());
+// CORS MUST be before express.json() to ensure headers are added even on Payload errors
 app.use(cors(corsOptions));
+
+// Chat image messages are sent as base64 data URLs, which are larger than default 100kb.
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
+app.use(cookieParser());
 
 // CLOUDINARY Configuration
 cloudinary.config({
