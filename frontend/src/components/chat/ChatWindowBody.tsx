@@ -479,20 +479,21 @@ const ChatWindowBody = () => {
       >
         <div ref={messagesEndRef} />
 
-        {/* Typing indicator */}
+        {/* ── Typing indicator ── */}
         {typingUserList.length > 0 && (
-          <div className="flex items-center gap-2 px-4 py-1 mb-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="flex -space-x-1">
+          <div className="typing-bubble-wrap">
+            {/* Avatars stack */}
+            <div className="typing-avatars">
               {typingUserList.slice(0, 3).map((typingUser) => (
-                <div key={typingUser.userId} className="relative">
+                <div key={typingUser.userId} className="typing-avatar">
                   {typingUser.avatarUrl ? (
                     <img
                       src={typingUser.avatarUrl}
                       alt={typingUser.displayName}
-                      className="size-6 rounded-full border border-background object-cover"
+                      className="typing-avatar-img"
                     />
                   ) : (
-                    <div className="size-6 rounded-full border border-background bg-muted flex items-center justify-center text-[10px] font-semibold text-muted-foreground">
+                    <div className="typing-avatar-fallback">
                       {typingUser.displayName.charAt(0).toUpperCase()}
                     </div>
                   )}
@@ -501,15 +502,15 @@ const ChatWindowBody = () => {
               ))}
             </div>
 
-            <div className="flex rounded-2xl rounded-bl-sm bg-muted/70 px-3 py-2 gap-1.5 items-center w-fit shadow-sm">
-              <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.3s]" />
-              <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce [animation-delay:-0.15s]" />
-              <span className="w-1.5 h-1.5 bg-muted-foreground/70 rounded-full animate-bounce" />
+            {/* Dots bubble */}
+            <div className="typing-bubble">
+              <span className="typing-dot typing-dot--1" />
+              <span className="typing-dot typing-dot--2" />
+              <span className="typing-dot typing-dot--3" />
             </div>
 
-            <span className="text-xs text-muted-foreground">
-              {typingSummaryText}
-            </span>
+            {/* Text label */}
+            <span className="typing-label">{typingSummaryText}</span>
           </div>
         )}
 
