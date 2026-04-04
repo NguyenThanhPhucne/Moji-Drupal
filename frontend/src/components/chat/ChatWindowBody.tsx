@@ -12,7 +12,7 @@ import {
 import InfiniteScroll from "react-infinite-scroll-component";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { ChevronDown, MessageCircle } from "lucide-react";
+import { ArrowDown, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Message } from "@/types/chat";
@@ -113,6 +113,9 @@ const ChatWindowBody = () => {
     () => (currentUser?._id ? String(currentUser._id) : ""),
     [currentUser?._id],
   );
+
+  // Count unread messages that arrived while user was scrolled up
+  const [newMsgCount, setNewMsgCount] = useState(0);
 
   const lastOwnMessage = useMemo(() => {
     if (!myId || messages.length === 0) {
@@ -390,15 +393,20 @@ const ChatWindowBody = () => {
     if (!container) return;
 
     if (messages.length > prevMsgLength.current) {
+      const delta = messages.length - prevMsgLength.current;
       const newestMsg = messages.at(-1);
       const isSentByMe = newestMsg?.senderId === currentUser?._id;
 
-      // Force scroll to bottom if I sent it, OR if I'm already within 150px of the bottom reading
+      // Force scroll to bottom if I sent it, OR if I'm already within 150px of the bottom
       if (isSentByMe || container.scrollTop < 150) {
         requestAnimationFrame(() => {
           container.scrollTop = 0;
         });
         setShowScrollBtn(false);
+        setNewMsgCount(0);
+      } else {
+        // User scrolled up — accumulate badge count for others' new messages
+        if (!isSentByMe) setNewMsgCount((prev) => prev + delta);
       }
     }
     prevMsgLength.current = messages.length;
@@ -424,7 +432,14 @@ const ChatWindowBody = () => {
       containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
     }
     setShowScrollBtn(false);
+    setNewMsgCount(0);
   };
+
+  // Reset badge when conversation changes
+  useEffect(() => {
+    setNewMsgCount(0);
+    setShowScrollBtn(false);
+  }, [activeConversationId]);
 
   const fetchMoreMessages = async () => {
     if (!activeConversationId) return;
@@ -543,18 +558,24 @@ const ChatWindowBody = () => {
         </InfiniteScroll>
       </div>
 
-      {/* Scroll to bottom FAB */}
+      {/* ── Scroll-to-bottom FAB ── */}
       <button
+        type="button"
         onClick={scrollToBottom}
+        aria-label="Scroll to latest messages"
         className={cn(
-          "absolute bottom-4 right-4 size-10 rounded-full bg-background border border-border/70 shadow-lg flex items-center justify-center transition-colors hover:bg-muted/70 z-20",
+          "scroll-to-bottom-fab",
           showScrollBtn
             ? "scroll-btn-enter pointer-events-auto"
             : "scroll-btn-exit pointer-events-none",
         )}
-        title="Scroll down"
       >
-        <ChevronDown className="size-5 text-muted-foreground" />
+        <ArrowDown className="size-4" />
+        {newMsgCount > 0 && (
+          <span className="scroll-fab-badge">
+            {newMsgCount > 99 ? "99+" : newMsgCount}
+          </span>
+        )}
       </button>
     </div>
   );

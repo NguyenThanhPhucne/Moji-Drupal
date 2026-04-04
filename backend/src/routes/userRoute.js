@@ -5,7 +5,10 @@ import {
   getUserProfileLite,
   searchUserByUsername,
   updateOnlineStatusVisibility,
+  updateProfile,
   uploadAvatar,
+  uploadCoverPhoto,
+  removeCoverPhoto,
 } from "../controllers/userController.js";
 import { upload } from "../middlewares/uploadMiddleware.js";
 import { protectedRoute } from "../middlewares/authMiddleware.js";
@@ -13,6 +16,7 @@ import { protectedRoute } from "../middlewares/authMiddleware.js";
 const router = express.Router();
 
 router.get("/me", protectedRoute, authMe);
+router.patch("/me", protectedRoute, updateProfile);
 router.post("/change-password", protectedRoute, changePassword);
 router.patch(
   "/online-status-visibility",
@@ -27,5 +31,12 @@ router.post(
   upload.single("file"),
   uploadAvatar,
 );
+router.post(
+  "/cover-photo",
+  protectedRoute,
+  upload.single("file"),
+  uploadCoverPhoto,
+);
+router.delete("/cover-photo", protectedRoute, removeCoverPhoto);
 
 export default router;

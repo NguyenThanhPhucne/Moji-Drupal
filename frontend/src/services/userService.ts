@@ -3,13 +3,24 @@ import type { ProfileLite } from "@/types/chat";
 
 export const userService = {
   uploadAvatar: async (formData: FormData) => {
-    // Do not set multipart Content-Type manually; axios/browser will set it with boundary.
     const res = await api.post("/users/uploadAvatar", formData);
+    if (res.status === 400) throw new Error(res.data.message);
+    return res.data;
+  },
 
-    if (res.status === 400) {
-      throw new Error(res.data.message);
-    }
+  updateProfile: async (data: { displayName?: string; bio?: string; phone?: string }) => {
+    const res = await api.patch("/users/me", data);
+    return res.data;
+  },
 
+  uploadCoverPhoto: async (formData: FormData) => {
+    const res = await api.post("/users/cover-photo", formData);
+    if (res.status === 400) throw new Error(res.data.message);
+    return res.data;
+  },
+
+  removeCoverPhoto: async () => {
+    const res = await api.delete("/users/cover-photo");
     return res.data;
   },
 
@@ -23,7 +34,6 @@ export const userService = {
       currentPassword,
       newPassword,
     });
-
     return res.data;
   },
 
@@ -31,7 +41,6 @@ export const userService = {
     const res = await api.patch("/users/online-status-visibility", {
       showOnlineStatus,
     });
-
     return res.data;
   },
 };

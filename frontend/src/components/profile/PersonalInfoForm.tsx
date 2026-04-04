@@ -1,109 +1,168 @@
-import { Heart } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { useState, useRef, useEffect } from "react";
+import { PenLine, Check, X } from "lucide-react";
 import type { User } from "@/types/user";
-import { useState } from "react";
+import { userService } from "@/services/userService";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-type EditableField = {
-  key: keyof Pick<User, "displayName" | "username" | "email" | "phone">;
-  label: string;
-  type?: string;
-};
+type Props = { userInfo: User | null };
 
-const PERSONAL_FIELDS: EditableField[] = [
-  { key: "displayName", label: "Display name" },
-  { key: "username", label: "Username" },
-  { key: "email", label: "Email", type: "email" },
-  { key: "phone", label: "Phone number" },
+type Field = { key: "displayName" | "bio" | "phone"; label: string; multiline?: boolean; maxLen: number; placeholder: string };
+
+const FIELDS: Field[] = [
+  { key: "displayName", label: "Display Name", maxLen: 60,  placeholder: "Your display name" },
+  { key: "bio",         label: "Bio",          maxLen: 240, placeholder: "Write a short bio…", multiline: true },
+  { key: "phone",       label: "Phone",        maxLen: 20,  placeholder: "+84 xxx xxx xxx" },
 ];
 
-type Props = {
-  userInfo: User | null;
-};
+function InlineEditField({ field, value, onSave }: {
+  field: Field;
+  value: string;
+  onSave: (key: string, val: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState(value);
+  const [saving, setSaving]   = useState(false);
+  const inputRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
-const PersonalInfoForm = ({ userInfo }: Props) => {
-  const [formData, setFormData] = useState({
-    displayName: userInfo?.displayName ?? "",
-    username: userInfo?.username ?? "",
-    email: userInfo?.email ?? "",
-    phone: userInfo?.phone ?? "",
-    bio: userInfo?.bio ?? "",
-  });
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  useEffect(() => { setDraft(value); }, [value]);
 
-  const handleFieldChange = (key: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSave = async () => {
+  const cancel = () => { setDraft(value); setEditing(false); };
+  const save   = async () => {
+    if (draft === value) { cancel(); return; }
+    setSaving(true);
     try {
-      // Placeholder: profile update API integration can be added here.
-      // await userService.updateProfile(formData);
-      toast.success("Changes saved successfully!");
-    } catch (error) {
-      console.error("Error while saving:", error);
-      toast.error("Failed to save changes");
+      await onSave(field.key, draft);
+      setEditing(false);
+    } finally {
+      setSaving(false);
     }
   };
 
-  if (!userInfo) return null;
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") cancel();
+    if (e.key === "Enter" && !field.multiline) { e.preventDefault(); save(); }
+  };
 
   return (
-    <Card className="glass-strong border-border/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Heart className="size-5 text-primary" />
-          Personal information
-        </CardTitle>
-        <CardDescription>
-          Update your personal details and profile information
-        </CardDescription>
-      </CardHeader>
+    <div className="settings-field">
+      <div className="settings-field-header">
+        <label className="settings-field-label">{field.label}</label>
+        {!editing && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="settings-field-edit-btn"
+          >
+            <PenLine className="size-3.5" />
+            Edit
+          </button>
+        )}
+      </div>
 
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {PERSONAL_FIELDS.map(({ key, label, type }) => (
-            <div key={key} className="space-y-2">
-              <Label htmlFor={key}>{label}</Label>
-              <Input
-                id={key}
-                type={type ?? "text"}
-                value={formData[key]}
-                onChange={(e) => handleFieldChange(key, e.target.value)}
-                className="glass-light border-border/30"
-              />
-            </div>
-          ))}
+      {editing ? (
+        <div className="settings-field-editing">
+          {field.multiline ? (
+            <textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+              value={draft}
+              maxLength={field.maxLen}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKey}
+              rows={3}
+              placeholder={field.placeholder}
+              className="settings-field-input settings-field-input--textarea"
+            />
+          ) : (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              value={draft}
+              maxLength={field.maxLen}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder={field.placeholder}
+              className="settings-field-input"
+            />
+          )}
+          <div className="settings-field-actions">
+            {field.multiline && (
+              <span className={cn("settings-field-counter", draft.length > field.maxLen * 0.85 && "text-amber-500")}>
+                {field.maxLen - draft.length}
+              </span>
+            )}
+            <button type="button" onClick={cancel} className="settings-field-btn settings-field-btn--cancel">
+              <X className="size-3.5" /> Cancel
+            </button>
+            <button type="button" onClick={save} disabled={saving} className="settings-field-btn settings-field-btn--save">
+              <Check className="size-3.5" /> {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
+      ) : (
+        <p className="settings-field-value">
+          {value || <span className="text-muted-foreground/60 italic">Not set</span>}
+        </p>
+      )}
+    </div>
+  );
+}
 
-        <div className="space-y-2">
-          <Label htmlFor="bio">Bio</Label>
-          <Textarea
-            id="bio"
-            rows={3}
-            value={formData.bio}
-            onChange={(e) => handleFieldChange("bio", e.target.value)}
-            className="glass-light border-border/30 resize-none"
+const PersonalInfoForm = ({ userInfo }: Props) => {
+  const { user, setUser } = useAuthStore();
+
+  if (!userInfo) return null;
+
+  const handleSave = async (key: string, val: string) => {
+    // Optimistic update
+    if (user) setUser({ ...user, [key]: val });
+
+    try {
+      const res = await userService.updateProfile({ [key]: val });
+      if (res.user && user) setUser({ ...user, ...res.user });
+      toast.success("Saved successfully!");
+    } catch (err) {
+      // Rollback
+      if (user) setUser({ ...user });
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? "Failed to save");
+      throw err;
+    }
+  };
+
+  return (
+    <div className="settings-card">
+      <div className="settings-card-header">
+        <h3 className="settings-card-title">Personal Information</h3>
+        <p className="settings-card-desc">Your profile details, visible to others on Moji.</p>
+      </div>
+
+      <div className="settings-card-body">
+        {FIELDS.map((field) => (
+          <InlineEditField
+            key={field.key}
+            field={field}
+            value={(userInfo[field.key] as string | null | undefined) ?? ""}
+            onSave={handleSave}
           />
-        </div>
+        ))}
 
-        <Button
-          onClick={handleSave}
-          className="w-full md:w-auto bg-gradient-primary hover:opacity-90 transition-opacity"
-        >
-          Save changes
-        </Button>
-      </CardContent>
-    </Card>
+        {/* Read-only fields */}
+        <div className="settings-field">
+          <label className="settings-field-label">Username</label>
+          <p className="settings-field-value settings-field-value--readonly">
+            @{userInfo.username}
+          </p>
+        </div>
+        <div className="settings-field">
+          <label className="settings-field-label">Email</label>
+          <p className="settings-field-value settings-field-value--readonly">
+            {userInfo.email}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };
 

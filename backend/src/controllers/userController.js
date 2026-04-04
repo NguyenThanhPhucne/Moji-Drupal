@@ -4,6 +4,7 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
 import crypto from "node:crypto";
+import { v2 as cloudinary } from "cloudinary";
 import { broadcastOnlineUsers } from "../socket/index.js";
 
 const isBcryptHash = (hash) => /^\$2[aby]\$\d{2}\$/.test(String(hash || ""));
@@ -232,6 +233,104 @@ export const updateOnlineStatusVisibility = async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi khi cập nhật showOnlineStatus", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { displayName, bio, phone } = req.body || {};
+
+    const allowedUpdates = {};
+
+    if (displayName !== undefined) {
+      const trimmed = String(displayName).trim();
+      if (!trimmed || trimmed.length > 60) {
+        return res.status(400).json({ message: "Display name phải từ 1–60 ký tự" });
+      }
+      allowedUpdates.displayName = trimmed;
+    }
+
+    if (bio !== undefined) {
+      allowedUpdates.bio = String(bio).trim().slice(0, 240);
+    }
+
+    if (phone !== undefined) {
+      allowedUpdates.phone = String(phone).trim().slice(0, 20);
+    }
+
+    if (Object.keys(allowedUpdates).length === 0) {
+      return res.status(400).json({ message: "Không có trường nào cần cập nhật" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: allowedUpdates },
+      { new: true },
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật profile thành công",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Lỗi khi updateProfile", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const uploadCoverPhoto = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const result = await cloudinary.uploader.upload(
+      `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
+      {
+        folder: "moji/covers",
+        resource_type: "image",
+        transformation: [{ width: 1200, height: 400, crop: "fill", gravity: "auto" }],
+      },
+    );
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { coverPhotoUrl: result.secure_url, coverPhotoId: result.public_id },
+      { new: true },
+    ).select("coverPhotoUrl");
+
+    return res.status(200).json({ coverPhotoUrl: updatedUser.coverPhotoUrl });
+  } catch (error) {
+    console.error("Lỗi khi uploadCoverPhoto", error);
+    return res.status(500).json({ message: "Upload failed" });
+  }
+};
+
+export const removeCoverPhoto = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+
+    const user = await User.findById(userId).select("coverPhotoId");
+    if (user?.coverPhotoId) {
+      await cloudinary.uploader.destroy(user.coverPhotoId);
+    }
+
+    await User.findByIdAndUpdate(userId, {
+      $unset: { coverPhotoUrl: "", coverPhotoId: "" },
+    });
+
+    return res.status(200).json({ message: "Cover photo removed" });
+  } catch (error) {
+    console.error("Lỗi khi removeCoverPhoto", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
