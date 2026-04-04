@@ -323,6 +323,9 @@ export const refreshToken = async (req, res) => {
 };
 
 // Google OAuth authentication
+// Supports both:
+//   - id_token (JWT): issued by <GoogleLogin> component or sign_in_with_google
+//   - access_token (ya29.xxx): issued by useGoogleLogin({ flow: "implicit" })
 export const googleAuth = async (req, res) => {
   try {
     const { token } = req.body;
@@ -331,76 +334,86 @@ export const googleAuth = async (req, res) => {
       return res.status(400).json({ message: "Thiếu Google token" });
     }
 
-    // Xác minh token từ Google
-    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-    let ticket;
-    try {
-      ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-    } catch (error) {
-      console.error("Google token verification failed:", error);
-      return res.status(401).json({ message: "Google token không hợp lệ" });
+    let googleId, email, displayName, avatarUrl;
+
+    // Detect token type: access_tokens from implicit flow start with "ya29."
+    const isAccessToken = String(token).startsWith("ya29.");
+
+    if (isAccessToken) {
+      // Exchange access_token for user profile via Google's userinfo endpoint
+      try {
+        const userInfoResponse = await axios.get(
+          "https://www.googleapis.com/oauth2/v3/userinfo",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 5000,
+          },
+        );
+        const info = userInfoResponse.data;
+        googleId = info.sub;
+        email = info.email;
+        displayName = info.name;
+        avatarUrl = info.picture ?? null;
+      } catch (error) {
+        console.error("Google userinfo fetch failed:", error?.response?.data ?? error.message);
+        return res.status(401).json({ message: "Google access token không hợp lệ" });
+      }
+    } else {
+      // Verify id_token via google-auth-library
+      const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+      let ticket;
+      try {
+        ticket = await client.verifyIdToken({
+          idToken: token,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+      } catch (error) {
+        console.error("Google id_token verification failed:", error.message);
+        return res.status(401).json({ message: "Google token không hợp lệ" });
+      }
+
+      const payload = ticket.getPayload();
+      googleId = payload.sub;
+      email = payload.email;
+      displayName = payload.name;
+      avatarUrl = payload.picture ?? null;
     }
 
-    const payload = ticket.getPayload();
-    const googleId = payload.sub;
-    const email = payload.email;
-    const displayName = payload.name;
+    if (!email || !googleId) {
+      return res.status(401).json({ message: "Không lấy được thông tin từ Google" });
+    }
 
-    // Tìm hoặc tạo user
-    let user = await User.findOne({ email });
+    // Find or create user
+    let user = await User.findOne({ $or: [{ googleId }, { email }] });
 
     if (!user) {
-      // Tạo user mới từ thông tin Google
       user = await User.create({
         email,
         googleId,
         displayName,
-        // Không có password vì đăng nhập bằng Google
+        avatarUrl: avatarUrl ?? null,
         username: email.split("@")[0] + "_google_" + googleId.slice(-6),
         hashedPassword: null,
       });
-    } else if (!user.googleId) {
-      // Nếu user tồn tại nhưng chưa liên kết Google, liên kết ngay
-      user.googleId = googleId;
-      await user.save();
+    } else {
+      // Link Google ID if not already linked
+      let changed = false;
+      if (!user.googleId) { user.googleId = googleId; changed = true; }
+      if (!user.avatarUrl && avatarUrl) { user.avatarUrl = avatarUrl; changed = true; }
+      if (changed) await user.save();
     }
 
-    // Tạo access token
-    const accessToken = jwt.sign(
-      { userId: user._id },
-      process.env.ACCESS_TOKEN_SECRET,
-      { expiresIn: ACCESS_TOKEN_TTL },
-    );
+    const accessToken = await issueSessionTokens(res, user);
 
-    // Tạo refresh token
-    const refreshToken = crypto.randomBytes(64).toString("hex");
-
-    // Tạo session mới
-    await Session.create({
-      userId: user._id,
-      refreshToken,
-      expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL),
-    });
-
-    // Trả refresh token về trong cookie
-    res.cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      maxAge: REFRESH_TOKEN_TTL,
-    });
-
-    // Trả access token về trong response
     return res.status(200).json({
       message: `User ${user.displayName} đã logged in với Google!`,
       accessToken,
       user: {
         _id: user._id,
+        username: user.username,
         email: user.email,
         displayName: user.displayName,
+        avatarUrl: user.avatarUrl ?? null,
       },
     });
   } catch (error) {
