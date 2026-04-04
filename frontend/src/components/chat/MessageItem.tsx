@@ -13,6 +13,7 @@ import {
   Bookmark,
   Link2,
   Quote,
+  ZoomIn,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -29,6 +30,7 @@ import {
   DialogTitle,
   DialogOverlay,
 } from "../ui/dialog";
+import ImageLightbox from "./ImageLightbox";
 
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 
@@ -430,6 +432,7 @@ const MessageItem = memo(function MessageItem({
     null,
   );
   const [isMessageHovered, setIsMessageHovered] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -760,11 +763,21 @@ const MessageItem = memo(function MessageItem({
       ) : (
         <>
           {message.imgUrl && (
-            <img
-              src={message.imgUrl}
-              alt="media"
-              className="mb-2 max-w-[200px] rounded-xl"
-            />
+            <button
+              type="button"
+              onClick={() => setLightboxOpen(true)}
+              className="lightbox-thumb-btn"
+              aria-label="View image full screen"
+            >
+              <img
+                src={message.imgUrl}
+                alt="media"
+                className="mb-2 max-w-[240px] max-h-[320px] w-full object-cover rounded-xl shadow-sm"
+              />
+              <span className="lightbox-thumb-overlay">
+                <ZoomIn className="size-5 text-white" />
+              </span>
+            </button>
           )}
           <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
             {message.content}
@@ -1110,6 +1123,20 @@ const MessageItem = memo(function MessageItem({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Image Lightbox */}
+      {lightboxOpen && message.imgUrl && (
+        <ImageLightbox
+          src={message.imgUrl}
+          alt="Chat image"
+          caption={
+            senderParticipant
+              ? `${senderParticipant.displayName} · ${new Date(message.createdAt).toLocaleString()}`
+              : undefined
+          }
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </>
   );
 });
