@@ -203,7 +203,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onClick={() => setShowDeleteDialog(true)}
+                onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
                 className="text-destructive cursor-pointer"
               >
                 <Trash2 className="h-4 w-4 mr-2" />

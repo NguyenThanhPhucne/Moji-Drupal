@@ -89,12 +89,12 @@ export function NavUser({ user }: Readonly<{ user: User }>) {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                <DropdownMenuItem onSelect={() => setTimeout(() => setProfileOpen(true), 100)}>
                   <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
                   Account
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setfriendRequestOpen(true)}
+                  onSelect={() => setTimeout(() => setfriendRequestOpen(true), 100)}
                   className="flex items-center justify-between"
                 >
                   <div className="flex items-center gap-2">
