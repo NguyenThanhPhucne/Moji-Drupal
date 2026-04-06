@@ -3,6 +3,7 @@ import { formatDistanceToNow } from "date-fns";
 import { MessageCircle, Trash2, UserRound, Users } from "lucide-react";
 
 import { userService } from "@/services/userService";
+import { useSocketStore } from "@/stores/useSocketStore";
 import type { ProfileLite } from "@/types/chat";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -91,11 +92,20 @@ const FriendProfileMiniCard = ({
     mutualGroups: [],
   };
 
-  const lastActiveText = resolvedProfile.lastActiveAt
-    ? formatDistanceToNow(new Date(resolvedProfile.lastActiveAt), {
-        addSuffix: true,
-      })
-    : "No recent activity";
+  const { getUserPresence, getLastActiveAt } = useSocketStore();
+  const presence = getUserPresence(userId);
+  const realTimeLastActive = getLastActiveAt(userId);
+
+  const finalLastActiveAt = realTimeLastActive || resolvedProfile.lastActiveAt;
+
+  let lastActiveText = "No recent activity";
+  if (presence === "online") {
+    lastActiveText = "Active now";
+  } else if (finalLastActiveAt) {
+    lastActiveText = formatDistanceToNow(new Date(finalLastActiveAt), {
+      addSuffix: true,
+    });
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -146,7 +156,7 @@ const FriendProfileMiniCard = ({
                   : "@unknown"}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Last active {lastActiveText}
+                {presence === "online" ? lastActiveText : `Last active ${lastActiveText}`}
               </p>
             </div>
           </div>
