@@ -1,5 +1,6 @@
 import { friendService } from "@/services/friendService";
 import type { FriendState } from "@/types/store";
+import type { FriendRequest } from "@/types/user";
 import { create } from "zustand";
 import { useNotificationStore } from "./useNotificationStore";
 
@@ -8,6 +9,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   loading: false,
   receivedList: [],
   sentList: [],
+  addReceivedRequest: (request: FriendRequest) => set((state) => ({ receivedList: [request, ...state.receivedList] })),
+  removeReceivedRequest: (requestId: string) => set((state) => ({ receivedList: state.receivedList.filter((r) => r._id !== requestId) })),
   searchByUsername: async (username) => {
     try {
       set({ loading: true });

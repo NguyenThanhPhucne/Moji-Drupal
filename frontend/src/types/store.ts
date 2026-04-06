@@ -123,6 +123,8 @@ export interface FriendState {
   loading: boolean;
   receivedList: FriendRequest[];
   sentList: FriendRequest[];
+  addReceivedRequest: (request: FriendRequest) => void;
+  removeReceivedRequest: (requestId: string) => void;
   searchByUsername: (username: string) => Promise<User | null>;
   addFriend: (to: string, message?: string) => Promise<string>;
   getAllFriendRequests: () => Promise<void>;

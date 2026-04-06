@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 import { useAuthStore } from "./useAuthStore";
 import type { SocketState } from "@/types/store";
 import { useChatStore } from "./useChatStore";
+import { useFriendStore } from "./useFriendStore";
 import { useNotificationStore } from "./useNotificationStore";
 import { useSocialStore } from "./useSocialStore";
 import { toast } from "sonner";
@@ -398,7 +399,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // Friend request received - real-time notification
     socket.on("friend-request-received", ({ request, message }) => {
-      useNotificationStore.getState().addPendingRequest(request);
+      useFriendStore.getState().addReceivedRequest(request);
+      useNotificationStore.getState().incrementUnreadCount();
       toast.success(message, {
         description: `${request.from.displayName} (@${request.from.username}) sent a friend request`,
         action: {

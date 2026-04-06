@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { FriendRequest } from "@/types/user";
 import type { SocialNotification } from "@/types/social";
 
 interface AcceptanceNotification {
@@ -16,7 +15,6 @@ interface AcceptanceNotification {
 interface NotificationState {
   // Data
   unreadFriendRequestCount: number;
-  pendingRequests: FriendRequest[]; // Unseen incoming requests
   acceptanceNotifications: AcceptanceNotification[]; // Notifications when a request is accepted
   socialNotifications: SocialNotification[];
   unreadSocialCount: number;
@@ -26,9 +24,6 @@ interface NotificationState {
   incrementUnreadCount: () => void;
   decrementUnreadCount: () => void;
   resetUnreadCount: () => void;
-  addPendingRequest: (request: FriendRequest) => void;
-  removePendingRequest: (requestId: string) => void;
-  clearPendingRequests: () => void;
   addAcceptanceNotification: (notification: AcceptanceNotification) => void;
   removeAcceptanceNotification: (index: number) => void;
   clearAcceptanceNotifications: () => void;
@@ -40,7 +35,6 @@ interface NotificationState {
 
 export const useNotificationStore = create<NotificationState>((set) => ({
   unreadFriendRequestCount: 0,
-  pendingRequests: [],
   acceptanceNotifications: [],
   socialNotifications: [],
   unreadSocialCount: 0,
@@ -58,19 +52,6 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     })),
 
   resetUnreadCount: () => set({ unreadFriendRequestCount: 0 }),
-
-  addPendingRequest: (request) =>
-    set((state) => ({
-      pendingRequests: [request, ...state.pendingRequests],
-      unreadFriendRequestCount: state.unreadFriendRequestCount + 1,
-    })),
-
-  removePendingRequest: (requestId) =>
-    set((state) => ({
-      pendingRequests: state.pendingRequests.filter((r) => r._id !== requestId),
-    })),
-
-  clearPendingRequests: () => set({ pendingRequests: [] }),
 
   addAcceptanceNotification: (notification) =>
     set((state) => ({

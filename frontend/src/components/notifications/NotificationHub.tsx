@@ -76,16 +76,14 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const {
-    pendingRequests,
     acceptanceNotifications,
     socialNotifications,
     resetUnreadCount,
-    removePendingRequest,
   } = useNotificationStore();
 
   const { markNotificationRead, markAllNotificationsRead } = useSocialStore();
 
-  const { acceptRequest, declineRequest } = useFriendStore();
+  const { acceptRequest, declineRequest, receivedList: pendingRequests, removeReceivedRequest } = useFriendStore();
 
   // ── Build unified list ────────────────────────────────────────────────────
   const unified = useMemo<UnifiedNotification[]>(() => {
@@ -181,7 +179,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
       }
     } else if (id.startsWith("fr-")) {
       const reqId = id.replace("fr-", "");
-      removePendingRequest(reqId);
+      removeReceivedRequest(reqId);
     } else {
       markNotificationRead(id);
     }
@@ -197,7 +195,6 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     setProcessingId(`fr-${requestId}`);
     try {
       await acceptRequest(requestId);
-      removePendingRequest(requestId);
       toast.success("Đã chấp nhận lời mời kết bạn!");
     } catch {
       toast.error("Không thể chấp nhận lời mời. Vui lòng thử lại.");
@@ -210,7 +207,6 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     setProcessingId(`fr-${requestId}`);
     try {
       await declineRequest(requestId);
-      removePendingRequest(requestId);
       toast.info("Đã từ chối lời mời kết bạn");
     } catch {
       toast.error("Không thể từ chối lời mời. Vui lòng thử lại.");
