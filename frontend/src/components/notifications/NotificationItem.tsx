@@ -2,6 +2,7 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Heart,
   MessageCircle,
+  MessageCircleMore,
   UserCheck,
   UserPlus,
   Users,
@@ -67,6 +68,8 @@ interface NotificationItemProps {
   onAcceptFriend?: (requestId: string) => void;
   onDeclineFriend?: (requestId: string) => void;
   loadingId?: string | null;
+  /** For friend_accepted: instantly open a direct conversation */
+  onOpenDirectChat?: () => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -77,12 +80,18 @@ const NotificationItem = ({
   onAcceptFriend,
   onDeclineFriend,
   loadingId,
+  onOpenDirectChat,
 }: NotificationItemProps) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const meta = KIND_META[notification.kind];
   const isLoading = loadingId === notification.id;
 
   const handleClick = () => {
+    // friend_accepted: open chat immediately
+    if (notification.kind === "friend_accepted" && onOpenDirectChat) {
+      onOpenDirectChat();
+      return;
+    }
     if (!notification.isRead) {
       onRead(notification.id);
     }
@@ -150,6 +159,16 @@ const NotificationItem = ({
             addSuffix: true,
           })}
         </p>
+
+        {/* ── "Chat now" CTA for friend_accepted ── */}
+        {notification.kind === "friend_accepted" && onOpenDirectChat && (
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary ring-1 ring-primary/20 group-hover:bg-primary/15 transition-colors">
+              <MessageCircleMore className="h-3 w-3" />
+              Nhấn để nhắn tin ngay
+            </span>
+          </div>
+        )}
 
         {/* ── Inline quick actions (friend request only) ── */}
         {notification.kind === "friend_request" &&

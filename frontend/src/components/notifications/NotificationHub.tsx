@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useSocialStore } from "@/stores/useSocialStore";
+import { useChatStore } from "@/stores/useChatStore";
 import NotificationItem, {
   type UnifiedNotification,
 } from "./NotificationItem";
@@ -75,6 +76,7 @@ interface NotificationHubProps {
 const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   const [tab, setTab] = useState<"all" | "unread">("all");
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [chatCreating, setChatCreating] = useState<string | null>(null);
 
   const {
     acceptanceNotifications,
@@ -83,6 +85,10 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   } = useNotificationStore();
 
   const { markNotificationRead, markAllNotificationsRead } = useSocialStore();
+  const { createConversation, setIsHubOpen } = {
+    createConversation: useChatStore((s) => s.createConversation),
+    setIsHubOpen: useNotificationStore((s) => s.setIsHubOpen),
+  };
 
   const {
     receivedList: pendingRequests,
@@ -224,6 +230,27 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     }
   };
 
+  /** Click on a friend_accepted notification → instantly open a direct chat */
+  const handleOpenDirectChat = async (actorId: string, actorName: string, notifId: string) => {
+    if (chatCreating === notifId) return;
+    setChatCreating(notifId);
+    try {
+      const success = await createConversation("direct", "", [actorId]);
+      if (success) {
+        // Dismiss the notification & close the hub
+        handleDismiss(notifId);
+        setIsHubOpen(false);
+        toast.success(`Cuộc trò chuyện với ${actorName} đã được mở!`);
+      } else {
+        toast.error("Không thể mở cuộc trò chuyện. Vui lòng thử lại!");
+      }
+    } catch {
+      toast.error("Đã xảy ra lỗi. Vui lòng thử lại!");
+    } finally {
+      setChatCreating(null);
+    }
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full flex-col">
@@ -312,7 +339,16 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
                         onDismiss={handleDismiss}
                         onAcceptFriend={handleAcceptFriend}
                         onDeclineFriend={handleDeclineFriend}
-                        loadingId={processingId}
+                        loadingId={processingId ?? chatCreating}
+                        onOpenDirectChat={
+                          notification.kind === "friend_accepted"
+                            ? () => handleOpenDirectChat(
+                                notification.actor._id,
+                                notification.actor.displayName,
+                                notification.id,
+                              )
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
