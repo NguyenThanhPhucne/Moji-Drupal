@@ -49,7 +49,7 @@ const resolveSocketBaseUrl = () => {
 };
 
 const baseURL = resolveSocketBaseUrl();
-const RECENTLY_ACTIVE_WINDOW_MS = 4000;
+const RECENTLY_ACTIVE_WINDOW_MS = 59 * 60 * 1000; // 59 minutes
 
 let recentActiveCleanupTimer: ReturnType<typeof setTimeout> | null = null;
 
