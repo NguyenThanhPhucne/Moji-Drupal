@@ -36,13 +36,12 @@ const ChatCard = ({
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "cursor-pointer rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200",
-        "hover:border-border/70 hover:bg-muted/70 hover:text-foreground hover:shadow-sm",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
+        "cursor-pointer rounded-lg border border-transparent px-3 py-2 transition-all duration-150",
+        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
         "group select-none relative overflow-hidden",
         isActive
-          ? "border-primary/30 bg-gradient-to-r from-primary/10 to-primary-foreground ring-1 ring-primary/20 shadow-sm"
-          : "bg-transparent",
+          ? "bg-muted text-foreground"
+          : "bg-transparent hover:bg-muted/40",
       )}
       onClick={() => onSelect(convoId)}
       onKeyDown={(event) => {
@@ -53,7 +52,7 @@ const ChatCard = ({
       }}
     >
       {isActive && (
-        <span className="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-primary" />
+        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
       )}
 
       <div className="flex items-center gap-3">

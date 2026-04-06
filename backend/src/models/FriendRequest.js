@@ -22,6 +22,14 @@ const friendRequestSchema = new mongoose.Schema(
   }
 );
 
+friendRequestSchema.pre("validate", function (next) {
+  if (this.from && this.to && this.from.toString() === this.to.toString()) {
+    return next(new Error("from and to must be different users"));
+  }
+
+  next();
+});
+
 friendRequestSchema.index({ from: 1, to: 1 }, { unique: true });
 
 friendRequestSchema.index({ from: 1 });

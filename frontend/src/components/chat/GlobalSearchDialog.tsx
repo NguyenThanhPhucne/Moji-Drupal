@@ -9,7 +9,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogTrigger,
-  DialogOverlay,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -362,8 +361,13 @@ const GlobalSearchDialog = () => {
         </button>
       </DialogTrigger>
 
-      <DialogOverlay className="modal-overlay" />
-      <DialogContent className="modal-content-shell sm:max-w-3xl">
+      <DialogContent 
+        className="modal-content-shell sm:max-w-3xl"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          document.querySelector<HTMLInputElement>('[data-autofocus="true"]')?.focus();
+        }}
+      >
         <DialogHeader className="modal-stagger-item">
           <DialogTitle>Global search</DialogTitle>
           <DialogDescription className="sr-only">

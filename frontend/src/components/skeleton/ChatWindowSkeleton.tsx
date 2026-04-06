@@ -3,6 +3,7 @@
  * Shows alternating sent/received bubbles so the layout shift is minimal
  * when real messages arrive.
  */
+import { cn } from "@/lib/utils";
 
 type BubbleVariant = {
   isOwn: boolean;
@@ -38,12 +39,11 @@ function ShimmerBubble({ isOwn, widthClass, hasAvatar }: BubbleVariant) {
         className={`flex flex-col gap-1 ${isOwn ? "items-end" : "items-start"}`}
       >
         <div
-          className={`h-9 ${widthClass} rounded-2xl skeleton-shimmer`}
-          style={{
-            borderRadius: isOwn
-              ? "1rem 1rem 0.25rem 1rem"
-              : "1rem 1rem 1rem 0.25rem",
-          }}
+          className={cn(
+            "h-9 rounded-2xl skeleton-shimmer",
+            widthClass,
+            isOwn ? "rounded-br-md" : "rounded-bl-md"
+          )}
         />
         {/* Timestamp */}
         <div className="w-10 h-2.5 rounded skeleton-shimmer opacity-60" />

@@ -5,6 +5,9 @@ import { io } from "../socket/index.js";
 import mongoose from "mongoose";
 import { deleteConversationFromDrupal } from "../libs/drupalSync.js";
 
+const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
+const MAX_MESSAGE_PAGE_LIMIT = 100;
+
 const buildDirectConversationKey = (userA, userB) => {
   return [String(userA), String(userB)]
     .sort((left, right) => left.localeCompare(right))
@@ -209,7 +212,8 @@ export const getConversations = async (req, res) => {
       .populate({
         path: "seenBy",
         select: "displayName avatarUrl",
-      });
+      })
+      .lean();
 
     const formatted = conversations.map((convo) => {
       const participants = (convo.participants || []).map((p) => ({
@@ -231,7 +235,7 @@ export const getConversations = async (req, res) => {
       }));
 
       return {
-        ...convo.toObject(),
+        ...convo,
         unreadCounts: normalizedUnreadCounts,
         seenBy: normalizedSeenBy,
         participants,
@@ -248,27 +252,29 @@ export const getConversations = async (req, res) => {
 export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { limit = 50, cursor } = req.query;
+    const { limit = DEFAULT_MESSAGE_PAGE_LIMIT, cursor } = req.query;
     const userId = req.user._id;
+    const parsedLimit = Number(limit);
+    const safeLimit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), MAX_MESSAGE_PAGE_LIMIT)
+      : DEFAULT_MESSAGE_PAGE_LIMIT;
 
     const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
     const canAccessAll =
       roles.includes("administrator") || roles.includes("sales_manager");
 
     if (!canAccessAll) {
-      const conversation = await Conversation.findById(conversationId).select(
-        "participants.userId",
-      );
-
-      if (!conversation) {
-        return res.status(404).json({ message: "Conversation not found" });
-      }
-
-      const isParticipant = conversation.participants.some(
-        (p) => p.userId.toString() === userId.toString(),
-      );
+      const isParticipant = await Conversation.exists({
+        _id: conversationId,
+        "participants.userId": userId,
+      });
 
       if (!isParticipant) {
+        const conversationExists = await Conversation.exists({ _id: conversationId });
+        if (!conversationExists) {
+          return res.status(404).json({ message: "Conversation not found" });
+        }
+
         return res.status(403).json({ message: "Access denied" });
       }
     }
@@ -279,16 +285,25 @@ export const getMessages = async (req, res) => {
     };
 
     if (cursor) {
-      query.createdAt = { $lt: new Date(cursor) };
+      const cursorDate = new Date(cursor);
+      if (Number.isNaN(cursorDate.getTime())) {
+        return res.status(400).json({ message: "Invalid cursor" });
+      }
+
+      query.createdAt = { $lt: cursorDate };
     }
 
     let messages = await Message.find(query)
+      .select(
+        "_id conversationId senderId content imgUrl replyTo reactions isDeleted editedAt readBy createdAt updatedAt",
+      )
       .sort({ createdAt: -1 })
-      .limit(Number(limit) + 1);
+      .limit(safeLimit + 1)
+      .lean();
 
     let nextCursor = null;
 
-    if (messages.length > Number(limit)) {
+    if (messages.length > safeLimit) {
       const nextMessage = messages.at(-1);
       nextCursor = nextMessage.createdAt.toISOString();
       messages.pop();

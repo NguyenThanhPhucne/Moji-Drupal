@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 const MAX_FILE_SIZE_MB = 5;
 const MAX_MESSAGE_LENGTH = 1200;
+const TYPING_EMIT_INTERVAL_MS = 350;
 
 const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const { user } = useAuthStore();
@@ -22,6 +23,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingEmitAtRef = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isSendingRef = useRef(false);
@@ -30,6 +32,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     if (typing && socket?.connected) {
       socket.emit("stop_typing", selectedConvo._id);
       setTyping(false);
+      lastTypingEmitAtRef.current = 0;
     }
   };
 
@@ -44,8 +47,17 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
       el.style.height = Math.min(el.scrollHeight, 120) + "px";
     }
 
-    if (socket?.connected && !typing) {
+    const now = Date.now();
+    const hasText = newValue.trim().length > 0;
+
+    if (!hasText) {
+      stopTyping();
+    } else if (
+      socket?.connected &&
+      (!typing || now - lastTypingEmitAtRef.current >= TYPING_EMIT_INTERVAL_MS)
+    ) {
       setTyping(true);
+      lastTypingEmitAtRef.current = now;
       socket.emit("typing", selectedConvo._id);
     }
 
@@ -61,6 +73,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = null;
       }
+      lastTypingEmitAtRef.current = 0;
 
       if (socket?.connected) {
         socket.emit("stop_typing", selectedConvo._id);
@@ -153,7 +166,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   };
 
   return (
-    <div className="flex flex-col bg-background/95 border-t border-border/50 backdrop-blur-sm">
+    <div className="flex flex-col bg-background relative z-10 w-full shrink-0">
       {/* Reply preview */}
       {replyingTo && (
         <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b border-border/30 animate-in slide-in-from-bottom-2 fade-in duration-200">
@@ -261,11 +274,11 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onBlur={() => setFocused(false)}
             placeholder="Type a message... (Shift+Enter for a new line)"
             className={cn(
-              "w-full resize-none overflow-hidden rounded-2xl bg-card/80 border border-border/60 shadow-sm",
-              "px-4 py-2.5 pr-12 text-sm leading-relaxed",
-              "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30",
-              "transition-all duration-150 max-h-[120px]",
-              "placeholder:text-muted-foreground",
+              "w-full resize-none overflow-hidden rounded-2xl bg-muted/30 border-0",
+              "px-4 py-3 pr-12 text-[14.5px] leading-relaxed text-foreground",
+              "focus:outline-none focus:ring-0 focus:bg-muted/50",
+              "transition-all duration-200 max-h-[140px]",
+              "placeholder:text-muted-foreground/60",
             )}
           />
           <div className="absolute right-2 bottom-1.5 flex items-center">
@@ -290,10 +303,10 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           size="icon"
           disabled={!hasSendable}
           className={cn(
-            "flex-shrink-0 mb-0.5 transition-all duration-200",
+            "flex-shrink-0 mb-0.5 rounded-xl transition-all duration-300",
             hasSendable
-              ? "send-btn-ready bg-gradient-chat"
-              : "bg-muted text-muted-foreground",
+              ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:scale-105 active:scale-95"
+              : "bg-transparent text-muted-foreground opacity-50",
           )}
           title="Send (Enter)"
         >

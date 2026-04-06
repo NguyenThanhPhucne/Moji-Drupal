@@ -11,12 +11,16 @@ const ChatWindowLayout = () => {
   const {
     activeConversationId,
     conversations,
+    messages,
     messageLoading: loading,
     markAsSeen,
   } = useChatStore();
 
   const selectedConvo =
     conversations.find((c) => c._id === activeConversationId) ?? null;
+  const hasLoadedMessages = selectedConvo
+    ? (messages[selectedConvo._id]?.items?.length ?? 0) > 0
+    : false;
 
   useEffect(() => {
     if (!selectedConvo) {
@@ -51,10 +55,10 @@ const ChatWindowLayout = () => {
       {/* Body */}
       <div className="flex-1 min-h-0 bg-primary-foreground/80">
         <div
-          key={`chat-body-${selectedConvo._id}-${loading ? "loading" : "ready"}`}
+          key={`chat-body-${selectedConvo._id}`}
           className="h-full conversation-fade"
         >
-          {loading ? (
+          {loading && !hasLoadedMessages ? (
             <div className="h-full w-full px-4 py-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Skeleton className="h-8 w-8 rounded-full" />

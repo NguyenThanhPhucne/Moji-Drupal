@@ -3,7 +3,7 @@ import type { FriendState } from "@/types/store";
 import { create } from "zustand";
 import { useNotificationStore } from "./useNotificationStore";
 
-export const useFriendStore = create<FriendState>((set) => ({
+export const useFriendStore = create<FriendState>((set, get) => ({
   friends: [],
   loading: false,
   receivedList: [],
@@ -55,34 +55,40 @@ export const useFriendStore = create<FriendState>((set) => ({
     }
   },
   acceptRequest: async (requestId) => {
+    const previousReceivedList = get().receivedList;
+    const previousUnreadCount = useNotificationStore.getState().unreadFriendRequestCount;
+
+    set((state) => ({
+      receivedList: state.receivedList.filter((r) => r._id !== requestId),
+    }));
+    useNotificationStore.getState().decrementUnreadCount();
+
     try {
       set({ loading: true });
       await friendService.acceptRequest(requestId);
-
-      set((state) => ({
-        receivedList: state.receivedList.filter((r) => r._id !== requestId),
-      }));
-
-      // Decrement notification count
-      useNotificationStore.getState().decrementUnreadCount();
     } catch (error) {
+      set({ receivedList: previousReceivedList });
+      useNotificationStore.getState().setUnreadCount(previousUnreadCount);
       console.error("Error accepting request", error);
     } finally {
       set({ loading: false });
     }
   },
   declineRequest: async (requestId) => {
+    const previousReceivedList = get().receivedList;
+    const previousUnreadCount = useNotificationStore.getState().unreadFriendRequestCount;
+
+    set((state) => ({
+      receivedList: state.receivedList.filter((r) => r._id !== requestId),
+    }));
+    useNotificationStore.getState().decrementUnreadCount();
+
     try {
       set({ loading: true });
       await friendService.declineRequest(requestId);
-
-      set((state) => ({
-        receivedList: state.receivedList.filter((r) => r._id !== requestId),
-      }));
-
-      // Decrement notification count
-      useNotificationStore.getState().decrementUnreadCount();
     } catch (error) {
+      set({ receivedList: previousReceivedList });
+      useNotificationStore.getState().setUnreadCount(previousUnreadCount);
       console.error("Error declining request", error);
     } finally {
       set({ loading: false });
@@ -101,19 +107,22 @@ export const useFriendStore = create<FriendState>((set) => ({
     }
   },
   removeFriend: async (friendId) => {
+    const previousFriends = get().friends;
+
+    set((state) => ({
+      friends: state.friends.filter((friend) => friend._id !== friendId),
+    }));
+
     try {
       set({ loading: true });
       const message = await friendService.removeFriend(friendId);
-
-      set((state) => ({
-        friends: state.friends.filter((friend) => friend._id !== friendId),
-      }));
 
       return {
         ok: true,
         message,
       };
     } catch (error) {
+      set({ friends: previousFriends });
       console.error("Error removing friend", error);
       return {
         ok: false,

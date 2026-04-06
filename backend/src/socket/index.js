@@ -42,6 +42,8 @@ io.use(socketAuthMiddleware);
 
 const onlineUsers = new Map(); // {userId: Set<socketId>}
 const ONLINE_USERS_RESYNC_MS = 15000;
+const TYPING_EMIT_THROTTLE_MS = 300;
+const typingEmitTimelineBySocket = new Map(); // {socketId: Map<conversationId, ts>}
 
 const removeSocketFromOnlineUsers = (userId, socketId) => {
   const userSockets = onlineUsers.get(userId);
@@ -117,21 +119,54 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("typing", (conversationId) => {
-    socket.to(conversationId).emit("user-typing", {
-      conversationId,
+    const normalizedConversationId = String(conversationId || "").trim();
+    if (!normalizedConversationId) {
+      return;
+    }
+
+    const now = Date.now();
+    let socketTypingTimeline = typingEmitTimelineBySocket.get(socket.id);
+    if (!socketTypingTimeline) {
+      socketTypingTimeline = new Map();
+      typingEmitTimelineBySocket.set(socket.id, socketTypingTimeline);
+    }
+
+    const lastEmitAt = socketTypingTimeline.get(normalizedConversationId) || 0;
+    if (now - lastEmitAt < TYPING_EMIT_THROTTLE_MS) {
+      return;
+    }
+
+    socketTypingTimeline.set(normalizedConversationId, now);
+
+    socket.to(normalizedConversationId).emit("user-typing", {
+      conversationId: normalizedConversationId,
       userId,
       displayName: user.displayName,
     });
   });
 
   socket.on("stop_typing", (conversationId) => {
-    socket.to(conversationId).emit("user-stop_typing", {
-      conversationId,
+    const normalizedConversationId = String(conversationId || "").trim();
+    if (!normalizedConversationId) {
+      return;
+    }
+
+    const socketTypingTimeline = typingEmitTimelineBySocket.get(socket.id);
+    if (socketTypingTimeline) {
+      socketTypingTimeline.delete(normalizedConversationId);
+      if (socketTypingTimeline.size === 0) {
+        typingEmitTimelineBySocket.delete(socket.id);
+      }
+    }
+
+    socket.to(normalizedConversationId).emit("user-stop_typing", {
+      conversationId: normalizedConversationId,
       userId,
     });
   });
 
   socket.on("manual-offline", async () => {
+    typingEmitTimelineBySocket.delete(socket.id);
     removeSocketFromOnlineUsers(userId, socket.id);
     try {
       await broadcastOnlineUsers();
@@ -147,6 +182,7 @@ io.on("connection", async (socket) => {
     console.log(
       `[Socket] User disconnected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
     );
+    typingEmitTimelineBySocket.delete(socket.id);
     removeSocketFromOnlineUsers(userId, socket.id);
     try {
       await broadcastOnlineUsers();

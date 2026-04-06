@@ -23,7 +23,11 @@ const checkFriendshipStatus = async (userA, userB) => {
 
   // 1. Kiểm tra MongoDB trước (cho user cũ)
   try {
-    const friend = await Friend.findOne({ userA, userB });
+    const [normalizedA, normalizedB] = pair(String(userA), String(userB));
+    const friend = await Friend.findOne({
+      userA: normalizedA,
+      userB: normalizedB,
+    });
     if (friend) {
       console.log("Found friendship in MongoDB");
       return true;

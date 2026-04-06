@@ -2,20 +2,26 @@ import { useChatStore } from "@/stores/useChatStore";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import {
+  Profiler,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useCallback,
 } from "react";
-import InfiniteScroll from "react-infinite-scroll-component";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { ArrowDown, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Message } from "@/types/chat";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import {
+  exposeChatThreadBenchApi,
+  isChatThreadBenchEnabled,
+  pushChatThreadSample,
+  startChatThreadBench,
+} from "@/lib/chatThreadBenchmark";
 
 function isSameDay(a: string, b: string) {
   return (
@@ -63,23 +69,6 @@ const buildTypingSummary = (names: string[]) => {
 
 const EMPTY_MESSAGES: Message[] = [];
 
-const getMessageRenderKey = (message: Message) => {
-  if (message._id) {
-    return message._id;
-  }
-
-  return [
-    "pending",
-    message.conversationId,
-    message.senderId,
-    message.createdAt,
-    message.updatedAt ?? "",
-    message.imgUrl ?? "",
-    message.replyTo?._id ?? "",
-    message.content ?? "",
-  ].join("::");
-};
-
 const ChatWindowBody = () => {
   const {
     activeConversationId,
@@ -93,7 +82,7 @@ const ChatWindowBody = () => {
   const [typingUsers, setTypingUsers] = useState<Record<string, TypingEntry>>(
     {},
   );
-  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   const messages = useMemo(() => {
     if (!activeConversationId) {
@@ -102,12 +91,10 @@ const ChatWindowBody = () => {
 
     return allMessages[activeConversationId]?.items ?? EMPTY_MESSAGES;
   }, [allMessages, activeConversationId]);
-  const reversedMessages = [...messages].reverse();
   const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
   const selectedConvo = conversations.find(
     (c) => c._id === activeConversationId,
   );
-  const key = `chat-scroll-${activeConversationId}`;
 
   const myId = useMemo(
     () => (currentUser?._id ? String(currentUser._id) : ""),
@@ -274,8 +261,7 @@ const ChatWindowBody = () => {
     }
   }, [activeConversationId, fetchMessages, allMessages]);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle | null>(null);
 
   // Auto mark as seen when the latest incoming message is visible in active chat.
   useEffect(() => {
@@ -343,7 +329,7 @@ const ChatWindowBody = () => {
       socket.off("user-typing", handleTyping);
       socket.off("user-stop_typing", handleStopTyping);
     };
-  }, [socket, activeConversationId, currentUser]);
+  }, [socket, activeConversationId, currentUser?._id]);
 
   // Reset stale typing indicator when switching conversations.
   useEffect(() => {
@@ -362,83 +348,121 @@ const ChatWindowBody = () => {
 
         return next;
       });
-    }, 320);
+    }, 500);
 
     return () => {
       globalThis.clearInterval(interval);
     };
   }, []);
 
-  // Scroll to bottom or saved position when conversation changes
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const item = sessionStorage.getItem(key);
-    if (item) {
-      const { scrollTop } = JSON.parse(item);
-      requestAnimationFrame(() => {
-        container.scrollTop = scrollTop;
-      });
-    } else {
-      container.scrollTop = 0; // bottom in column-reverse
-    }
-    prevMsgLength.current = messages.length;
-  }, [activeConversationId, key, messages.length]);
-
   // Auto-scroll logic when new messages arrive
   const prevMsgLength = useRef(messages.length);
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
+  useEffect(() => {
     if (messages.length > prevMsgLength.current) {
       const delta = messages.length - prevMsgLength.current;
       const newestMsg = messages.at(-1);
       const isSentByMe = newestMsg?.senderId === currentUser?._id;
 
-      // Force scroll to bottom if I sent it, OR if I'm already within 150px of the bottom
-      if (isSentByMe || container.scrollTop < 150) {
-        requestAnimationFrame(() => {
-          container.scrollTop = 0;
+      // Keep chat pinned to bottom for outgoing messages or when already at bottom.
+      if (isSentByMe || isAtBottom) {
+        virtuosoRef.current?.scrollToIndex({
+          index: messages.length - 1,
+          align: "end",
+          behavior: "smooth",
         });
-        setShowScrollBtn(false);
         setNewMsgCount(0);
-      } else {
-        // User scrolled up — accumulate badge count for others' new messages
-        if (!isSentByMe) setNewMsgCount((prev) => prev + delta);
+      } else if (!isSentByMe) {
+        // User scrolled up — accumulate unread indicator for incoming messages.
+        setNewMsgCount((prev) => prev + delta);
       }
     }
     prevMsgLength.current = messages.length;
-  }, [messages, currentUser?._id]);
+  }, [messages, currentUser?._id, isAtBottom]);
 
-  const handleScrollSave = useCallback(() => {
-    const container = containerRef.current;
-    if (!container || !activeConversationId) return;
-    sessionStorage.setItem(
-      key,
-      JSON.stringify({
-        scrollTop: container.scrollTop,
-        scrollHeight: container.scrollHeight,
-      }),
-    );
-    // Show scroll-to-bottom button when far from bottom
-    const distFromBottom = Math.abs(container.scrollTop);
-    setShowScrollBtn(distFromBottom > 300);
-  }, [activeConversationId, key]);
+  const renderMessageItem = useCallback(
+    (index: number, message: Message) => {
+      const prevMessage = index > 0 ? messages[index - 1] : undefined;
+      const nextMessage = messages[index + 1];
+      const showDateDivider =
+        !nextMessage || !isSameDay(message.createdAt, nextMessage.createdAt);
+
+      return (
+        <MessageItem
+          message={message}
+          index={index}
+          prevSenderId={prevMessage?.senderId ? String(prevMessage.senderId) : ""}
+          selectedConvo={selectedConvo as NonNullable<typeof selectedConvo>}
+          lastMessageStatus={lastMessageStatus}
+          lastOwnMessageId={lastOwnMessage?._id ?? null}
+          seenUser={directSeenUser}
+          seenUsers={groupSeenUsers}
+          showDateDivider={showDateDivider}
+          isNew={index === messages.length - 1}
+        />
+      );
+    },
+    [
+      messages,
+      selectedConvo,
+      lastMessageStatus,
+      lastOwnMessage?._id,
+      directSeenUser,
+      groupSeenUsers,
+    ],
+  );
 
   const scrollToBottom = () => {
-    if (containerRef.current) {
-      containerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-    }
-    setShowScrollBtn(false);
+    virtuosoRef.current?.scrollToIndex({
+      index: Math.max(messages.length - 1, 0),
+      align: "end",
+      behavior: "smooth",
+    });
+    setIsAtBottom(true);
     setNewMsgCount(0);
   };
+  const showScrollButton = isAtBottom === false;
+  const benchEnabled = useMemo(() => isChatThreadBenchEnabled(), []);
+
+  const onThreadRender = useCallback(
+    (
+      _id: string,
+      phase: "mount" | "update" | "nested-update",
+      actualDuration: number,
+      baseDuration: number,
+      startTime: number,
+      commitTime: number,
+    ) => {
+      pushChatThreadSample({
+        phase,
+        actualDuration,
+        baseDuration,
+        startTime,
+        commitTime,
+        messageCount: messages.length,
+      });
+    },
+    [messages.length],
+  );
+
+  useEffect(() => {
+    if (!benchEnabled) {
+      return;
+    }
+
+    exposeChatThreadBenchApi();
+    startChatThreadBench();
+  }, [benchEnabled]);
 
   // Reset badge when conversation changes
   useEffect(() => {
     setNewMsgCount(0);
-    setShowScrollBtn(false);
+    setIsAtBottom(true);
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({
+        index: Math.max(messages.length - 1, 0),
+        align: "end",
+      });
+    });
   }, [activeConversationId]);
 
   const fetchMoreMessages = async () => {
@@ -471,93 +495,59 @@ const ChatWindowBody = () => {
       key={`chat-conversation-${activeConversationId}`}
       className="conversation-fade p-2 bg-primary-foreground h-full flex flex-col overflow-hidden relative"
     >
-      <div
-        id="scrollableDiv"
-        ref={containerRef}
-        onScroll={handleScrollSave}
-        className="flex flex-col-reverse overflow-y-auto overflow-x-hidden beautiful-scrollbar flex-1"
-      >
-        <div ref={messagesEndRef} />
+      <Profiler id="chat-thread" onRender={onThreadRender}>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <Virtuoso
+            ref={virtuosoRef}
+            className="h-full beautiful-scrollbar"
+            data={messages}
+            atBottomStateChange={(bottom) => {
+              setIsAtBottom(bottom);
+              if (bottom) {
+                setNewMsgCount(0);
+              }
+            }}
+            followOutput={(atBottom) => (atBottom ? "smooth" : false)}
+            startReached={() => {
+              if (hasMore) {
+                void fetchMoreMessages();
+              }
+            }}
+            itemContent={renderMessageItem}
+          />
+        </div>
+      </Profiler>
 
-        {/* ── Typing indicator ── */}
-        {typingUserList.length > 0 && (
-          <div className="typing-bubble-wrap">
-            {/* Avatars stack */}
-            <div className="typing-avatars">
-              {typingUserList.slice(0, 3).map((typingUser) => (
-                <div key={typingUser.userId} className="typing-avatar">
-                  {typingUser.avatarUrl ? (
-                    <img
-                      src={typingUser.avatarUrl}
-                      alt={typingUser.displayName}
-                      className="typing-avatar-img"
-                    />
-                  ) : (
-                    <div className="typing-avatar-fallback">
-                      {typingUser.displayName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                  <span className="typing-avatar-pulse" />
-                </div>
-              ))}
-            </div>
-
-            {/* Dots bubble */}
-            <div className="typing-bubble">
-              <span className="typing-dot typing-dot--1" />
-              <span className="typing-dot typing-dot--2" />
-              <span className="typing-dot typing-dot--3" />
-            </div>
-
-            {/* Text label */}
-            <span className="typing-label">{typingSummaryText}</span>
-          </div>
-        )}
-
-        <InfiniteScroll
-          dataLength={messages.length}
-          next={fetchMoreMessages}
-          hasMore={hasMore}
-          scrollableTarget="scrollableDiv"
-          loader={
-            <div className="flex justify-center py-3">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-2 h-2 bg-primary/50 rounded-full animate-bounce" />
+      {/* ── Typing indicator ── */}
+      {typingUserList.length > 0 && (
+        <div className="typing-bubble-wrap">
+          <div className="typing-avatars">
+            {typingUserList.slice(0, 3).map((typingUser) => (
+              <div key={typingUser.userId} className="typing-avatar">
+                {typingUser.avatarUrl ? (
+                  <img
+                    src={typingUser.avatarUrl}
+                    alt={typingUser.displayName}
+                    className="typing-avatar-img"
+                  />
+                ) : (
+                  <div className="typing-avatar-fallback">
+                    {typingUser.displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <span className="typing-avatar-pulse" />
               </div>
-            </div>
-          }
-          inverse={true}
-          style={{
-            display: "flex",
-            flexDirection: "column-reverse",
-            overflow: "visible",
-          }}
-        >
-          {reversedMessages.map((message, index) => {
-            const prevMessage = reversedMessages[index + 1];
-            const showDateDivider =
-              !prevMessage ||
-              !isSameDay(message.createdAt, prevMessage.createdAt);
-            return (
-              <MessageItem
-                key={getMessageRenderKey(message)}
-                message={message}
-                index={index}
-                messages={reversedMessages}
-                selectedConvo={selectedConvo}
-                lastMessageStatus={lastMessageStatus}
-                lastOwnMessageId={lastOwnMessage?._id ?? null}
-                seenUser={directSeenUser}
-                seenUsers={groupSeenUsers}
-                showDateDivider={showDateDivider}
-                isNew={index === 0}
-              />
-            );
-          })}
-        </InfiniteScroll>
-      </div>
+            ))}
+          </div>
+
+          <div className="typing-bubble">
+            <span className="typing-dot typing-dot--1" />
+            <span className="typing-dot typing-dot--2" />
+            <span className="typing-dot typing-dot--3" />
+          </div>
+          <span className="typing-label">{typingSummaryText}</span>
+        </div>
+      )}
 
       {/* ── Scroll-to-bottom FAB ── */}
       <button
@@ -566,7 +556,7 @@ const ChatWindowBody = () => {
         aria-label="Scroll to latest messages"
         className={cn(
           "scroll-to-bottom-fab",
-          showScrollBtn
+          showScrollButton
             ? "scroll-btn-enter pointer-events-auto"
             : "scroll-btn-exit pointer-events-none",
         )}

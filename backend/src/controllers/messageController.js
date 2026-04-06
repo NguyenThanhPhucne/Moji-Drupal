@@ -260,6 +260,12 @@ export const sendDirectMessage = async (req, res) => {
     const normalizedContent = String(content || "").trim();
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
 
+    if (!conversationId && !recipientId) {
+      return res
+        .status(400)
+        .json({ message: "Thiếu recipientId cho cuộc trò chuyện trực tiếp mới" });
+    }
+
     if (!normalizedContent && !uploadedImgUrl) {
       return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
     }

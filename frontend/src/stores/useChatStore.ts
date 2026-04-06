@@ -93,7 +93,11 @@ export const useChatStore = create<ChatState>()(
             const prev = state.messages[convoId]?.items ?? [];
             const merged =
               prev.length > 0 ? [...processed, ...prev] : processed;
-            const normalized = sortMessagesChronologically(merged);
+              
+            // Deduplicate (prevent React StrictMode race condition from duplicating messages)
+            const uniqueMap = new Map();
+            merged.forEach((m) => uniqueMap.set(m._id, m));
+            const normalized = sortMessagesChronologically(Array.from(uniqueMap.values()));
 
             return {
               messages: {
@@ -464,8 +468,7 @@ export const useChatStore = create<ChatState>()(
             return;
           }
 
-          await chatService.markAsSeen(activeConversationId);
-
+          // Optimistic update
           set((state) => ({
             conversations: state.conversations.map((c) =>
               c._id === activeConversationId && c.lastMessage
@@ -479,6 +482,8 @@ export const useChatStore = create<ChatState>()(
                 : c,
             ),
           }));
+
+          await chatService.markAsSeen(activeConversationId);
         } catch (error) {
           console.error("Error calling markAsSeen in store", error);
         }

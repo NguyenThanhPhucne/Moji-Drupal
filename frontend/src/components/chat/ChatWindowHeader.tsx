@@ -26,7 +26,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogOverlay,
 } from "../ui/dialog";
 import { useNavigate } from "react-router-dom";
 import GlobalSearchDialog from "./GlobalSearchDialog";
@@ -132,7 +131,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center border-b border-border/60 bg-background/85 px-4 py-2.5 backdrop-blur-xl">
+      <header className="sticky top-0 z-10 flex items-center border-b border-border/40 bg-background px-4 py-2">
         <div className="flex items-center gap-2 w-full justify-between">
           <div className="flex items-center gap-2">
             <SidebarTrigger className="-ml-1 text-foreground" />
@@ -141,7 +140,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
               className="mr-2 data-[orientation=vertical]:h-4"
             />
 
-            <div className="flex items-center gap-3 rounded-2xl border border-border/50 bg-card/65 px-3 py-2 shadow-sm transition-colors hover:bg-card/90">
+            <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 cursor-pointer">
               {/* avatar */}
               <div className="relative">
                 {chat.type === "direct" ? (
@@ -217,7 +216,6 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogOverlay className="modal-overlay" />
         <AlertDialogContent className="modal-content-shell max-w-sm">
           <AlertDialogHeader className="items-center text-center modal-stagger-item">
             <div className="dialog-danger-icon">

@@ -1,134 +1,36 @@
 import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
-import { useChatStore } from "@/stores/useChatStore";
-import { useFriendStore } from "@/stores/useFriendStore";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "../ui/dialog";
-import FriendListModal from "../createNewChat/FriendListModal";
-import NewGroupChatModal from "./NewGroupChatModal";
 import GlobalSearchDialog from "./GlobalSearchDialog";
-import { MessageCircleMore, Search, Users } from "lucide-react";
+import { MessageSquareDashed } from "lucide-react";
 
-/* ── Direct chat card — opens FriendListModal inline ── */
-function NewDirectChatCard() {
-  const { getFriends } = useFriendStore();
-  return (
-    <Dialog onOpenChange={(open) => { if (open) getFriends(); }}>
-      <DialogTrigger asChild>
-        <button type="button" className="welcome-action-card">
-          <div className="welcome-action-icon welcome-action-icon--primary">
-            <MessageCircleMore className="size-5" />
-          </div>
-          <div className="welcome-action-text">
-            <span className="welcome-action-title">New Message</span>
-            <span className="welcome-action-desc">Start a direct chat</span>
-          </div>
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-w-[420px]">
-        <DialogHeader>
-          <DialogTitle>Start a Conversation</DialogTitle>
-          <DialogDescription>Choose a friend to message</DialogDescription>
-        </DialogHeader>
-        <FriendListModal />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/* ════════════════════════════════════════════════════════ */
 const ChatWelcomeScreen = () => {
-  const { conversations } = useChatStore();
-  const hasConversations = conversations.length > 0;
-
   return (
-    <SidebarInset className="flex h-full w-full overflow-hidden rounded-3xl border border-border/70 bg-background/80 shadow-soft backdrop-blur-sm">
+    <SidebarInset className="flex h-full w-full flex-col overflow-hidden bg-background">
       <ChatWindowHeader />
 
       {/* GlobalSearchDialog is always mounted (manages Ctrl+K itself) */}
       <GlobalSearchDialog />
 
-      <div className="welcome-screen-root">
-        {/* Animated background orbs */}
-        <div className="welcome-orb welcome-orb--1" />
-        <div className="welcome-orb welcome-orb--2" />
-        <div className="welcome-orb welcome-orb--3" />
+      <div className="flex-1 flex flex-col items-center justify-center bg-background px-6 text-center select-none relative">
+        {/* Đẳng cấp SaaS: Nền Grid lưới mượt mà, siêu nhạt */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--muted-foreground)/0.05)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--muted-foreground)/0.05)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
-        {/* Center content */}
-        <div className="welcome-content">
-          {/* Animated icon */}
-          <div className="welcome-icon-wrap">
-            <div className="welcome-icon-ring" />
-            <div className="welcome-icon-inner">
-              <MessageCircleMore className="size-10 text-white drop-shadow" />
+        <div className="relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 ease-out flex flex-col items-center">
+          <div className="relative mx-auto mb-6 flex size-16 items-center justify-center">
+            {/* Hiệu ứng Sonar (Ping) nhẹ nhàng để chớp tắt chuyên nghiệp */}
+            <div className="chat-welcome-ping chat-welcome-ping-primary" />
+            <div className="chat-welcome-ping chat-welcome-ping-secondary" />
+            
+            <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-background text-primary ring-1 ring-primary/20 shadow-sm transition-all duration-300 hover:ring-primary/50 hover:shadow-primary/10 hover:shadow-xl">
+              <MessageSquareDashed className="size-8" strokeWidth={1.5} />
             </div>
           </div>
 
-          {/* Heading */}
-          <h1 className="welcome-title">Welcome to Moji</h1>
-          <p className="welcome-subtitle">
-            {hasConversations
-              ? "Select a conversation from the sidebar to continue"
-              : "Connect with friends and start meaningful conversations"}
-          </p>
-
-          {/* Quick action cards */}
-          <div className="welcome-actions">
-            <NewDirectChatCard />
-
-            {/* Search — renders its own DialogTrigger via keyboard shortcut,
-                we render a visible card that simulates clicking Ctrl+K    */}
-            <button
-              type="button"
-              className="welcome-action-card"
-              onClick={() => {
-                // Trigger the existing GlobalSearchDialog keyboard shortcut handler
-                window.dispatchEvent(
-                  new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true }),
-                );
-              }}
-            >
-              <div className="welcome-action-icon welcome-action-icon--secondary">
-                <Search className="size-5" />
-              </div>
-              <div className="welcome-action-text">
-                <span className="welcome-action-title">Search</span>
-                <span className="welcome-action-desc">Find messages &amp; people</span>
-              </div>
-            </button>
-
-            {/* New Group — NewGroupChatModal wraps its own trigger button internally,
-                so we give it a wrapper card that acts as the trigger */}
-            <Dialog>
-              <DialogTrigger asChild>
-                <button type="button" className="welcome-action-card">
-                  <div className="welcome-action-icon welcome-action-icon--accent">
-                    <Users className="size-5" />
-                  </div>
-                  <div className="welcome-action-text">
-                    <span className="welcome-action-title">New Group</span>
-                    <span className="welcome-action-desc">Create a group chat</span>
-                  </div>
-                </button>
-              </DialogTrigger>
-              {/* Render NewGroupChatModal in a passthrough Dialog */}
-              <NewGroupChatModal />
-            </Dialog>
-          </div>
-
-          {/* Tip */}
-          <p className="welcome-tip">
-            💡 Tip: Press{" "}
-            <kbd className="welcome-kbd">Ctrl</kbd>
-            {" + "}
-            <kbd className="welcome-kbd">K</kbd>
-            {" to search anytime"}
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mb-2">
+            Welcome to Moji
+          </h1>
+          <p className="max-w-xs text-[13px] sm:text-sm font-medium text-muted-foreground/80">
+            Select a conversation from the sidebar to continue
           </p>
         </div>
       </div>

@@ -7,6 +7,7 @@ import { useSocketStore } from "./stores/useSocketStore";
 import { useFriendStore } from "./stores/useFriendStore";
 import { useBookmarkStore } from "./stores/useBookmarkStore";
 import { useSocialStore } from "./stores/useSocialStore";
+import { useChatStore } from "./stores/useChatStore";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import WorkspaceLoadingSkeleton from "./components/skeleton/WorkspaceLoadingSkeleton";
 
@@ -56,6 +57,7 @@ function AppContent() {
 
       // Load non-critical data after first paint to improve TTI on sign-in.
       const cancelDeferred = scheduleAfterFirstPaint(() => {
+        void useChatStore.getState().fetchConversations();
         void getAllFriendRequests();
         void getFriends();
         void fetchBookmarks({ page: 1, limit: 30 });

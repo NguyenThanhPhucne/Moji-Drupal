@@ -28,7 +28,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogOverlay,
 } from "../ui/dialog";
 import ImageLightbox from "./ImageLightbox";
 
@@ -375,7 +374,7 @@ const SeenStatus = memo(function SeenStatus({
 interface MessageItemProps {
   message: Message;
   index: number;
-  messages: Message[];
+  prevSenderId?: string;
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
   lastOwnMessageId?: string | null;
@@ -396,7 +395,7 @@ interface MessageItemProps {
 const MessageItem = memo(function MessageItem({
   message,
   index,
-  messages,
+  prevSenderId,
   selectedConvo,
   lastMessageStatus,
   lastOwnMessageId,
@@ -446,7 +445,7 @@ const MessageItem = memo(function MessageItem({
   const canEdit = isOwn;
 
   const isLastFromSender =
-    index === 0 || messages[index - 1]?.senderId !== message.senderId;
+    index === 0 || prevSenderId !== String(message.senderId);
 
   const senderParticipant = selectedConvo.participants.find(
     (p) => p._id === message.senderId,
@@ -749,12 +748,11 @@ const MessageItem = memo(function MessageItem({
   const renderReadOnlyBubble = () => (
     <div
       className={cn(
-        "rounded-2xl px-4 py-2.5 relative transition-transform duration-150 motion-reduce:transition-none",
+        "px-3.5 py-2 relative transition-opacity duration-150 text-[14.5px] leading-relaxed",
         isOwn
-          ? "chat-bubble-sent rounded-br-md"
-          : "chat-bubble-received rounded-bl-md",
+          ? "bg-primary text-primary-foreground rounded-[20px] rounded-br-[4px]"
+          : "bg-muted text-foreground/90 rounded-[20px] rounded-tl-[4px]",
         message.isDeleted && "opacity-50 italic",
-        isMessageHovered && !message.isDeleted && "-translate-y-0.5",
         "select-text",
       )}
     >
@@ -769,19 +767,13 @@ const MessageItem = memo(function MessageItem({
               className="lightbox-thumb-btn"
               aria-label="View image full screen"
             >
-              <img
-                src={message.imgUrl}
-                alt="media"
-                className="mb-2 max-w-[240px] max-h-[320px] w-full object-cover rounded-xl shadow-sm"
-              />
+              <img src={message.imgUrl} alt="media" className="mb-1 max-w-[240px] max-h-[320px] w-full object-cover rounded-xl" />
               <span className="lightbox-thumb-overlay">
                 <ZoomIn className="size-5 text-white" />
               </span>
             </button>
           )}
-          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-            {message.content}
-          </p>
+          <p className="whitespace-pre-wrap break-words tracking-tight">{message.content}</p>
         </>
       )}
     </div>
@@ -1058,7 +1050,6 @@ const MessageItem = memo(function MessageItem({
         open={deleteDialogOpen}
         onOpenChange={handleDeleteDialogOpenChange}
       >
-        <DialogOverlay className="modal-overlay" />
         <DialogContent
           className="modal-content-shell sm:max-w-xl"
           showCloseButton={!deleteActionLoading}

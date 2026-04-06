@@ -29,7 +29,7 @@ const FriendListModal = () => {
       if (success) {
         const friend = friends.find((f) => f._id === friendId);
         toast.success(
-          `Conversation with ${friend?.displayName} created successfully!`,
+          `Conversation with ${friend?.displayName} opened successfully!`,
         );
       } else {
         toast.error("Cannot create conversation. Please try again!");

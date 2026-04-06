@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogOverlay,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { UserPlus, Users } from "lucide-react";
@@ -97,11 +96,14 @@ const NewGroupChatModal = () => {
         </Button>
       </DialogTrigger>
 
-      <DialogOverlay className="modal-overlay" />
       <DialogContent
         className="modal-content-shell sm:max-w-[425px] border-none"
         dismissible={!loading}
         showCloseButton={!loading}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          document.querySelector<HTMLInputElement>('[data-autofocus="true"]')?.focus();
+        }}
       >
         <DialogHeader className="modal-stagger-item">
           <DialogTitle className="capitalize">

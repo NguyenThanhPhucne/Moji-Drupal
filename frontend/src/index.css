@@ -5,6 +5,28 @@
 @custom-variant dark (&:is(.dark *));
 @config "../tailwind.config.ts";
 
+.chat-thread-infinite {
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: visible;
+}
+
+.chat-welcome-ping {
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  animation: ping 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.chat-welcome-ping-primary {
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.3);
+}
+
+.chat-welcome-ping-secondary {
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.1);
+  animation-delay: 1.5s;
+}
+
 @layer base {
   :root {
     /* Base colors - soft pastels */
@@ -311,8 +333,14 @@
   }
 
   .elevated-card {
-    @apply rounded-2xl border border-border/70 bg-card/85 backdrop-blur;
+    @apply rounded-2xl border border-border/70 bg-card/85 backdrop-blur transition-all duration-300;
     box-shadow: var(--shadow-soft);
+  }
+
+  .elevated-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-bubble);
+    border-color: hsl(var(--primary)/0.2);
   }
 
   .section-eyebrow {
@@ -352,9 +380,7 @@
   }
 
   .stagger-enter {
-    opacity: 0;
-    transform: translateY(8px) scale(0.985);
-    animation: listStaggerIn 0.35s ease forwards;
+    animation: listStaggerIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
     animation-delay: calc(var(--stagger-index, 0) * 45ms);
   }
 
@@ -364,13 +390,21 @@
 
   /* Chat bubble variants */
   .chat-bubble-sent {
-    @apply bg-primary/80! text-[hsl(var(--chat-bubble-sent-foreground))]! shadow-[var(--shadow-bubble)];
+    @apply bg-primary/80! text-[hsl(var(--chat-bubble-sent-foreground))]! shadow-[var(--shadow-bubble)] transition-all duration-300 origin-bottom-right;
     position: relative;
+  }
+  .chat-bubble-sent:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px -4px hsl(var(--primary)/0.3);
   }
 
   .chat-bubble-received {
-    @apply bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-foreground))] border border-border/50;
+    @apply bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-foreground))] border border-border/50 transition-all duration-300 origin-top-left;
     position: relative;
+  }
+  .chat-bubble-received:hover {
+    transform: scale(1.015);
+    background: hsl(var(--chat-bubble-received)/0.9);
   }
 
   .error-message {
@@ -706,60 +740,82 @@
     @apply mx-3 h-px bg-border/50 my-1;
   }
 
-  /* ─── Skeleton shimmer ───────────────────────────────────────────── */
+  /* ─── Skeleton shimmer (Premium Angled Sweep) ────────────────────── */
   .skeleton-shimmer {
-    @apply bg-muted/80 rounded-lg;
-    background: linear-gradient(
-      90deg,
-      hsl(var(--muted) / 0.7) 25%,
-      hsl(var(--muted) / 1) 50%,
-      hsl(var(--muted) / 0.7) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.6s ease-in-out infinite;
+    @apply relative overflow-hidden bg-muted/40 rounded-lg border border-border/20;
   }
 
-  @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+  .skeleton-shimmer::after {
+    content: "";
+    @apply absolute inset-0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.03) 30%,
+      hsl(var(--foreground) / 0.08) 50%,
+      hsl(var(--foreground) / 0.03) 70%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: premiumShimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  .dark .skeleton-shimmer::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.06) 30%,
+      hsl(var(--foreground) / 0.12) 50%,
+      hsl(var(--foreground) / 0.06) 70%,
+      transparent 100%
+    );
+  }
+
+  @keyframes premiumShimmer {
+    0% { transform: translateX(-150%) skewX(-15deg); }
+    100% { transform: translateX(150%) skewX(-15deg); }
   }
 
   /* ─── Dialog / Modal smooth entry ───────────────────────────────── */
   .dialog-backdrop {
-    animation: backdropFadeIn 0.2s ease forwards;
+    animation: backdropFadeIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .modal-overlay {
     background:
       radial-gradient(
         circle at 20% 15%,
-        hsl(var(--primary) / 0.15),
+        hsl(var(--primary) / 0.12),
         transparent 38%
       ),
       radial-gradient(
         circle at 80% 10%,
-        hsl(var(--accent) / 0.12),
+        hsl(var(--accent) / 0.1),
         transparent 34%
       ),
-      hsl(222 30% 6% / 0.62);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+      hsl(var(--background) / 0.4);
+    backdrop-filter: blur(16px) saturate(160%);
+    -webkit-backdrop-filter: blur(16px) saturate(160%);
   }
 
   .modal-overlay[data-state="open"] {
-    animation: modalOverlayIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: modalOverlayIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .modal-overlay[data-state="closed"] {
-    animation: modalOverlayOut 0.16s ease forwards;
+    animation: modalOverlayOut 0.2s ease forwards;
+  }
+
+  .modal-content-shell {
+    @apply bg-card/90 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_24px_48px_-12px_rgba(0,0,0,0.25)];
   }
 
   .modal-content-shell[data-state="open"] {
-    animation: modalContentIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: modalContentIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .modal-content-shell[data-state="closed"] {
-    animation: modalContentOut 0.14s ease forwards;
+    animation: modalContentOut 0.2s ease forwards;
   }
 
   .modal-stagger-item {
@@ -963,7 +1019,7 @@
     height: 18px;
     padding: 0 4px;
     border-radius: 9px;
-    background: hsl(0 84% 55%);
+    background: hsl(0 78% 42%);
     color: white;
     font-size: 10px;
     font-weight: 700;
@@ -1807,15 +1863,15 @@
   height: 34px;
   border-radius: 8px;
   border: none;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.48);
+  color: #ffffff;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, transform 0.1s;
   flex-shrink: 0;
 }
 
 .lightbox-action-btn:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.62);
   color: #fff;
 }
 
@@ -1824,12 +1880,12 @@
 }
 
 .lightbox-action-btn--close {
-  background: rgba(255, 70, 70, 0.15);
-  color: rgba(255, 120, 120, 0.9);
+  background: rgba(150, 22, 22, 0.88);
+  color: #fff;
 }
 
 .lightbox-action-btn--close:hover {
-  background: rgba(255, 70, 70, 0.35);
+  background: rgba(112, 16, 16, 0.94);
   color: white;
 }
 
@@ -1870,13 +1926,13 @@
 }
 
 @keyframes lightboxImgIn {
-  from { opacity: 0; transform: scale(0.92) !important; }
+  from { opacity: 0; transform: scale(0.92); }
   to   { opacity: 1; }
 }
 
 @keyframes lightboxImgOut {
   from { opacity: 1; }
-  to   { opacity: 0; transform: scale(0.95) !important; }
+  to   { opacity: 0; transform: scale(0.95); }
 }
 
 /* ── Skeleton loader ─────────────────────────────────────────────────── */
@@ -2000,89 +2056,6 @@
   width: 100%;
 }
 
-/* ── Animated Orbs ── */
-.welcome-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.5;
-  pointer-events: none;
-  z-index: 0;
-  animation: orbFloat 10s ease-in-out infinite alternate;
-}
-
-.welcome-orb--1 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%);
-  top: -100px;
-  left: -100px;
-}
-
-.welcome-orb--2 {
-  width: 350px;
-  height: 350px;
-  background: radial-gradient(circle, hsl(var(--accent) / 0.15) 0%, transparent 70%);
-  bottom: -50px;
-  right: -50px;
-  animation-delay: -3s;
-}
-
-.welcome-orb--3 {
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, hsl(var(--primary) / 0.1) 0%, transparent 70%);
-  top: 40%;
-  left: 60%;
-  animation-delay: -5s;
-}
-
-@keyframes orbFloat {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(30px, -40px) scale(1.1); }
-}
-
-/* ── Animated Icon ── */
-.welcome-icon-wrap {
-  position: relative;
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.welcome-icon-ring {
-  position: absolute;
-  inset: -12px;
-  border-radius: 50%;
-  border: 2px dashed hsl(var(--primary) / 0.2);
-  animation: spinSlow 12s linear infinite;
-}
-
-.welcome-icon-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
-  border-radius: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 12px 32px hsl(var(--primary) / 0.25);
-  animation: floatIcon 4s ease-in-out infinite;
-}
-
-@keyframes spinSlow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes floatIcon {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
 
 /* ── Typography ── */
 .welcome-title {

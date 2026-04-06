@@ -6,7 +6,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogOverlay,
 } from "../ui/dialog";
 import { UserPlus } from "lucide-react";
 import type { User } from "@/types/user";
@@ -104,11 +103,14 @@ const AddFriendModal = () => {
         </div>
       </DialogTrigger>
 
-      <DialogOverlay className="modal-overlay" />
       <DialogContent
         className="modal-content-shell sm:max-w-[425px] border-none"
         dismissible={!loading}
         showCloseButton={!loading}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          document.querySelector<HTMLInputElement>('[data-autofocus="true"]')?.focus();
+        }}
       >
         <DialogHeader className="modal-stagger-item">
           <DialogTitle>Add Friend</DialogTitle>

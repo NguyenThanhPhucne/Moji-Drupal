@@ -18,13 +18,25 @@ const friendSchema = new mongoose.Schema(
   }
 );
 
+friendSchema.pre("validate", function (next) {
+  if (
+    this.userA &&
+    this.userB &&
+    this.userA.toString() === this.userB.toString()
+  ) {
+    return next(new Error("userA and userB must be different users"));
+  }
+
+  next();
+});
+
 friendSchema.pre("save", function (next) {
   const a = this.userA.toString();
   const b = this.userB.toString();
 
   if (a > b) {
-    this.userA = new mongoose.Types.ObjectId(b);
-    this.userB = new mongoose.Types.ObjectId(a);
+    this.userA = b;
+    this.userB = a;
   }
 
   next();

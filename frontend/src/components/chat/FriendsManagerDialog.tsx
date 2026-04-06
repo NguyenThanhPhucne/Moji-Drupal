@@ -15,7 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogOverlay,
 } from "../ui/dialog";
 import UserAvatar from "./UserAvatar";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
@@ -101,7 +100,6 @@ const FriendsManagerDialog = () => {
         </button>
       </DialogTrigger>
 
-      <DialogOverlay className="modal-overlay" />
       <DialogContent className="modal-content-shell sm:max-w-xl">
         <DialogHeader className="modal-stagger-item">
           <DialogTitle>Friends</DialogTitle>
