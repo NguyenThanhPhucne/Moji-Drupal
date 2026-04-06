@@ -53,14 +53,15 @@ const NotificationHubSkeleton = () => (
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 const EmptyState = () => (
-  <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-      <Inbox className="h-7 w-7 text-muted-foreground" />
+  <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 py-12 px-6 text-center animate-in fade-in zoom-in-95 duration-500">
+    <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-muted shadow-inner">
+      <div className="absolute inset-0 rounded-full border border-dashed border-foreground/20 animate-spin-slow" />
+      <Inbox className="h-9 w-9 text-muted-foreground/80 relative z-10" />
     </div>
-    <div>
-      <p className="text-sm font-medium text-foreground">Chưa có thông báo</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Bạn sẽ thấy hoạt động mới ở đây
+    <div className="space-y-1">
+      <p className="text-[15px] font-semibold text-foreground tracking-tight">Bạn đã xem hết thông báo</p>
+      <p className="max-w-[220px] text-xs font-medium text-muted-foreground/90 leading-relaxed">
+        Không có hoạt động nào mới vào lúc này. Chúng tôi sẽ báo cho bạn khi có tin mới.
       </p>
     </div>
   </div>
@@ -257,11 +258,17 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
         onValueChange={(v) => setTab(v as "all" | "unread")}
         className="flex flex-1 flex-col overflow-hidden"
       >
-        <TabsList className="mx-4 mt-3 h-8 w-auto self-start rounded-lg bg-muted/60 p-0.5">
-          <TabsTrigger value="all" className="h-7 px-3 text-xs">
+        <TabsList className="grid w-full grid-cols-2 bg-secondary/40 p-1 h-9 rounded-xl mx-4 mt-3 w-[calc(100%-32px)]">
+          <TabsTrigger
+            value="all"
+            className="rounded-lg text-[13px] tracking-tight font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+          >
             Tất cả
           </TabsTrigger>
-          <TabsTrigger value="unread" className="h-7 px-3 text-xs">
+          <TabsTrigger
+            value="unread"
+            className="rounded-lg text-[13px] tracking-tight font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+          >
             Chưa đọc
             {unreadCount > 0 && (
               <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
@@ -290,9 +297,11 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
                 return (
                   <div key={group}>
                     {/* Group label */}
-                    <p className="mb-1 mt-3 px-3 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground first:mt-1">
-                      {GROUP_LABELS[group]}
-                    </p>
+                      <div className="flex items-center pt-5 pb-2">
+                        <h3 className="text-[13px] font-bold text-foreground/80 tracking-tight uppercase">
+                          {GROUP_LABELS[group as keyof typeof GROUP_LABELS]}
+                        </h3>
+                      </div>
 
                     {/* Items */}
                     {items.map((notification) => (

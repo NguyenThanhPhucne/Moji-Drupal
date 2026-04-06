@@ -100,21 +100,22 @@ const NotificationItem = ({
         }
       }}
       className={cn(
-        "group relative flex items-start gap-3 rounded-xl px-3 py-2.5 transition-all duration-150 cursor-pointer select-none",
+        "group relative flex items-start gap-4 rounded-xl p-3 transition-all duration-200 cursor-pointer select-none active:scale-[0.99]",
         notification.isRead
-          ? "bg-transparent hover:bg-muted/50"
-          : "bg-primary/[0.07] hover:bg-primary/[0.12]",
-        isLoading && "opacity-60 pointer-events-none",
+          ? "bg-transparent hover:bg-accent/40"
+          : "bg-primary/[0.04] hover:bg-primary/[0.08] shadow-[inset_3px_0_0_0_hsl(var(--primary))]",
+        isLoading && "opacity-60 pointer-events-none grayscale-[0.2]",
       )}
     >
       {/* ── Avatar with type icon overlay ── */}
-      <div className="relative flex-shrink-0 mt-0.5">
-        <Avatar className="h-10 w-10 ring-2 ring-background">
+      <div className="relative flex-shrink-0">
+        <Avatar className="h-11 w-11 shadow-xs border border-background/50">
           <AvatarImage
             src={notification.actor.avatarUrl ?? undefined}
             alt={notification.actor.displayName}
+            className="object-cover"
           />
-          <AvatarFallback className="text-sm font-semibold">
+          <AvatarFallback className="text-sm font-semibold bg-accent/50">
             {notification.actor.displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -122,27 +123,27 @@ const NotificationItem = ({
         {/* Type icon badge */}
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-background",
+            "absolute -bottom-1 -right-1 flex h-[22px] w-[22px] items-center justify-center rounded-full ring-[2.5px] ring-background shadow-xs",
             meta.colorClass,
           )}
         >
-          <meta.Icon className="h-2.5 w-2.5 text-white" />
+          <meta.Icon className="h-3 w-3 text-white" />
         </span>
       </div>
 
       {/* ── Content ── */}
       <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug line-clamp-2">
-          <span className="font-semibold text-foreground">
+        <p className="text-sm leading-snug line-clamp-2 pr-2">
+          <span className="font-semibold text-foreground tracking-tight">
             {notification.actor.displayName}
           </span>{" "}
-          <span className="text-foreground/80">{notification.message}</span>
+          <span className="text-foreground/85">{notification.message}</span>
         </p>
 
         <p
           className={cn(
-            "mt-0.5 text-xs",
-            notification.isRead ? "text-muted-foreground" : "text-primary font-medium",
+            "mt-1 text-[11px] font-medium tracking-wide flex items-center gap-1",
+            notification.isRead ? "text-muted-foreground" : "text-primary/90",
           )}
         >
           {formatDistanceToNow(new Date(notification.createdAt), {
@@ -189,10 +190,10 @@ const NotificationItem = ({
       </div>
 
       {/* ── Right: unread dot + hover dismiss button ── */}
-      <div className="flex flex-shrink-0 flex-col items-center gap-2 self-start pt-0.5">
-        {/* Unread blue dot */}
+      <div className="flex flex-shrink-0 flex-col items-center gap-3 self-start pt-1">
+        {/* Unread blue dot with soft glow */}
         {!notification.isRead && (
-          <span className="h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
+          <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_6px_hsl(var(--primary)_/_0.6)]" />
         )}
 
         {/* ⋯ More button — always mounted but hidden unless hovered or focused/open */}
