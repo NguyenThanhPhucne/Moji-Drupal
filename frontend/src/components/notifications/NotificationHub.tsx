@@ -132,11 +132,19 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
       });
     }
 
-    // 3. Social notifications (follow / like / comment)
+    // 3. Social notifications (follow / like / comment / friend_accepted from DB)
     for (const notif of socialNotifications) {
+      // friend_accepted stored in DB — map correctly so they show "Chat now" CTA
+      const kindMap: Record<string, import("./NotificationItem").NotificationKind> = {
+        follow: "follow",
+        like: "like",
+        comment: "comment",
+        friend_accepted: "friend_accepted",
+        system: "system",
+      };
       items.push({
         id: notif._id,
-        kind: notif.type === "follow" ? "follow" : notif.type === "like" ? "like" : notif.type === "comment" ? "comment" : "system",
+        kind: kindMap[notif.type] ?? "system",
         actor: {
           _id: notif.actorId._id,
           displayName: notif.actorId.displayName,

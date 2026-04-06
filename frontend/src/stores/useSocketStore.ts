@@ -413,14 +413,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // Friend request accepted - notification when someone accepts your request
-    socket.on("friend-request-accepted", ({ from, message }) => {
+    socket.on("friend-request-accepted", ({ from, message, notification }) => {
       try {
-        useNotificationStore.getState().addAcceptanceNotification({
-          type: "friend-accepted",
-          from,
-          message,
-          createdAt: new Date(),
-        });
+        if (notification) {
+          useNotificationStore.getState().addSocialNotification(notification);
+        } else {
+          // Fallback legacy memory-only notification just in case
+          useNotificationStore.getState().addAcceptanceNotification({
+            type: "friend-accepted",
+            from,
+            message,
+            createdAt: new Date(),
+          });
+        }
       } catch (error) {
         console.error("Error adding notification:", error);
       }

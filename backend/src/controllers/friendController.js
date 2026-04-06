@@ -1,6 +1,7 @@
 import Friend from "../models/Friend.js";
 import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
+import Notification from "../models/Notification.js";
 import { io } from "../socket/index.js";
 
 export const sendFriendRequest = async (req, res) => {
@@ -109,10 +110,25 @@ export const acceptFriendRequest = async (req, res) => {
       .select("_id displayName avatarUrl")
       .lean();
 
-    // Emit socket event tới người gửi lời mời (to notify they are now friends)
+    const message = `${receiver?.displayName} đã chấp nhận lời mời kết bạn của bạn`;
+
+    // Persist notification to DB so it survives page refresh
+    const notification = await Notification.create({
+      recipientId: request.from,
+      actorId: request.to,
+      type: "friend_accepted",
+      message,
+    });
+
+    const populatedNotification = await Notification.findById(notification._id)
+      .populate("actorId", "_id displayName username avatarUrl")
+      .lean();
+
+    // Emit realtime event to the original requester
     io.to(request.from.toString()).emit("friend-request-accepted", {
       from: receiver,
-      message: `${receiver?.displayName} đã chấp nhận lời mời kết bạn của bạn`,
+      message,
+      notification: populatedNotification,
     });
 
     return res.status(200).json({
@@ -124,7 +140,7 @@ export const acceptFriendRequest = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Lỗi khi chấp nhận lời mời kết bạn", error);
+    console.error("Ài khi chấp nhận lời mời kết bạn", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

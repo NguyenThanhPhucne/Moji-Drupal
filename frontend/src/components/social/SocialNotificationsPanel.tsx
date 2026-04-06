@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { Bell, CheckCheck, Inbox, Heart, MessageCircle, Users } from "lucide-react";
+import { Bell, CheckCheck, Inbox, Heart, MessageCircle, Users, UserCheck } from "lucide-react";
 import type { CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -12,10 +12,11 @@ const TYPE_META: Record<
   SocialNotification["type"],
   { Icon: React.FC<{ className?: string }>; colorClass: string }
 > = {
-  like: { Icon: Heart, colorClass: "bg-rose-500" },
-  comment: { Icon: MessageCircle, colorClass: "bg-indigo-500" },
-  follow: { Icon: Users, colorClass: "bg-cyan-500" },
-  system: { Icon: Bell, colorClass: "bg-slate-500" },
+  like:            { Icon: Heart,        colorClass: "bg-rose-500" },
+  comment:         { Icon: MessageCircle, colorClass: "bg-indigo-500" },
+  follow:          { Icon: Users,         colorClass: "bg-cyan-500" },
+  system:          { Icon: Bell,          colorClass: "bg-slate-500" },
+  friend_accepted: { Icon: UserCheck,     colorClass: "bg-emerald-500" },
 };
 
 // ─── Skeleton premium ─────────────────────────────────────────────────────────
