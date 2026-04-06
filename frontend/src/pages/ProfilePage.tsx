@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Lock, UserRound } from "lucide-react";
+import { Lock } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
+import UserAvatar from "@/components/chat/UserAvatar";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import ProfileHeaderSkeleton from "@/components/skeleton/ProfileHeaderSkeleton";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
@@ -78,10 +79,13 @@ const ProfilePage = () => {
               <div className="elevated-card p-4 md:p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
-                    <div className="flex size-16 items-center justify-center rounded-full bg-primary/15 text-primary">
-                      <UserRound className="size-8" />
-                    </div>
-                    <div>
+                    <UserAvatar
+                      type="profile"
+                      name={profile?.displayName || "Profile"}
+                      avatarUrl={profile?.avatarUrl ?? undefined}
+                      className="size-16 text-xl shadow-none shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
                       <p className="section-eyebrow">Profile</p>
                       <h1 className="text-title-1">
                         {profile?.displayName || "Profile"}

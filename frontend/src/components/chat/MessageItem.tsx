@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { chatService, type LinkPreviewPayload } from "@/services/chatService";
 import { useLinkPreviewStore } from "@/stores/useLinkPreviewStore";
+import UserAvatar from "./UserAvatar";
 import {
   Dialog,
   DialogContent,
@@ -845,9 +846,12 @@ const MessageItem = memo(function MessageItem({
         {!isOwn && (
           <div className="w-8 flex-shrink-0 self-end">
             {isLastFromSender && (
-              <div className="size-8 rounded-full bg-gradient-chat flex items-center justify-center text-white text-xs font-bold shadow-sm">
-                {(senderParticipant?.displayName ?? "?")[0].toUpperCase()}
-              </div>
+              <UserAvatar
+                type="chat"
+                name={senderParticipant?.displayName ?? "?"}
+                avatarUrl={senderParticipant?.avatarUrl ?? undefined}
+                className="size-8"
+              />
             )}
           </div>
         )}
