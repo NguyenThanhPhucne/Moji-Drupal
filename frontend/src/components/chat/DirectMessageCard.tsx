@@ -29,7 +29,22 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   if (!otherUser) return null;
 
   const unreadCount = convo.unreadCounts?.[String(user._id)] ?? 0;
-  const lastMessage = convo.lastMessage?.content ?? "";
+  let lastMessage = convo.lastMessage?.content ?? "";
+  
+  if (lastMessage === "📷 Photo") {
+    const senderId =
+      (convo.lastMessage as any)?.senderId ||
+      (convo.lastMessage as any)?.sender?._id;
+
+    if (senderId === user._id) {
+      lastMessage = "You sent a photo";
+    } else if (senderId === otherUser._id) {
+      lastMessage = `${otherUser.displayName} sent a photo`;
+    } else {
+      lastMessage = "Sent a photo";
+    }
+  }
+
   const normalizedLastMessage = lastMessage.toLowerCase();
   const directMentionPatterns = [
     user.username ? `@${user.username.toLowerCase()}` : "",

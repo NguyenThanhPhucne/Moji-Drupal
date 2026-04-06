@@ -746,13 +746,20 @@ const MessageItem = memo(function MessageItem({
     isNew && "message-slide-in",
   );
 
+  const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted);
+
   const renderReadOnlyBubble = () => (
     <div
       className={cn(
-        "px-3.5 py-2 relative transition-opacity duration-150 text-[14.5px] leading-relaxed",
-        isOwn
-          ? "bg-primary text-primary-foreground rounded-[20px] rounded-br-[4px]"
-          : "bg-muted text-foreground/90 rounded-[20px] rounded-tl-[4px]",
+        "relative transition-opacity duration-150 text-[14.5px] leading-relaxed",
+        hasOnlyImage
+          ? "bg-transparent p-0"
+          : cn(
+              "px-3.5 py-2",
+              isOwn
+                ? "bg-primary text-primary-foreground rounded-[20px] rounded-br-[4px]"
+                : "bg-muted text-foreground/90 rounded-[20px] rounded-tl-[4px]"
+            ),
         message.isDeleted && "opacity-50 italic",
         "select-text",
       )}
@@ -765,16 +772,30 @@ const MessageItem = memo(function MessageItem({
             <button
               type="button"
               onClick={() => setLightboxOpen(true)}
-              className="lightbox-thumb-btn"
+              className={cn("lightbox-thumb-btn block w-full relative", !hasOnlyImage && "mb-1")}
               aria-label="View image full screen"
             >
-              <img src={message.imgUrl} alt="media" className="mb-1 max-w-[240px] max-h-[320px] w-full object-cover rounded-xl" />
-              <span className="lightbox-thumb-overlay">
+              <img 
+                src={message.imgUrl} 
+                alt="media" 
+                className={cn(
+                  "max-w-[240px] max-h-[320px] w-full object-cover shadow-sm",
+                  hasOnlyImage 
+                    ? cn(
+                        "rounded-[20px] border-[0.5px] border-border/40",
+                        isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]"
+                      )
+                    : "rounded-xl"
+                )} 
+              />
+              <span className={cn("lightbox-thumb-overlay", hasOnlyImage && "rounded-[20px]")}>
                 <ZoomIn className="size-5 text-white" />
               </span>
             </button>
           )}
-          <p className="whitespace-pre-wrap break-words tracking-tight">{message.content}</p>
+          {message.content && (
+            <p className="whitespace-pre-wrap break-words tracking-tight">{message.content}</p>
+          )}
         </>
       )}
     </div>

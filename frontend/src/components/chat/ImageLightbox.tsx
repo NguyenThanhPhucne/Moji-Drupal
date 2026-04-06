@@ -75,7 +75,6 @@ const ImageLightbox = memo(function ImageLightbox({
 
   // Scroll to zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
     setZoom((z) => {
       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2))));
