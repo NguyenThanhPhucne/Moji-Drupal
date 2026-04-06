@@ -39,6 +39,7 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
       <DialogContent
         className="modal-content-shell flex flex-col gap-0 p-0 sm:max-w-md"
         style={{ height: "min(600px, 85svh)" }}
+        showCloseButton={false}
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Thông báo</DialogTitle>

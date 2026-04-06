@@ -83,7 +83,14 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
 
   const { markNotificationRead, markAllNotificationsRead } = useSocialStore();
 
-  const { acceptRequest, declineRequest, receivedList: pendingRequests, removeReceivedRequest } = useFriendStore();
+  const {
+    receivedList: pendingRequests,
+    acceptRequest,
+    declineRequest,
+    removeReceivedRequest,
+    seenRequests,
+    markRequestSeen,
+  } = useFriendStore();
 
   // ── Build unified list ────────────────────────────────────────────────────
   const unified = useMemo<UnifiedNotification[]>(() => {
@@ -100,7 +107,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
           avatarUrl: req.from?.avatarUrl ?? null,
         },
         message: "đã gửi cho bạn lời mời kết bạn",
-        isRead: false,
+        isRead: seenRequests.includes(req._id),
         createdAt: req.createdAt,
         requestId: req._id,
       });
@@ -142,7 +149,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     return items.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [pendingRequests, acceptanceNotifications, socialNotifications]);
+  }, [pendingRequests, acceptanceNotifications, socialNotifications, seenRequests]);
 
   const filtered = tab === "unread" ? unified.filter((n) => !n.isRead) : unified;
   const unreadCount = unified.filter((n) => !n.isRead).length;
@@ -165,8 +172,9 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     // Social notification
     if (!id.startsWith("fr-") && !id.startsWith("fa-")) {
       markNotificationRead(id);
+    } else if (id.startsWith("fr-")) {
+      markRequestSeen(id.replace("fr-", ""));
     }
-    // friend_request and friend_accepted are dismissed
   };
 
   const handleDismiss = (id: string) => {
@@ -218,8 +226,8 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/60 px-4 pb-3 pt-1">
+      {/* ── Notification Dialog Header ── */}
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border/40 px-4">
         <div className="flex items-center gap-2">
           <Bell className="h-5 w-5 text-foreground" />
           <h2 className="text-base font-semibold text-foreground">Thông báo</h2>

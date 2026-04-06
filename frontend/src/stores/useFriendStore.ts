@@ -9,6 +9,16 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   loading: false,
   receivedList: [],
   sentList: [],
+  seenRequests: [],
+  markRequestSeen: (requestId) =>
+    set((state) => {
+      if (state.seenRequests.includes(requestId)) return state;
+      
+      // Reduce the badge count in NotificationStore IF it was unread
+      useNotificationStore.getState().decrementUnreadCount();
+      
+      return { seenRequests: [...state.seenRequests, requestId] };
+    }),
   addReceivedRequest: (request: FriendRequest) => set((state) => ({ receivedList: [request, ...state.receivedList] })),
   removeReceivedRequest: (requestId: string) => set((state) => ({ receivedList: state.receivedList.filter((r) => r._id !== requestId) })),
   searchByUsername: async (username) => {
@@ -50,7 +60,8 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       set({ receivedList: received, sentList: sent });
 
       // Update notification count (only unread received requests)
-      useNotificationStore.getState().setUnreadCount(received.length);
+      const unreadCount = received.filter((req: { _id: string }) => !get().seenRequests.includes(req._id)).length;
+      useNotificationStore.getState().setUnreadCount(unreadCount);
     } catch (error) {
       console.error("Error fetching friend requests", error);
     } finally {
