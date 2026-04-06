@@ -425,7 +425,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         console.error("Error adding notification:", error);
       }
       toast.success(message, {
-        description: `${from?.displayName} is now your friend!`,
+        description: `${from?.displayName} đã trở thành bạn bè của bạn!`,
+        action: {
+          label: "Xem",
+          onClick: () => {
+            useNotificationStore.getState().setIsHubOpen(true);
+          },
+        },
       });
     });
 
