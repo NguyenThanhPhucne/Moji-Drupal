@@ -13,6 +13,12 @@ import {
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 // ─── Unified notification type consumed by NotificationHub ────────────────────
@@ -73,6 +79,7 @@ const NotificationItem = ({
   loadingId,
 }: NotificationItemProps) => {
   const [hovered, setHovered] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const meta = KIND_META[notification.kind];
   const isLoading = loadingId === notification.id;
 
@@ -191,19 +198,46 @@ const NotificationItem = ({
           <span className="h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
         )}
 
-        {/* ⋯ Dismiss button — shown on hover */}
-        {hovered && onDismiss && (
-          <button
-            type="button"
-            aria-label="Dismiss notification"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDismiss(notification.id);
-            }}
-            className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+        {/* ⋯ More button — shown on hover */}
+        {(hovered || dropdownOpen) && (
+          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Tùy chọn thông báo"
+                onClick={(e) => e.stopPropagation()}
+                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              {!notification.isRead && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRead(notification.id);
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Đánh dấu đã đọc
+                </DropdownMenuItem>
+              )}
+              {onDismiss && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDismiss(notification.id);
+                  }}
+                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Gỡ thông báo này
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </div>
     </div>
