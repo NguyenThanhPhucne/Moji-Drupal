@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { MessageCircleMore, Users } from "lucide-react";
-import { Card } from "../ui/card";
+// removed Card import
 import UserAvatar from "../chat/UserAvatar";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
@@ -70,7 +70,7 @@ const FriendListModal = () => {
           ) : (
             <>
               {friends.map((friend, index) => (
-                <Card
+                <div
                   onClick={() => handleAddConversation(friend._id)}
                   key={friend._id}
                   tabIndex={isBusy ? -1 : 0}
@@ -87,7 +87,7 @@ const FriendListModal = () => {
                     }
                   }}
                   className={cn(
-                    "p-3 cursor-pointer transition-smooth hover:shadow-soft glass hover:bg-muted/40 group/friendCard",
+                    "flex flex-row items-center p-2.5 pl-3 cursor-pointer transition-smooth hover:shadow-soft glass justify-between group/friendCard",
                     isBusy && "pointer-events-none",
                     chatLoading && creatingFor === friend._id && "opacity-60",
                   )}
@@ -116,7 +116,7 @@ const FriendListModal = () => {
                       </div>
                     )}
                   </div>
-                </Card>
+                </div>
               ))}
 
               {friends.length === 0 && (

@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { Button } from "../ui/button";
-import { Card } from "../ui/card";
+// removed Card import
 import { Input } from "../ui/input";
 import {
   Dialog,
@@ -131,11 +131,12 @@ const FriendsManagerDialog = () => {
                 const disabled = busy || chatLoading;
 
                 return (
-                  <Card
+                  <div
                     key={friend._id}
-                    className="flex items-center gap-3 rounded-xl border border-border/70 p-3"
+                    className="flex flex-row items-center justify-between gap-3 rounded-xl border border-border/70 p-2.5 pl-3 transition-colors bg-card hover:bg-muted/40"
                   >
-                    <FriendProfileMiniCard
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <FriendProfileMiniCard
                       userId={friend._id}
                       displayName={friend.displayName}
                       avatarUrl={friend.avatarUrl}
@@ -156,16 +157,17 @@ const FriendsManagerDialog = () => {
                       />
                     </FriendProfileMiniCard>
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">
-                        {friend.displayName}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        @{friend.username}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold">
+                          {friend.displayName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          @{friend.username}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-shrink-0 items-center gap-2">
                       <Button
                         type="button"
                         size="sm"
@@ -189,7 +191,7 @@ const FriendsManagerDialog = () => {
                         Remove
                       </Button>
                     </div>
-                  </Card>
+                  </div>
                 );
               })}
             </>

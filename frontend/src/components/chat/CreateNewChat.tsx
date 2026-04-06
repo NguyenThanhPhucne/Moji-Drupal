@@ -1,5 +1,5 @@
 import { useFriendStore } from "@/stores/useFriendStore";
-import { Card } from "../ui/card";
+// Card import removed - using plain div instead
 import { Dialog, DialogTrigger } from "../ui/dialog";
 import { MessageCircle } from "lucide-react";
 import FriendListModal from "../createNewChat/FriendListModal";
@@ -19,7 +19,7 @@ const CreateNewChat = () => {
 
   return (
     <div className="flex gap-2">
-      <Card className="flex-1 p-3 glass hover:shadow-soft transition-smooth cursor-pointer group/card">
+      <div className="flex-1 rounded-xl border bg-card text-card-foreground shadow-sm p-3 glass hover:shadow-soft transition-smooth cursor-pointer group/card">
         <Dialog open={open} onOpenChange={handleOpenChange}>
           <DialogTrigger asChild>
             <button type="button" className="w-full text-left">
@@ -36,7 +36,7 @@ const CreateNewChat = () => {
 
           <FriendListModal />
         </Dialog>
-      </Card>
+      </div>
     </div>
   );
 };

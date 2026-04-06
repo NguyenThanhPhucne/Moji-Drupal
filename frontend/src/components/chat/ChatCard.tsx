@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+// Card import removed - using plain div instead
 import { formatOnlineTime, cn } from "@/lib/utils";
 
 interface ChatCardProps {
@@ -28,7 +28,7 @@ const ChatCard = ({
   const hasMention = (mentionCount ?? 0) > 0;
 
   return (
-    <Card
+    <div
       key={convoId}
       data-chat-card="true"
       role="button"
@@ -36,7 +36,7 @@ const ChatCard = ({
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "cursor-pointer rounded-lg border border-transparent px-3 py-2 transition-all duration-150",
+        "cursor-pointer rounded-xl border border-transparent px-3 py-2 transition-all duration-150",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
         "group select-none relative overflow-hidden",
         isActive
@@ -55,7 +55,7 @@ const ChatCard = ({
         <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
       )}
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-row items-center gap-3">
         {/* Avatar */}
         <div className="chat-card-avatar-wrap relative flex-shrink-0">{leftSection}</div>
 
@@ -112,7 +112,7 @@ const ChatCard = ({
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   );
 };
 

@@ -463,6 +463,7 @@ const ChatWindowBody = () => {
         align: "end",
       });
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId]);
 
   const fetchMoreMessages = async () => {
