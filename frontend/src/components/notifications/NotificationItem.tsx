@@ -78,7 +78,6 @@ const NotificationItem = ({
   onDeclineFriend,
   loadingId,
 }: NotificationItemProps) => {
-  const [hovered, setHovered] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const meta = KIND_META[notification.kind];
   const isLoading = loadingId === notification.id;
@@ -93,8 +92,6 @@ const NotificationItem = ({
     <div
       role="button"
       tabIndex={0}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       onClick={handleClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -198,47 +195,50 @@ const NotificationItem = ({
           <span className="h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
         )}
 
-        {/* ⋯ More button — shown on hover */}
-        {(hovered || dropdownOpen) && (
-          <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Tùy chọn thông báo"
-                onClick={(e) => e.stopPropagation()}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        {/* ⋯ More button — always mounted but hidden unless hovered or focused/open */}
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Tùy chọn thông báo"
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                "flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground",
+                dropdownOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+              )}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            {!notification.isRead && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRead(notification.id);
+                  setDropdownOpen(false);
+                }}
+                className="cursor-pointer"
               >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-              {!notification.isRead && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRead(notification.id);
-                  }}
-                  className="cursor-pointer"
-                >
-                  <Check className="mr-2 h-4 w-4" />
-                  Đánh dấu đã đọc
-                </DropdownMenuItem>
-              )}
-              {onDismiss && (
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDismiss(notification.id);
-                  }}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                >
-                  <X className="mr-2 h-4 w-4" />
-                  Gỡ thông báo này
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+                <Check className="mr-2 h-4 w-4" />
+                Đánh dấu đã đọc
+              </DropdownMenuItem>
+            )}
+            {onDismiss && (
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismiss(notification.id);
+                  setDropdownOpen(false);
+                }}
+                className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+              >
+                <X className="mr-2 h-4 w-4" />
+                Gỡ thông báo này
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
