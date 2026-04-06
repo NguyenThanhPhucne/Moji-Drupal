@@ -1,7 +1,5 @@
-import { cn } from "@/lib/utils";
+import { formatOnlineTime } from "@/lib/utils";
 import { useSocketStore } from "@/stores/useSocketStore";
-import { formatDistanceToNow } from "date-fns";
-import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 const StatusBadge = ({
   status,
@@ -13,50 +11,30 @@ const StatusBadge = ({
   const { getLastActiveAt } = useSocketStore();
   const lastActiveAt = getLastActiveAt(userId);
 
-  let statusLabel = "Offline";
+  if (!userId || status === "offline") {
+    return null;
+  }
+
   if (status === "online") {
-    statusLabel = "Online";
-  } else if (status === "recently-active") {
-    statusLabel = "Recently active";
+    return (
+      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-[13px] w-[13px] items-center justify-center rounded-full bg-background">
+        <span className="h-2 w-2 rounded-full bg-[#3FBB46]" />
+      </span>
+    );
   }
 
-  const lastActiveLabel =
-    lastActiveAt && status !== "online"
-      ? `Last active ${formatDistanceToNow(new Date(lastActiveAt), {
-          addSuffix: true,
-        })}`
-      : "";
-
-  const badgeNode = (
-    <div
-      className={cn(
-        "absolute -bottom-0.5 -right-0.5 size-4 rounded-full border-2 border-card transition-all duration-300 ease-out",
-        status === "online" && "status-online",
-        status === "recently-active" && "status-recently-active",
-        status === "offline" && "status-offline",
-      )}
-    ></div>
-  );
-
-  if (!userId) {
-    return badgeNode;
-  }
-
-  return (
-    <Tooltip delayDuration={180}>
-      <TooltipTrigger asChild>
-        <span className="absolute -bottom-0.5 -right-0.5 inline-flex">
-          {badgeNode}
+  if (status === "recently-active" && lastActiveAt) {
+    const timeStr = formatOnlineTime(new Date(lastActiveAt));
+    return (
+      <span className="absolute -bottom-1 -right-2 inline-flex items-center justify-center rounded-full bg-background px-[2px] py-[2px]">
+        <span className="flex h-3.5 items-center justify-center rounded-full bg-[#3FBB46]/15 px-1.5 text-[9px] font-bold text-[#3FBB46] dark:text-[#90E78A]">
+          {timeStr}
         </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6}>
-        <div className="space-y-0.5">
-          <p className="font-semibold">{statusLabel}</p>
-          {lastActiveLabel && <p>{lastActiveLabel}</p>}
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  );
+      </span>
+    );
+  }
+
+  return null;
 };
 
 export default StatusBadge;

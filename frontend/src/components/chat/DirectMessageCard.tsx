@@ -2,7 +2,7 @@ import type { Conversation } from "@/types/chat";
 import ChatCard from "./ChatCard";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
-import { cn } from "@/lib/utils";
+import { cn, formatOnlineTime } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import UnreadCountBadge from "./UnreadCountBadge";
@@ -17,7 +17,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     messages,
     fetchMessages,
   } = useChatStore();
-  const { getUserPresence } = useSocketStore();
+  const { getUserPresence, getLastActiveAt } = useSocketStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -53,6 +53,17 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     }
   };
 
+  const userPresence = getUserPresence(otherUser?._id);
+  const lastActiveAt = getLastActiveAt(otherUser?._id);
+
+  let activeStatusText = "Offline";
+  if (userPresence === "online") {
+    activeStatusText = "Active now";
+  } else if (userPresence === "recently-active" && lastActiveAt) {
+    const timeStr = formatOnlineTime(new Date(lastActiveAt));
+    activeStatusText = `Active ${timeStr} ago`;
+  }
+
   return (
     <ChatCard
       convoId={convo._id}
@@ -81,16 +92,21 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
         </>
       }
       subtitle={
-        <p
-          className={cn(
-            "text-sm truncate",
-            unreadCount > 0
-              ? "font-medium text-foreground"
-              : "text-muted-foreground",
-          )}
-        >
-          {lastMessage}
-        </p>
+        <div className="flex flex-col gap-0.5 mt-0.5">
+          <p
+            className={cn(
+              "text-[13px] truncate leading-snug",
+              unreadCount > 0
+                ? "font-medium text-foreground"
+                : "text-muted-foreground",
+            )}
+          >
+            {lastMessage}
+          </p>
+          <p className="text-[11px] font-medium text-muted-foreground/75 truncate">
+            {activeStatusText}
+          </p>
+        </div>
       }
     />
   );
