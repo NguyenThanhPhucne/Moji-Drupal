@@ -12,7 +12,7 @@ import NotificationHub from "@/components/notifications/NotificationHub";
 
 interface FriendRequestDialogProps {
   open: boolean;
-  setOpen: Dispatch<SetStateAction<boolean>>;
+  setOpen: (open: boolean) => void;
 }
 
 const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {

@@ -22,11 +22,12 @@ import Logout from "../auth/Logout";
 import FriendRequestDialog from "../friendRequest/FriendRequestDialog";
 import ProfileDialog from "../profile/ProfileDialog";
 import { useFriendStore } from "@/stores/useFriendStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
 import { NotificationBadge } from "../notifications/NotificationBadge";
 
 export function NavUser({ user }: Readonly<{ user: User }>) {
   const { isMobile } = useSidebar();
-  const [friendRequestOpen, setfriendRequestOpen] = useState(false);
+  const { isHubOpen: friendRequestOpen, setIsHubOpen: setfriendRequestOpen } = useNotificationStore();
   const [profileOpen, setProfileOpen] = useState(false);
   const { getAllFriendRequests } = useFriendStore();
 

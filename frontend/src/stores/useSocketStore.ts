@@ -406,7 +406,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         action: {
           label: "View",
           onClick: () => {
-            // Open a dialog here if needed.
+            useNotificationStore.getState().setIsHubOpen(true);
           },
         },
       });

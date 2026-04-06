@@ -18,8 +18,10 @@ interface NotificationState {
   acceptanceNotifications: AcceptanceNotification[]; // Notifications when a request is accepted
   socialNotifications: SocialNotification[];
   unreadSocialCount: number;
+  isHubOpen: boolean;
 
   // Actions
+  setIsHubOpen: (open: boolean) => void;
   setUnreadCount: (count: number) => void;
   incrementUnreadCount: () => void;
   decrementUnreadCount: () => void;
@@ -38,6 +40,9 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   acceptanceNotifications: [],
   socialNotifications: [],
   unreadSocialCount: 0,
+  isHubOpen: false,
+
+  setIsHubOpen: (open) => set({ isHubOpen: open }),
 
   setUnreadCount: (count) => set({ unreadFriendRequestCount: count }),
 
