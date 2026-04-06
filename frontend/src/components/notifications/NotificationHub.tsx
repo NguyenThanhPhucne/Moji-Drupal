@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useFriendStore } from "@/stores/useFriendStore";
+import { useSocialStore } from "@/stores/useSocialStore";
 import NotificationItem, {
   type UnifiedNotification,
 } from "./NotificationItem";
@@ -80,9 +81,9 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     socialNotifications,
     resetUnreadCount,
     removePendingRequest,
-    markSocialNotificationRead,
-    markAllSocialNotificationsRead,
   } = useNotificationStore();
+
+  const { markNotificationRead, markAllNotificationsRead } = useSocialStore();
 
   const { acceptRequest, declineRequest } = useFriendStore();
 
@@ -165,7 +166,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   const handleRead = (id: string) => {
     // Social notification
     if (!id.startsWith("fr-") && !id.startsWith("fa-")) {
-      markSocialNotificationRead(id);
+      markNotificationRead(id);
     }
     // friend_request and friend_accepted are dismissed
   };
@@ -182,12 +183,12 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
       const reqId = id.replace("fr-", "");
       removePendingRequest(reqId);
     } else {
-      markSocialNotificationRead(id);
+      markNotificationRead(id);
     }
   };
 
   const handleMarkAllRead = async () => {
-    markAllSocialNotificationsRead();
+    await markAllNotificationsRead();
     resetUnreadCount();
     toast.success("Đã đánh dấu tất cả là đã đọc");
   };
