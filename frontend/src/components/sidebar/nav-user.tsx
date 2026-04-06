@@ -1,4 +1,4 @@
-import { Bell, ChevronsUpDown, UserIcon } from "lucide-react";
+import { ChevronsUpDown, UserIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -59,7 +59,10 @@ export function NavUser({ user }: Readonly<{ user: User }>) {
                   </span>
                   <span className="truncate text-xs">{user.username}</span>
                 </div>
-                <ChevronsUpDown className="ml-auto size-4" />
+                <div className="ml-auto flex items-center gap-1">
+                  <NotificationBadge showBell={false} />
+                  <ChevronsUpDown className="size-4" />
+                </div>
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -94,9 +97,9 @@ export function NavUser({ user }: Readonly<{ user: User }>) {
                   onClick={() => setfriendRequestOpen(true)}
                   className="flex items-center justify-between"
                 >
-                  <div className="flex items-center">
-                    <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
-                    <span className="ml-2">Notifications</span>
+                  <div className="flex items-center gap-2">
+                    <NotificationBadge showBell className="h-4 w-4" />
+                    <span>Thông báo</span>
                   </div>
                   <NotificationBadge showBell={false} className="ml-auto" />
                 </DropdownMenuItem>
