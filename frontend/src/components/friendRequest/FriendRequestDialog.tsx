@@ -1,17 +1,14 @@
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
-import SentRequests from "./SentRequests";
-import ReceivedRequests from "./ReceivedRequests";
-import { PendingFriendRequests } from "../notifications/PendingFriendRequests";
-import { AcceptanceNotifications } from "../notifications/AcceptanceNotifications";
+import NotificationHub from "@/components/notifications/NotificationHub";
 
 interface FriendRequestDialogProps {
   open: boolean;
@@ -19,69 +16,39 @@ interface FriendRequestDialogProps {
 }
 
 const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
-  const [tab, setTab] = useState("received");
-  const { getAllFriendRequests } = useFriendStore();
+  const { getAllFriendRequests, loading } = useFriendStore();
   const { resetUnreadCount } = useNotificationStore();
 
   useEffect(() => {
-    const loadRequest = async () => {
+    if (!open) return;
+
+    const load = async () => {
       try {
         await getAllFriendRequests();
-        // Reset notification count when opening the dialog.
         resetUnreadCount();
       } catch (error) {
-        console.error("Error while loading requests", error);
+        console.error("Error loading friend requests", error);
       }
     };
 
-    if (open) {
-      loadRequest();
-    }
+    load();
   }, [open, getAllFriendRequests, resetUnreadCount]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader className="modal-stagger-item">
-          <DialogTitle>Friend requests</DialogTitle>
+      <DialogContent
+        className="modal-content-shell flex flex-col gap-0 p-0 sm:max-w-md"
+        style={{ height: "min(600px, 85svh)" }}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="sr-only">
+          <DialogTitle>Thông báo</DialogTitle>
+          <DialogDescription>
+            Xem và quản lý tất cả thông báo của bạn
+          </DialogDescription>
         </DialogHeader>
 
-        {/* Show new incoming requests */}
-        <PendingFriendRequests />
-
-        <Tabs value={tab} onValueChange={setTab} className="w-full modal-stagger-item">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="received">Received</TabsTrigger>
-            <TabsTrigger value="sent">Sent</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          </TabsList>
-
-          <div className="mt-3 min-h-[300px]">
-            <TabsContent
-              value="received"
-              forceMount
-              className="mt-0 max-h-[300px] overflow-y-auto data-[state=inactive]:hidden"
-            >
-              <ReceivedRequests />
-            </TabsContent>
-
-            <TabsContent
-              value="sent"
-              forceMount
-              className="mt-0 max-h-[300px] overflow-y-auto data-[state=inactive]:hidden"
-            >
-              <SentRequests />
-            </TabsContent>
-
-            <TabsContent
-              value="notifications"
-              forceMount
-              className="mt-0 max-h-[300px] overflow-y-auto data-[state=inactive]:hidden"
-            >
-              <AcceptanceNotifications />
-            </TabsContent>
-          </div>
-        </Tabs>
+        <NotificationHub loading={loading} />
       </DialogContent>
     </Dialog>
   );
