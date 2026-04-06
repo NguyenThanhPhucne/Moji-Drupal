@@ -22,13 +22,19 @@ const SocialNotificationsSkeleton = ({
         return (
           <div
             key={`${key}-${staggerIndex}`}
-            className="stagger-enter rounded-xl border border-border/60 bg-background/60 px-3 py-2"
+            className="stagger-enter flex items-start gap-3 rounded-xl px-3 py-2.5"
             style={{ "--stagger-index": staggerIndex } as CSSProperties}
           >
-            <Skeleton className={`h-4 ${compact ? "w-24" : "w-28"}`} />
-            <Skeleton className="mt-2 h-3 w-full" />
-            {!compact && <Skeleton className="mt-1 h-3 w-4/5" />}
-            <Skeleton className={`mt-2 h-3 ${compact ? "w-16" : "w-20"}`} />
+            {/* Avatar circle */}
+            <Skeleton className={`flex-shrink-0 rounded-full ${compact ? "h-9 w-9" : "h-10 w-10"}`} />
+
+            {/* Content lines */}
+            <div className="flex-1 space-y-2 pt-0.5">
+              <Skeleton className={`h-3.5 ${compact ? "w-1/2" : "w-3/4"}`} />
+              <Skeleton className="h-3 w-full" />
+              {!compact && <Skeleton className="h-3 w-4/5" />}
+              <Skeleton className="h-3 w-1/4" />
+            </div>
           </div>
         );
       })}
