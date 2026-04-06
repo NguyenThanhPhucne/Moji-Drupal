@@ -1,4 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
 import {
   Heart,
   MessageCircle,
@@ -9,7 +10,7 @@ import {
   Bell,
   MoreHorizontal,
   Check,
-  X,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,11 +19,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-// ─── Unified notification type consumed by NotificationHub ────────────────────
+// ─── Unified notification type ────────────────────────────────────────────────
 export type NotificationKind =
   | "friend_request"
   | "friend_accepted"
@@ -32,7 +34,6 @@ export type NotificationKind =
   | "system";
 
 export interface UnifiedNotification {
-  /** Unique key for react rendering */
   id: string;
   kind: NotificationKind;
   actor: {
@@ -43,21 +44,20 @@ export interface UnifiedNotification {
   message: string;
   isRead: boolean;
   createdAt: string;
-  /** Only for friend_request kind */
   requestId?: string;
 }
 
-// ─── Type → icon + color ──────────────────────────────────────────────────────
+// ─── Kind metadata ────────────────────────────────────────────────────────────
 const KIND_META: Record<
   NotificationKind,
-  { Icon: React.FC<{ className?: string }>; colorClass: string }
+  { Icon: React.FC<{ className?: string }>; bg: string; text: string }
 > = {
-  friend_request: { Icon: UserPlus, colorClass: "bg-blue-500" },
-  friend_accepted: { Icon: UserCheck, colorClass: "bg-emerald-500" },
-  like: { Icon: Heart, colorClass: "bg-rose-500" },
-  comment: { Icon: MessageCircle, colorClass: "bg-indigo-500" },
-  follow: { Icon: Users, colorClass: "bg-cyan-500" },
-  system: { Icon: Bell, colorClass: "bg-slate-500" },
+  friend_request:  { Icon: UserPlus,       bg: "bg-blue-500",    text: "text-blue-500" },
+  friend_accepted: { Icon: UserCheck,      bg: "bg-emerald-500", text: "text-emerald-500" },
+  like:            { Icon: Heart,           bg: "bg-rose-500",    text: "text-rose-500" },
+  comment:         { Icon: MessageCircle,   bg: "bg-indigo-500",  text: "text-indigo-500" },
+  follow:          { Icon: Users,           bg: "bg-cyan-500",    text: "text-cyan-500" },
+  system:          { Icon: Bell,            bg: "bg-slate-400",   text: "text-slate-500" },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -68,7 +68,6 @@ interface NotificationItemProps {
   onAcceptFriend?: (requestId: string) => void;
   onDeclineFriend?: (requestId: string) => void;
   loadingId?: string | null;
-  /** For friend_accepted: instantly open a direct conversation */
   onOpenDirectChat?: () => void;
 }
 
@@ -87,7 +86,6 @@ const NotificationItem = ({
   const isLoading = loadingId === notification.id;
 
   const handleClick = () => {
-    // friend_accepted: open chat immediately
     if (notification.kind === "friend_accepted" && onOpenDirectChat) {
       onOpenDirectChat();
       return;
@@ -109,113 +107,126 @@ const NotificationItem = ({
         }
       }}
       className={cn(
-        "group relative flex items-start gap-4 rounded-xl p-3 transition-all duration-200 cursor-pointer select-none active:scale-[0.99]",
+        // Base layout
+        "group relative flex items-start gap-3 rounded-xl px-3 py-3 cursor-pointer select-none",
+        // Smooth transition on all states
+        "transition-colors duration-150",
+        // Unread: light blue tint + left accent stripe (Facebook-style)
         notification.isRead
-          ? "bg-transparent hover:bg-accent/40"
-          : "bg-primary/[0.04] hover:bg-primary/[0.08] shadow-[inset_3px_0_0_0_hsl(var(--primary))]",
-        isLoading && "opacity-60 pointer-events-none grayscale-[0.2]",
+          ? "bg-transparent hover:bg-slate-50 dark:hover:bg-muted/40"
+          : "bg-blue-50/70 hover:bg-blue-50 dark:bg-primary/[0.05] dark:hover:bg-primary/[0.08]",
+        // Loading
+        isLoading && "opacity-50 pointer-events-none",
       )}
     >
-      {/* ── Avatar with type icon overlay ── */}
-      <div className="relative flex-shrink-0">
-        <Avatar className="h-11 w-11 shadow-xs border border-background/50">
+      {/* ── Left unread stripe ── */}
+      {!notification.isRead && (
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-[60%] rounded-r-full bg-primary" />
+      )}
+
+      {/* ── Avatar ── */}
+      <div className="relative flex-shrink-0 mt-0.5">
+        <Avatar className="h-11 w-11">
           <AvatarImage
             src={notification.actor.avatarUrl ?? undefined}
             alt={notification.actor.displayName}
             className="object-cover"
           />
-          <AvatarFallback className="text-sm font-semibold bg-accent/50">
+          <AvatarFallback className="text-sm font-semibold bg-muted">
             {notification.actor.displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
 
-        {/* Type icon badge */}
+        {/* Kind icon badge */}
         <span
           className={cn(
-            "absolute -bottom-1 -right-1 flex h-[22px] w-[22px] items-center justify-center rounded-full ring-[2.5px] ring-background shadow-xs",
-            meta.colorClass,
+            "absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full ring-2 ring-white dark:ring-background",
+            meta.bg,
           )}
         >
-          <meta.Icon className="h-3 w-3 text-white" />
+          <meta.Icon className="h-2.5 w-2.5 text-white" />
         </span>
       </div>
 
       {/* ── Content ── */}
       <div className="min-w-0 flex-1">
-        <p className="text-sm leading-snug line-clamp-2 pr-2">
-          <span className="font-semibold text-foreground tracking-tight">
-            {notification.actor.displayName}
-          </span>{" "}
-          <span className="text-foreground/85">{notification.message}</span>
+        {/* Main text */}
+        <p className="text-[13.5px] leading-snug text-foreground line-clamp-3 pr-1">
+          <span className="font-semibold">{notification.actor.displayName}</span>
+          {" "}
+          <span className="text-foreground/80">{notification.message}</span>
         </p>
 
+        {/* Timestamp */}
         <p
           className={cn(
-            "mt-1 text-[11px] font-medium tracking-wide flex items-center gap-1",
-            notification.isRead ? "text-muted-foreground" : "text-primary/90",
+            "mt-1 text-[12px] font-semibold",
+            notification.isRead
+              ? "text-muted-foreground"
+              : meta.text,
           )}
         >
           {formatDistanceToNow(new Date(notification.createdAt), {
             addSuffix: true,
+            locale: vi,
           })}
         </p>
 
-        {/* ── "Chat now" CTA for friend_accepted ── */}
+        {/* ── "Chat now" pill for friend_accepted ── */}
         {notification.kind === "friend_accepted" && onOpenDirectChat && (
-          <div className="mt-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary ring-1 ring-primary/20 group-hover:bg-primary/15 transition-colors">
-              <MessageCircleMore className="h-3 w-3" />
-              Nhấn để nhắn tin ngay
+          <div className="mt-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/15">
+              <MessageCircleMore className="h-3.5 w-3.5" />
+              Nhắn tin ngay
             </span>
           </div>
         )}
 
-        {/* ── Inline quick actions (friend request only) ── */}
+        {/* ── Accept / Decline buttons for friend_request ── */}
         {notification.kind === "friend_request" &&
           notification.requestId &&
           onAcceptFriend &&
           onDeclineFriend && (
             <div
-              className="mt-2 flex gap-2"
+              className="mt-2.5 flex gap-2"
               onClick={(e) => e.stopPropagation()}
             >
               <Button
                 size="sm"
-                className="h-7 px-3 text-xs"
+                className="h-8 px-4 text-[13px] font-semibold rounded-lg"
                 onClick={() => {
                   onAcceptFriend(notification.requestId!);
                   onRead(notification.id);
                 }}
                 disabled={isLoading}
               >
-                <Check className="mr-1 h-3 w-3" />
+                <Check className="mr-1.5 h-3.5 w-3.5" />
                 Xác nhận
               </Button>
               <Button
                 size="sm"
-                variant="outline"
-                className="h-7 px-3 text-xs text-destructive hover:text-destructive"
+                variant="secondary"
+                className="h-8 px-4 text-[13px] font-semibold rounded-lg text-foreground/80"
                 onClick={() => {
                   onDeclineFriend(notification.requestId!);
                   onRead(notification.id);
                 }}
                 disabled={isLoading}
               >
-                <X className="mr-1 h-3 w-3" />
                 Xóa
               </Button>
             </div>
           )}
       </div>
 
-      {/* ── Right: unread dot + hover dismiss button ── */}
-      <div className="flex flex-shrink-0 flex-col items-center gap-3 self-start pt-1">
-        {/* Unread blue dot with soft glow */}
+      {/* ── Right: unread dot + options menu ── */}
+      <div className="flex flex-shrink-0 flex-col items-center gap-2.5 self-start pt-1">
+        {/* Blue dot */}
         {!notification.isRead && (
-          <span className="h-2.5 w-2.5 rounded-full bg-primary shadow-[0_0_6px_hsl(var(--primary)_/_0.6)]" />
+          <span className="h-3 w-3 rounded-full bg-primary flex-shrink-0" />
         )}
 
-        {/* ⋯ More button — always mounted but hidden unless hovered or focused/open */}
+        {/* ⋯ More options */}
         <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
           <DropdownMenuTrigger asChild>
             <button
@@ -223,14 +234,22 @@ const NotificationItem = ({
               aria-label="Tùy chọn thông báo"
               onClick={(e) => e.stopPropagation()}
               className={cn(
-                "flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-muted hover:text-foreground",
-                dropdownOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60",
+                "transition-all hover:bg-muted hover:text-foreground",
+                dropdownOpen
+                  ? "opacity-100 bg-muted text-foreground"
+                  : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
               )}
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+
+          <DropdownMenuContent
+            align="end"
+            className="w-52"
+            onClick={(e) => e.stopPropagation()}
+          >
             {!notification.isRead && (
               <DropdownMenuItem
                 onClick={(e) => {
@@ -238,12 +257,13 @@ const NotificationItem = ({
                   onRead(notification.id);
                   setDropdownOpen(false);
                 }}
-                className="cursor-pointer"
+                className="cursor-pointer gap-2 text-[13px]"
               >
-                <Check className="mr-2 h-4 w-4" />
+                <Check className="h-4 w-4 text-muted-foreground" />
                 Đánh dấu đã đọc
               </DropdownMenuItem>
             )}
+            {!notification.isRead && onDismiss && <DropdownMenuSeparator />}
             {onDismiss && (
               <DropdownMenuItem
                 onClick={(e) => {
@@ -251,9 +271,9 @@ const NotificationItem = ({
                   onDismiss(notification.id);
                   setDropdownOpen(false);
                 }}
-                className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                className="cursor-pointer gap-2 text-[13px] text-destructive focus:text-destructive focus:bg-destructive/10"
               >
-                <X className="mr-2 h-4 w-4" />
+                <Trash2 className="h-4 w-4" />
                 Gỡ thông báo này
               </DropdownMenuItem>
             )}

@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { isToday, subDays, isAfter } from "date-fns";
-import { Bell, CheckCheck, Inbox } from "lucide-react";
+import { CheckCheck, Inbox } from "lucide-react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useSocialStore } from "@/stores/useSocialStore";
@@ -35,34 +35,30 @@ const GROUP_LABELS: Record<"new" | "today" | "earlier", string> = {
 const SKEL_KEYS = ["s1", "s2", "s3", "s4", "s5"];
 
 const NotificationHubSkeleton = () => (
-  <div className="space-y-1 p-1">
+  <div className="divide-y divide-border/40">
     {SKEL_KEYS.map((key) => (
-      <div
-        key={key}
-        className="flex items-start gap-3 rounded-xl px-3 py-2.5"
-      >
-        <Skeleton className="h-10 w-10 rounded-full flex-shrink-0" />
+      <div key={key} className="flex items-start gap-3 px-4 py-3.5">
+        <Skeleton className="h-11 w-11 rounded-full flex-shrink-0" />
         <div className="flex-1 space-y-2 pt-1">
-          <Skeleton className="h-3.5 w-3/4" />
+          <Skeleton className="h-3.5 w-4/5" />
           <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-1/3" />
+          <Skeleton className="h-3 w-1/4" />
         </div>
       </div>
     ))}
   </div>
 );
 
-// ─── Empty state ──────────────────────────────────────────────────────────────
-const EmptyState = () => (
-  <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 py-12 px-6 text-center animate-in fade-in zoom-in-95 duration-500">
-    <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-muted shadow-inner">
-      <div className="absolute inset-0 rounded-full border border-dashed border-foreground/20 animate-spin-slow" />
-      <Inbox className="h-9 w-9 text-muted-foreground/80 relative z-10" />
+// ─── Empty state ─────────────────────────────────────────────────────────────
+ const EmptyState = () => (
+  <div className="flex h-full min-h-[280px] flex-col items-center justify-center gap-3 py-10 text-center">
+    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+      <Inbox className="h-7 w-7 text-muted-foreground/70" />
     </div>
-    <div className="space-y-1">
-      <p className="text-[15px] font-semibold text-foreground tracking-tight">Bạn đã xem hết thông báo</p>
-      <p className="max-w-[220px] text-xs font-medium text-muted-foreground/90 leading-relaxed">
-        Không có hoạt động nào mới vào lúc này. Chúng tôi sẽ báo cho bạn khi có tin mới.
+    <div className="space-y-0.5">
+      <p className="text-[14px] font-semibold text-foreground">Bạn đã cập nhật hết</p>
+      <p className="text-[12.5px] text-muted-foreground">
+        Khi có tin mới, bạn sẽ thấy ở đây
       </p>
     </div>
   </div>
@@ -254,29 +250,24 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full flex-col">
-      {/* ── Notification Dialog Header ── */}
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-border/40 px-4">
-        <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-foreground" />
-          <h2 className="text-base font-semibold text-foreground">Thông báo</h2>
-          {unreadCount > 0 && (
-            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
-          )}
-        </div>
+      {/* ── Header ── */}
+      <div className="flex h-14 shrink-0 items-center justify-between px-4">
+        <h2 className="text-[18px] font-bold text-foreground tracking-tight">Thông báo</h2>
 
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
           onClick={handleMarkAllRead}
           disabled={unreadCount === 0}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold transition-colors",
+            unreadCount === 0
+              ? "text-muted-foreground/50 cursor-default"
+              : "text-primary hover:bg-primary/10 cursor-pointer",
+          )}
         >
-          <CheckCheck className="h-3.5 w-3.5" />
-          Đánh dấu đã đọc
-        </Button>
+          <CheckCheck className="h-4 w-4" />
+          Đánh dấu tất cả
+        </button>
       </div>
 
       {/* Tabs */}
@@ -285,21 +276,22 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
         onValueChange={(v) => setTab(v as "all" | "unread")}
         className="flex flex-1 flex-col overflow-hidden"
       >
-        <TabsList className="grid w-full grid-cols-2 bg-secondary/40 p-1 h-9 rounded-xl mx-4 mt-3 w-[calc(100%-32px)]">
+        {/* Tabs */}
+        <TabsList className="flex gap-1 bg-transparent px-3 pt-1 pb-0 border-b border-border/40 rounded-none h-auto justify-start">
           <TabsTrigger
             value="all"
-            className="rounded-lg text-[13px] tracking-tight font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+            className="rounded-none pb-2.5 px-1 text-[14px] font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:shadow-[0_2px_0_0_hsl(var(--primary))] bg-transparent shadow-none transition-colors"
           >
             Tất cả
           </TabsTrigger>
           <TabsTrigger
             value="unread"
-            className="rounded-lg text-[13px] tracking-tight font-semibold transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+            className="rounded-none pb-2.5 px-1 text-[14px] font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:shadow-[0_2px_0_0_hsl(var(--primary))] bg-transparent shadow-none transition-colors"
           >
             Chưa đọc
             {unreadCount > 0 && (
-              <span className="ml-1.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
-                {unreadCount}
+              <span className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
+                {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
           </TabsTrigger>
@@ -309,14 +301,14 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
         <TabsContent
           value={tab}
           forceMount
-          className="mt-2 flex-1 overflow-y-auto px-2 pb-3 data-[state=inactive]:hidden beautiful-scrollbar"
+          className="flex-1 overflow-y-auto px-2 pb-4 pt-1 data-[state=inactive]:hidden beautiful-scrollbar"
         >
           {loading && unified.length === 0 ? (
             <NotificationHubSkeleton />
           ) : filtered.length === 0 ? (
             <EmptyState />
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-0.5 py-1">
               {(["new", "today", "earlier"] as const).map((group) => {
                 const items = grouped[group];
                 if (items.length === 0) return null;
@@ -324,11 +316,11 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
                 return (
                   <div key={group}>
                     {/* Group label */}
-                      <div className="flex items-center pt-5 pb-2">
-                        <h3 className="text-[13px] font-bold text-foreground/80 tracking-tight uppercase">
-                          {GROUP_LABELS[group as keyof typeof GROUP_LABELS]}
-                        </h3>
-                      </div>
+                    <div className="px-3 pb-1 pt-3">
+                      <h3 className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest">
+                        {GROUP_LABELS[group as keyof typeof GROUP_LABELS]}
+                      </h3>
+                    </div>
 
                     {/* Items */}
                     {items.map((notification) => (
