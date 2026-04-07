@@ -77,7 +77,7 @@ const mergeResults = (
   );
 };
 
-const GlobalSearchDialog = () => {
+const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) => {
   const navigate = useNavigate();
   const {
     conversations,
@@ -348,18 +348,20 @@ const GlobalSearchDialog = () => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="group hidden md:flex items-center gap-2.5 w-full px-3 py-2 rounded-xl border border-border/50 bg-muted/30 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <Search className="size-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
-          <span className="flex-1 text-left text-[13px]">Search people, groups...</span>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 shrink-0">
-            ⌘K
-          </kbd>
-        </button>
-      </DialogTrigger>
+      {!globalOnly && (
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="group hidden md:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
+            <span className="flex-1 text-left text-[12px] truncate">Search...</span>
+            <kbd className="hidden sm:inline-flex items-center rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 shrink-0">
+              ⌘K
+            </kbd>
+          </button>
+        </DialogTrigger>
+      )}
 
       <DialogContent 
         className="modal-content-shell sm:max-w-3xl"

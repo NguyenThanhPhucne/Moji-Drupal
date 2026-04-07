@@ -1,6 +1,5 @@
 import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
-import GlobalSearchDialog from "./GlobalSearchDialog";
 import { MessageSquareDashed } from "lucide-react";
 
 const ChatWelcomeScreen = () => {
@@ -8,8 +7,6 @@ const ChatWelcomeScreen = () => {
     <SidebarInset className="flex h-full w-full flex-col overflow-hidden bg-background">
       <ChatWindowHeader />
 
-      {/* GlobalSearchDialog is always mounted (manages Ctrl+K itself) */}
-      <GlobalSearchDialog />
 
       <div className="flex-1 flex flex-col items-center justify-center bg-background px-6 text-center select-none relative">
         {/* Đẳng cấp SaaS: Nền Grid lưới mượt mà, siêu nhạt */}

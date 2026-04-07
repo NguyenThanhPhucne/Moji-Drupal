@@ -112,7 +112,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     className={cn(
                       "flex flex-col items-center gap-2 rounded-xl border px-2 py-3 transition-all duration-200 text-center",
                       active
-                        ? "border-primary/70 bg-primary/8 text-primary ring-1 ring-primary/20"
+                        ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border"
                     )}
                   >
@@ -149,14 +149,10 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                       className={cn(
                         "relative size-11 rounded-full transition-all duration-200",
                         active
-                          ? "ring-2 ring-offset-2 ring-offset-background scale-110 shadow-lg"
+                          ? "shadow-lg scale-110 outline outline-2 outline-offset-2 outline-primary"
                           : "hover:scale-105 hover:shadow-md"
                       )}
-                      style={{
-                        background: color.style,
-                        // ring-color matches the gradient's dominant color
-                        ["--tw-ring-color" as string]: active ? "hsl(var(--primary))" : "transparent",
-                      }}
+                      style={{ background: color.style }}
                     >
                       {active && (
                         <span className="absolute inset-0 flex items-center justify-center">
@@ -209,7 +205,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     className={cn(
                       "flex flex-col items-center gap-2.5 rounded-xl border p-3 transition-all duration-200",
                       active
-                        ? "border-primary/70 bg-primary/8 ring-1 ring-primary/20"
+                        ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 hover:bg-muted/50 hover:border-border"
                     )}
                   >

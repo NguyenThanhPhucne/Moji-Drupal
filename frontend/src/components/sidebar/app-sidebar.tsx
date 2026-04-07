@@ -19,7 +19,7 @@ import {
   User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useState } from "react";
+import React, { useState } from "react";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
@@ -143,10 +143,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <Sidebar
         data-chat-sidebar="true"
         variant="inset"
-        className={cn(
-          "border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300",
-          isCompact && "w-[72px] min-w-[72px] max-w-[72px]"
-        )}
+        className="border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300"
+        style={isCompact ? { "--sidebar-width": "72px" } as React.CSSProperties : undefined}
         {...props}
       >
         {/* Header */}
