@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, memo, useState } from "react";
+import { useEffect, useRef, useCallback, memo, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Link2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -16,6 +16,8 @@ const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.4;
 const SWIPE_CLOSE_THRESHOLD = 80;
 
+const parseZoomValue = (value: number) => Number.parseFloat(value.toFixed(2));
+
 const ImageLightbox = memo(function ImageLightbox({
   src,
   alt = "Image",
@@ -32,7 +34,7 @@ const ImageLightbox = memo(function ImageLightbox({
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const offsetAtDrag = useRef({ x: 0, y: 0 });
   const lastTouchDist = useRef<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDialogElement>(null);
   const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerClose = useCallback(() => {
@@ -46,17 +48,17 @@ const ImageLightbox = memo(function ImageLightbox({
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") triggerClose();
       if (e.key === "+" || e.key === "=")
-        setZoom((z) => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_STEP).toFixed(2))));
+        setZoom((z) => Math.min(MAX_ZOOM, parseZoomValue(z + ZOOM_STEP)));
       if (e.key === "-")
         setZoom((z) => {
-          const next = Math.max(MIN_ZOOM, parseFloat((z - ZOOM_STEP).toFixed(2)));
+          const next = Math.max(MIN_ZOOM, parseZoomValue(z - ZOOM_STEP));
           if (next === 1) { setOffset({ x: 0, y: 0 }); setSwipeY(0); }
           return next;
         });
       if (e.key === "0") { setZoom(1); setOffset({ x: 0, y: 0 }); setSwipeY(0); }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    globalThis.addEventListener("keydown", handler);
+    return () => globalThis.removeEventListener("keydown", handler);
   }, [triggerClose]);
 
   // Cleanup timer on unmount
@@ -66,7 +68,7 @@ const ImageLightbox = memo(function ImageLightbox({
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
     setZoom((z) => {
-      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2))));
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseZoomValue(z + delta)));
       if (next === 1) { setOffset({ x: 0, y: 0 }); setSwipeY(0); }
       return next;
     });
@@ -96,7 +98,7 @@ const ImageLightbox = memo(function ImageLightbox({
       );
       const delta = (dist - lastTouchDist.current) * 0.01;
       setZoom((z) => {
-        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2))));
+        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseZoomValue(z + delta)));
         if (next === 1) { setOffset({ x: 0, y: 0 }); setSwipeY(0); }
         return next;
       });
@@ -206,10 +208,16 @@ const ImageLightbox = memo(function ImageLightbox({
   // Calculate dynamic styling for the backdrop swipe pull-to-dismiss
   const backdropOpacity = isClosing ? 0 : Math.max(0, 0.92 - Math.abs(swipeY) / 500);
 
+  let stageCursorClass = "cursor-zoom-in";
+  if (isDragging) {
+    stageCursorClass = "cursor-grabbing";
+  } else if (zoom > 1) {
+    stageCursorClass = "cursor-grab";
+  }
+
   return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-label="Image viewer"
       ref={containerRef}
       className={cn(
@@ -217,21 +225,28 @@ const ImageLightbox = memo(function ImageLightbox({
         isClosing ? "lightbox-backdrop--closing" : "lightbox-backdrop--open",
       )}
       style={{
+        "--lightbox-swipe-opacity": Math.max(0, 1 - Math.abs(swipeY) / 100),
         backgroundColor: `hsla(0, 0%, 0%, ${backdropOpacity})`,
         backdropFilter: `blur(${Math.max(0, 12 - Math.abs(swipeY) / 10)}px)`
+      } as CSSProperties}
+      onCancel={(event) => {
+        event.preventDefault();
+        triggerClose();
       }}
-      onClick={handleBackdropClick}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchEnd}
     >
+      <button
+        type="button"
+        aria-label="Close image viewer"
+        className="absolute inset-0"
+        onClick={handleBackdropClick}
+      />
+
       {/* ── Toolbar top ── */}
-      <div 
-        className="lightbox-toolbar"
-        style={{ opacity: Math.max(0, 1 - Math.abs(swipeY) / 100), transition: isDragging ? "none" : "opacity 0.2s" }}
+      <div
+        className={cn(
+          "lightbox-toolbar lightbox-swipe-fade",
+          isDragging && "lightbox-swipe-fade--dragging",
+        )}
       >
         <div className="lightbox-toolbar-left">
           {caption && <span className="lightbox-caption">{caption}</span>}
@@ -242,7 +257,7 @@ const ImageLightbox = memo(function ImageLightbox({
 
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.max(MIN_ZOOM, parseFloat((z - ZOOM_STEP).toFixed(2))))}
+            onClick={() => setZoom((z) => Math.max(MIN_ZOOM, parseZoomValue(z - ZOOM_STEP)))}
             className="lightbox-action-btn hidden sm:flex"
             aria-label="Zoom out"
             title="Zoom out (−)"
@@ -252,7 +267,7 @@ const ImageLightbox = memo(function ImageLightbox({
 
           <button
             type="button"
-            onClick={() => setZoom((z) => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_STEP).toFixed(2))))}
+            onClick={() => setZoom((z) => Math.min(MAX_ZOOM, parseZoomValue(z + ZOOM_STEP)))}
             className="lightbox-action-btn hidden sm:flex"
             aria-label="Zoom in"
             title="Zoom in (+)"
@@ -309,15 +324,22 @@ const ImageLightbox = memo(function ImageLightbox({
       </div>
 
       {/* ── Image stage ── */}
-      <div
+      <button
+        type="button"
+        aria-label="Image stage"
         className={cn(
           "lightbox-stage p-0 sm:p-4 md:p-8",
-          isDragging ? "cursor-grabbing" : zoom > 1 ? "cursor-grab" : "cursor-zoom-in",
+          stageCursorClass,
         )}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
         onTouchStart={handleTouchStart}
-        onClick={(e) => e.stopPropagation()}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         onDoubleClick={handleDoubleClick}
       >
         {/* Skeleton while loading */}
@@ -342,16 +364,18 @@ const ImageLightbox = memo(function ImageLightbox({
             transition: isDragging ? "none" : "transform 0.25s cubic-bezier(0.33, 1, 0.68, 1)",
           }}
         />
-      </div>
+      </button>
 
       {/* ── Keyboard hint ── */}
-      <div 
-        className="lightbox-hint"
-        style={{ opacity: Math.max(0, 1 - Math.abs(swipeY) / 100), transition: isDragging ? "none" : "opacity 0.2s" }}
+      <div
+        className={cn(
+          "lightbox-hint lightbox-swipe-fade",
+          isDragging && "lightbox-swipe-fade--dragging",
+        )}
       >
         Double-click to zoom · Swipe down to close
       </div>
-    </div>,
+    </dialog>,
     document.body,
   );
 });

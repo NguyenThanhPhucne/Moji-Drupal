@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { MoreVertical, Trash2, Phone, Video, UserCircle } from "lucide-react";
+import { MoreVertical, Trash2, Phone, Video, UserCircle, Users, Circle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,30 @@ import { useNavigate } from "react-router-dom";
 import GlobalSearchDialog from "./GlobalSearchDialog";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
 import { useFriendStore } from "@/stores/useFriendStore";
+
+function resolveDirectPeer(chat: Conversation, userId?: string) {
+  if (chat.type !== "direct") {
+    return null;
+  }
+
+  const otherUsers = chat.participants.filter((participant) => String(participant._id) !== String(userId));
+  return otherUsers.length > 0 ? otherUsers[0] : null;
+}
+
+function getPresenceText(
+  chat: Conversation,
+  otherUserId: string | undefined,
+  getUserPresence: (userId?: string) => "online" | "recently-active" | "offline",
+) {
+  if (chat.type !== "direct") {
+    return `${chat.participants.length} members`;
+  }
+
+  const presence = getUserPresence(otherUserId);
+  if (presence === "online") return "Active now";
+  if (presence === "recently-active") return "Recently active";
+  return "Offline";
+}
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const { conversations, activeConversationId } = useChatStore();
@@ -61,25 +85,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   }
 
   if (chat.type === "direct") {
-    const otherUsers = chat.participants.filter(
-      (p) => String(p._id) !== String(user?._id),
-    );
-    otherUser = otherUsers.length > 0 ? otherUsers[0] : null;
-
+    otherUser = resolveDirectPeer(chat, user?._id);
     if (!user || !otherUser) return null;
   }
 
-  let presenceText = `${chat.participants.length} members`;
-  if (chat.type === "direct") {
-    const presence = getUserPresence(otherUser?._id);
-    if (presence === "online") {
-      presenceText = "Active now";
-    } else if (presence === "recently-active") {
-      presenceText = "Recently active";
-    } else {
-      presenceText = "Offline";
-    }
-  }
+  const presenceText = getPresenceText(chat, otherUser?._id, getUserPresence);
+  const contextLabel = chat.type === "direct" ? "Direct message" : "Group chat";
 
   const handleDeleteConversation = async () => {
     try {
@@ -131,14 +142,14 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center border-b border-border/40 bg-background/95 backdrop-blur-sm px-3 py-2">
+      <header className="chat-header-shell sticky top-0 z-10 flex items-center px-3 py-2">
         <div className="flex items-center gap-2 w-full justify-between">
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Sidebar toggle — only on mobile */}
             <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
 
             {/* Avatar + name */}
-            <div className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/50 cursor-pointer min-w-0">
+            <div className="chat-header-identity flex items-center gap-3 rounded-xl px-2 py-1.5 cursor-pointer min-w-0">
               {/* avatar */}
               <div className="relative flex-shrink-0">
                 {chat.type === "direct" ? (
@@ -180,7 +191,19 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     ? otherUser?.displayName
                     : chat.group?.name}
                 </h2>
-                <p className="text-[11px] text-muted-foreground leading-none mt-0.5">{presenceText}</p>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <span className="chat-header-context-pill">
+                    {chat.type === "direct" ? (
+                      <Circle className="size-2.5 fill-current" />
+                    ) : (
+                      <Users className="size-2.5" />
+                    )}
+                    {contextLabel}
+                  </span>
+                  <p className="text-[11px] text-muted-foreground leading-none">
+                    {presenceText}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -190,26 +213,32 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             <GlobalSearchDialog />
 
             {/* Phone call quick action */}
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Voice call"
-              onClick={() => {}}
-              className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-primary transition-all hidden md:flex"
-            >
-              <Phone className="h-4 w-4" />
-            </Button>
+            {chat.type === "direct" && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Voice call"
+                  aria-label="Start voice call"
+                  onClick={() => {}}
+                  className="chat-header-action-btn hidden md:flex"
+                >
+                  <Phone className="h-4 w-4" />
+                </Button>
 
-            {/* Video call quick action */}
-            <Button
-              variant="ghost"
-              size="icon"
-              title="Video call"
-              onClick={() => {}}
-              className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-primary transition-all hidden md:flex"
-            >
-              <Video className="h-4 w-4" />
-            </Button>
+                {/* Video call quick action */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Video call"
+                  aria-label="Start video call"
+                  onClick={() => {}}
+                  className="chat-header-action-btn hidden md:flex"
+                >
+                  <Video className="h-4 w-4" />
+                </Button>
+              </>
+            )}
 
             {/* More menu */}
             <DropdownMenu>
@@ -218,16 +247,17 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   variant="ghost"
                   size="icon"
                   disabled={isDeleting}
-                  className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-foreground"
+                  aria-label="Open conversation actions"
+                  className="chat-header-action-btn"
                 >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="chat-header-dropdown w-52">
                 {chat.type === "direct" && otherUser?._id && (
                   <DropdownMenuItem
                     onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
-                    className="cursor-pointer"
+                    className="chat-header-dropdown-item"
                   >
                     <UserCircle className="h-4 w-4 mr-2" />
                     View profile
@@ -236,7 +266,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
-                  className="text-destructive focus:text-destructive cursor-pointer"
+                  className="chat-header-dropdown-item chat-header-dropdown-item--danger"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Delete conversation
@@ -249,7 +279,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent className="modal-content-shell max-w-sm">
+        <AlertDialogContent
+          className="modal-content-shell max-w-sm"
+          aria-busy={isDeleting}
+        >
           <AlertDialogHeader className="items-center text-center modal-stagger-item">
             <div className="dialog-danger-icon">
               <Trash2 className="size-6" />
@@ -268,16 +301,13 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="sm:flex-col-reverse gap-2 modal-stagger-item">
-            <AlertDialogCancel
-              disabled={isDeleting}
-              className="w-full"
-            >
+            <AlertDialogCancel disabled={isDeleting} className="chat-modal-btn chat-modal-btn--secondary w-full">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
-              className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-all"
+              className="chat-modal-btn chat-modal-btn--danger w-full"
             >
               {isDeleting ? "Deleting..." : "Yes, delete"}
             </AlertDialogAction>
