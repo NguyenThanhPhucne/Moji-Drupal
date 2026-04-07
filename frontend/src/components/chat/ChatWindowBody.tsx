@@ -479,7 +479,7 @@ const ChatWindowBody = () => {
 
   if (!messages?.length) {
     return (
-      <div className="flex h-full items-center justify-center flex-col gap-4 text-muted-foreground px-8 text-center bg-primary-foreground">
+      <div className="flex h-full items-center justify-center flex-col gap-4 text-muted-foreground px-8 text-center bg-background">
         <div className="size-16 rounded-full bg-muted flex items-center justify-center animate-bounce">
           <MessageCircle className="size-8 text-muted-foreground" />
         </div>
@@ -494,7 +494,7 @@ const ChatWindowBody = () => {
   return (
     <div
       key={`chat-conversation-${activeConversationId}`}
-      className="conversation-fade p-2 bg-primary-foreground h-full flex flex-col overflow-hidden relative"
+      className="conversation-fade p-2 bg-background h-full flex flex-col overflow-hidden relative"
     >
       <Profiler id="chat-thread" onRender={onThreadRender}>
         <div className="flex-1 min-h-0 overflow-hidden">

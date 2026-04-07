@@ -166,7 +166,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   };
 
   return (
-    <div className="flex flex-col bg-background relative z-10 w-full shrink-0">
+    <div className="flex flex-col bg-background/95 backdrop-blur-sm relative z-10 w-full shrink-0 border-t border-border/40">
       {/* Reply preview */}
       {replyingTo && (
         <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b border-border/30 animate-in slide-in-from-bottom-2 fade-in duration-200">
@@ -206,13 +206,54 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         </div>
       )}
 
+      {/* Action chips (shown when focused) */}
+      {showActionChips && (
+        <div className="flex flex-wrap items-center gap-1.5 px-4 pt-2.5">
+          <button
+            type="button"
+            onClick={() => injectTemplate("mention")}
+            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border"
+          >
+            @ Mention
+          </button>
+          <button
+            type="button"
+            onClick={() => injectTemplate("code")}
+            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border"
+          >
+            Code
+          </button>
+          <button
+            type="button"
+            onClick={() => injectTemplate("spoiler")}
+            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border"
+          >
+            Spoiler
+          </button>
+          <span
+            className={cn(
+              "ml-auto text-[10px] tabular-nums",
+              charsLeft < 120
+                ? "text-amber-500 font-medium"
+                : "text-muted-foreground/60",
+            )}
+          >
+            {charsLeft}
+          </span>
+        </div>
+      )}
+
       {/* Input row */}
-      <div className="flex items-end gap-2.5 p-3 min-h-[64px]">
-        {/* Attach */}
+      <div className="flex items-end gap-2 px-3 py-2.5">
+        {/* Attach image */}
         <Button
           variant="ghost"
           size="icon"
-          className="mb-0.5 flex-shrink-0 rounded-xl border border-transparent hover:border-border/60 hover:bg-primary/10"
+          className={cn(
+            "mb-0.5 flex-shrink-0 size-9 rounded-xl transition-all duration-200",
+            "border border-transparent hover:border-border/60 hover:bg-primary/10 hover:text-primary",
+            imagePreview && "text-primary border-primary/40 bg-primary/10"
+          )}
           onClick={() => fileInputRef.current?.click()}
           title="Send image"
         >
@@ -226,44 +267,16 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           onChange={handleFileChange}
         />
 
-        {/* Textarea */}
-        <div className="flex-1 relative">
-          {showActionChips && (
-            <div className="mb-2 flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => injectTemplate("mention")}
-                className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/85 transition-colors hover:bg-muted/75"
-              >
-                @ Mention
-              </button>
-              <button
-                type="button"
-                onClick={() => injectTemplate("code")}
-                className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/85 transition-colors hover:bg-muted/75"
-              >
-                Code
-              </button>
-              <button
-                type="button"
-                onClick={() => injectTemplate("spoiler")}
-                className="rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] font-medium text-foreground/85 transition-colors hover:bg-muted/75"
-              >
-                Spoiler
-              </button>
-              <span
-                className={cn(
-                  "ml-auto text-[10px] tabular-nums",
-                  charsLeft < 120
-                    ? "text-amber-500"
-                    : "text-muted-foreground/80",
-                )}
-              >
-                {charsLeft}
-              </span>
-            </div>
+        {/* Textarea wrapper with focus ring */}
+        <div
+          className={cn(
+            "flex-1 relative rounded-2xl transition-all duration-200",
+            "border bg-muted/30",
+            focused
+              ? "border-primary/50 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
+              : "border-border/50 hover:border-border/80",
           )}
-
+        >
           <textarea
             ref={textareaRef}
             rows={1}
@@ -272,21 +285,22 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder="Type a message... (Shift+Enter for a new line)"
+            placeholder="Type a message... (Shift+Enter for new line)"
             className={cn(
-              "w-full resize-none overflow-hidden rounded-2xl bg-muted/30 border-0",
-              "px-4 py-3 pr-12 text-[14.5px] leading-relaxed text-foreground",
-              "focus:outline-none focus:ring-0 focus:bg-muted/50",
+              "w-full resize-none overflow-hidden bg-transparent",
+              "px-4 py-2.5 pr-10 text-[14px] leading-relaxed text-foreground",
+              "focus:outline-none focus:ring-0",
               "transition-all duration-200 max-h-[140px]",
-              "placeholder:text-muted-foreground/60",
+              "placeholder:text-muted-foreground/50",
             )}
           />
-          <div className="absolute right-2 bottom-1.5 flex items-center">
+          {/* Emoji picker inside the box */}
+          <div className="absolute right-1.5 bottom-1.5 flex items-center">
             <Button
               asChild
               variant="ghost"
               size="icon"
-              className="size-8 rounded-xl hover:bg-primary/10"
+              className="size-7 rounded-lg hover:bg-muted/70 text-muted-foreground hover:text-foreground"
             >
               <div>
                 <EmojiPicker
@@ -297,20 +311,20 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           </div>
         </div>
 
-        {/* Send */}
+        {/* Send button */}
         <Button
           onClick={sendMessage}
           size="icon"
           disabled={!hasSendable}
           className={cn(
-            "flex-shrink-0 mb-0.5 rounded-xl transition-all duration-300",
+            "flex-shrink-0 mb-0.5 size-9 rounded-xl transition-all duration-200",
             hasSendable
-              ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 hover:scale-105 active:scale-95"
-              : "bg-transparent text-muted-foreground opacity-50",
+              ? "bg-primary text-primary-foreground shadow-md hover:brightness-110 hover:scale-105 active:scale-95"
+              : "bg-muted text-muted-foreground opacity-40 cursor-not-allowed",
           )}
           title="Send (Enter)"
         >
-          <Send className="size-4 text-white" />
+          <Send className="size-4" />
         </Button>
       </div>
     </div>

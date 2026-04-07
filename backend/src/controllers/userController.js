@@ -110,7 +110,7 @@ export const getUserProfileLite = async (req, res) => {
     const { userId } = req.params;
 
     const user = await User.findById(userId)
-      .select("_id displayName username avatarUrl bio updatedAt")
+      .select("_id displayName username avatarUrl bio lastActiveAt updatedAt")
       .lean();
 
     if (!user) {
@@ -136,7 +136,7 @@ export const getUserProfileLite = async (req, res) => {
         username: user.username,
         avatarUrl: user.avatarUrl || null,
         bio: user.bio || "",
-        lastActiveAt: latestMessage?.createdAt || user.updatedAt || null,
+        lastActiveAt: user.lastActiveAt || latestMessage?.createdAt || user.updatedAt || null,
         mutualGroupsCount: mutualGroups.length,
         mutualGroups: mutualGroups.map((groupItem) => ({
           _id: String(groupItem._id),

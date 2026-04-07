@@ -36,12 +36,12 @@ const ChatCard = ({
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "cursor-pointer rounded-xl border border-transparent px-3 py-2 transition-all duration-150",
+        "cursor-pointer rounded-[14px] border border-transparent px-3 py-2.5 transition-all duration-200",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
-        "group select-none relative overflow-hidden",
+        "group select-none relative overflow-hidden active:scale-[0.98]",
         isActive
-          ? "bg-muted text-foreground"
-          : "bg-transparent hover:bg-muted/40",
+          ? "bg-muted/80 shadow-sm text-foreground border-border/40"
+          : "bg-transparent hover:bg-muted/50 hover:border-border/30",
       )}
       onClick={() => onSelect(convoId)}
       onKeyDown={(event) => {

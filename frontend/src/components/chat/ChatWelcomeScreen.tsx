@@ -4,7 +4,7 @@ import { MessageSquareDashed } from "lucide-react";
 
 const ChatWelcomeScreen = () => {
   return (
-    <SidebarInset className="flex h-full w-full flex-col overflow-hidden bg-background">
+    <SidebarInset className="app-shell-panel glass-strong flex h-full min-h-0 flex-1 md:border md:border-border/80 md:rounded-2xl overflow-hidden shadow-soft">
       <ChatWindowHeader />
 
 

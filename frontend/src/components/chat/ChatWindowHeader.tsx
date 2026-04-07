@@ -2,7 +2,6 @@ import { useChatStore } from "@/stores/useChatStore";
 import type { Conversation } from "@/types/chat";
 import { SidebarTrigger } from "../ui/sidebar";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { Separator } from "../ui/separator";
 import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
@@ -12,9 +11,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { MoreVertical, Trash2 } from "lucide-react";
+import { MoreVertical, Trash2, Phone, Video, UserCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -131,18 +131,16 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-10 flex items-center border-b border-border/40 bg-background px-4 py-2">
+      <header className="sticky top-0 z-10 flex items-center border-b border-border/40 bg-background/95 backdrop-blur-sm px-3 py-2">
         <div className="flex items-center gap-2 w-full justify-between">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1 text-foreground" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4"
-            />
+          <div className="flex items-center gap-1.5 min-w-0">
+            {/* Sidebar toggle — only on mobile */}
+            <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
 
-            <div className="flex items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-muted/50 cursor-pointer">
+            {/* Avatar + name */}
+            <div className="flex items-center gap-3 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/50 cursor-pointer min-w-0">
               {/* avatar */}
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 {chat.type === "direct" ? (
                   <>
                     <FriendProfileMiniCard
@@ -177,40 +175,75 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
               {/* name + presence */}
               <div key={chat._id} className="header-info-enter min-w-0">
-                <h2 className="truncate font-semibold tracking-[-0.01em] text-foreground">
+                <h2 className="truncate font-semibold tracking-[-0.01em] text-[15px] text-foreground">
                   {chat.type === "direct"
                     ? otherUser?.displayName
                     : chat.group?.name}
                 </h2>
-                <p className="text-xs text-muted-foreground">{presenceText}</p>
+                <p className="text-[11px] text-muted-foreground leading-none mt-0.5">{presenceText}</p>
               </div>
             </div>
           </div>
 
-          <GlobalSearchDialog />
+          {/* Right actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <GlobalSearchDialog />
 
-          {/* Delete Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={isDeleting}
-                className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-foreground"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
-                className="text-destructive cursor-pointer"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete conversation
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {/* Phone call quick action */}
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Voice call"
+              onClick={() => {}}
+              className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-primary transition-all hidden md:flex"
+            >
+              <Phone className="h-4 w-4" />
+            </Button>
+
+            {/* Video call quick action */}
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Video call"
+              onClick={() => {}}
+              className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-primary transition-all hidden md:flex"
+            >
+              <Video className="h-4 w-4" />
+            </Button>
+
+            {/* More menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isDeleting}
+                  className="rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/70 hover:text-foreground"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {chat.type === "direct" && otherUser?._id && (
+                  <DropdownMenuItem
+                    onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
+                    className="cursor-pointer"
+                  >
+                    <UserCircle className="h-4 w-4 mr-2" />
+                    View profile
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
+                  className="text-destructive focus:text-destructive cursor-pointer"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete conversation
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </header>
 

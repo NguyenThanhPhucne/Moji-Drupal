@@ -802,15 +802,15 @@ const MessageItem = memo(function MessageItem({
   );
 
   const readOnlyBubbleNode = (
-    <button
-      type="button"
+    <div
       onDoubleClick={handleDoubleClickBubble}
       onContextMenu={handleContextMenu}
       aria-label="Message bubble"
-      className={cn("text-left", !canOpenEditMode && "cursor-default")}
+      role="presentation"
+      className={cn("text-left select-none relative", !canOpenEditMode && "cursor-default")}
     >
       {renderReadOnlyBubble()}
-    </button>
+    </div>
   );
 
   const bubbleNode = editMode ? (

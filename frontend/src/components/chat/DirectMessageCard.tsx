@@ -32,9 +32,10 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   let lastMessage = convo.lastMessage?.content ?? "";
   
   if (lastMessage === "📷 Photo") {
+    const lastMsgContent = convo.lastMessage as { senderId?: string; sender?: { _id: string } } | undefined | null;
     const senderId =
-      (convo.lastMessage as any)?.senderId ||
-      (convo.lastMessage as any)?.sender?._id;
+      lastMsgContent?.senderId ||
+      lastMsgContent?.sender?._id;
 
     if (senderId === user._id) {
       lastMessage = "You sent a photo";

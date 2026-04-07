@@ -169,6 +169,7 @@ io.on("connection", async (socket) => {
     typingEmitTimelineBySocket.delete(socket.id);
     removeSocketFromOnlineUsers(userId, socket.id);
     try {
+      await User.findByIdAndUpdate(userId, { lastActiveAt: new Date() });
       await broadcastOnlineUsers();
     } catch (error) {
       console.error(
@@ -185,6 +186,9 @@ io.on("connection", async (socket) => {
     typingEmitTimelineBySocket.delete(socket.id);
     removeSocketFromOnlineUsers(userId, socket.id);
     try {
+      if (!onlineUsers.has(userId)) {
+        await User.findByIdAndUpdate(userId, { lastActiveAt: new Date() });
+      }
       await broadcastOnlineUsers();
     } catch (error) {
       console.error(

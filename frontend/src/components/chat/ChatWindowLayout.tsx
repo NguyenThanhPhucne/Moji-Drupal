@@ -43,7 +43,7 @@ const ChatWindowLayout = () => {
   }
 
   return (
-    <SidebarInset className="app-shell-panel glass-strong flex h-full min-h-0 flex-1">
+    <SidebarInset className="app-shell-panel glass-strong flex h-full min-h-0 flex-1 md:border md:border-border/80 md:rounded-2xl overflow-hidden shadow-soft">
       {/* Header */}
       <div
         key={`chat-header-${selectedConvo._id}`}
@@ -53,7 +53,7 @@ const ChatWindowLayout = () => {
       </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 bg-primary-foreground/80">
+      <div className="flex-1 min-h-0 bg-background">
         <div
           key={`chat-body-${selectedConvo._id}`}
           className="h-full conversation-fade"

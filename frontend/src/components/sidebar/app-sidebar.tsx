@@ -46,15 +46,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const isCompact = sidebarLayout === "compact";
 
-  const quickNavItems: Array<{
+  const navItems: Array<{
     key: string;
     label: string;
     icon: LucideIcon;
     to: string;
     isActive: boolean;
     badge?: number;
-    wide?: boolean;
   }> = [
+    {
+      key: "chats",
+      label: "Chats",
+      icon: MessageSquare,
+      to: "/",
+      isActive: location.pathname === "/",
+    },
     {
       key: "feed",
       label: "Feed",
@@ -70,13 +76,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       to: "/explore",
       isActive: location.pathname === "/explore",
     },
-    {
-      key: "chats",
-      label: "Chats",
-      icon: MessageSquare,
-      to: "/",
-      isActive: location.pathname === "/",
-    },
+  ];
+
+  const bottomNavItems: Array<{
+    key: string;
+    label: string;
+    icon: LucideIcon;
+    to: string;
+    isActive: boolean;
+    badge?: number;
+  }> = [
     {
       key: "saved",
       label: "Saved",
@@ -90,51 +99,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       icon: User,
       to: user?._id ? `/profile/${user._id}` : "/profile",
       isActive: location.pathname.startsWith("/profile"),
-      wide: true,
-    },
-  ];
-
-  const railItems: Array<{
-    key: string;
-    icon: LucideIcon;
-    to: string;
-    title: string;
-    isActive: boolean;
-  }> = [
-    {
-      key: "rail-chats",
-      icon: MessageSquare,
-      to: "/",
-      title: "Chats",
-      isActive: location.pathname === "/",
-    },
-    {
-      key: "rail-feed",
-      icon: Home,
-      to: "/feed",
-      title: "Feed",
-      isActive: location.pathname === "/feed",
-    },
-    {
-      key: "rail-explore",
-      icon: Compass,
-      to: "/explore",
-      title: "Explore",
-      isActive: location.pathname === "/explore",
-    },
-    {
-      key: "rail-saved",
-      icon: Bookmark,
-      to: "/saved",
-      title: "Saved",
-      isActive: location.pathname === "/saved",
-    },
-    {
-      key: "rail-profile",
-      icon: User,
-      to: user?._id ? `/profile/${user._id}` : "/profile",
-      title: "Profile",
-      isActive: location.pathname.startsWith("/profile"),
     },
   ];
 
@@ -144,7 +108,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         data-chat-sidebar="true"
         variant="inset"
         className="border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300"
-        style={isCompact ? { "--sidebar-width": "72px" } as React.CSSProperties : undefined}
+        style={isCompact ? { "--sidebar-width": "56px" } as React.CSSProperties : undefined}
         {...props}
       >
         {/* Header */}
@@ -206,13 +170,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               {isCompact ? (
                 /* ── Compact rail: vertical icon list ───────────────────── */
                 <div className="flex flex-col items-center gap-1.5 py-1">
-                  {railItems.map((item) => {
+                  {[...navItems, ...bottomNavItems].map((item) => {
                     const Icon = item.icon;
                     return (
                       <button
                         key={item.key}
                         type="button"
-                        title={item.title}
+                        title={item.label}
                         onClick={() => navigate(item.to)}
                         className={cn(
                           "relative flex size-10 items-center justify-center rounded-xl border transition-all duration-200",
@@ -225,40 +189,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           <span className="absolute -left-2 h-4 w-1 rounded-full bg-primary" />
                         )}
                         <Icon className="size-4" />
+                        {(item.badge ?? 0) > 0 && (
+                          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                            {(item.badge ?? 0) > 9 ? "9+" : item.badge}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                /* ── Full rail: horizontal + quick nav grid ─────────────── */
-                <>
-                  <div className="mb-2 flex items-center gap-2 rounded-2xl border border-border/60 bg-background/55 p-2">
-                    {railItems.slice(0, 3).map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          title={item.title}
-                          onClick={() => navigate(item.to)}
-                          className={cn(
-                            "relative inline-flex size-9 items-center justify-center rounded-xl border transition-all duration-200",
-                            item.isActive
-                              ? "nav-rail-active border-primary/60 bg-primary text-primary-foreground"
-                              : "border-border/50 bg-muted/40 text-foreground/80 hover:bg-muted/75"
-                          )}
-                        >
-                          {item.isActive && (
-                            <span className="absolute -left-1.5 h-4 w-1 rounded-full bg-primary" />
-                          )}
-                          <Icon className="size-4" />
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 p-2">
-                    {quickNavItems.map((item) => {
+                /* ── Full: nav grid (3-col top + 2-col bottom) ──────────── */
+                <div className="flex flex-col gap-1 p-1">
+                  {/* Top row: Chats / Feed / Explore */}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {navItems.map((item) => {
                       const Icon = item.icon;
                       return (
                         <button
@@ -266,25 +211,51 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           type="button"
                           onClick={() => navigate(item.to)}
                           className={cn(
-                            "inline-flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs font-semibold transition-all",
+                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200",
                             item.isActive
                               ? "bg-primary text-primary-foreground shadow-soft"
-                              : "bg-muted/70 text-foreground/90 hover:bg-muted/70 hover:text-foreground",
-                            item.wide && "col-span-2"
+                              : "bg-muted/50 text-foreground/80 hover:bg-muted hover:text-foreground",
                           )}
                         >
-                          <Icon className="size-3.5" />
-                          {item.label}
-                          {item.badge && item.badge > 0 && (
-                            <span className="rounded-full bg-background/85 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                              {item.badge > 99 ? "99+" : item.badge}
+                          <Icon className="size-4" />
+                          <span className="leading-none">{item.label}</span>
+                          {(item.badge ?? 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                              {(item.badge ?? 0) > 9 ? "9+" : item.badge}
                             </span>
                           )}
                         </button>
                       );
                     })}
                   </div>
-                </>
+                  {/* Bottom row: Saved / Profile — 2 equal columns */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {bottomNavItems.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() => navigate(item.to)}
+                          className={cn(
+                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200",
+                            item.isActive
+                              ? "bg-primary text-primary-foreground shadow-soft"
+                              : "bg-muted/50 text-foreground/80 hover:bg-muted hover:text-foreground",
+                          )}
+                        >
+                          <Icon className="size-4" />
+                          <span className="leading-none">{item.label}</span>
+                          {(item.badge ?? 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                              {(item.badge ?? 0) > 9 ? "9+" : item.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </SidebarGroupContent>
 
