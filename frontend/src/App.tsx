@@ -40,7 +40,7 @@ const scheduleAfterFirstPaint = (callback: () => void) => {
 };
 
 function AppContent() {
-  const { isDark, setTheme } = useThemeStore();
+  const { applyTheme } = useThemeStore();
   const { accessToken, user } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
   const { getAllFriendRequests, getFriends } = useFriendStore();
@@ -48,8 +48,8 @@ function AppContent() {
   const { fetchNotifications } = useSocialStore();
 
   useEffect(() => {
-    setTheme(isDark);
-  }, [isDark, setTheme]);
+    applyTheme();
+  }, [applyTheme]);
 
   useEffect(() => {
     if (accessToken && user) {

@@ -25,8 +25,15 @@ export interface AuthState {
 
 export interface ThemeState {
   isDark: boolean;
+  themeMode: "light" | "dark" | "system";
+  accentColor: string;
+  sidebarLayout: "full" | "compact";
   toggleTheme: () => void;
   setTheme: (dark: boolean) => void;
+  setThemeMode: (mode: "light" | "dark" | "system") => void;
+  setAccentColor: (color: string) => void;
+  setSidebarLayout: (layout: "full" | "compact") => void;
+  applyTheme: () => void;
 }
 
 export interface ChatState {

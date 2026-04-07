@@ -254,7 +254,170 @@
     --sidebar-border: 210 25% 20%;
     --sidebar-ring: 204 89% 60%;
   }
+} /* end @layer base */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACCENT COLOR SYSTEM  — driven by data-accent="..." on <html>
+   Each accent overrides: --primary, --ring, --gradient-primary, --gradient-chat
+   --shadow-soft, --chat-bubble-sent.
+   Chat bubble text color is always 0 0% 100% (white) for dark accents,
+   and 217 32% 17% (dark slate) for very light accents like amber.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Default: Blue (already in :root) ──────────────────────────────────── */
+[data-accent="blue"] {
+  --primary:              204 89% 51%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 204 89% 51%;
+  --gradient-primary:     linear-gradient(135deg, hsl(204,89%,51%), hsl(206,100%,70%));
+  --gradient-chat:        linear-gradient(135deg, hsl(204,89%,51%), hsl(210,80%,65%));
+  --shadow-soft:          0 8px 32px -8px hsl(204 89% 51% / 0.2);
+  --chat-bubble-sent:     204 89% 51%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="blue"], .dark [data-accent="blue"] {
+  --primary:              204 89% 60%;
+  --ring:                 204 89% 60%;
+  --gradient-primary:     linear-gradient(135deg, hsl(204,89%,60%), hsl(206,100%,75%));
+  --gradient-chat:        linear-gradient(135deg, hsl(204,89%,60%), hsl(174,100%,50%));
+  --chat-bubble-sent:     204 89% 60%;
+}
+
+/* ── Violet ─────────────────────────────────────────────────────────────── */
+[data-accent="violet"] {
+  --primary:              262 80% 58%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 262 80% 58%;
+  --gradient-primary:     linear-gradient(135deg, hsl(262,80%,58%), hsl(280,75%,68%));
+  --gradient-chat:        linear-gradient(135deg, hsl(262,80%,58%), hsl(240,75%,68%));
+  --shadow-soft:          0 8px 32px -8px hsl(262 80% 58% / 0.2);
+  --chat-bubble-sent:     262 80% 58%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="violet"], .dark [data-accent="violet"] {
+  --primary:              262 75% 68%;
+  --ring:                 262 75% 68%;
+  --gradient-primary:     linear-gradient(135deg, hsl(262,75%,68%), hsl(280,70%,75%));
+  --gradient-chat:        linear-gradient(135deg, hsl(262,75%,68%), hsl(240,70%,75%));
+  --chat-bubble-sent:     262 75% 68%;
+}
+
+/* ── Rose ───────────────────────────────────────────────────────────────── */
+[data-accent="rose"] {
+  --primary:              346 84% 55%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 346 84% 55%;
+  --gradient-primary:     linear-gradient(135deg, hsl(346,84%,55%), hsl(15,90%,62%));
+  --gradient-chat:        linear-gradient(135deg, hsl(346,84%,55%), hsl(330,80%,65%));
+  --shadow-soft:          0 8px 32px -8px hsl(346 84% 55% / 0.2);
+  --chat-bubble-sent:     346 84% 55%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="rose"], .dark [data-accent="rose"] {
+  --primary:              346 80% 65%;
+  --ring:                 346 80% 65%;
+  --gradient-primary:     linear-gradient(135deg, hsl(346,80%,65%), hsl(15,85%,68%));
+  --gradient-chat:        linear-gradient(135deg, hsl(346,80%,65%), hsl(330,75%,72%));
+  --chat-bubble-sent:     346 80% 65%;
+}
+
+/* ── Emerald ────────────────────────────────────────────────────────────── */
+[data-accent="emerald"] {
+  --primary:              158 70% 40%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 158 70% 40%;
+  --gradient-primary:     linear-gradient(135deg, hsl(158,70%,40%), hsl(174,80%,50%));
+  --gradient-chat:        linear-gradient(135deg, hsl(158,70%,40%), hsl(145,65%,48%));
+  --shadow-soft:          0 8px 32px -8px hsl(158 70% 40% / 0.2);
+  --chat-bubble-sent:     158 70% 40%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="emerald"], .dark [data-accent="emerald"] {
+  --primary:              158 65% 52%;
+  --ring:                 158 65% 52%;
+  --gradient-primary:     linear-gradient(135deg, hsl(158,65%,52%), hsl(174,75%,58%));
+  --gradient-chat:        linear-gradient(135deg, hsl(158,65%,52%), hsl(145,60%,58%));
+  --chat-bubble-sent:     158 65% 52%;
+}
+
+/* ── Amber ──────────────────────────────────────────────────────────────── */
+[data-accent="amber"] {
+  --primary:              38 92% 50%;
+  --primary-foreground:   25 30% 15%; /* dark text for accessibility on bright yellow */
+  --ring:                 38 92% 50%;
+  --gradient-primary:     linear-gradient(135deg, hsl(38,92%,50%), hsl(20,90%,56%));
+  --gradient-chat:        linear-gradient(135deg, hsl(38,92%,50%), hsl(45,95%,58%));
+  --shadow-soft:          0 8px 32px -8px hsl(38 92% 50% / 0.2);
+  --chat-bubble-sent:     38 92% 50%;
+  --chat-bubble-sent-foreground: 25 30% 15%;
+}
+.dark[data-accent="amber"], .dark [data-accent="amber"] {
+  --primary:              38 90% 58%;
+  --ring:                 38 90% 58%;
+  --gradient-primary:     linear-gradient(135deg, hsl(38,90%,58%), hsl(20,85%,62%));
+  --gradient-chat:        linear-gradient(135deg, hsl(38,90%,58%), hsl(45,90%,65%));
+  --chat-bubble-sent:     38 90% 58%;
+}
+
+/* ── Gradient Sunset ────────────────────────────────────────────────────── */
+[data-accent="sunset"] {
+  --primary:              340 82% 58%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 340 82% 58%;
+  --gradient-primary:     linear-gradient(135deg, hsl(262,80%,58%), hsl(340,82%,60%));
+  --gradient-chat:        linear-gradient(135deg, hsl(262,80%,60%), hsl(340,82%,58%));
+  --shadow-soft:          0 8px 32px -8px hsl(340 82% 58% / 0.2);
+  --chat-bubble-sent:     262 80% 58%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="sunset"], .dark [data-accent="sunset"] {
+  --primary:              340 78% 66%;
+  --ring:                 340 78% 66%;
+  --gradient-primary:     linear-gradient(135deg, hsl(262,75%,65%), hsl(340,78%,66%));
+  --gradient-chat:        linear-gradient(135deg, hsl(262,75%,65%), hsl(340,78%,66%));
+  --chat-bubble-sent:     262 75% 65%;
+}
+
+/* ── Gradient Ocean ─────────────────────────────────────────────────────── */
+[data-accent="ocean"] {
+  --primary:              200 90% 47%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 200 90% 47%;
+  --gradient-primary:     linear-gradient(135deg, hsl(220,85%,55%), hsl(174,80%,45%));
+  --gradient-chat:        linear-gradient(135deg, hsl(220,85%,55%), hsl(174,80%,45%));
+  --shadow-soft:          0 8px 32px -8px hsl(200 90% 47% / 0.2);
+  --chat-bubble-sent:     220 85% 55%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="ocean"], .dark [data-accent="ocean"] {
+  --primary:              200 85% 58%;
+  --ring:                 200 85% 58%;
+  --gradient-primary:     linear-gradient(135deg, hsl(220,80%,62%), hsl(174,75%,52%));
+  --gradient-chat:        linear-gradient(135deg, hsl(220,80%,62%), hsl(174,75%,52%));
+  --chat-bubble-sent:     220 80% 62%;
+}
+
+/* ── Slate (Neutral) ────────────────────────────────────────────────────── */
+[data-accent="slate"] {
+  --primary:              215 20% 45%;
+  --primary-foreground:   0 0% 100%;
+  --ring:                 215 20% 45%;
+  --gradient-primary:     linear-gradient(135deg, hsl(215,25%,45%), hsl(215,20%,55%));
+  --gradient-chat:        linear-gradient(135deg, hsl(215,25%,45%), hsl(215,20%,55%));
+  --shadow-soft:          0 8px 32px -8px hsl(215 20% 45% / 0.15);
+  --chat-bubble-sent:     215 25% 45%;
+  --chat-bubble-sent-foreground: 0 0% 100%;
+}
+.dark[data-accent="slate"], .dark [data-accent="slate"] {
+  --primary:              215 20% 62%;
+  --ring:                 215 20% 62%;
+  --gradient-primary:     linear-gradient(135deg, hsl(215,20%,62%), hsl(215,20%,72%));
+  --gradient-chat:        linear-gradient(135deg, hsl(215,20%,62%), hsl(215,20%,72%));
+  --chat-bubble-sent:     215 20% 62%;
+}
+
+/* ── Appearance Drawer ──────────────────────────────────────────────────── */
+@layer base {
   body {
     @apply text-slate-800 dark:text-slate-200 bg-background;
     font-family:

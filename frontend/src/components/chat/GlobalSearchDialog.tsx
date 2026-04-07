@@ -351,12 +351,12 @@ const GlobalSearchDialog = () => {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="hidden md:flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+          className="group hidden md:flex items-center gap-2.5 w-full px-3 py-2 rounded-xl border border-border/50 bg-muted/30 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/60 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
-          <Search className="size-3.5" />
-          Search people, groups, messages
-          <kbd className="rounded bg-muted px-1.5 py-0.5 text-[10px]">
-            Cmd+K
+          <Search className="size-4 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
+          <span className="flex-1 text-left text-[13px]">Search people, groups...</span>
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 shrink-0">
+            ⌘K
           </kbd>
         </button>
       </DialogTrigger>

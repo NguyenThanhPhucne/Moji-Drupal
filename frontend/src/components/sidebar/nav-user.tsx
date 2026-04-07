@@ -25,7 +25,7 @@ import { useFriendStore } from "@/stores/useFriendStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { NotificationBadge } from "../notifications/NotificationBadge";
 
-export function NavUser({ user }: Readonly<{ user: User }>) {
+export function NavUser({ user, compact = false }: Readonly<{ user: User; compact?: boolean }>) {
   const { isMobile } = useSidebar();
   const { isHubOpen: friendRequestOpen, setIsHubOpen: setfriendRequestOpen } = useNotificationStore();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -44,7 +44,7 @@ export function NavUser({ user }: Readonly<{ user: User }>) {
         <SidebarMenuItem>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
+                <SidebarMenuButton
                 size="lg"
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
@@ -54,16 +54,18 @@ export function NavUser({ user }: Readonly<{ user: User }>) {
                     {user.displayName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">
-                    {user.displayName}
-                  </span>
-                  <span className="truncate text-xs">{user.username}</span>
-                </div>
-                <div className="ml-auto flex items-center gap-1">
-                  <NotificationBadge showBell={false} />
-                  <ChevronsUpDown className="size-4" />
-                </div>
+                {!compact && (
+                  <>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-medium">{user.displayName}</span>
+                      <span className="truncate text-xs">{user.username}</span>
+                    </div>
+                    <div className="ml-auto flex items-center gap-1">
+                      <NotificationBadge showBell={false} />
+                      <ChevronsUpDown className="size-4" />
+                    </div>
+                  </>
+                )}
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
