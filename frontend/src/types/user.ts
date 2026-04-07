@@ -7,6 +7,11 @@ export interface User {
   bio?: string;
   phone?: string;
   showOnlineStatus?: boolean;
+  notificationPreferences?: {
+    message: boolean;
+    sound: boolean;
+    desktop: boolean;
+  };
   createdAt?: string;
   updatedAt?: string;
 }

@@ -53,6 +53,20 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    notificationPreferences: {
+      message: {
+        type: Boolean,
+        default: true,
+      },
+      sound: {
+        type: Boolean,
+        default: true,
+      },
+      desktop: {
+        type: Boolean,
+        default: false,
+      },
+    },
     lastActiveAt: {
       type: Date,
     },

@@ -156,9 +156,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     setDrawerOpen(true);
                   }}
                   title="Appearance"
+                  aria-label="Open appearance settings"
                   className={cn(
                     "flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-2 py-1.5",
-                    "text-white/80 hover:bg-white/25 hover:text-white transition-colors",
+                    "text-white/80 hover:bg-white/25 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/55 focus-visible:ring-offset-2 focus-visible:ring-offset-primary/40",
                     isCompact && "size-9 p-0 justify-center rounded-xl"
                   )}
                 >
@@ -184,9 +185,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         key={item.key}
                         type="button"
                         title={item.label}
+                        aria-label={item.label}
+                        aria-current={item.isActive ? "page" : undefined}
                         onClick={() => navigate(item.to)}
                         className={cn(
-                          "relative flex size-10 items-center justify-center rounded-xl border transition-all duration-200",
+                          "relative flex size-10 items-center justify-center rounded-xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
                           item.isActive
                             ? "nav-rail-active border-primary/60 bg-primary text-primary-foreground"
                             : "border-border/50 bg-muted/40 text-foreground/80 hover:bg-muted/75"
@@ -216,9 +219,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <button
                           key={item.key}
                           type="button"
+                          aria-current={item.isActive ? "page" : undefined}
                           onClick={() => navigate(item.to)}
                           className={cn(
-                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200",
+                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
                             item.isActive
                               ? "bg-primary text-primary-foreground shadow-soft"
                               : "bg-muted/50 text-foreground/80 hover:bg-muted hover:text-foreground",
@@ -243,9 +247,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <button
                           key={item.key}
                           type="button"
+                          aria-current={item.isActive ? "page" : undefined}
                           onClick={() => navigate(item.to)}
                           className={cn(
-                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200",
+                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
                             item.isActive
                               ? "bg-primary text-primary-foreground shadow-soft"
                               : "bg-muted/50 text-foreground/80 hover:bg-muted hover:text-foreground",

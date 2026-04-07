@@ -50,23 +50,22 @@ const PreferencesForm = () => {
   };
 
   return (
-    <Card className="glass-strong border-border/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sun className="h-5 w-5 text-primary" />
+    <Card className="settings-card">
+      <CardHeader className="settings-card-header">
+        <CardTitle className="settings-card-title flex items-center gap-2">
+          <Sun className="h-4.5 w-4.5 text-primary" />
           App preferences
         </CardTitle>
-        <CardDescription>Customize your chat experience</CardDescription>
+        <CardDescription className="settings-card-desc">Customize your chat experience</CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        {/* Dark Mode */}
-        <div className="flex items-center justify-between">
+      <CardContent className="settings-card-body p-0">
+        <div className="settings-toggle-row">
           <div>
-            <Label htmlFor="theme-toggle" className="text-base font-medium">
+            <Label htmlFor="theme-toggle" className="text-sm font-medium">
               Dark mode
             </Label>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Switch between light and dark appearance
             </p>
           </div>
@@ -82,13 +81,12 @@ const PreferencesForm = () => {
           </div>
         </div>
 
-        {/* Online Status */}
-        <div className="flex items-center justify-between">
+        <div className="settings-toggle-row">
           <div>
-            <Label htmlFor="online-status" className="text-base font-medium">
+            <Label htmlFor="online-status" className="text-sm font-medium">
               Show online status
             </Label>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-0.5">
               Allow others to see when you are online
             </p>
           </div>

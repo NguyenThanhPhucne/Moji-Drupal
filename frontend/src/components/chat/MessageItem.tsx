@@ -169,7 +169,7 @@ const ContextMenu = memo(function ContextMenu({
       <div
         role="menu"
         style={{ position: "fixed", left: x, top: y, zIndex: 9999 }}
-        className="bg-popover border border-border/70 rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 fade-in duration-100 min-w-[160px]"
+        className="chat-context-menu animate-in zoom-in-95 fade-in duration-100"
       >
         {items.map(({ icon: Icon, label, onClick, disabled, danger }) => (
           <button
@@ -181,10 +181,8 @@ const ContextMenu = memo(function ContextMenu({
               onClose();
             }}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors",
-              danger
-                ? "text-destructive hover:bg-destructive/10"
-                : "hover:bg-muted/70",
+              "chat-context-menu-item",
+              danger && "chat-context-menu-item--danger",
               "disabled:opacity-40 disabled:cursor-not-allowed",
             )}
           >
@@ -496,7 +494,8 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
         <button
           type="button"
           onClick={onToggleReactBar}
-          className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors"
+          aria-label="Add reaction"
+          className="chat-message-action-btn"
         >
           <Smile className="size-3.5 text-muted-foreground" />
         </button>
@@ -504,15 +503,17 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
       <button
         type="button"
         onClick={onReply}
-        className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors"
+        aria-label="Reply"
+        className="chat-message-action-btn"
       >
         <Reply className="size-3.5 text-muted-foreground" />
       </button>
       <button
         type="button"
         onClick={onToggleBookmark}
+        aria-label={bookmarked ? "Remove bookmark" : "Save message"}
         className={cn(
-          "p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors",
+          "chat-message-action-btn",
           bookmarked && "text-amber-500",
         )}
       >
@@ -523,7 +524,8 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
       <button
         type="button"
         onClick={onOpenContext}
-        className="p-1.5 rounded-full bg-background border border-border/60 shadow-sm hover:bg-muted/70 transition-colors"
+        aria-label="Open message actions"
+        className="chat-message-action-btn"
       >
         <MoreHorizontal className="size-3.5 text-muted-foreground" />
       </button>
@@ -1278,7 +1280,7 @@ const MessageItem = memo(function MessageItem({
         onOpenChange={handleDeleteDialogOpenChange}
       >
         <DialogContent
-          className="modal-content-shell sm:max-w-xl"
+          className="chat-modal-shell sm:max-w-xl"
           showCloseButton={!deleteActionLoading}
           dismissible={!deleteActionLoading}
         >
@@ -1298,7 +1300,7 @@ const MessageItem = memo(function MessageItem({
                 type="button"
                 disabled={!!deleteActionLoading}
                 onClick={handleConfirmUnsendForEveryone}
-                className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted/70 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="chat-delete-scope-option chat-delete-scope-option--danger disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <p className="text-sm font-semibold">Unsend for everyone</p>
                 <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
@@ -1316,7 +1318,7 @@ const MessageItem = memo(function MessageItem({
               type="button"
               disabled={!!deleteActionLoading}
               onClick={handleConfirmRemoveForMe}
-              className="text-left rounded-xl border border-border/70 p-4 transition-colors hover:bg-muted/70 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="chat-delete-scope-option disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <p className="text-sm font-semibold">Remove for you</p>
               <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
@@ -1334,7 +1336,7 @@ const MessageItem = memo(function MessageItem({
               type="button"
               disabled={!!deleteActionLoading}
               onClick={() => setDeleteDialogOpen(false)}
-              className="px-3 py-2 text-sm rounded-md border border-border/70 hover:bg-muted/70 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="chat-modal-btn chat-modal-btn--secondary disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

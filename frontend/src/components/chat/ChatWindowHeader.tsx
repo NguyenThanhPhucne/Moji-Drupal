@@ -280,7 +280,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent
-          className="modal-content-shell max-w-sm"
+          className="chat-modal-shell max-w-sm"
           aria-busy={isDeleting}
         >
           <AlertDialogHeader className="items-center text-center modal-stagger-item">

@@ -78,24 +78,24 @@ const PrivacySettings = () => {
   };
 
   return (
-    <Card className="glass-strong border-border/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-primary" />
+    <Card className="settings-card">
+      <CardHeader className="settings-card-header">
+        <CardTitle className="settings-card-title flex items-center gap-2">
+          <Shield className="h-4.5 w-4.5 text-primary" />
           Privacy & Security
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="settings-card-desc">
           Manage your privacy and security preferences
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        <div className="space-y-4">
+      <CardContent className="settings-card-body p-0">
+        <div className="p-4 space-y-3 border-b border-border/30">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button
                 variant="outline"
-                className="w-full justify-start glass-light border-border/30"
+                className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
               >
                 <Shield className="h-4 w-4 mr-2" />
                 Change password
@@ -184,7 +184,7 @@ const PrivacySettings = () => {
 
           <Button
             variant="outline"
-            className="w-full justify-start glass-light border-border/30"
+            className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
           >
             <Bell className="h-4 w-4 mr-2" />
             Notification settings
@@ -192,16 +192,16 @@ const PrivacySettings = () => {
 
           <Button
             variant="outline"
-            className="w-full justify-start glass-light border-border/30"
+            className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
           >
             <ShieldBan className="size-4 mr-2" />
             Block & Report
           </Button>
         </div>
 
-        <div className="pt-4 border-t border-border/30">
+        <div className="p-4 bg-destructive/5">
           <h4 className="font-medium mb-3 text-destructive">Danger zone</h4>
-          <Button variant="destructive" className="w-full">
+          <Button variant="destructive" className="w-full shadow-sm">
             Delete account
           </Button>
         </div>

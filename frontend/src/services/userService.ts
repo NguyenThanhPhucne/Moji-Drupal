@@ -43,4 +43,13 @@ export const userService = {
     });
     return res.data;
   },
+
+  updateNotificationPreferences: async (payload: {
+    message: boolean;
+    sound: boolean;
+    desktop: boolean;
+  }) => {
+    const res = await api.patch("/users/notification-preferences", payload);
+    return res.data;
+  },
 };

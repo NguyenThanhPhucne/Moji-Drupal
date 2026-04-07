@@ -111,6 +111,7 @@ const NotificationItem = ({
         "group relative flex items-start gap-3 rounded-xl px-3 py-3 cursor-pointer select-none",
         // Smooth transition on all states
         "transition-colors duration-150",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2",
         // Unread: light blue tint + left accent stripe (Facebook-style)
         notification.isRead
           ? "bg-transparent hover:bg-muted/50 dark:hover:bg-muted/40"
@@ -235,7 +236,7 @@ const NotificationItem = ({
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60",
-                "transition-all hover:bg-muted hover:text-foreground",
+                "transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
                 dropdownOpen
                   ? "opacity-100 bg-muted text-foreground"
                   : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",

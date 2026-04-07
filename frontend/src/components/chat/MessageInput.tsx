@@ -181,7 +181,8 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 rounded-full hover:bg-muted-foreground/20"
+            className="h-6 w-6 rounded-full hover:bg-muted-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+            aria-label="Cancel reply"
             onClick={() => setReplyingTo(null)}
           >
             <X className="size-4 text-muted-foreground" />
@@ -198,8 +199,10 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             className="h-28 w-28 object-cover rounded-xl border border-border shadow-sm"
           />
           <button
+            type="button"
             onClick={() => setImagePreview(null)}
-            className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-0.5 shadow hover:bg-muted/70 transition-colors"
+            className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-0.5 shadow hover:bg-muted/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+            aria-label="Remove selected image"
           >
             <X className="size-3.5 text-muted-foreground" />
           </button>
@@ -212,21 +215,24 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           <button
             type="button"
             onClick={() => injectTemplate("mention")}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border"
+            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
+            aria-label="Mention someone"
           >
             @ Mention
           </button>
           <button
             type="button"
             onClick={() => injectTemplate("code")}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border"
+            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
+            aria-label="Insert code"
           >
             Code
           </button>
           <button
             type="button"
             onClick={() => injectTemplate("spoiler")}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border"
+            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
+            aria-label="Insert spoiler"
           >
             Spoiler
           </button>
@@ -256,6 +262,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           )}
           onClick={() => fileInputRef.current?.click()}
           title="Send image"
+          aria-label="Attach image"
         >
           <ImagePlus className="size-4" />
         </Button>
@@ -286,6 +293,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             placeholder="Type a message... (Shift+Enter for new line)"
+            aria-label="Message input"
             className={cn(
               "w-full resize-none overflow-hidden bg-transparent",
               "px-4 py-2.5 pr-10 text-[14px] leading-relaxed text-foreground",
@@ -316,6 +324,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           onClick={sendMessage}
           size="icon"
           disabled={!hasSendable}
+          aria-label="Send message"
           className={cn(
             "flex-shrink-0 mb-0.5 size-9 rounded-xl transition-all duration-200",
             hasSendable

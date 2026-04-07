@@ -121,7 +121,7 @@ const GroupChatList = () => {
                   [category]: !isCollapsed,
                 }))
               }
-              className="mb-1 flex w-full items-center justify-between rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted/50"
+              className="mb-1 flex w-full items-center justify-between rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
             >
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/85">
                 {category}

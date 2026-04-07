@@ -67,14 +67,14 @@ export default defineConfig({
       },
       // 2. Khi gọi /api/node -> Chuyển hướng ngầm sang cổng 5001
       "/api/node": {
-        target: "http://localhost:5001",
+        target: "http://127.0.0.1:5001",
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api\/node/, "/api"),
       },
       // 3. Socket.IO proxy cho local dev (websocket + polling)
       "/socket.io": {
-        target: "http://localhost:5001",
+        target: "http://127.0.0.1:5001",
         changeOrigin: true,
         secure: false,
         ws: true,

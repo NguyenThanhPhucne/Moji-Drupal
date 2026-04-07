@@ -352,7 +352,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
         <DialogTrigger asChild>
           <button
             type="button"
-            className="group hidden md:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            className="group hidden md:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
           >
             <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
             <span className="flex-1 text-left text-[12px] truncate">Search...</span>
@@ -363,8 +363,8 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
         </DialogTrigger>
       )}
 
-      <DialogContent 
-        className="modal-content-shell sm:max-w-3xl"
+      <DialogContent
+        className="sm:max-w-3xl"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           document.querySelector<HTMLInputElement>('[data-autofocus="true"]')?.focus();
@@ -383,6 +383,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search people, groups, messages..."
+          aria-label="Global search"
           className="modal-stagger-item"
         />
 
@@ -407,7 +408,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                         key={item}
                         type="button"
                         onClick={() => setQuery(item)}
-                        className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/70"
+                        className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                       >
                         {item}
                       </button>
@@ -425,7 +426,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                         <button
                           key={item.key}
                           type="button"
-                          className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground"
+                          className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                           onClick={() => {
                             if (item.conversationId) {
                               setActiveConversation(item.conversationId);
@@ -495,7 +496,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                     return (
                       <div
                         key={toResultKey(item)}
-                        className="flex items-center gap-3 rounded-lg border border-border/70 p-2.5 hover:bg-muted/40"
+                        className="flex items-center gap-3 rounded-lg border border-border/70 p-2.5 hover:bg-muted/40 focus-within:ring-2 focus-within:ring-primary/25"
                       >
                         <div className="size-8 rounded-full bg-muted flex items-center justify-center">
                           {item.type === "people" && <Users className="size-4" />}
@@ -508,7 +509,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                         <button
                           type="button"
                           onClick={() => onSelectResult(item)}
-                          className="min-w-0 flex-1 text-left"
+                          className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                         >
                           <p className="truncate text-sm font-medium">
                             {resultTitle}

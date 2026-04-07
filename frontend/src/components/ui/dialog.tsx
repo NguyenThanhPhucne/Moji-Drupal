@@ -7,6 +7,9 @@ import { XIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
+const MODAL_CONTENT_BASE_CLASS =
+  "modal-content-shell pointer-events-auto bg-background relative z-10 grid w-full max-w-[calc(100%-2rem)] max-h-[min(88dvh,720px)] gap-4 overflow-hidden rounded-2xl border border-border/80 p-5 shadow-xl outline-none ring-1 ring-black/5 sm:max-w-lg sm:p-6";
+
 function Dialog({
   ...props
 }: Readonly<React.ComponentProps<typeof DialogPrimitive.Root>>) {
@@ -120,7 +123,7 @@ function DialogContent({
             onInteractOutside?.(event);
           }}
           className={cn(
-            "modal-content-shell pointer-events-auto bg-background relative z-10 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-2xl border border-border/80 p-6 shadow-xl outline-none sm:max-w-lg",
+            MODAL_CONTENT_BASE_CLASS,
             className,
           )}
           {...props}
@@ -274,7 +277,7 @@ function AlertDialogContent({
             onEscapeKeyDown?.(event);
           }}
           className={cn(
-            "modal-content-shell pointer-events-auto bg-background relative z-10 grid w-full max-w-[calc(100%-2rem)] gap-4 rounded-2xl border border-border/80 p-6 shadow-xl outline-none sm:max-w-lg",
+            MODAL_CONTENT_BASE_CLASS,
             className,
           )}
           {...props}

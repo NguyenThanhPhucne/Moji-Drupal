@@ -116,7 +116,10 @@ const FriendProfileMiniCard = ({
           onMouseEnter={handleOpen}
           onMouseLeave={handleCloseSoon}
           onClick={() => setOpen((prev) => !prev)}
-          className="rounded-full outline-none disabled:opacity-60"
+          aria-label={`Open profile quick card for ${displayName}`}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          className="rounded-full outline-none disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
         >
           {children}
         </button>

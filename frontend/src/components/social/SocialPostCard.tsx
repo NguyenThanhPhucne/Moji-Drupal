@@ -194,7 +194,7 @@ const SocialPostCard = ({
       <button
         key={key}
         type="button"
-        className="font-medium text-primary transition-colors hover:text-primary/80"
+        className="font-medium text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
         onClick={() => onSelectTag(part.value.slice(1).toLowerCase())}
       >
         {part.value}
@@ -219,7 +219,7 @@ const SocialPostCard = ({
       <button
         key={key}
         type="button"
-        className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+        className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
         onClick={() => onSelectTag(tag.toLowerCase())}
       >
         #{tag}
@@ -232,7 +232,7 @@ const SocialPostCard = ({
       <header className="mb-3 flex items-center gap-3">
         <button
           type="button"
-          className="flex min-w-0 items-center gap-3 text-left"
+          className="flex min-w-0 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
           onClick={() => onOpenProfile?.(post.authorId._id)}
         >
           <div className="flex size-10 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
@@ -268,7 +268,7 @@ const SocialPostCard = ({
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <button
           type="button"
-          className="font-medium transition-colors hover:text-foreground"
+          className="rounded-md font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
           onClick={openEngagement}
         >
           <span
@@ -281,7 +281,7 @@ const SocialPostCard = ({
         <span>·</span>
         <button
           type="button"
-          className="font-medium transition-colors hover:text-foreground"
+          className="rounded-md font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
           onClick={openEngagement}
         >
           <span
@@ -348,6 +348,13 @@ const SocialPostCard = ({
               value={commentDraft}
               onChange={(event) => setCommentDraft(event.target.value)}
               placeholder="Write a comment"
+              aria-label="Write a comment"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void submitComment();
+                }
+              }}
             />
             <Button
               type="button"
@@ -402,7 +409,7 @@ const SocialPostCard = ({
                   <button
                     key={`like-${user._id}`}
                     type="button"
-                    className="flex w-full items-center justify-between rounded-md border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/60"
+                    className="flex w-full items-center justify-between rounded-md border border-border/60 px-3 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                     onClick={() => onOpenProfile?.(user._id)}
                   >
                     <span className="text-sm font-medium">
@@ -431,7 +438,7 @@ const SocialPostCard = ({
                   >
                     <button
                       type="button"
-                      className="mb-1 text-left text-sm font-semibold text-foreground transition-colors hover:text-primary"
+                      className="mb-1 rounded-sm text-left text-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                       onClick={() => onOpenProfile?.(comment.authorId._id)}
                     >
                       {comment.authorId.displayName}

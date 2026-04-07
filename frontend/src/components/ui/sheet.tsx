@@ -6,6 +6,9 @@ import { XIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
+const SHEET_CONTENT_BASE_CLASS =
+  "bg-background fixed z-50 flex flex-col gap-4 border-border/80 shadow-xl outline-none ring-1 ring-black/5 transition ease-in-out data-[state=closed]:duration-250 data-[state=open]:duration-300 motion-reduce:transition-none"
+
 function Sheet({
   ...props
 }: Readonly<React.ComponentProps<typeof SheetPrimitive.Root>>) {
@@ -89,11 +92,11 @@ function SheetContent({
         tabIndex={-1}
         onOpenAutoFocus={handleOpenAutoFocus}
         className={cn(
-          "bg-background fixed z-50 flex flex-col gap-4 rounded-none border-border/80 shadow-xl outline-none transition ease-in-out data-[state=closed]:duration-250 data-[state=open]:duration-300",
+          SHEET_CONTENT_BASE_CLASS,
           side === "right" &&
-            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
+            "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right inset-y-0 right-0 h-full w-[min(88vw,420px)] border-l",
           side === "left" &&
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-3/4 border-r sm:max-w-sm",
+            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left inset-y-0 left-0 h-full w-[min(88vw,420px)] border-r",
           side === "top" &&
             "data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top inset-x-0 top-0 h-auto border-b",
           side === "bottom" &&

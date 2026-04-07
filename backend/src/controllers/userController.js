@@ -237,6 +237,47 @@ export const updateOnlineStatusVisibility = async (req, res) => {
   }
 };
 
+export const updateNotificationPreferences = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const { message, sound, desktop } = req.body || {};
+
+    if (
+      typeof message !== "boolean" ||
+      typeof sound !== "boolean" ||
+      typeof desktop !== "boolean"
+    ) {
+      return res.status(400).json({
+        message: "message, sound, desktop phải là kiểu boolean",
+      });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        notificationPreferences: {
+          message,
+          sound,
+          desktop,
+        },
+      },
+      { new: true },
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật thông báo thành công",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật notificationPreferences", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user?._id;
