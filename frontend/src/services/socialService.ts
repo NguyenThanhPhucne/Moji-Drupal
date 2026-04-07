@@ -4,6 +4,8 @@ import type {
   PaginationPayload,
   SocialComment,
   SocialNotification,
+  SocialReactionType,
+  SocialReactionSummary,
   SocialPostEngagement,
   SocialPost,
   SocialProfile,
@@ -50,6 +52,18 @@ export const socialService = {
     return res.data.post;
   },
 
+  editPost: async (
+    postId: string,
+    payload: {
+      caption?: string;
+      tags?: string[];
+      privacy?: "public" | "followers";
+    },
+  ): Promise<SocialPost> => {
+    const res = await api.patch(`/social/posts/${postId}`, payload);
+    return res.data.post;
+  },
+
   getProfile: async (userId: string): Promise<SocialProfile> => {
     const res = await api.get(`/social/profiles/${userId}`);
     return res.data.profile;
@@ -66,10 +80,17 @@ export const socialService = {
     return res.data;
   },
 
-  toggleLikePost: async (
+  reactToPost: async (
     postId: string,
-  ): Promise<{ liked: boolean; likesCount: number; postId: string }> => {
-    const res = await api.post(`/social/posts/${postId}/like`);
+    reaction: SocialReactionType,
+  ): Promise<{
+    liked: boolean;
+    ownReaction: SocialReactionType | null;
+    likesCount: number;
+    reactionSummary: SocialReactionSummary;
+    postId: string;
+  }> => {
+    const res = await api.post(`/social/posts/${postId}/like`, { reaction });
     return res.data;
   },
 
@@ -85,9 +106,10 @@ export const socialService = {
     postId: string,
     page = 1,
     limit = 20,
+    sort: "relevant" | "newest" = "relevant",
   ): Promise<{ comments: SocialComment[]; pagination: PaginationPayload }> => {
     const res = await api.get(`/social/posts/${postId}/comments`, {
-      params: { page, limit },
+      params: { page, limit, sort },
     });
     return res.data;
   },

@@ -6,6 +6,27 @@ import Follow from "../models/Follow.js";
 import Friend from "../models/Friend.js";
 import Notification from "../models/Notification.js";
 import { io } from "../socket/index.js";
+import { v2 as cloudinary } from "cloudinary";
+
+const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow"];
+
+const normalizeReactionType = (input) => {
+  const normalized = String(input || "like").trim().toLowerCase();
+  return SUPPORTED_REACTION_TYPES.includes(normalized) ? normalized : "like";
+};
+
+const buildReactionSummary = (reactions) => {
+  const summary = SUPPORTED_REACTION_TYPES.reduce((acc, reactionType) => {
+    acc[reactionType] = 0;
+    return acc;
+  }, {});
+
+  (Array.isArray(reactions) ? reactions : []).forEach((reaction) => {
+    summary[normalizeReactionType(reaction?.type)] += 1;
+  });
+
+  return summary;
+};
 
 const normalizePaging = (pageRaw, limitRaw) => {
   const page = Math.max(1, Number(pageRaw) || 1);
@@ -61,13 +82,72 @@ const resolveProfileAccess = async (currentUserId, profileUserId) => {
 
 const toPostPayload = (post, currentUserId) => {
   const postObject = post.toObject ? post.toObject() : post;
-  const likes = (postObject.likes || []).map(String);
+
+  const normalizedReactions = Array.isArray(postObject.reactions)
+    ? postObject.reactions
+        .map((reaction) => ({
+          userId: String(reaction?.userId || ""),
+          type: normalizeReactionType(reaction?.type),
+        }))
+        .filter((reaction) => reaction.userId)
+    : Array.isArray(postObject.likes)
+      ? postObject.likes.map((userId) => ({
+          userId: String(userId),
+          type: "like",
+        }))
+      : [];
+
+  const reactionSummary = buildReactionSummary(normalizedReactions);
+
+  const ownReaction =
+    normalizedReactions.find(
+      (reaction) => String(reaction.userId) === String(currentUserId),
+    )?.type || null;
 
   return {
     ...postObject,
-    isLiked: likes.includes(String(currentUserId)),
+    isLiked: ownReaction === "like",
+    ownReaction,
+    reactionSummary,
     likes: undefined,
+    reactions: undefined,
   };
+};
+
+const uploadPostMedia = async (rawMediaUrls) => {
+  const incomingMedia = Array.isArray(rawMediaUrls)
+    ? rawMediaUrls
+    : rawMediaUrls
+      ? [rawMediaUrls]
+      : [];
+
+  const normalizedMedia = incomingMedia
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 10);
+
+  if (normalizedMedia.length === 0) {
+    return [];
+  }
+
+  const uploadSingle = async (mediaValue) => {
+    if (mediaValue.startsWith("http://") || mediaValue.startsWith("https://")) {
+      return mediaValue;
+    }
+
+    if (!mediaValue.startsWith("data:image/")) {
+      throw new Error("Unsupported media format");
+    }
+
+    const uploaded = await cloudinary.uploader.upload(mediaValue, {
+      folder: "coming_chat/posts",
+      resource_type: "image",
+    });
+
+    return uploaded.secure_url;
+  };
+
+  return Promise.all(normalizedMedia.map((mediaValue) => uploadSingle(mediaValue)));
 };
 
 const createAndEmitNotification = async ({
@@ -105,6 +185,61 @@ const createAndEmitNotification = async ({
   return populated;
 };
 
+const emitSocialLikeUpdated = ({
+  postId,
+  likesCount,
+  liked,
+  actor,
+  reactionSummary,
+}) => {
+  io.emit("social-post-like-updated", {
+    postId: String(postId),
+    likesCount,
+    liked,
+    reactionType: liked || null,
+    reactionSummary,
+    actor,
+  });
+};
+
+const emitSocialCommentAdded = ({ postId, comment, commentsCount }) => {
+  io.emit("social-post-comment-added", {
+    postId: String(postId),
+    comment,
+    commentsCount,
+  });
+};
+
+const emitSocialPostCreated = ({ post, authorId }) => {
+  if (!post) {
+    return;
+  }
+
+  if (post.privacy === "public") {
+    io.emit("social-post-created", { post });
+    return;
+  }
+
+  if (authorId) {
+    io.to(String(authorId)).emit("social-post-created", { post });
+  }
+};
+
+const emitSocialPostUpdated = ({ post, authorId }) => {
+  if (!post) {
+    return;
+  }
+
+  if (post.privacy === "public") {
+    io.emit("social-post-updated", { post });
+    return;
+  }
+
+  if (authorId) {
+    io.to(String(authorId)).emit("social-post-updated", { post });
+  }
+};
+
 export const createPost = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -115,10 +250,9 @@ export const createPost = async (req, res) => {
       privacy = "public",
     } = req.body;
 
-    if (
-      !caption.trim() &&
-      (!Array.isArray(mediaUrls) || mediaUrls.length === 0)
-    ) {
+    const uploadedMediaUrls = await uploadPostMedia(mediaUrls);
+
+    if (!caption.trim() && uploadedMediaUrls.length === 0) {
       return res
         .status(400)
         .json({ message: "Post must have text or media content" });
@@ -137,16 +271,81 @@ export const createPost = async (req, res) => {
     const post = await Post.create({
       authorId: userId,
       caption: caption.trim(),
-      mediaUrls: Array.isArray(mediaUrls) ? mediaUrls.slice(0, 10) : [],
+      mediaUrls: uploadedMediaUrls,
       tags: [...new Set(sanitizedTags)],
       privacy,
     });
 
     await post.populate("authorId", "displayName username avatarUrl");
 
-    return res.status(201).json({ post: toPostPayload(post, userId) });
+    const payload = toPostPayload(post, userId);
+    emitSocialPostCreated({ post: payload, authorId: userId });
+
+    return res.status(201).json({ post: payload });
   } catch (error) {
     console.error("[social] createPost error", error);
+    return res.status(500).json({ message: "System error" });
+  }
+};
+
+export const editPost = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { postId } = req.params;
+    const {
+      caption,
+      tags,
+      privacy,
+    } = req.body || {};
+
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ message: "Invalid post id" });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post || post.isDeleted) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (String(post.authorId) !== String(userId)) {
+      return res.status(403).json({ message: "You cannot edit this post" });
+    }
+
+    if (typeof caption === "string") {
+      post.caption = caption.trim();
+    }
+
+    if (Array.isArray(tags)) {
+      const sanitizedTags = tags
+        .map((tag) =>
+          String(tag || "")
+            .trim()
+            .toLowerCase(),
+        )
+        .filter(Boolean);
+      post.tags = [...new Set(sanitizedTags)];
+    }
+
+    if (privacy === "public" || privacy === "followers") {
+      post.privacy = privacy;
+    }
+
+    const hasMedia = Array.isArray(post.mediaUrls) && post.mediaUrls.length > 0;
+    if (!String(post.caption || "").trim() && !hasMedia) {
+      return res
+        .status(400)
+        .json({ message: "Post must have text or media content" });
+    }
+
+    await post.save();
+    await post.populate("authorId", "displayName username avatarUrl");
+
+    const payload = toPostPayload(post, userId);
+    emitSocialPostUpdated({ post: payload, authorId: userId });
+
+    return res.status(200).json({ post: payload });
+  } catch (error) {
+    console.error("[social] editPost error", error);
     return res.status(500).json({ message: "System error" });
   }
 };
@@ -410,10 +609,18 @@ export const getPostEngagement = async (req, res) => {
       return res.status(403).json({ message: "You cannot view this post" });
     }
 
-    const [likers, comments] = await Promise.all([
-      User.find({ _id: { $in: post.likes || [] } })
+    const normalizedReactions = Array.isArray(post.reactions)
+      ? post.reactions
+      : Array.isArray(post.likes)
+        ? post.likes.map((userId) => ({ userId, type: "like" }))
+        : [];
+
+    const reactorIds = [...new Set(normalizedReactions.map((reaction) => String(reaction.userId)))];
+    const [reactors, comments] = await Promise.all([
+      User.find({ _id: { $in: reactorIds } })
         .select("displayName username avatarUrl")
-        .limit(50),
+        .limit(50)
+        .lean(),
       Comment.find({ postId, isDeleted: false })
         .sort({ createdAt: -1 })
         .limit(100)
@@ -439,9 +646,20 @@ export const getPostEngagement = async (req, res) => {
       }
     }
 
+    const reactionBreakdown = SUPPORTED_REACTION_TYPES.reduce((acc, reactionType) => {
+      acc[reactionType] = 0;
+      return acc;
+    }, {});
+
+    normalizedReactions.forEach((reaction) => {
+      const reactionType = normalizeReactionType(reaction?.type);
+      reactionBreakdown[reactionType] += 1;
+    });
+
     return res.status(200).json({
-      likers,
+      likers: reactors,
       commenters: uniqueCommenters,
+      reactionBreakdown,
       recentComments: comments.slice(0, 30).map((comment) => ({
         _id: comment._id,
         content: comment.content,
@@ -469,15 +687,36 @@ export const toggleLikePost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    const alreadyLiked = post.likes.some(
-      (item) => String(item) === String(userId),
+    if (!Array.isArray(post.reactions)) {
+      post.reactions = Array.isArray(post.likes)
+        ? post.likes.map((item) => ({ userId: item, type: "like" }))
+        : [];
+    }
+
+    const nextReactionType = normalizeReactionType(req.body?.reaction || "like");
+    const reactionIndex = post.reactions.findIndex(
+      (item) => String(item.userId) === String(userId),
     );
 
-    if (alreadyLiked) {
-      post.likes = post.likes.filter((item) => String(item) !== String(userId));
-    } else {
-      post.likes.push(userId);
+    let finalReactionType = null;
 
+    if (reactionIndex === -1) {
+      post.reactions.push({ userId, type: nextReactionType });
+      finalReactionType = nextReactionType;
+    } else {
+      const existingType = normalizeReactionType(post.reactions[reactionIndex]?.type);
+
+      if (existingType === nextReactionType) {
+        post.reactions.splice(reactionIndex, 1);
+      } else {
+        post.reactions[reactionIndex].type = nextReactionType;
+        finalReactionType = nextReactionType;
+      }
+    }
+
+    const isNewReactionAdded = reactionIndex === -1 && Boolean(finalReactionType);
+
+    if (isNewReactionAdded) {
       await createAndEmitNotification({
         recipientId: post.authorId,
         actorId: userId,
@@ -487,12 +726,28 @@ export const toggleLikePost = async (req, res) => {
       });
     }
 
-    post.likesCount = post.likes.length;
+    post.likesCount = post.reactions.length;
     await post.save();
 
-    return res.status(200).json({
-      liked: !alreadyLiked,
+    const actor = await User.findById(userId)
+      .select("_id displayName username avatarUrl")
+      .lean();
+
+    const reactionSummary = buildReactionSummary(post.reactions || []);
+
+    emitSocialLikeUpdated({
+      postId: post._id,
       likesCount: post.likesCount,
+      liked: finalReactionType,
+      reactionSummary,
+      actor,
+    });
+
+    return res.status(200).json({
+      liked: Boolean(finalReactionType),
+      ownReaction: finalReactionType,
+      likesCount: post.likesCount,
+      reactionSummary,
       postId: post._id,
     });
   } catch (error) {
@@ -532,6 +787,12 @@ export const addComment = async (req, res) => {
 
     await comment.populate("authorId", "displayName username avatarUrl");
 
+    emitSocialCommentAdded({
+      postId: post._id,
+      comment,
+      commentsCount: post.commentsCount,
+    });
+
     const commentPreview = String(comment.content || "").trim();
     const compactPreview =
       commentPreview.length > 80
@@ -559,6 +820,7 @@ export const addComment = async (req, res) => {
 export const getCommentsByPost = async (req, res) => {
   try {
     const { postId } = req.params;
+    const sortMode = String(req.query.sort || "relevant").toLowerCase();
     const { page, limit, skip } = normalizePaging(
       req.query.page,
       req.query.limit,
@@ -573,14 +835,55 @@ export const getCommentsByPost = async (req, res) => {
       isDeleted: false,
     };
 
-    const [comments, total] = await Promise.all([
-      Comment.find(query)
-        .sort({ createdAt: 1 })
-        .skip(skip)
-        .limit(limit)
-        .populate("authorId", "displayName username avatarUrl"),
-      Comment.countDocuments(query),
-    ]);
+    const post = await Post.findById(postId).select("authorId").lean();
+    const postAuthorId = String(post?.authorId || "");
+
+    const sortByNewest = { createdAt: -1 };
+    const sortByRelevant = { createdAt: -1, _id: -1 };
+
+    let comments = [];
+    let total = 0;
+
+    if (sortMode === "newest") {
+      [comments, total] = await Promise.all([
+        Comment.find(query)
+          .sort(sortByNewest)
+          .skip(skip)
+          .limit(limit)
+          .populate("authorId", "displayName username avatarUrl"),
+        Comment.countDocuments(query),
+      ]);
+    } else {
+      const postAuthorObjectId = mongoose.Types.ObjectId.isValid(postAuthorId)
+        ? new mongoose.Types.ObjectId(postAuthorId)
+        : null;
+
+      const relevantComments = await Comment.aggregate([
+        { $match: { postId: new mongoose.Types.ObjectId(postId), isDeleted: false } },
+        {
+          $addFields: {
+            isAuthorComment: postAuthorObjectId
+              ? {
+                  $cond: [
+                    { $eq: ["$authorId", postAuthorObjectId] },
+                    1,
+                    0,
+                  ],
+                }
+              : 0,
+          },
+        },
+        { $sort: { isAuthorComment: -1, ...sortByRelevant } },
+        { $skip: skip },
+        { $limit: limit },
+      ]);
+
+      comments = await Comment.populate(relevantComments, {
+        path: "authorId",
+        select: "displayName username avatarUrl",
+      });
+      total = await Comment.countDocuments(query);
+    }
 
     return res.status(200).json({
       comments,

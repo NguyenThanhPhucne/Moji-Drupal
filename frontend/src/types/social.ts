@@ -5,6 +5,10 @@ export interface SocialUserLite {
   avatarUrl?: string | null;
 }
 
+export type SocialReactionType = "like" | "love" | "haha" | "wow";
+
+export type SocialReactionSummary = Record<SocialReactionType, number>;
+
 export interface SocialPost {
   _id: string;
   authorId: SocialUserLite;
@@ -15,6 +19,8 @@ export interface SocialPost {
   likesCount: number;
   commentsCount: number;
   isLiked: boolean;
+  ownReaction?: SocialReactionType | null;
+  reactionSummary?: SocialReactionSummary;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +52,7 @@ export interface SocialProfile {
 export interface SocialPostEngagement {
   likers: SocialUserLite[];
   commenters: SocialUserLite[];
+  reactionBreakdown?: SocialReactionSummary;
   recentComments: Array<{
     _id: string;
     authorId: SocialUserLite;

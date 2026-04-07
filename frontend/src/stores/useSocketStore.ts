@@ -7,6 +7,295 @@ import { useFriendStore } from "./useFriendStore";
 import { useNotificationStore } from "./useNotificationStore";
 import { useSocialStore } from "./useSocialStore";
 import { toast } from "sonner";
+import type {
+  SocialComment,
+  SocialPost,
+  SocialReactionSummary,
+  SocialReactionType,
+  SocialUserLite,
+} from "@/types/social";
+
+const SOCIAL_BURST_DEBOUNCE_MS = 90;
+
+let socialBurstTimer: ReturnType<typeof setTimeout> | null = null;
+
+const pendingLikeUpdates = new Map<
+  string,
+  {
+    likesCount: number;
+    ownReaction: SocialReactionType | null;
+    reactionSummary?: SocialReactionSummary;
+    actor?: SocialUserLite;
+  }
+>();
+
+const pendingCommentUpdates = new Map<
+  string,
+  { commentsCount?: number; comments: SocialComment[] }
+>();
+
+const pendingCreatedPosts = new Map<string, SocialPost>();
+const pendingUpdatedPosts = new Map<string, SocialPost>();
+
+const scheduleSocialBurstFlush = () => {
+  if (socialBurstTimer) {
+    return;
+  }
+
+  socialBurstTimer = setTimeout(() => {
+    socialBurstTimer = null;
+
+    const likeUpdates = new Map(pendingLikeUpdates);
+    const commentUpdates = new Map(pendingCommentUpdates);
+    const createdPosts = Array.from(pendingCreatedPosts.values());
+    const updatedPosts = new Map(pendingUpdatedPosts);
+
+    pendingLikeUpdates.clear();
+    pendingCommentUpdates.clear();
+    pendingCreatedPosts.clear();
+    pendingUpdatedPosts.clear();
+
+    if (
+      likeUpdates.size === 0 &&
+      commentUpdates.size === 0 &&
+      createdPosts.length === 0 &&
+      updatedPosts.size === 0
+    ) {
+      return;
+    }
+
+    useSocialStore.setState((state) => {
+      const currentUserId = String(useAuthStore.getState().user?._id || "");
+
+      const applyPostMutations = (posts: SocialPost[], listType: "home" | "explore" | "profile") => {
+        const createdCandidates = createdPosts.filter((post) => {
+          if (posts.some((existingPost) => existingPost._id === post._id)) {
+            return false;
+          }
+
+          if (listType === "explore") {
+            if (post.privacy !== "public") {
+              return false;
+            }
+
+            return String(post.authorId?._id || "") !== currentUserId;
+          }
+
+          if (listType === "profile") {
+            return String(state.profile?._id || "") === String(post.authorId?._id || "");
+          }
+
+          return true;
+        });
+
+        let nextPosts = [...createdCandidates, ...posts];
+
+        if (updatedPosts.size > 0) {
+          nextPosts = nextPosts.map((post) => {
+            const updated = updatedPosts.get(post._id);
+            return updated ? { ...post, ...updated } : post;
+          });
+        }
+
+        if (likeUpdates.size > 0) {
+          nextPosts = nextPosts.map((post) => {
+            const likeUpdate = likeUpdates.get(post._id);
+            if (!likeUpdate) {
+              return post;
+            }
+
+            const actorId = String(likeUpdate.actor?._id || "");
+            const shouldApplyIsLiked = Boolean(currentUserId) && actorId === currentUserId;
+
+            return {
+              ...post,
+              likesCount: likeUpdate.likesCount,
+              ownReaction: shouldApplyIsLiked
+                ? likeUpdate.ownReaction
+                : post.ownReaction,
+              isLiked: shouldApplyIsLiked
+                ? likeUpdate.ownReaction === "like"
+                : post.isLiked,
+              reactionSummary: likeUpdate.reactionSummary || post.reactionSummary,
+            };
+          });
+        }
+
+        if (commentUpdates.size > 0) {
+          nextPosts = nextPosts.map((post) => {
+            const commentUpdate = commentUpdates.get(post._id);
+            if (!commentUpdate) {
+              return post;
+            }
+
+            return {
+              ...post,
+              commentsCount:
+                typeof commentUpdate.commentsCount === "number"
+                  ? commentUpdate.commentsCount
+                  : post.commentsCount,
+            };
+          });
+        }
+
+        return nextPosts;
+      };
+
+      const nextPostComments = { ...state.postComments };
+      commentUpdates.forEach((commentUpdate, postId) => {
+        const mergedComments = [...(nextPostComments[postId] || [])];
+        commentUpdate.comments.forEach((incomingComment) => {
+          if (!mergedComments.some((comment) => comment._id === incomingComment._id)) {
+            mergedComments.push(incomingComment);
+          }
+        });
+        nextPostComments[postId] = mergedComments;
+      });
+
+      const nextPostEngagement = { ...state.postEngagement };
+
+      likeUpdates.forEach((likeUpdate, postId) => {
+        const currentEngagement = nextPostEngagement[postId];
+        if (!currentEngagement) {
+          return;
+        }
+
+        let nextLikers = currentEngagement.likers;
+        const actorId = String(likeUpdate.actor?._id || "");
+        if (actorId) {
+          if (likeUpdate.ownReaction) {
+            const actorAlreadyExists = nextLikers.some(
+              (liker) => String(liker._id) === actorId,
+            );
+
+            if (!actorAlreadyExists && likeUpdate.actor?._id) {
+              nextLikers = [likeUpdate.actor, ...nextLikers].slice(0, 50);
+            }
+          } else {
+            nextLikers = nextLikers.filter(
+              (liker) => String(liker._id) !== actorId,
+            );
+          }
+        }
+
+        nextPostEngagement[postId] = {
+          ...currentEngagement,
+          likers: nextLikers,
+        };
+      });
+
+      commentUpdates.forEach((commentUpdate, postId) => {
+        const currentEngagement = nextPostEngagement[postId];
+        if (!currentEngagement) {
+          return;
+        }
+
+        let nextRecentComments = [...currentEngagement.recentComments];
+        let nextCommenters = [...currentEngagement.commenters];
+
+        commentUpdate.comments.forEach((incomingComment) => {
+          nextRecentComments = [
+            {
+              _id: incomingComment._id,
+              authorId: incomingComment.authorId,
+              content: incomingComment.content,
+              createdAt: incomingComment.createdAt,
+            },
+            ...nextRecentComments.filter(
+              (recentComment) => recentComment._id !== incomingComment._id,
+            ),
+          ].slice(0, 30);
+
+          const commenterId = String(incomingComment.authorId?._id || "");
+          if (
+            commenterId &&
+            !nextCommenters.some((commenter) => String(commenter._id) === commenterId)
+          ) {
+            nextCommenters = [incomingComment.authorId, ...nextCommenters].slice(0, 50);
+          }
+        });
+
+        nextPostEngagement[postId] = {
+          ...currentEngagement,
+          recentComments: nextRecentComments,
+          commenters: nextCommenters,
+        };
+      });
+
+      return {
+        homeFeed: applyPostMutations(state.homeFeed, "home"),
+        exploreFeed: applyPostMutations(state.exploreFeed, "explore"),
+        profilePosts: applyPostMutations(state.profilePosts, "profile"),
+        profile:
+          state.profile &&
+          createdPosts.some(
+            (post) => String(post.authorId?._id || "") === String(state.profile?._id || ""),
+          )
+            ? {
+                ...state.profile,
+                postCount: state.profile.postCount + createdPosts.filter(
+                  (post) => String(post.authorId?._id || "") === String(state.profile?._id || ""),
+                ).length,
+              }
+            : state.profile,
+        postComments: nextPostComments,
+        postEngagement: nextPostEngagement,
+      };
+    });
+  }, SOCIAL_BURST_DEBOUNCE_MS);
+};
+
+const queueSocialLikeUpdate = (payload: {
+  postId: string;
+  likesCount: number;
+  ownReaction: SocialReactionType | null;
+  reactionSummary?: SocialReactionSummary;
+  actor?: SocialUserLite;
+}) => {
+  pendingLikeUpdates.set(payload.postId, {
+    likesCount: payload.likesCount,
+    ownReaction: payload.ownReaction,
+    reactionSummary: payload.reactionSummary,
+    actor: payload.actor,
+  });
+  scheduleSocialBurstFlush();
+};
+
+const queueSocialCommentUpdate = (payload: {
+  postId: string;
+  comment: SocialComment;
+  commentsCount?: number;
+}) => {
+  const current = pendingCommentUpdates.get(payload.postId) || {
+    comments: [],
+  };
+
+  const alreadyExists = current.comments.some(
+    (comment) => comment._id === payload.comment._id,
+  );
+
+  pendingCommentUpdates.set(payload.postId, {
+    commentsCount:
+      typeof payload.commentsCount === "number"
+        ? payload.commentsCount
+        : current.commentsCount,
+    comments: alreadyExists
+      ? current.comments
+      : [...current.comments, payload.comment],
+  });
+
+  scheduleSocialBurstFlush();
+};
+
+const queueSocialCreatedPost = (post: SocialPost) => {
+  pendingCreatedPosts.set(post._id, post);
+  scheduleSocialBurstFlush();
+};
+
+const queueSocialUpdatedPost = (post: SocialPost) => {
+  pendingUpdatedPosts.set(post._id, post);
+  scheduleSocialBurstFlush();
+};
 
 const resolveSocketBaseUrl = () => {
   const socketUrl = String(import.meta.env.VITE_SOCKET_URL || "").trim();
@@ -497,6 +786,60 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       }
 
       toast.info(`${actorName} ${fallbackMessage}`);
+    });
+
+    socket.on(
+      "social-post-like-updated",
+      ({ postId, likesCount, reactionType, reactionSummary, actor }: {
+        postId: string;
+        likesCount: number;
+        reactionType: SocialReactionType | null;
+        reactionSummary?: SocialReactionSummary;
+        actor?: SocialUserLite;
+      }) => {
+        if (!postId || typeof likesCount !== "number") {
+          return;
+        }
+
+        queueSocialLikeUpdate({
+          postId,
+          likesCount,
+          ownReaction: reactionType,
+          reactionSummary,
+          actor,
+        });
+      },
+    );
+
+    socket.on(
+      "social-post-comment-added",
+      ({ postId, comment, commentsCount }: {
+        postId: string;
+        comment: SocialComment;
+        commentsCount?: number;
+      }) => {
+        if (!postId || !comment?._id) {
+          return;
+        }
+
+        queueSocialCommentUpdate({ postId, comment, commentsCount });
+      },
+    );
+
+    socket.on("social-post-created", ({ post }: { post: SocialPost }) => {
+      if (!post?._id) {
+        return;
+      }
+
+      queueSocialCreatedPost(post);
+    });
+
+    socket.on("social-post-updated", ({ post }: { post: SocialPost }) => {
+      if (!post?._id) {
+        return;
+      }
+
+      queueSocialUpdatedPost(post);
     });
   },
   disconnectSocket: () => {

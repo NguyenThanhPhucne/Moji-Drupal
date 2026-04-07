@@ -23,6 +23,9 @@ const ProfilePage = () => {
     profilePosts,
     profilePagination,
     postComments,
+    postCommentsPagination,
+    postCommentsSortBy,
+    loadingCommentsByPost,
     postEngagement,
     profileAccessDenied,
     loadingProfile,
@@ -30,6 +33,8 @@ const ProfilePage = () => {
     fetchProfilePosts,
     toggleLike,
     fetchComments,
+    loadMoreComments,
+    setCommentsSortBy,
     fetchPostEngagement,
     addComment,
     toggleFollow,
@@ -145,9 +150,14 @@ const ProfilePage = () => {
                     <SocialPostCard
                       post={post}
                       comments={postComments[post._id]}
+                      commentsPagination={postCommentsPagination[post._id]}
+                      commentsLoading={loadingCommentsByPost[post._id]}
+                      commentsSortBy={postCommentsSortBy[post._id]}
                       engagement={postEngagement[post._id]}
                       onLike={toggleLike}
                       onFetchComments={fetchComments}
+                      onLoadMoreComments={loadMoreComments}
+                      onSetCommentsSortBy={setCommentsSortBy}
                       onFetchEngagement={fetchPostEngagement}
                       onComment={addComment}
                       onOpenProfile={(id) => navigate(`/profile/${id}`)}

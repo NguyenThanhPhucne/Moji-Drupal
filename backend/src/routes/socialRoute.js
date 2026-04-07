@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createPost,
+  editPost,
   getPostById,
   getHomeFeed,
   getExploreFeed,
@@ -19,6 +20,7 @@ import {
 const router = express.Router();
 
 router.post("/posts", createPost);
+router.patch("/posts/:postId", editPost);
 router.get("/posts/:postId", getPostById);
 router.get("/feed/home", getHomeFeed);
 router.get("/feed/explore", getExploreFeed);

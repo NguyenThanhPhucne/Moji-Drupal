@@ -33,6 +33,23 @@ const postSchema = new mongoose.Schema(
       ref: "User",
       default: [],
     },
+    reactions: {
+      type: [
+        {
+          userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            required: true,
+          },
+          type: {
+            type: String,
+            enum: ["like", "love", "haha", "wow"],
+            default: "like",
+          },
+        },
+      ],
+      default: [],
+    },
     likesCount: {
       type: Number,
       default: 0,

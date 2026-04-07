@@ -21,11 +21,16 @@ const ExplorePage = () => {
     exploreFeed,
     explorePagination,
     postComments,
+    postCommentsPagination,
+    postCommentsSortBy,
+    loadingCommentsByPost,
     postEngagement,
     loadingExplore,
     fetchExploreFeed,
     toggleLike,
     fetchComments,
+    loadMoreComments,
+    setCommentsSortBy,
     fetchPostEngagement,
     addComment,
   } = useSocialStore();
@@ -139,9 +144,14 @@ const ExplorePage = () => {
                   <SocialPostCard
                     post={post}
                     comments={postComments[post._id]}
+                    commentsPagination={postCommentsPagination[post._id]}
+                    commentsLoading={loadingCommentsByPost[post._id]}
+                    commentsSortBy={postCommentsSortBy[post._id]}
                     engagement={postEngagement[post._id]}
                     onLike={toggleLike}
                     onFetchComments={fetchComments}
+                    onLoadMoreComments={loadMoreComments}
+                    onSetCommentsSortBy={setCommentsSortBy}
                     onFetchEngagement={fetchPostEngagement}
                     onComment={addComment}
                     onOpenProfile={(userId) => navigate(`/profile/${userId}`)}

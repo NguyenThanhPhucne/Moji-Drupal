@@ -11,6 +11,7 @@ import type {
   SocialPostEngagement,
   SocialPost,
   SocialProfile,
+  SocialReactionType,
 } from "@/types/social";
 
 interface SocialState {
@@ -20,6 +21,9 @@ interface SocialState {
   profile: SocialProfile | null;
   notifications: SocialNotification[];
   postComments: Record<string, SocialComment[]>;
+  postCommentsPagination: Record<string, PaginationPayload>;
+  postCommentsSortBy: Record<string, "relevant" | "newest">;
+  loadingCommentsByPost: Record<string, boolean>;
   postEngagement: Record<string, SocialPostEngagement>;
   profileAccessDenied: boolean;
   homePagination: PaginationPayload;
@@ -43,10 +47,24 @@ interface SocialState {
     page?: number,
     append?: boolean,
   ) => Promise<void>;
-  toggleLike: (postId: string) => Promise<boolean>;
-  fetchComments: (postId: string) => Promise<void>;
+  toggleLike: (postId: string, reaction?: SocialReactionType) => Promise<boolean>;
+  fetchComments: (
+    postId: string,
+    page?: number,
+    append?: boolean,
+    sortBy?: "relevant" | "newest",
+  ) => Promise<void>;
+  loadMoreComments: (postId: string) => Promise<void>;
+  setCommentsSortBy: (
+    postId: string,
+    sortBy: "relevant" | "newest",
+  ) => Promise<void>;
   fetchPostEngagement: (postId: string) => Promise<void>;
-  addComment: (postId: string, content: string) => Promise<boolean>;
+  addComment: (
+    postId: string,
+    content: string,
+    parentCommentId?: string | null,
+  ) => Promise<boolean>;
   toggleFollow: (userId: string) => Promise<boolean>;
   fetchNotifications: () => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
@@ -84,6 +102,9 @@ export const useSocialStore = create<SocialState>((set) => ({
   profile: null,
   notifications: [],
   postComments: {},
+  postCommentsPagination: {},
+  postCommentsSortBy: {},
+  loadingCommentsByPost: {},
   postEngagement: {},
   profileAccessDenied: false,
   homePagination: DEFAULT_PAGINATION,
@@ -207,27 +228,39 @@ export const useSocialStore = create<SocialState>((set) => ({
     }
   },
 
-  toggleLike: async (postId) => {
+  toggleLike: async (postId, reaction = "like") => {
     try {
-      const result = await socialService.toggleLikePost(postId);
+      const result = await socialService.reactToPost(postId, reaction);
       set((state) => ({
-        homeFeed: updatePostLike(
-          state.homeFeed,
-          result.postId,
-          result.liked,
-          result.likesCount,
+        homeFeed: updatePostLike(state.homeFeed, result.postId, Boolean(result.ownReaction), result.likesCount).map((post) =>
+          post._id === result.postId
+            ? {
+                ...post,
+                ownReaction: result.ownReaction,
+                isLiked: result.ownReaction === "like",
+                reactionSummary: result.reactionSummary,
+              }
+            : post,
         ),
-        exploreFeed: updatePostLike(
-          state.exploreFeed,
-          result.postId,
-          result.liked,
-          result.likesCount,
+        exploreFeed: updatePostLike(state.exploreFeed, result.postId, Boolean(result.ownReaction), result.likesCount).map((post) =>
+          post._id === result.postId
+            ? {
+                ...post,
+                ownReaction: result.ownReaction,
+                isLiked: result.ownReaction === "like",
+                reactionSummary: result.reactionSummary,
+              }
+            : post,
         ),
-        profilePosts: updatePostLike(
-          state.profilePosts,
-          result.postId,
-          result.liked,
-          result.likesCount,
+        profilePosts: updatePostLike(state.profilePosts, result.postId, Boolean(result.ownReaction), result.likesCount).map((post) =>
+          post._id === result.postId
+            ? {
+                ...post,
+                ownReaction: result.ownReaction,
+                isLiked: result.ownReaction === "like",
+                reactionSummary: result.reactionSummary,
+              }
+            : post,
         ),
       }));
       return true;
@@ -238,19 +271,70 @@ export const useSocialStore = create<SocialState>((set) => ({
     }
   },
 
-  fetchComments: async (postId) => {
+  fetchComments: async (
+    postId,
+    page = 1,
+    append = false,
+    sortBy,
+  ) => {
     try {
-      const result = await socialService.getCommentsByPost(postId);
+      set((state) => ({
+        loadingCommentsByPost: {
+          ...state.loadingCommentsByPost,
+          [postId]: true,
+        },
+      }));
+
+      const currentSortBy =
+        sortBy || useSocialStore.getState().postCommentsSortBy[postId] || "relevant";
+
+      const result = await socialService.getCommentsByPost(
+        postId,
+        page,
+        20,
+        currentSortBy,
+      );
       set((state) => ({
         postComments: {
           ...state.postComments,
-          [postId]: result.comments,
+          [postId]: append
+            ? [...(state.postComments[postId] || []), ...result.comments]
+            : result.comments,
+        },
+        postCommentsPagination: {
+          ...state.postCommentsPagination,
+          [postId]: result.pagination,
+        },
+        postCommentsSortBy: {
+          ...state.postCommentsSortBy,
+          [postId]: currentSortBy,
         },
       }));
     } catch (error) {
       console.error("[social] fetchComments error", error);
       toast.error("Cannot load comments");
+    } finally {
+      set((state) => ({
+        loadingCommentsByPost: {
+          ...state.loadingCommentsByPost,
+          [postId]: false,
+        },
+      }));
     }
+  },
+
+  loadMoreComments: async (postId) => {
+    const state = useSocialStore.getState();
+    const currentPagination = state.postCommentsPagination[postId];
+    if (!currentPagination?.hasNextPage || state.loadingCommentsByPost[postId]) {
+      return;
+    }
+
+    await state.fetchComments(postId, currentPagination.page + 1, true);
+  },
+
+  setCommentsSortBy: async (postId, sortBy) => {
+    await useSocialStore.getState().fetchComments(postId, 1, false, sortBy);
   },
 
   fetchPostEngagement: async (postId) => {
@@ -268,29 +352,89 @@ export const useSocialStore = create<SocialState>((set) => ({
     }
   },
 
-  addComment: async (postId, content) => {
+  addComment: async (postId, content, parentCommentId = null) => {
     try {
-      const comment = await socialService.addComment(postId, { content });
+      const comment = await socialService.addComment(postId, {
+        content,
+        parentCommentId,
+      });
       set((state) => ({
-        postComments: {
-          ...state.postComments,
-          [postId]: [...(state.postComments[postId] || []), comment],
-        },
-        homeFeed: state.homeFeed.map((post) =>
-          post._id === postId
-            ? { ...post, commentsCount: post.commentsCount + 1 }
-            : post,
-        ),
-        exploreFeed: state.exploreFeed.map((post) =>
-          post._id === postId
-            ? { ...post, commentsCount: post.commentsCount + 1 }
-            : post,
-        ),
-        profilePosts: state.profilePosts.map((post) =>
-          post._id === postId
-            ? { ...post, commentsCount: post.commentsCount + 1 }
-            : post,
-        ),
+        postComments: (() => {
+          const existing = state.postComments[postId] || [];
+          const alreadyExists = existing.some(
+            (commentItem) => commentItem._id === comment._id,
+          );
+
+          return {
+            ...state.postComments,
+            [postId]: alreadyExists ? existing : [...existing, comment],
+          };
+        })(),
+        postCommentsPagination: (() => {
+          const current = state.postCommentsPagination[postId];
+          if (!current) {
+            return state.postCommentsPagination;
+          }
+
+          return {
+            ...state.postCommentsPagination,
+            [postId]: {
+              ...current,
+              total: current.total + 1,
+            },
+          };
+        })(),
+        homeFeed: state.homeFeed.map((post) => {
+          if (post._id !== postId) {
+            return post;
+          }
+
+          const existing = state.postComments[postId] || [];
+          const alreadyExists = existing.some(
+            (commentItem) => commentItem._id === comment._id,
+          );
+
+          return {
+            ...post,
+            commentsCount: alreadyExists
+              ? post.commentsCount
+              : post.commentsCount + 1,
+          };
+        }),
+        exploreFeed: state.exploreFeed.map((post) => {
+          if (post._id !== postId) {
+            return post;
+          }
+
+          const existing = state.postComments[postId] || [];
+          const alreadyExists = existing.some(
+            (commentItem) => commentItem._id === comment._id,
+          );
+
+          return {
+            ...post,
+            commentsCount: alreadyExists
+              ? post.commentsCount
+              : post.commentsCount + 1,
+          };
+        }),
+        profilePosts: state.profilePosts.map((post) => {
+          if (post._id !== postId) {
+            return post;
+          }
+
+          const existing = state.postComments[postId] || [];
+          const alreadyExists = existing.some(
+            (commentItem) => commentItem._id === comment._id,
+          );
+
+          return {
+            ...post,
+            commentsCount: alreadyExists
+              ? post.commentsCount
+              : post.commentsCount + 1,
+          };
+        }),
       }));
       return true;
     } catch (error) {
