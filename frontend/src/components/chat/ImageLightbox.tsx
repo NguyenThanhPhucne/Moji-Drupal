@@ -1,17 +1,3 @@
-/**
- * ImageLightbox — Premium full-screen image viewer
- *
- * Features:
- * - Smooth fade/scale enter + exit animation
- * - Pinch-to-zoom / scroll-to-zoom (1x – 4x)
- * - Click-and-drag pan when zoomed
- * - Keyboard: Esc → close, +/- → zoom, 0 → reset
- * - Download button (saves original Cloudinary URL)
- * - Copy link button
- * - Caption showing sender display name + timestamp
- * - Accessible: focus-trap, aria-modal, aria-label
- */
-
 import { useEffect, useRef, useCallback, memo, useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Download, Link2, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
@@ -28,6 +14,7 @@ interface LightboxProps {
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 const ZOOM_STEP = 0.4;
+const SWIPE_CLOSE_THRESHOLD = 80;
 
 const ImageLightbox = memo(function ImageLightbox({
   src,
@@ -37,19 +24,21 @@ const ImageLightbox = memo(function ImageLightbox({
 }: LightboxProps) {
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [swipeY, setSwipeY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
   const dragStart = useRef<{ x: number; y: number } | null>(null);
   const offsetAtDrag = useRef({ x: 0, y: 0 });
+  const lastTouchDist = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const triggerClose = useCallback(() => {
     if (isClosing) return;
     setIsClosing(true);
-    closingTimer.current = setTimeout(onClose, 220);
+    closingTimer.current = setTimeout(onClose, 250);
   }, [isClosing, onClose]);
 
   // Keyboard shortcuts
@@ -61,10 +50,10 @@ const ImageLightbox = memo(function ImageLightbox({
       if (e.key === "-")
         setZoom((z) => {
           const next = Math.max(MIN_ZOOM, parseFloat((z - ZOOM_STEP).toFixed(2)));
-          if (next === 1) setOffset({ x: 0, y: 0 });
+          if (next === 1) { setOffset({ x: 0, y: 0 }); setSwipeY(0); }
           return next;
         });
-      if (e.key === "0") { setZoom(1); setOffset({ x: 0, y: 0 }); }
+      if (e.key === "0") { setZoom(1); setOffset({ x: 0, y: 0 }); setSwipeY(0); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -73,43 +62,116 @@ const ImageLightbox = memo(function ImageLightbox({
   // Cleanup timer on unmount
   useEffect(() => () => { if (closingTimer.current) clearTimeout(closingTimer.current); }, []);
 
-  // Scroll to zoom
+  // Wheel to zoom
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
     setZoom((z) => {
       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2))));
-      if (next === 1) setOffset({ x: 0, y: 0 });
+      if (next === 1) { setOffset({ x: 0, y: 0 }); setSwipeY(0); }
       return next;
     });
   }, []);
 
-  // Pan drag handlers
+  // ------------- TOUCH PAN & PINCH & SWIPE -------------
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastTouchDist.current = dist;
+    } else if (e.touches.length === 1) {
+      setIsDragging(true);
+      dragStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      offsetAtDrag.current = { ...offset };
+    }
+  }, [offset]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDist.current !== null) {
+      // Pinch to zoom
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = (dist - lastTouchDist.current) * 0.01;
+      setZoom((z) => {
+        const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, parseFloat((z + delta).toFixed(2))));
+        if (next === 1) { setOffset({ x: 0, y: 0 }); setSwipeY(0); }
+        return next;
+      });
+      lastTouchDist.current = dist;
+    } else if (e.touches.length === 1 && isDragging && dragStart.current) {
+      // Pan or Swipe
+      const dy = e.touches[0].clientY - dragStart.current.y;
+      const dx = e.touches[0].clientX - dragStart.current.x;
+
+      if (zoom === 1) {
+        setSwipeY(dy);
+      } else {
+        setOffset({ x: offsetAtDrag.current.x + dx, y: offsetAtDrag.current.y + dy });
+      }
+    }
+  }, [zoom, isDragging]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+    dragStart.current = null;
+    lastTouchDist.current = null;
+
+    if (zoom === 1 && Math.abs(swipeY) > SWIPE_CLOSE_THRESHOLD) {
+      triggerClose();
+    } else if (zoom === 1) {
+      setSwipeY(0); // bounce back
+    }
+  }, [zoom, swipeY, triggerClose]);
+
+  // ------------- MOUSE PAN & SWIPE -------------
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (zoom <= 1) return;
-    e.preventDefault();
     setIsDragging(true);
     dragStart.current = { x: e.clientX, y: e.clientY };
     offsetAtDrag.current = { ...offset };
-  }, [zoom, offset]);
+  }, [offset]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDragging || !dragStart.current) return;
-    const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
-    setOffset({ x: offsetAtDrag.current.x + dx, y: offsetAtDrag.current.y + dy });
-  }, [isDragging]);
+    const dx = e.clientX - dragStart.current.x;
+
+    if (zoom === 1) {
+      setSwipeY(dy);
+    } else {
+      setOffset({ x: offsetAtDrag.current.x + dx, y: offsetAtDrag.current.y + dy });
+    }
+  }, [isDragging, zoom]);
 
   const handleMouseUp = useCallback(() => {
+    if (!isDragging) return;
     setIsDragging(false);
-    dragStart.current = null;
-  }, []);
+    if (zoom === 1 && Math.abs(swipeY) > SWIPE_CLOSE_THRESHOLD) {
+      triggerClose();
+    } else if (zoom === 1) {
+      setSwipeY(0); // Bounce back if not swiped far enough
+    }
+  }, [isDragging, zoom, swipeY, triggerClose]);
 
-  // Backdrop click → close only when not dragging and zoom=1
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (zoom > 1) {
+      setZoom(1);
+      setOffset({ x: 0, y: 0 });
+      setSwipeY(0);
+    } else {
+      setZoom(2.5);
+    }
+  }, [zoom]);
+
+  // Backdrop click → close only when not dragging/swiping
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !isDragging && zoom <= 1) {
+    if (e.target === e.currentTarget && !isDragging && zoom <= 1 && Math.abs(swipeY) < 10) {
       triggerClose();
     }
-  }, [isDragging, zoom, triggerClose]);
+  }, [isDragging, zoom, swipeY, triggerClose]);
 
   const handleDownload = useCallback(async () => {
     try {
@@ -124,7 +186,6 @@ const ImageLightbox = memo(function ImageLightbox({
       URL.revokeObjectURL(url);
       toast.success("Image downloaded!");
     } catch {
-      // Fallback: open in new tab
       window.open(src, "_blank", "noopener,noreferrer");
       toast.info("Opened in new tab");
     }
@@ -139,7 +200,11 @@ const ImageLightbox = memo(function ImageLightbox({
   const resetZoom = useCallback(() => {
     setZoom(1);
     setOffset({ x: 0, y: 0 });
+    setSwipeY(0);
   }, []);
+
+  // Calculate dynamic styling for the backdrop swipe pull-to-dismiss
+  const backdropOpacity = isClosing ? 0 : Math.max(0, 0.92 - Math.abs(swipeY) / 500);
 
   return createPortal(
     <div
@@ -151,38 +216,48 @@ const ImageLightbox = memo(function ImageLightbox({
         "lightbox-backdrop",
         isClosing ? "lightbox-backdrop--closing" : "lightbox-backdrop--open",
       )}
+      style={{
+        backgroundColor: `hsla(0, 0%, 0%, ${backdropOpacity})`,
+        backdropFilter: `blur(${Math.max(0, 12 - Math.abs(swipeY) / 10)}px)`
+      }}
       onClick={handleBackdropClick}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       {/* ── Toolbar top ── */}
-      <div className="lightbox-toolbar">
+      <div 
+        className="lightbox-toolbar"
+        style={{ opacity: Math.max(0, 1 - Math.abs(swipeY) / 100), transition: isDragging ? "none" : "opacity 0.2s" }}
+      >
         <div className="lightbox-toolbar-left">
           {caption && <span className="lightbox-caption">{caption}</span>}
         </div>
-        <div className="lightbox-toolbar-right">
+        <div className="lightbox-toolbar-right gap-1.5 md:gap-2">
           {/* Zoom indicator */}
-          <span className="lightbox-zoom-label">{Math.round(zoom * 100)}%</span>
+          <span className="lightbox-zoom-label hidden md:inline-block">{Math.round(zoom * 100)}%</span>
 
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(MIN_ZOOM, parseFloat((z - ZOOM_STEP).toFixed(2))))}
-            className="lightbox-action-btn"
+            className="lightbox-action-btn hidden sm:flex"
             aria-label="Zoom out"
             title="Zoom out (−)"
           >
-            <ZoomOut className="size-4" />
+            <ZoomOut className="size-4.5" />
           </button>
 
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(MAX_ZOOM, parseFloat((z + ZOOM_STEP).toFixed(2))))}
-            className="lightbox-action-btn"
+            className="lightbox-action-btn hidden sm:flex"
             aria-label="Zoom in"
             title="Zoom in (+)"
           >
-            <ZoomIn className="size-4" />
+            <ZoomIn className="size-4.5" />
           </button>
 
           {zoom > 1 && (
@@ -193,11 +268,11 @@ const ImageLightbox = memo(function ImageLightbox({
               aria-label="Reset zoom"
               title="Reset (0)"
             >
-              <RotateCcw className="size-3.5" />
+              <RotateCcw className="size-4" />
             </button>
           )}
 
-          <div className="lightbox-divider" />
+          <div className="lightbox-divider hidden sm:block" />
 
           <button
             type="button"
@@ -206,7 +281,7 @@ const ImageLightbox = memo(function ImageLightbox({
             aria-label="Copy image link"
             title="Copy link"
           >
-            <Link2 className="size-4" />
+            <Link2 className="size-4.5" />
           </button>
 
           <button
@@ -216,7 +291,7 @@ const ImageLightbox = memo(function ImageLightbox({
             aria-label="Download image"
             title="Download"
           >
-            <Download className="size-4" />
+            <Download className="size-4.5" />
           </button>
 
           <div className="lightbox-divider" />
@@ -228,7 +303,7 @@ const ImageLightbox = memo(function ImageLightbox({
             aria-label="Close"
             title="Close (Esc)"
           >
-            <X className="size-4.5" />
+            <X className="size-5" />
           </button>
         </div>
       </div>
@@ -236,12 +311,14 @@ const ImageLightbox = memo(function ImageLightbox({
       {/* ── Image stage ── */}
       <div
         className={cn(
-          "lightbox-stage",
+          "lightbox-stage p-0 sm:p-4 md:p-8",
           isDragging ? "cursor-grabbing" : zoom > 1 ? "cursor-grab" : "cursor-zoom-in",
         )}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
         onClick={(e) => e.stopPropagation()}
+        onDoubleClick={handleDoubleClick}
       >
         {/* Skeleton while loading */}
         {!imgLoaded && (
@@ -256,20 +333,23 @@ const ImageLightbox = memo(function ImageLightbox({
           draggable={false}
           onLoad={() => setImgLoaded(true)}
           className={cn(
-            "lightbox-img",
+            "lightbox-img rounded-none sm:rounded-xl md:rounded-2xl shadow-2xl",
             imgLoaded ? "lightbox-img--loaded" : "lightbox-img--loading",
             isClosing && "lightbox-img--closing",
           )}
           style={{
-            transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
-            transition: isDragging ? "none" : "transform 0.18s cubic-bezier(0.25,0.46,0.45,0.94)",
+            transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${(offset.y + swipeY) / zoom}px)`,
+            transition: isDragging ? "none" : "transform 0.25s cubic-bezier(0.33, 1, 0.68, 1)",
           }}
         />
       </div>
 
       {/* ── Keyboard hint ── */}
-      <div className="lightbox-hint">
-        Scroll to zoom · Drag to pan · Esc to close
+      <div 
+        className="lightbox-hint"
+        style={{ opacity: Math.max(0, 1 - Math.abs(swipeY) / 100), transition: isDragging ? "none" : "opacity 0.2s" }}
+      >
+        Double-click to zoom · Swipe down to close
       </div>
     </div>,
     document.body,
