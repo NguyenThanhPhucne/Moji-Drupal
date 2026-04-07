@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 type PostComposerSkeletonProps = {
   compact?: boolean;
@@ -12,8 +12,7 @@ const PostComposerSkeleton = ({
 }: PostComposerSkeletonProps) => {
   return (
     <section
-      className="stagger-enter elevated-card space-y-3 p-3 sm:space-y-4 sm:p-4"
-      style={{ "--stagger-index": staggerIndex } as CSSProperties}
+      className={`${getStaggerEnterClass(staggerIndex)} elevated-card space-y-3 p-3 sm:space-y-4 sm:p-4`}
     >
       <Skeleton className={`h-6 ${compact ? "w-32" : "w-40"}`} />
 

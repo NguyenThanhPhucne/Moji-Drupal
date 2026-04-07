@@ -134,7 +134,7 @@ export function SigninForm({
               </div>
             </div>
           </form>
-          <div className="relative hidden overflow-hidden bg-gradient-to-br from-sky-400 via-cyan-400 to-sky-600 md:block">
+          <div className="auth-hero-pane auth-hero-pane--signin relative hidden overflow-hidden md:block">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,255,255,0.28),transparent_36%),radial-gradient(circle_at_74%_28%,rgba(255,255,255,0.2),transparent_32%)]" />
             <img
               src="/placeholder.png"

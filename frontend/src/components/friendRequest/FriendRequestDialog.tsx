@@ -37,8 +37,7 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
-        className="modal-content-shell flex flex-col gap-0 p-0 sm:max-w-md"
-        style={{ height: "min(600px, 85svh)" }}
+        className="modal-content-shell flex h-[min(600px,85svh)] flex-col gap-0 p-0 sm:max-w-md"
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">

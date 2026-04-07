@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 type SocialNotificationsSkeletonProps = {
   count?: number;
@@ -22,8 +22,7 @@ const SocialNotificationsSkeleton = ({
         return (
           <div
             key={`${key}-${staggerIndex}`}
-            className="stagger-enter flex items-start gap-3 rounded-xl px-3 py-2.5"
-            style={{ "--stagger-index": staggerIndex } as CSSProperties}
+            className={`${getStaggerEnterClass(staggerIndex)} flex items-start gap-3 rounded-xl px-3 py-2.5`}
           >
             {/* Avatar circle */}
             <Skeleton className={`flex-shrink-0 rounded-full ${compact ? "h-9 w-9" : "h-10 w-10"}`} />

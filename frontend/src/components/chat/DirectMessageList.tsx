@@ -1,6 +1,6 @@
 import { useChatStore } from "@/stores/useChatStore";
 import DirectMessageCard from "./DirectMessageCard";
-import type { CSSProperties } from "react";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 const DirectMessageList = () => {
   const { conversations } = useChatStore();
@@ -33,8 +33,7 @@ const DirectMessageList = () => {
       {directConversations.map((convo, index) => (
         <div
           key={convo._id}
-          className="stagger-enter"
-          style={{ "--stagger-index": index % 10 } as CSSProperties}
+          className={getStaggerEnterClass(index)}
         >
           <DirectMessageCard convo={convo} />
         </div>

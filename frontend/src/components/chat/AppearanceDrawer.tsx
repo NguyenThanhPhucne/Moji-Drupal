@@ -1,8 +1,18 @@
 import { memo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, Sun, Moon, Monitor, Check } from "lucide-react";
+import { X, Sun, Moon, Monitor, Check, Rabbit, Waves, Type, MessageCircleMore, Grid2x2, Rows3, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useThemeStore, type AccentColor, type ThemeMode, type SidebarLayout } from "@/stores/useThemeStore";
+import {
+  useThemeStore,
+  type AccentColor,
+  type ThemeMode,
+  type SidebarLayout,
+  type BubbleStyle,
+  type ChatDensity,
+  type MessageTextSize,
+  type MotionPreference,
+  type RememberMode,
+} from "@/stores/useThemeStore";
 
 interface AppearanceDrawerProps {
   open: boolean;
@@ -13,17 +23,17 @@ interface AppearanceDrawerProps {
 const ACCENT_COLORS: Array<{
   id: AccentColor;
   label: string;
-  style: string; // CSS gradient or color for the swatch
+  swatchClass: string;
   isGradient?: boolean;
 }> = [
-  { id: "blue",    label: "Sky Blue",    style: "linear-gradient(135deg, hsl(204,89%,51%), hsl(206,100%,70%))" },
-  { id: "violet",  label: "Violet",      style: "linear-gradient(135deg, hsl(262,80%,58%), hsl(280,75%,68%))" },
-  { id: "rose",    label: "Rose",        style: "linear-gradient(135deg, hsl(346,84%,55%), hsl(15,90%,62%))" },
-  { id: "emerald", label: "Emerald",     style: "linear-gradient(135deg, hsl(158,70%,40%), hsl(174,80%,50%))" },
-  { id: "amber",   label: "Amber",       style: "linear-gradient(135deg, hsl(38,92%,50%), hsl(45,95%,55%))" },
-  { id: "sunset",  label: "Sunset",      style: "linear-gradient(135deg, hsl(262,80%,58%), hsl(340,82%,60%))", isGradient: true },
-  { id: "ocean",   label: "Ocean",       style: "linear-gradient(135deg, hsl(220,85%,55%), hsl(174,80%,45%))", isGradient: true },
-  { id: "slate",   label: "Slate",       style: "linear-gradient(135deg, hsl(215,25%,45%), hsl(215,20%,55%))" },
+  { id: "blue",    label: "Sky Blue",    swatchClass: "appearance-swatch-blue" },
+  { id: "violet",  label: "Violet",      swatchClass: "appearance-swatch-violet" },
+  { id: "rose",    label: "Rose",        swatchClass: "appearance-swatch-rose" },
+  { id: "emerald", label: "Emerald",     swatchClass: "appearance-swatch-emerald" },
+  { id: "amber",   label: "Amber",       swatchClass: "appearance-swatch-amber" },
+  { id: "sunset",  label: "Sunset",      swatchClass: "appearance-swatch-sunset", isGradient: true },
+  { id: "ocean",   label: "Ocean",       swatchClass: "appearance-swatch-ocean", isGradient: true },
+  { id: "slate",   label: "Slate",       swatchClass: "appearance-swatch-slate" },
 ];
 
 // ── Layout preview thumbnails ────────────────────────────────────────────────
@@ -32,8 +42,96 @@ const LAYOUTS: Array<{ id: SidebarLayout; label: string }> = [
   { id: "compact", label: "Compact" },
 ];
 
+const DENSITY_OPTIONS: Array<{ id: ChatDensity; label: string; icon: typeof Rows3 }> = [
+  { id: "comfortable", label: "Comfortable", icon: Rows3 },
+  { id: "compact", label: "Compact", icon: Grid2x2 },
+];
+
+const MOTION_OPTIONS: Array<{ id: MotionPreference; label: string; icon: typeof Rabbit }> = [
+  { id: "smooth", label: "Smooth", icon: Rabbit },
+  { id: "reduced", label: "Reduced", icon: Waves },
+  { id: "system", label: "System", icon: Monitor },
+];
+
+const MESSAGE_SIZE_OPTIONS: Array<{ id: MessageTextSize; label: string }> = [
+  { id: "sm", label: "Small" },
+  { id: "md", label: "Medium" },
+  { id: "lg", label: "Large" },
+];
+
+const BUBBLE_STYLE_OPTIONS: Array<{ id: BubbleStyle; label: string; description: string }> = [
+  { id: "modern", label: "Modern", description: "Soft radius with subtle depth" },
+  { id: "classic", label: "Classic", description: "Cleaner shape with flatter bubbles" },
+];
+
+const APPEARANCE_PRESETS: Array<{
+  id: string;
+  label: string;
+  description: string;
+  config: {
+    density: ChatDensity;
+    motion: MotionPreference;
+    textSize: MessageTextSize;
+    bubbleStyle: BubbleStyle;
+  };
+}> = [
+  {
+    id: "deep-work",
+    label: "Deep Work",
+    description: "Compact layout with lower motion for focus",
+    config: { density: "compact", motion: "reduced", textSize: "sm", bubbleStyle: "classic" },
+  },
+  {
+    id: "accessibility-first",
+    label: "Accessibility First",
+    description: "Large text, calmer motion, clearer bubble shape",
+    config: { density: "comfortable", motion: "reduced", textSize: "lg", bubbleStyle: "classic" },
+  },
+  {
+    id: "night-reader",
+    label: "Night Reader",
+    description: "Relaxed spacing with smooth readable rhythm",
+    config: { density: "comfortable", motion: "smooth", textSize: "md", bubbleStyle: "modern" },
+  },
+];
+
+const REMEMBER_OPTIONS: Array<{
+  id: RememberMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "device",
+    label: "Remember on this device",
+    description: "Same appearance for all accounts on this browser",
+  },
+  {
+    id: "profile",
+    label: "Remember per profile",
+    description: "Each account keeps its own appearance setup",
+  },
+];
+
 const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: AppearanceDrawerProps) {
-  const { themeMode, accentColor, sidebarLayout, setThemeMode, setAccentColor, setSidebarLayout } = useThemeStore();
+  const {
+    themeMode,
+    accentColor,
+    sidebarLayout,
+    chatDensity,
+    motionPreference,
+    messageTextSize,
+    bubbleStyle,
+    rememberMode,
+    setThemeMode,
+    setAccentColor,
+    setSidebarLayout,
+    setChatDensity,
+    setMotionPreference,
+    setMessageTextSize,
+    setBubbleStyle,
+    setRememberMode,
+    resetAppearance,
+  } = useThemeStore();
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Close on Escape
@@ -48,6 +146,27 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
   useEffect(() => {
     if (open) panelRef.current?.focus();
   }, [open]);
+
+  const applyPreset = (presetId: string) => {
+    const selectedPreset = APPEARANCE_PRESETS.find((preset) => preset.id === presetId);
+    if (!selectedPreset) {
+      return;
+    }
+
+    setChatDensity(selectedPreset.config.density);
+    setMotionPreference(selectedPreset.config.motion);
+    setMessageTextSize(selectedPreset.config.textSize);
+    setBubbleStyle(selectedPreset.config.bubbleStyle);
+  };
+
+  const activePresetId =
+    APPEARANCE_PRESETS.find(
+      (preset) =>
+        preset.config.density === chatDensity &&
+        preset.config.motion === motionPreference &&
+        preset.config.textSize === messageTextSize &&
+        preset.config.bubbleStyle === bubbleStyle,
+    )?.id ?? null;
 
   return createPortal(
     <>
@@ -110,7 +229,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setThemeMode(mode)}
                     className={cn(
-                      "flex flex-col items-center gap-2 rounded-xl border px-2 py-3 transition-all duration-200 text-center",
+                      "appearance-drawer-btn flex flex-col items-center gap-2 rounded-xl border px-2 py-3 transition-all duration-200 text-center",
                       active
                         ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border"
@@ -123,6 +242,68 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                       <Icon className="size-4" />
                     </div>
                     <span className="text-[12px] font-medium leading-none">{labels[mode]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Quick presets
+            </p>
+            <div className="space-y-2">
+              {APPEARANCE_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => applyPreset(preset.id)}
+                  aria-current={activePresetId === preset.id ? "true" : undefined}
+                  className={cn(
+                    "appearance-drawer-btn appearance-preset-card w-full rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
+                    activePresetId === preset.id
+                      ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
+                      : "border-border/60 bg-muted/20 hover:bg-muted/50 hover:border-border",
+                  )}
+                  data-active={activePresetId === preset.id ? "true" : "false"}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className={cn("text-[12px] font-semibold", activePresetId === preset.id ? "text-primary" : "text-foreground")}>{preset.label}</p>
+                    {activePresetId === preset.id && (
+                      <span className="appearance-preset-active-pill">
+                        <Check className="size-3" />
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{preset.description}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Preferences memory
+            </p>
+            <div className="space-y-2.5">
+              {REMEMBER_OPTIONS.map((option) => {
+                const active = rememberMode === option.id;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setRememberMode(option.id)}
+                    className={cn(
+                      "appearance-drawer-btn w-full rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
+                      active
+                        ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
+                        : "border-border/60 bg-muted/20 hover:bg-muted/50",
+                    )}
+                  >
+                    <p className={cn("text-[12px] font-semibold", active ? "text-primary" : "text-foreground")}>{option.label}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{option.description}</p>
                   </button>
                 );
               })}
@@ -143,16 +324,16 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setAccentColor(color.id)}
                     title={color.label}
-                    className="group flex flex-col items-center gap-1.5"
+                    className="appearance-drawer-btn group flex flex-col items-center gap-1.5"
                   >
                     <div
                       className={cn(
                         "relative size-11 rounded-full transition-all duration-200",
+                        color.swatchClass,
                         active
                           ? "shadow-lg scale-110 outline outline-2 outline-offset-2 outline-primary"
                           : "hover:scale-105 hover:shadow-md"
                       )}
-                      style={{ background: color.style }}
                     >
                       {active && (
                         <span className="absolute inset-0 flex items-center justify-center">
@@ -175,21 +356,191 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
             <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-3">
               <p className="text-[11px] text-muted-foreground mb-2 font-medium">Preview</p>
               <div className="flex flex-col gap-1.5">
-                <div className="self-end max-w-[75%] px-3 py-2 rounded-[16px] rounded-br-[4px] text-[13px] font-medium"
-                  style={{
-                    background: "var(--gradient-chat)",
-                    color: "hsl(var(--chat-bubble-sent-foreground, 0 0% 100%))"
-                  }}>
-                  Hey! How are you? 😊
+                <div className="chat-message-row flex justify-end p-0">
+                  <div className="chat-bubble-shell chat-bubble-sent chat-bubble-shape-sent max-w-[75%] text-[13px] font-medium">
+                    Hey! How are you? 😊
+                  </div>
                 </div>
-                <div className="self-start max-w-[75%] px-3 py-2 rounded-[16px] rounded-tl-[4px] text-[13px] bg-muted text-foreground/90">
-                  I'm doing great, thanks!
+                <div className="chat-message-row flex justify-start p-0">
+                  <div className="chat-bubble-shell chat-bubble-received chat-bubble-shape-received max-w-[75%] text-[13px]">
+                    I'm doing great, thanks!
+                  </div>
                 </div>
               </div>
             </div>
           </section>
 
           {/* ── Section 3: Sidebar Layout ──────────────────────────────── */}
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Chat density
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {DENSITY_OPTIONS.map((densityOption) => {
+                const active = chatDensity === densityOption.id;
+                const Icon = densityOption.icon;
+
+                return (
+                  <button
+                    key={densityOption.id}
+                    type="button"
+                    onClick={() => setChatDensity(densityOption.id)}
+                    className={cn(
+                      "appearance-drawer-btn flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 transition-all duration-200",
+                      active
+                        ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                        : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    <span className="text-[12px] font-medium">{densityOption.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Motion
+            </p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {MOTION_OPTIONS.map((motionOption) => {
+                const active = motionPreference === motionOption.id;
+                const Icon = motionOption.icon;
+
+                return (
+                  <button
+                    key={motionOption.id}
+                    type="button"
+                    onClick={() => setMotionPreference(motionOption.id)}
+                    className={cn(
+                      "appearance-drawer-btn flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 transition-all duration-200",
+                      active
+                        ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                        : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    <span className="text-[11px] font-medium leading-none">{motionOption.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Message text size
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {MESSAGE_SIZE_OPTIONS.map((sizeOption) => {
+                const active = messageTextSize === sizeOption.id;
+
+                return (
+                  <button
+                    key={sizeOption.id}
+                    type="button"
+                    onClick={() => setMessageTextSize(sizeOption.id)}
+                    className={cn(
+                      "appearance-drawer-btn rounded-xl border px-2 py-2.5 transition-all duration-200",
+                      active
+                        ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                        : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                    )}
+                  >
+                    <span className="inline-flex items-center justify-center gap-1 text-[12px] font-medium">
+                      <Type className="size-3.5" />
+                      {sizeOption.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Bubble style
+            </p>
+            <div className="grid grid-cols-1 gap-2.5">
+              {BUBBLE_STYLE_OPTIONS.map((styleOption) => {
+                const active = bubbleStyle === styleOption.id;
+
+                return (
+                  <button
+                    key={styleOption.id}
+                    type="button"
+                    onClick={() => setBubbleStyle(styleOption.id)}
+                    className={cn(
+                      "appearance-drawer-btn flex items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition-all duration-200",
+                      active
+                        ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
+                        : "border-border/60 bg-muted/20 hover:bg-muted/50"
+                    )}
+                  >
+                    <MessageCircleMore className={cn("mt-0.5 size-4", active ? "text-primary" : "text-muted-foreground")} />
+                    <div className="space-y-1">
+                      <p className={cn("text-[12px] font-semibold", active ? "text-primary" : "text-foreground")}>{styleOption.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{styleOption.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                Live preview
+              </p>
+              <button
+                type="button"
+                onClick={resetAppearance}
+                className="appearance-drawer-btn inline-flex items-center gap-1.5 rounded-lg border border-border/70 bg-muted/20 px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+              >
+                <RotateCcw className="size-3.5" />
+                Reset to default
+              </button>
+            </div>
+
+            <div className="appearance-drawer-note rounded-xl p-3">
+              <div className="mb-2 flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-2.5 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="size-6 rounded-full bg-muted" />
+                  <div>
+                    <p className="text-[11px] font-semibold text-foreground">Product Team</p>
+                    <p className="text-[10px] text-muted-foreground">Active now</p>
+                  </div>
+                </div>
+                <div className="size-6 rounded-md bg-muted/70" />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="chat-message-row flex justify-start">
+                  <div className="chat-bubble-shell chat-bubble-received chat-bubble-shape-received max-w-[75%]">
+                    Can we review this release plan?
+                  </div>
+                </div>
+                <div className="chat-message-row flex justify-end">
+                  <div className="chat-bubble-shell chat-bubble-sent chat-bubble-shape-sent max-w-[75%]">
+                    Sure, I just polished the final UI pass.
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-center justify-end gap-2">
+                <button type="button" className="chat-modal-btn chat-modal-btn--secondary px-3 py-1.5 text-[11px]">
+                  Cancel
+                </button>
+                <button type="button" className="chat-modal-btn chat-modal-btn--danger px-3 py-1.5 text-[11px]">
+                  Delete
+                </button>
+              </div>
+            </div>
+          </section>
+
           <section>
             <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
               Sidebar layout

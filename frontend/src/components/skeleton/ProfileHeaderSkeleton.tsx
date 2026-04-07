@@ -1,11 +1,9 @@
-import type { CSSProperties } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const ProfileHeaderSkeleton = () => {
   return (
     <div
-      className="stagger-enter elevated-card p-4 md:p-5"
-      style={{ "--stagger-index": 0 } as CSSProperties}
+      className="stagger-enter stagger-0 elevated-card p-4 md:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-start gap-4">

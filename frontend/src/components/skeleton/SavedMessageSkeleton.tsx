@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 type SavedMessageSkeletonProps = {
   count?: number;
@@ -20,8 +20,7 @@ const SavedMessageSkeleton = ({
         return (
           <div
             key={`${key}-${staggerIndex}`}
-            className="stagger-enter elevated-card space-y-3 p-4"
-            style={{ "--stagger-index": staggerIndex } as CSSProperties}
+            className={`${getStaggerEnterClass(staggerIndex)} elevated-card space-y-3 p-4`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-2">

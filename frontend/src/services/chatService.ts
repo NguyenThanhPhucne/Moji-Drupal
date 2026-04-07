@@ -1,5 +1,5 @@
 import api from "@/lib/axios";
-import type { ConversationResponse, Message } from "@/types/chat";
+import type { Conversation, ConversationResponse, Message } from "@/types/chat";
 
 interface FetchMessageProps {
   messages: Message[];
@@ -12,6 +12,11 @@ export interface LinkPreviewPayload {
   title: string;
   description: string;
   image?: string;
+}
+
+interface MessageSyncResponse {
+  message: Message;
+  conversation?: Partial<Conversation> | null;
 }
 
 const pageLimit = 50;
@@ -92,7 +97,7 @@ export const chatService = {
 
   async unsendMessage(messageId: string) {
     const res = await api.delete(`/messages/${messageId}/unsend`);
-    return res.data;
+    return res.data as MessageSyncResponse;
   },
 
   async removeMessageForMe(messageId: string) {
@@ -102,7 +107,7 @@ export const chatService = {
 
   async editMessage(messageId: string, content: string) {
     const res = await api.put(`/messages/${messageId}/edit`, { content });
-    return res.data;
+    return res.data as MessageSyncResponse;
   },
 
   async markMessageRead(messageId: string) {

@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 type SocialPostSkeletonProps = {
   count?: number;
@@ -29,8 +29,7 @@ const SocialPostSkeleton = ({
         return (
           <article
             key={`${key}-${staggerIndex}`}
-            className="stagger-enter elevated-card space-y-4 p-4 md:p-5"
-            style={{ "--stagger-index": staggerIndex } as CSSProperties}
+            className={`${getStaggerEnterClass(staggerIndex)} elevated-card space-y-4 p-4 md:p-5`}
           >
             <div className="flex items-center gap-3">
               <Skeleton className="h-10 w-10 rounded-full" />

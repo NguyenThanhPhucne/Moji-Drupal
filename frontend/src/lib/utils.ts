@@ -5,6 +5,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export const getStaggerEnterClass = (index: number) => {
+  const normalized = Number.isFinite(index)
+    ? ((Math.floor(index) % 12) + 12) % 12
+    : 0;
+  return `stagger-enter stagger-${normalized}`;
+};
+
 export const formatOnlineTime = (date: Date) => {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();

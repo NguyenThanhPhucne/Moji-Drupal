@@ -1,10 +1,9 @@
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import GroupChatCard from "./GroupChatCard";
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, getStaggerEnterClass } from "@/lib/utils";
 
 const CATEGORY_ORDER = ["Team", "Projects", "Support", "Social", "General"];
 const COLLAPSE_STORAGE_PREFIX = "crm.channel.collapsed";
@@ -144,12 +143,7 @@ const GroupChatList = () => {
               items.map((convo, itemIndex) => (
                 <div
                   key={convo._id}
-                  className="stagger-enter"
-                  style={
-                    {
-                      "--stagger-index": (categoryIndex + itemIndex) % 10,
-                    } as CSSProperties
-                  }
+                  className={getStaggerEnterClass(categoryIndex + itemIndex)}
                 >
                   <GroupChatCard convo={convo} />
                 </div>

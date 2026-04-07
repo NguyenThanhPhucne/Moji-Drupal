@@ -18,7 +18,7 @@ const StatusBadge = ({
   if (status === "online") {
     return (
       <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-[13px] w-[13px] items-center justify-center rounded-full bg-background">
-        <span className="h-2 w-2 rounded-full bg-[#3FBB46]" />
+        <span className="chat-presence-online-dot h-2 w-2 rounded-full" />
       </span>
     );
   }
@@ -27,7 +27,7 @@ const StatusBadge = ({
     const timeStr = formatOnlineTime(new Date(lastActiveAt));
     return (
       <span className="absolute -bottom-1 -right-2 inline-flex items-center justify-center rounded-full bg-background px-[2px] py-[2px]">
-        <span className="flex h-3.5 items-center justify-center rounded-full bg-[#3FBB46]/15 px-1.5 text-[9px] font-bold text-[#3FBB46] dark:text-[#90E78A]">
+        <span className="chat-presence-recent-pill flex h-3.5 items-center justify-center rounded-full px-1.5 text-[9px] font-bold">
           {timeStr}
         </span>
       </span>

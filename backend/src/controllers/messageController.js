@@ -125,6 +125,34 @@ const ensureConversationMembership = async (conversationId, userId) => {
   return Boolean(membership);
 };
 
+const formatConversationSyncPayload = (conversation) => {
+  if (!conversation) {
+    return null;
+  }
+
+  return {
+    _id: conversation._id,
+    lastMessage: {
+      _id: conversation.lastMessage?._id,
+      content: conversation.lastMessage?.content,
+      createdAt: conversation.lastMessage?.createdAt,
+      sender: {
+        _id:
+          conversation.lastMessage?.senderId?.toString?.() ||
+          conversation.lastMessage?.senderId,
+        displayName: "",
+        avatarUrl: null,
+      },
+    },
+    lastMessageAt: conversation.lastMessageAt,
+    unreadCounts:
+      conversation.unreadCounts instanceof Map
+        ? Object.fromEntries(conversation.unreadCounts)
+        : conversation.unreadCounts || {},
+    seenBy: (conversation.seenBy || []).map((id) => id?.toString?.() || id),
+  };
+};
+
 const uploadMessageImage = async (rawImgUrl) => {
   const normalized = String(rawImgUrl || "").trim();
   if (!normalized) {
@@ -421,9 +449,14 @@ export const unsendMessage = async (req, res) => {
         .json({ message: "Không có quyền gỡ tin nhắn này" });
     }
 
+    if (message.isDeleted) {
+      return res.status(200).json({ message, conversation: null });
+    }
+
     message.isDeleted = true;
     message.content = "";
     message.imgUrl = null;
+    message.editedAt = new Date();
     await message.save();
 
     const updatedConversation = await Conversation.findOneAndUpdate(
@@ -444,34 +477,13 @@ export const unsendMessage = async (req, res) => {
       conversationId: message.conversationId,
       messageId: message._id,
       content: message.content,
-      conversation: updatedConversation
-        ? {
-            _id: updatedConversation._id,
-            lastMessage: {
-              _id: updatedConversation.lastMessage?._id,
-              content: updatedConversation.lastMessage?.content,
-              createdAt: updatedConversation.lastMessage?.createdAt,
-              sender: {
-                _id:
-                  updatedConversation.lastMessage?.senderId?.toString?.() ||
-                  updatedConversation.lastMessage?.senderId,
-                displayName: "",
-                avatarUrl: null,
-              },
-            },
-            lastMessageAt: updatedConversation.lastMessageAt,
-            unreadCounts:
-              updatedConversation.unreadCounts instanceof Map
-                ? Object.fromEntries(updatedConversation.unreadCounts)
-                : updatedConversation.unreadCounts || {},
-            seenBy: (updatedConversation.seenBy || []).map(
-              (id) => id?.toString?.() || id,
-            ),
-          }
-        : null,
+      conversation: formatConversationSyncPayload(updatedConversation),
     });
 
-    return res.status(200).json({ message, conversation: updatedConversation });
+    return res.status(200).json({
+      message,
+      conversation: formatConversationSyncPayload(updatedConversation),
+    });
   } catch (error) {
     console.error("Lỗi khi gỡ tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -552,18 +564,42 @@ export const editMessage = async (req, res) => {
         .json({ message: "Không thể sửa tin nhắn đã bị gỡ" });
     }
 
-    message.content = content.trim();
+    const normalizedContent = content.trim();
+
+    if (normalizedContent === message.content) {
+      return res.status(200).json(message);
+    }
+
+    message.content = normalizedContent;
     message.editedAt = new Date();
     await message.save();
+
+    const updatedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: message.conversationId,
+        "lastMessage._id": message._id.toString(),
+      },
+      {
+        $set: {
+          "lastMessage.content": message.content,
+          "lastMessage.createdAt": message.createdAt,
+        },
+      },
+      { new: true },
+    );
 
     io.to(message.conversationId.toString()).emit("message-edited", {
       conversationId: message.conversationId,
       messageId: message._id,
       content: message.content,
       editedAt: message.editedAt,
+      conversation: formatConversationSyncPayload(updatedConversation),
     });
 
-    return res.status(200).json(message);
+    return res.status(200).json({
+      message,
+      conversation: formatConversationSyncPayload(updatedConversation),
+    });
   } catch (error) {
     console.error("Lỗi khi sửa tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });

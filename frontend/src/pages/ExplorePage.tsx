@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Compass } from "lucide-react";
@@ -12,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 const ExplorePage = () => {
   const navigate = useNavigate();
@@ -134,8 +134,7 @@ const ExplorePage = () => {
               {filteredExploreFeed.map((post, index) => (
                 <div
                   key={post._id}
-                  className="stagger-enter"
-                  style={{ "--stagger-index": index } as CSSProperties}
+                  className={getStaggerEnterClass(index)}
                 >
                   <SocialPostCard
                     post={post}

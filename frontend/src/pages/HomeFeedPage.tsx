@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
@@ -13,6 +12,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 const HomeFeedPage = () => {
   const navigate = useNavigate();
@@ -95,8 +95,7 @@ const HomeFeedPage = () => {
                 {homeFeed.map((post, index) => (
                   <div
                     key={post._id}
-                    className="stagger-enter"
-                    style={{ "--stagger-index": index } as CSSProperties}
+                    className={getStaggerEnterClass(index)}
                   >
                     <SocialPostCard
                       post={post}

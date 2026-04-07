@@ -88,7 +88,7 @@ function InlineEditField({ field, value, onSave }: {
           )}
           <div className="settings-field-actions">
             {field.multiline && (
-              <span className={cn("settings-field-counter", draft.length > field.maxLen * 0.85 && "text-amber-500")}>
+              <span className={cn("settings-field-counter", draft.length > field.maxLen * 0.85 && "profile-counter-warning")}>
                 {field.maxLen - draft.length}
               </span>
             )}

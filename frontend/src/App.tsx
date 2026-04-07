@@ -19,6 +19,7 @@ const HomeFeedPage = lazy(() => import("./pages/HomeFeedPage"));
 const ExplorePage = lazy(() => import("./pages/ExplorePage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const PostDetailPage = lazy(() => import("./pages/PostDetailPage"));
+const ChatContrastQaPage = lazy(() => import("./pages/ChatContrastQaPage"));
 const ProtectedRoute = lazy(() => import("./components/auth/ProtectedRoute"));
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -40,7 +41,7 @@ const scheduleAfterFirstPaint = (callback: () => void) => {
 };
 
 function AppContent() {
-  const { applyTheme } = useThemeStore();
+  const { applyTheme, bindProfileUser } = useThemeStore();
   const { accessToken, user } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
   const { getAllFriendRequests, getFriends } = useFriendStore();
@@ -50,6 +51,10 @@ function AppContent() {
   useEffect(() => {
     applyTheme();
   }, [applyTheme]);
+
+  useEffect(() => {
+    bindProfileUser(user?._id ? String(user._id) : null);
+  }, [bindProfileUser, user?._id]);
 
   useEffect(() => {
     if (accessToken && user) {
@@ -95,6 +100,7 @@ function AppContent() {
             {/* public routes */}
             <Route path="/signin" element={<SignInPage />} />
             <Route path="/signup" element={<SignUpPage />} />
+            <Route path="/qa/chat-contrast-light" element={<ChatContrastQaPage />} />
 
             {/* protectect routes */}
             <Route element={<ProtectedRoute />}>

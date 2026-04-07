@@ -1,4 +1,5 @@
 import { chatService } from "@/services/chatService";
+import type { Conversation } from "@/types/chat";
 import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -26,6 +27,24 @@ const sortMessagesChronologically = <
 
     return String(a._id || "").localeCompare(String(b._id || ""));
   });
+};
+
+const messageMutationVersions = new Map<string, number>();
+
+const startMessageMutation = (mutationKey: string) => {
+  const nextVersion = (messageMutationVersions.get(mutationKey) || 0) + 1;
+  messageMutationVersions.set(mutationKey, nextVersion);
+  return nextVersion;
+};
+
+const isLatestMessageMutation = (mutationKey: string, version: number) => {
+  return messageMutationVersions.get(mutationKey) === version;
+};
+
+const clearMessageMutation = (mutationKey: string, version: number) => {
+  if (isLatestMessageMutation(mutationKey, version)) {
+    messageMutationVersions.delete(mutationKey);
+  }
 };
 
 export const useChatStore = create<ChatState>()(
@@ -355,6 +374,8 @@ export const useChatStore = create<ChatState>()(
         }
       },
       unsendMessage: async (conversationId, messageId) => {
+        const mutationKey = `unsend:${conversationId}:${messageId}`;
+        const mutationVersion = startMessageMutation(mutationKey);
         const previousMessage =
           get().messages[conversationId]?.items.find(
             (messageItem) => messageItem._id === messageId,
@@ -371,8 +392,46 @@ export const useChatStore = create<ChatState>()(
         });
 
         try {
-          await chatService.unsendMessage(messageId);
+          const result = await chatService.unsendMessage(messageId);
+
+          if (result?.message?._id) {
+            get().updateMessage(conversationId, messageId, {
+              isDeleted: Boolean(result.message.isDeleted),
+              content: result.message.content ?? "",
+              imgUrl: result.message.imgUrl ?? null,
+              editedAt: result.message.editedAt ?? null,
+            });
+          }
+
+          if (result?.conversation?._id) {
+            get().updateConversation(
+              result.conversation as Partial<Conversation> & { _id: string },
+            );
+          }
         } catch (error) {
+          if (!isLatestMessageMutation(mutationKey, mutationVersion)) {
+            throw error;
+          }
+
+          const latestMessage =
+            get().messages[conversationId]?.items.find(
+              (messageItem) => messageItem._id === messageId,
+            ) ?? null;
+
+          // If another canonical update already marked this message deleted,
+          // do not rollback to stale content.
+          const alreadyCanonicallyDeleted = Boolean(
+            latestMessage?.isDeleted &&
+              latestMessage?.imgUrl == null &&
+              String(latestMessage?.content ?? "")
+                .toLowerCase()
+                .includes("removed"),
+          );
+
+          if (alreadyCanonicallyDeleted) {
+            throw error;
+          }
+
           get().updateMessage(conversationId, messageId, {
             isDeleted: previousMessage.isDeleted ?? false,
             content: previousMessage.content,
@@ -382,6 +441,8 @@ export const useChatStore = create<ChatState>()(
           toast.error("Could not remove message for everyone. Restored.");
           console.error("Unsend error:", error);
           throw error;
+        } finally {
+          clearMessageMutation(mutationKey, mutationVersion);
         }
       },
       removeMessageForMe: async (conversationId, messageId) => {
@@ -414,6 +475,8 @@ export const useChatStore = create<ChatState>()(
         }
       },
       editMessage: async (conversationId, messageId, content) => {
+        const mutationKey = `edit:${conversationId}:${messageId}`;
+        const mutationVersion = startMessageMutation(mutationKey);
         const normalizedContent = content.trim();
         const prevMessage =
           get().messages[conversationId]?.items.find(
@@ -429,14 +492,48 @@ export const useChatStore = create<ChatState>()(
         });
 
         try {
-          await chatService.editMessage(messageId, normalizedContent);
+          const result = await chatService.editMessage(
+            messageId,
+            normalizedContent,
+          );
+
+          get().updateMessage(conversationId, messageId, {
+            content: result?.message?.content ?? normalizedContent,
+            editedAt: result?.message?.editedAt ?? optimisticEditedAt,
+          });
+
+          if (result?.conversation?._id) {
+            get().updateConversation(
+              result.conversation as Partial<Conversation> & { _id: string },
+            );
+          }
         } catch (error) {
+          if (!isLatestMessageMutation(mutationKey, mutationVersion)) {
+            throw error;
+          }
+
+          const latestMessage =
+            get().messages[conversationId]?.items.find(
+              (messageItem) => messageItem._id === messageId,
+            ) ?? null;
+
+          const latestEditedTs = toTimestamp(latestMessage?.editedAt || undefined);
+          const optimisticEditedTsValue = toTimestamp(optimisticEditedAt);
+
+          // If a newer update has landed (typically from socket canonical event),
+          // skip rollback to avoid restoring stale text.
+          if (latestEditedTs > optimisticEditedTsValue) {
+            throw error;
+          }
+
           get().updateMessage(conversationId, messageId, {
             content: previousContent,
             editedAt: previousEditedAt,
           });
           console.error("Edit error:", error);
           throw error;
+        } finally {
+          clearMessageMutation(mutationKey, mutationVersion);
         }
       },
 

@@ -384,10 +384,32 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on(
       "message-edited",
-      ({ conversationId, messageId, content, editedAt }) => {
+      ({ conversationId, messageId, content, editedAt, conversation }) => {
+        const chatState = useChatStore.getState();
+        const currentMessage = chatState.messages?.[conversationId]?.items?.find(
+          (messageItem) => messageItem._id === messageId,
+        );
+
+        if (currentMessage?.isDeleted) {
+          return;
+        }
+
+        const incomingEditedAtTs = editedAt ? new Date(editedAt).getTime() : 0;
+        const currentEditedAtTs = currentMessage?.editedAt
+          ? new Date(currentMessage.editedAt).getTime()
+          : 0;
+
+        if (incomingEditedAtTs && currentEditedAtTs && incomingEditedAtTs < currentEditedAtTs) {
+          return;
+        }
+
         useChatStore
           .getState()
           .updateMessage(conversationId, messageId, { content, editedAt });
+
+        if (conversation?._id) {
+          useChatStore.getState().updateConversation(conversation);
+        }
       },
     );
 

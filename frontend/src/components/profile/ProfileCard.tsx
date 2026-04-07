@@ -19,22 +19,22 @@ const ProfileCard = ({ user }: ProfileCardProps) => {
   }
 
   const presence = getUserPresence(user._id);
-  let badgeClassName = "bg-slate-100 text-slate-700";
-  let dotClassName = "bg-slate-500";
+  let badgeClassName = "profile-presence-badge profile-presence-badge--offline";
+  let dotClassName = "profile-presence-dot profile-presence-dot--offline";
   let label = "offline";
 
   if (presence === "online") {
-    badgeClassName = "bg-green-100 text-green-700";
-    dotClassName = "bg-green-500 animate-pulse";
+    badgeClassName = "profile-presence-badge profile-presence-badge--online";
+    dotClassName = "profile-presence-dot profile-presence-dot--online";
     label = "online";
   } else if (presence === "recently-active") {
-    badgeClassName = "bg-amber-100 text-amber-700";
-    dotClassName = "bg-amber-500";
+    badgeClassName = "profile-presence-badge profile-presence-badge--recent";
+    dotClassName = "profile-presence-dot profile-presence-dot--recent";
     label = "recently active";
   }
 
   return (
-    <Card className="h-52 overflow-hidden bg-gradient-to-r from-sky-600 via-cyan-600 to-sky-700 p-0">
+    <Card className="profile-card-shell h-52 overflow-hidden p-0">
       <CardContent className="mt-20 pb-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
         <div className="relative">
           <UserAvatar

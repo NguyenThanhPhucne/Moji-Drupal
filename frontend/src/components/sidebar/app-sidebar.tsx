@@ -107,8 +107,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <Sidebar
         data-chat-sidebar="true"
         variant="inset"
-        className="border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300"
-        style={isCompact ? { "--sidebar-width": "56px" } as React.CSSProperties : undefined}
+        className={cn(
+          "border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300",
+          isCompact && "chat-sidebar-compact",
+        )}
+        style={
+          isCompact
+            ? ({ "--sidebar-width": "56px" } as React.CSSProperties)
+            : undefined
+        }
         {...props}
       >
         {/* Header */}

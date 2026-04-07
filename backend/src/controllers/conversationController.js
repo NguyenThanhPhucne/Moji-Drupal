@@ -3,7 +3,6 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
-import { deleteConversationFromDrupal } from "../libs/drupalSync.js";
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
@@ -508,12 +507,6 @@ export const deleteConversation = async (req, res) => {
 
       await Message.deleteMany({ conversationId });
       await Conversation.findOneAndDelete({ _id: conversation._id });
-    }
-
-    try {
-      await deleteConversationFromDrupal(conversationId);
-    } catch (drupalError) {
-      console.error("[deleteConversation] Drupal sync delete failed:", drupalError);
     }
 
     // 4. Emit to all participants that conversation was deleted

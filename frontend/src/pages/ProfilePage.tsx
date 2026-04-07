@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import { useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Lock } from "lucide-react";
@@ -13,6 +12,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocialStore } from "@/stores/useSocialStore";
+import { getStaggerEnterClass } from "@/lib/utils";
 
 const ProfilePage = () => {
   const navigate = useNavigate();
@@ -140,8 +140,7 @@ const ProfilePage = () => {
                 {profilePosts.map((post, index) => (
                   <div
                     key={post._id}
-                    className="stagger-enter"
-                    style={{ "--stagger-index": index } as CSSProperties}
+                    className={getStaggerEnterClass(index)}
                   >
                     <SocialPostCard
                       post={post}

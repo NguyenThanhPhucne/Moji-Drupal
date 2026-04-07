@@ -435,7 +435,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                           }}
                         >
                           <span className="text-sm truncate">{item.label}</span>
-                          <Pin className="size-3.5 text-amber-500" />
+                          <Pin className="chat-pin-active size-3.5" />
                         </button>
                       ))}
                     </div>
@@ -526,7 +526,12 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                           title={pinnedState ? "Unpin" : "Pin"}
                         >
                           <Star
-                            className={`size-4 ${pinnedState ? "fill-amber-400 text-amber-500" : "text-muted-foreground"}`}
+                            className={cn(
+                              "size-4",
+                              pinnedState
+                                ? "chat-pin-active chat-pin-active-fill"
+                                : "text-muted-foreground",
+                            )}
                           />
                         </Button>
                       </div>

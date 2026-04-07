@@ -12,12 +12,12 @@ interface ProfileHeroProps {
 }
 
 const COVER_GRADIENTS = [
-  "linear-gradient(135deg, #1e3a5f, #0ea5e9)",
-  "linear-gradient(135deg, #312e81, #7c3aed)",
-  "linear-gradient(135deg, #134e4a, #0d9488)",
-  "linear-gradient(135deg, #78350f, #f59e0b)",
-  "linear-gradient(135deg, #881337, #e11d48)",
-  "linear-gradient(135deg, #1e293b, #475569)",
+  "profile-cover-gradient-0",
+  "profile-cover-gradient-1",
+  "profile-cover-gradient-2",
+  "profile-cover-gradient-3",
+  "profile-cover-gradient-4",
+  "profile-cover-gradient-5",
 ];
 
 const ProfileHero = ({ user }: ProfileHeroProps) => {
@@ -32,11 +32,16 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
   if (!user) return null;
 
   const presence = getUserPresence(user._id);
-  const PRESENCE_MAP: Record<string, { dot: string; ring: string; label: string }> = {
-    online:           { dot: "bg-green-500 animate-pulse", ring: "ring-green-500", label: "Online" },
-    "recently-active": { dot: "bg-amber-500", ring: "ring-amber-500", label: "Recently active" },
+  const PRESENCE_MAP: Record<string, { dot: string; ring: string; pill: string; label: string }> = {
+    online:             { dot: "profile-presence-dot--online", ring: "profile-avatar-ring--online", pill: "profile-presence-pill--online", label: "Online" },
+    "recently-active": { dot: "profile-presence-dot--recent", ring: "profile-avatar-ring--recent", pill: "profile-presence-pill--recent", label: "Recently active" },
   };
-  const presenceConfig = PRESENCE_MAP[presence ?? ""] ?? { dot: "bg-slate-400", ring: "ring-slate-400", label: "Offline" };
+  const presenceConfig = PRESENCE_MAP[presence ?? ""] ?? {
+    dot: "profile-presence-dot--offline",
+    ring: "profile-avatar-ring--offline",
+    pill: "profile-presence-pill--offline",
+    label: "Offline",
+  };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -84,15 +89,15 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
     }
   };
 
-  const fallbackGradient = COVER_GRADIENTS[user.displayName.charCodeAt(0) % COVER_GRADIENTS.length];
+  const fallbackGradientClass = COVER_GRADIENTS[user.displayName.charCodeAt(0) % COVER_GRADIENTS.length];
   const coverUrl = (user as User & { coverPhotoUrl?: string }).coverPhotoUrl;
 
   return (
     <div className="profile-hero">
       {/* Cover Photo */}
       <div
-        className="profile-cover"
-        style={coverUrl ? { backgroundImage: `url(${coverUrl})` } : { background: fallbackGradient }}
+        className={cn("profile-cover", !coverUrl && fallbackGradientClass)}
+        style={coverUrl ? { backgroundImage: `url(${coverUrl})` } : undefined}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -174,7 +179,7 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
         </div>
 
         {/* Online Pill */}
-        <div className="profile-presence-pill">
+        <div className={cn("profile-presence-pill", presenceConfig.pill)}>
           <span className={cn("profile-presence-dot", presenceConfig.dot)} />
           {presenceConfig.label}
         </div>

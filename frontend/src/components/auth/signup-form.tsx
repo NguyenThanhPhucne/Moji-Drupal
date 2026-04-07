@@ -170,7 +170,7 @@ export function SignupForm({
               </div>
             </div>
           </form>
-          <div className="relative hidden overflow-hidden bg-gradient-to-br from-cyan-400 via-sky-500 to-blue-600 md:block">
+          <div className="auth-hero-pane auth-hero-pane--signup relative hidden overflow-hidden md:block">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.24),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(255,255,255,0.18),transparent_34%)]" />
             <img
               src="/placeholderSignUp.png"

@@ -1,10 +1,9 @@
 import { formatDistanceToNow } from "date-fns";
 import { Bell, CheckCheck, Inbox, Heart, MessageCircle, Users, UserCheck } from "lucide-react";
-import type { CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
+import { cn, getStaggerEnterClass } from "@/lib/utils";
 import type { SocialNotification } from "@/types/social";
 
 // ─── Type icon mapping ────────────────────────────────────────────────────────
@@ -12,11 +11,11 @@ const TYPE_META: Record<
   SocialNotification["type"],
   { Icon: React.FC<{ className?: string }>; colorClass: string }
 > = {
-  like:            { Icon: Heart,        colorClass: "bg-rose-500" },
-  comment:         { Icon: MessageCircle, colorClass: "bg-indigo-500" },
-  follow:          { Icon: Users,         colorClass: "bg-cyan-500" },
-  system:          { Icon: Bell,          colorClass: "bg-slate-500" },
-  friend_accepted: { Icon: UserCheck,     colorClass: "bg-emerald-500" },
+  like:            { Icon: Heart,         colorClass: "notification-kind-like-bg" },
+  comment:         { Icon: MessageCircle, colorClass: "notification-kind-comment-bg" },
+  follow:          { Icon: Users,         colorClass: "notification-kind-follow-bg" },
+  system:          { Icon: Bell,          colorClass: "notification-kind-system-bg" },
+  friend_accepted: { Icon: UserCheck,     colorClass: "notification-kind-friend-accepted-bg" },
 };
 
 // ─── Skeleton premium ─────────────────────────────────────────────────────────
@@ -33,8 +32,10 @@ const NotificationSkeleton = ({
     {SKEL_KEYS.slice(0, count).map((key, i) => (
       <div
         key={key}
-        className="flex items-start gap-3 rounded-xl px-3 py-2.5"
-        style={{ "--stagger-index": i } as CSSProperties}
+        className={cn(
+          "flex items-start gap-3 rounded-xl px-3 py-2.5",
+          getStaggerEnterClass(i),
+        )}
       >
         <Skeleton className="h-10 w-10 flex-shrink-0 rounded-full" />
         <div className="flex-1 space-y-2 pt-0.5">
@@ -152,13 +153,13 @@ const SocialNotificationsPanel = ({
               key={notification._id}
               type="button"
               className={cn(
-                "stagger-enter group w-full rounded-xl text-left transition-all duration-150",
+                "group w-full rounded-xl text-left transition-all duration-150",
+                getStaggerEnterClass(index),
                 compact ? "px-2.5 py-2" : "px-3 py-2.5",
                 notification.isRead
                   ? "hover:bg-muted/50"
                   : "bg-primary/[0.07] hover:bg-primary/[0.12]",
               )}
-              style={{ "--stagger-index": index } as CSSProperties}
               onClick={() => onReadOne(notification._id)}
             >
               <div className="flex items-start gap-3">
@@ -169,7 +170,7 @@ const SocialNotificationsPanel = ({
                       src={notification.actorId.avatarUrl ?? undefined}
                       alt={notification.actorId.displayName}
                     />
-                    <AvatarFallback className="text-xs font-semibold">
+                    <AvatarFallback className="avatar-fallback-accent text-xs font-semibold">
                       {notification.actorId.displayName.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>

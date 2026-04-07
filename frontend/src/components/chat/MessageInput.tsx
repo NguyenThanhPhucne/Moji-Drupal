@@ -234,7 +234,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             className={cn(
               "ml-auto text-[10px] tabular-nums",
               charsLeft < 120
-                ? "text-amber-500 font-medium"
+                ? "chat-counter-warning"
                 : "text-muted-foreground/60",
             )}
           >

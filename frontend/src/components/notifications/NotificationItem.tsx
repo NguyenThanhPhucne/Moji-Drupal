@@ -52,12 +52,12 @@ const KIND_META: Record<
   NotificationKind,
   { Icon: React.FC<{ className?: string }>; bg: string; text: string }
 > = {
-  friend_request:  { Icon: UserPlus,       bg: "bg-blue-500",    text: "text-blue-500" },
-  friend_accepted: { Icon: UserCheck,      bg: "bg-emerald-500", text: "text-emerald-500" },
-  like:            { Icon: Heart,           bg: "bg-rose-500",    text: "text-rose-500" },
-  comment:         { Icon: MessageCircle,   bg: "bg-indigo-500",  text: "text-indigo-500" },
-  follow:          { Icon: Users,           bg: "bg-cyan-500",    text: "text-cyan-500" },
-  system:          { Icon: Bell,            bg: "bg-slate-400",   text: "text-slate-500" },
+  friend_request:  { Icon: UserPlus,       bg: "notification-kind-friend-request-bg", text: "notification-kind-friend-request-text" },
+  friend_accepted: { Icon: UserCheck,      bg: "notification-kind-friend-accepted-bg", text: "notification-kind-friend-accepted-text" },
+  like:            { Icon: Heart,          bg: "notification-kind-like-bg", text: "notification-kind-like-text" },
+  comment:         { Icon: MessageCircle,  bg: "notification-kind-comment-bg", text: "notification-kind-comment-text" },
+  follow:          { Icon: Users,          bg: "notification-kind-follow-bg", text: "notification-kind-follow-text" },
+  system:          { Icon: Bell,           bg: "notification-kind-system-bg", text: "notification-kind-system-text" },
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -113,8 +113,8 @@ const NotificationItem = ({
         "transition-colors duration-150",
         // Unread: light blue tint + left accent stripe (Facebook-style)
         notification.isRead
-          ? "bg-transparent hover:bg-slate-50 dark:hover:bg-muted/40"
-          : "bg-blue-50/70 hover:bg-blue-50 dark:bg-primary/[0.05] dark:hover:bg-primary/[0.08]",
+          ? "bg-transparent hover:bg-muted/50 dark:hover:bg-muted/40"
+          : "bg-primary/[0.07] hover:bg-primary/[0.12] dark:bg-primary/[0.05] dark:hover:bg-primary/[0.08]",
         // Loading
         isLoading && "opacity-50 pointer-events-none",
       )}
@@ -132,7 +132,7 @@ const NotificationItem = ({
             alt={notification.actor.displayName}
             className="object-cover"
           />
-          <AvatarFallback className="text-sm font-semibold bg-muted">
+          <AvatarFallback className="avatar-fallback-accent text-sm font-semibold">
             {notification.actor.displayName.charAt(0).toUpperCase()}
           </AvatarFallback>
         </Avatar>
