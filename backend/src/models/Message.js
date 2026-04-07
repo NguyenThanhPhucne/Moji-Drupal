@@ -108,6 +108,38 @@ messageSchema.post("deleteOne", async function () {
   }
 });
 
+messageSchema.pre("deleteMany", async function () {
+  const filter = this.getFilter() || {};
+  const conversationId = filter.conversationId;
+
+  if (!conversationId) {
+    return;
+  }
+
+  this._conversationIdForBulkDelete = conversationId.toString();
+  this._bulkDeleteMessageCount = await this.model.countDocuments(filter);
+});
+
+messageSchema.post("deleteMany", async function (result) {
+  try {
+    const conversationId = this._conversationIdForBulkDelete;
+    if (!conversationId) {
+      return;
+    }
+
+    const deletedCount =
+      typeof result?.deletedCount === "number"
+        ? result.deletedCount
+        : this._bulkDeleteMessageCount || 0;
+
+    if (deletedCount > 0) {
+      await adjustMessageCountInDrupal(conversationId, -deletedCount);
+    }
+  } catch (error) {
+    console.error("Failed to update message count in Drupal (deleteMany):", error);
+  }
+});
+
 const Message = mongoose.model("Message", messageSchema);
 
 export default Message;

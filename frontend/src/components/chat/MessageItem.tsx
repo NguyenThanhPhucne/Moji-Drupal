@@ -716,7 +716,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
             target="_blank"
             rel="noreferrer"
             className={cn(
-              "mt-1.5 block max-w-[320px] rounded-xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-sm transition-colors hover:bg-card",
+              "chat-link-preview-card mt-1.5 block max-w-[320px] rounded-xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-sm transition-colors hover:bg-card",
               isOwn ? "ml-auto" : "mr-auto",
             )}
           >
@@ -1140,7 +1140,7 @@ const MessageItem = memo(function MessageItem({
       onContextMenu={handleContextMenu}
       aria-label="Message bubble"
       className={cn(
-        "text-left select-none relative p-0 m-0 border-0 bg-transparent",
+        "chat-message-bubble-hit text-left select-none relative p-0 m-0 border-0 bg-transparent",
         !canOpenEditMode && "cursor-default",
       )}
     >
@@ -1164,12 +1164,12 @@ const MessageItem = memo(function MessageItem({
             setEditValue(message.content ?? "");
           }
         }}
-        className="flex-1 rounded-xl px-3 py-2 text-sm border border-primary outline-none bg-background focus:ring-2 focus:ring-primary/30"
+        className="flex-1 rounded-xl px-3 py-2 text-sm border border-primary/55 outline-none bg-background/95 focus:ring-2 focus:ring-primary/30"
       />
       <button
         type="button"
         onClick={handleEditSave}
-        className="px-2 py-1 text-xs bg-primary text-white rounded-lg hover:bg-primary/90"
+        className="chat-modal-btn chat-modal-btn--primary"
       >
         Save
       </button>
@@ -1179,7 +1179,7 @@ const MessageItem = memo(function MessageItem({
           setEditMode(false);
           setEditValue(message.content ?? "");
         }}
-        className="px-2 py-1 text-xs bg-muted rounded-lg hover:bg-muted/80"
+        className="chat-modal-btn chat-modal-btn--secondary"
       >
         Cancel
       </button>
@@ -1309,7 +1309,7 @@ const MessageItem = memo(function MessageItem({
                   still be reported.
                 </p>
                 {deleteActionLoading === "for-everyone" && (
-                  <p className="mt-2 text-xs text-primary">Processing...</p>
+                  <p className="chat-processing-pill mt-2 text-xs text-primary">Processing...</p>
                 )}
               </button>
             )}
@@ -1326,7 +1326,7 @@ const MessageItem = memo(function MessageItem({
                 remain visible to other chat participants.
               </p>
               {deleteActionLoading === "for-me" && (
-                <p className="mt-2 text-xs text-primary">Processing...</p>
+                <p className="chat-processing-pill mt-2 text-xs text-primary">Processing...</p>
               )}
             </button>
           </div>

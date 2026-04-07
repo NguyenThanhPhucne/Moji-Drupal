@@ -7,6 +7,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import type { ProfileLite } from "@/types/chat";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { Skeleton } from "../ui/skeleton";
 
 interface FriendProfileMiniCardProps {
   userId: string;
@@ -166,11 +167,16 @@ const FriendProfileMiniCard = ({
 
           <div className="rounded-lg bg-muted/40 p-3">
             <p className="text-xs font-medium mb-1">Bio</p>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {loading
-                ? "Loading profile..."
-                : resolvedProfile.bio || "No bio yet."}
-            </p>
+            {loading ? (
+              <div className="space-y-1.5">
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-5/6" />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {resolvedProfile.bio || "No bio yet."}
+              </p>
+            )}
           </div>
 
           <div className="rounded-lg border border-border/70 p-3">
@@ -178,21 +184,28 @@ const FriendProfileMiniCard = ({
               <Users className="size-3.5" />
               Mutual groups ({resolvedProfile.mutualGroupsCount})
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {resolvedProfile.mutualGroups.length === 0 && (
-                <span className="text-xs text-muted-foreground">
-                  No mutual groups
-                </span>
-              )}
-              {resolvedProfile.mutualGroups.slice(0, 3).map((groupItem) => (
-                <span
-                  key={groupItem._id}
-                  className="rounded-full bg-muted px-2 py-1 text-[11px]"
-                >
-                  {groupItem.name}
-                </span>
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex flex-wrap gap-1.5">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {resolvedProfile.mutualGroups.length === 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    No mutual groups
+                  </span>
+                )}
+                {resolvedProfile.mutualGroups.slice(0, 3).map((groupItem) => (
+                  <span
+                    key={groupItem._id}
+                    className="rounded-full bg-muted px-2 py-1 text-[11px]"
+                  >
+                    {groupItem.name}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

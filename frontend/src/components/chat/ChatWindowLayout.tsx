@@ -5,7 +5,7 @@ import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
 import { useEffect } from "react";
-import { Skeleton } from "../ui/skeleton";
+import ChatWindowSkeleton from "../skeleton/ChatWindowSkeleton";
 
 const ChatWindowLayout = () => {
   const {
@@ -59,16 +59,7 @@ const ChatWindowLayout = () => {
           className="h-full conversation-fade"
         >
           {loading && !hasLoadedMessages ? (
-            <div className="h-full w-full px-4 py-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Skeleton className="h-8 w-8 rounded-full" />
-                <Skeleton className="h-6 w-40 rounded-xl" />
-              </div>
-              <Skeleton className="h-14 w-2/3 rounded-2xl" />
-              <Skeleton className="h-14 w-1/2 rounded-2xl ml-auto" />
-              <Skeleton className="h-14 w-3/4 rounded-2xl" />
-              <Skeleton className="h-14 w-1/3 rounded-2xl ml-auto" />
-            </div>
+            <ChatWindowSkeleton />
           ) : (
             <ChatWindowBody />
           )}

@@ -153,6 +153,8 @@ const formatConversationSyncPayload = (conversation) => {
   };
 };
 
+const REMOVED_MESSAGE_CONTENT = "This message was removed";
+
 const uploadMessageImage = async (rawImgUrl) => {
   const normalized = String(rawImgUrl || "").trim();
   if (!normalized) {
@@ -454,7 +456,7 @@ export const unsendMessage = async (req, res) => {
     }
 
     message.isDeleted = true;
-    message.content = "";
+    message.content = REMOVED_MESSAGE_CONTENT;
     message.imgUrl = null;
     message.editedAt = new Date();
     await message.save();
@@ -466,7 +468,7 @@ export const unsendMessage = async (req, res) => {
       },
       {
         $set: {
-          "lastMessage.content": "This message was removed",
+          "lastMessage.content": REMOVED_MESSAGE_CONTENT,
           "lastMessage.createdAt": message.createdAt,
         },
       },
