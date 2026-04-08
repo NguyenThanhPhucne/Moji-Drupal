@@ -7,8 +7,11 @@ import { XIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const MODAL_CONTENT_BASE_CLASS =
-  "modal-content-shell pointer-events-auto bg-background relative z-10 grid w-full max-w-[calc(100%-2rem)] max-h-[min(88dvh,720px)] gap-4 overflow-hidden rounded-2xl border border-border/80 p-5 shadow-xl outline-none ring-1 ring-black/5 sm:max-w-lg sm:p-6";
+const MODAL_CONTENT_LAYOUT_CLASS =
+  "modal-content-shell pointer-events-auto relative z-10 w-full max-w-[calc(100%-2rem)] max-h-[min(88dvh,720px)] overflow-hidden outline-none";
+
+const MODAL_CONTENT_DEFAULT_CLASS =
+  "bg-background grid gap-4 rounded-2xl border border-border/80 p-5 shadow-xl ring-1 ring-black/5 sm:max-w-lg sm:p-6";
 
 function Dialog({
   ...props
@@ -55,6 +58,7 @@ function DialogContent({
   children,
   showCloseButton = true,
   dismissible = true,
+  contentClassMode = "default",
   onOpenAutoFocus,
   onEscapeKeyDown,
   onPointerDownOutside,
@@ -63,6 +67,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   dismissible?: boolean;
+  contentClassMode?: "default" | "bare";
 }) {
   const contentRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -123,7 +128,8 @@ function DialogContent({
             onInteractOutside?.(event);
           }}
           className={cn(
-            MODAL_CONTENT_BASE_CLASS,
+            MODAL_CONTENT_LAYOUT_CLASS,
+            contentClassMode === "default" ? MODAL_CONTENT_DEFAULT_CLASS : null,
             className,
           )}
           {...props}
@@ -132,7 +138,7 @@ function DialogContent({
           {showCloseButton && (
             <DialogPrimitive.Close
               data-slot="dialog-close"
-              className="ring-offset-background focus:ring-ring absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/85 text-muted-foreground opacity-90 transition-colors hover:bg-accent/70 hover:text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
+              className="ring-offset-background focus:ring-ring absolute top-4 right-4 z-20 inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-background/85 text-muted-foreground opacity-90 transition-colors hover:bg-accent/70 hover:text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none"
             >
               <XIcon />
               <span className="sr-only">Close</span>
@@ -277,7 +283,8 @@ function AlertDialogContent({
             onEscapeKeyDown?.(event);
           }}
           className={cn(
-            MODAL_CONTENT_BASE_CLASS,
+            MODAL_CONTENT_LAYOUT_CLASS,
+            MODAL_CONTENT_DEFAULT_CLASS,
             className,
           )}
           {...props}

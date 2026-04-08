@@ -50,28 +50,28 @@ const PrivacySettings = () => {
     event?.preventDefault();
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error("Vui lòng nhập đầy đủ thông tin");
+      toast.error("Please fill in all fields");
       return;
     }
 
     if (newPassword.length < 5) {
-      toast.error("Mật khẩu mới phải có ít nhất 5 ký tự");
+      toast.error("New password must be at least 5 characters");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error("Mật khẩu xác nhận không khớp");
+      toast.error("Password confirmation does not match");
       return;
     }
 
     setIsSubmitting(true);
     try {
       await userService.changePassword(currentPassword, newPassword);
-      toast.success("Đổi mật khẩu thành công");
+      toast.success("Password changed successfully");
       resetForm();
       setIsDialogOpen(false);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Đổi mật khẩu thất bại"));
+      toast.error(getErrorMessage(error, "Failed to change password"));
     } finally {
       setIsSubmitting(false);
     }

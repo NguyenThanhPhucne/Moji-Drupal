@@ -64,6 +64,13 @@ export const socialService = {
     return res.data.post;
   },
 
+  deletePost: async (
+    postId: string,
+  ): Promise<{ ok: boolean; postId: string }> => {
+    const res = await api.delete(`/social/posts/${postId}`);
+    return res.data;
+  },
+
   getProfile: async (userId: string): Promise<SocialProfile> => {
     const res = await api.get(`/social/profiles/${userId}`);
     return res.data.profile;
@@ -100,6 +107,14 @@ export const socialService = {
   ): Promise<SocialComment> => {
     const res = await api.post(`/social/posts/${postId}/comments`, payload);
     return res.data.comment;
+  },
+
+  deleteComment: async (
+    postId: string,
+    commentId: string,
+  ): Promise<{ ok: boolean; postId: string; commentId: string; deletedCount: number }> => {
+    const res = await api.delete(`/social/posts/${postId}/comments/${commentId}`);
+    return res.data;
   },
 
   getCommentsByPost: async (

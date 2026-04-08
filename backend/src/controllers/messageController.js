@@ -1,6 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { v2 as cloudinary } from "cloudinary";
+import mongoose from "mongoose";
 import {
   emitNewMessage,
   updateConversationAfterCreateMessage,
@@ -27,7 +28,7 @@ const ensureDirectConversationForSend = async ({
   let conversation = null;
   let isNewConversation = false;
 
-  if (conversationId) {
+  if (conversationId && mongoose.isValidObjectId(conversationId)) {
     conversation = await Conversation.findById(conversationId);
 
     const isMember = conversation?.participants?.some(
@@ -154,6 +155,38 @@ const formatConversationSyncPayload = (conversation) => {
 };
 
 const REMOVED_MESSAGE_CONTENT = "This message was removed";
+
+const normalizeReplyToId = (replyTo) => {
+  const normalized = String(replyTo || "").trim();
+  return normalized || null;
+};
+
+const resolveValidatedReplyTo = async ({
+  replyTo,
+  conversationId,
+}) => {
+  const normalizedReplyTo = normalizeReplyToId(replyTo);
+  if (!normalizedReplyTo) {
+    return null;
+  }
+
+  const replyTarget = await Message.findById(normalizedReplyTo)
+    .select("_id conversationId")
+    .lean();
+
+  if (!replyTarget) {
+    throw createHttpError(404, "Không tìm thấy tin nhắn trả lời");
+  }
+
+  if (String(replyTarget.conversationId) !== String(conversationId)) {
+    throw createHttpError(
+      400,
+      "Tin nhắn trả lời phải thuộc cùng cuộc trò chuyện",
+    );
+  }
+
+  return replyTarget._id;
+};
 
 const uploadMessageImage = async (rawImgUrl) => {
   const normalized = String(rawImgUrl || "").trim();
@@ -311,15 +344,20 @@ export const sendDirectMessage = async (req, res) => {
         recipientId,
       });
 
+    const validatedReplyTo = await resolveValidatedReplyTo({
+      replyTo,
+      conversationId: conversation._id,
+    });
+
     let message = await Message.create({
       conversationId: conversation._id,
       senderId,
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
-      replyTo: replyTo || null,
+      replyTo: validatedReplyTo,
     });
 
-    if (replyTo) {
+    if (validatedReplyTo) {
       message = await message.populate("replyTo", "content senderId");
     }
 
@@ -353,6 +391,10 @@ export const sendGroupMessage = async (req, res) => {
     const conversation = req.conversation;
     const normalizedContent = String(content || "").trim();
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
+    const validatedReplyTo = await resolveValidatedReplyTo({
+      replyTo,
+      conversationId,
+    });
 
     if (!normalizedContent && !uploadedImgUrl) {
       return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
@@ -363,10 +405,10 @@ export const sendGroupMessage = async (req, res) => {
       senderId,
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
-      replyTo: replyTo || null,
+      replyTo: validatedReplyTo,
     });
 
-    if (replyTo) {
+    if (validatedReplyTo) {
       message = await message.populate("replyTo", "content senderId");
     }
 
@@ -388,9 +430,17 @@ export const reactToMessage = async (req, res) => {
     const { emoji } = req.body;
     const userId = req.user._id;
 
-    const message = await Message.findById(messageId);
+    const message = await Message.findById(messageId).select(
+      "_id conversationId isDeleted",
+    );
     if (!message)
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+
+    if (message.isDeleted) {
+      return res
+        .status(400)
+        .json({ message: "Không thể thả cảm xúc cho tin nhắn đã gỡ" });
+    }
 
     const isMember = await ensureConversationMembership(
       message.conversationId,
@@ -400,28 +450,64 @@ export const reactToMessage = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
-    const existingReactionIndex = message.reactions.findIndex(
-      (r) => r.userId.toString() === userId.toString() && r.emoji === emoji,
+    const removeResult = await Message.updateOne(
+      {
+        _id: messageId,
+        isDeleted: { $ne: true },
+        reactions: { $elemMatch: { userId, emoji } },
+      },
+      {
+        $pull: {
+          reactions: { userId, emoji },
+        },
+      },
     );
 
-    if (existingReactionIndex > -1) {
-      message.reactions.splice(existingReactionIndex, 1);
-    } else {
-      message.reactions = message.reactions.filter(
-        (r) => r.userId.toString() !== userId.toString(),
+    if (!removeResult.modifiedCount) {
+      await Message.updateOne(
+        {
+          _id: messageId,
+          isDeleted: { $ne: true },
+        },
+        [
+          {
+            $set: {
+              reactions: {
+                $filter: {
+                  input: "$reactions",
+                  as: "reaction",
+                  cond: {
+                    $ne: ["$$reaction.userId", userId],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $set: {
+              reactions: {
+                $concatArrays: ["$reactions", [{ userId, emoji }]],
+              },
+            },
+          },
+        ],
       );
-      message.reactions.push({ userId, emoji });
     }
 
-    await message.save();
+    const updatedMessage = await Message.findById(messageId).select(
+      "_id conversationId reactions",
+    );
+    if (!updatedMessage) {
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
 
-    io.to(message.conversationId.toString()).emit("message-reacted", {
-      conversationId: message.conversationId,
-      messageId: message._id,
-      reactions: message.reactions,
+    io.to(updatedMessage.conversationId.toString()).emit("message-reacted", {
+      conversationId: updatedMessage.conversationId,
+      messageId: updatedMessage._id,
+      reactions: updatedMessage.reactions,
     });
 
-    return res.status(200).json(message);
+    return res.status(200).json(updatedMessage);
   } catch (error) {
     console.error("Lỗi khi phản hồi tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -451,13 +537,27 @@ export const unsendMessage = async (req, res) => {
         .json({ message: "Không có quyền gỡ tin nhắn này" });
     }
 
-    if (message.isDeleted) {
-      return res.status(200).json({ message, conversation: null });
+    const shouldNormalizeDeletedPayload =
+      !message.isDeleted ||
+      message.content !== REMOVED_MESSAGE_CONTENT ||
+      message.imgUrl !== null ||
+      message.reactions.length > 0 ||
+      message.readBy.length > 0 ||
+      Boolean(message.replyTo);
+
+    if (!shouldNormalizeDeletedPayload) {
+      return res.status(200).json({
+        message,
+        conversation: null,
+      });
     }
 
     message.isDeleted = true;
     message.content = REMOVED_MESSAGE_CONTENT;
     message.imgUrl = null;
+    message.replyTo = null;
+    message.reactions = [];
+    message.readBy = [];
     message.editedAt = new Date();
     await message.save();
 
@@ -479,6 +579,10 @@ export const unsendMessage = async (req, res) => {
       conversationId: message.conversationId,
       messageId: message._id,
       content: message.content,
+      editedAt: message.editedAt,
+      reactions: message.reactions,
+      readBy: message.readBy,
+      replyTo: message.replyTo,
       conversation: formatConversationSyncPayload(updatedConversation),
     });
 

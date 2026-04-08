@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { vi } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 import {
   Heart,
   MessageCircle,
@@ -169,7 +169,7 @@ const NotificationItem = ({
         >
           {formatDistanceToNow(new Date(notification.createdAt), {
             addSuffix: true,
-            locale: vi,
+            locale: enUS,
           })}
         </p>
 
@@ -178,7 +178,7 @@ const NotificationItem = ({
           <div className="mt-2.5">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/15">
               <MessageCircleMore className="h-3.5 w-3.5" />
-              Nhắn tin ngay
+              Chat now
             </span>
           </div>
         )}
@@ -202,7 +202,7 @@ const NotificationItem = ({
                 disabled={isLoading}
               >
                 <Check className="mr-1.5 h-3.5 w-3.5" />
-                Xác nhận
+                Confirm
               </Button>
               <Button
                 size="sm"
@@ -214,7 +214,7 @@ const NotificationItem = ({
                 }}
                 disabled={isLoading}
               >
-                Xóa
+                Delete
               </Button>
             </div>
           )}
@@ -232,7 +232,7 @@ const NotificationItem = ({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Tùy chọn thông báo"
+              aria-label="Notification options"
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60",
@@ -261,7 +261,7 @@ const NotificationItem = ({
                 className="cursor-pointer gap-2 text-[13px]"
               >
                 <Check className="h-4 w-4 text-muted-foreground" />
-                Đánh dấu đã đọc
+                Mark as read
               </DropdownMenuItem>
             )}
             {!notification.isRead && onDismiss && <DropdownMenuSeparator />}
@@ -275,7 +275,7 @@ const NotificationItem = ({
                 className="cursor-pointer gap-2 text-[13px] text-destructive focus:text-destructive focus:bg-destructive/10"
               >
                 <Trash2 className="h-4 w-4" />
-                Gỡ thông báo này
+                Remove this notification
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

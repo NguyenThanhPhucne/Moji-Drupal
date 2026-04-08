@@ -5,7 +5,7 @@ export interface SocialUserLite {
   avatarUrl?: string | null;
 }
 
-export type SocialReactionType = "like" | "love" | "haha" | "wow";
+export type SocialReactionType = "like" | "love" | "haha" | "wow" | "sad" | "angry";
 
 export type SocialReactionSummary = Record<SocialReactionType, number>;
 
@@ -21,6 +21,7 @@ export interface SocialPost {
   isLiked: boolean;
   ownReaction?: SocialReactionType | null;
   reactionSummary?: SocialReactionSummary;
+  visibleReactors?: SocialUserLite[];
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +44,8 @@ export interface SocialProfile {
   createdAt: string;
   followerCount: number;
   followingCount: number;
+  friendCount?: number;
+  friendsPreview?: SocialUserLite[];
   postCount: number;
   isFollowing: boolean;
   isFriend?: boolean;

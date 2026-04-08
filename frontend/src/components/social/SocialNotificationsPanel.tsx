@@ -55,7 +55,7 @@ const EmptyState = () => (
     <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
       <Inbox className="h-6 w-6 text-muted-foreground" />
     </div>
-    <p className="text-xs text-muted-foreground">Chưa có thông báo nào</p>
+    <p className="text-xs text-muted-foreground">No notifications yet</p>
   </div>
 );
 
@@ -84,8 +84,8 @@ const SocialNotificationsPanel = ({
   return (
     <aside
       className={cn(
-        "elevated-card flex flex-col gap-0 overflow-hidden",
-        compact ? "p-0" : "p-0",
+        "social-card flex flex-col gap-0 overflow-hidden",
+        "p-0",
       )}
     >
       {/* ── Header ── */}
@@ -103,7 +103,7 @@ const SocialNotificationsPanel = ({
               compact ? "text-sm" : "text-base",
             )}
           >
-            Thông báo
+            Notifications
           </h3>
           {unread > 0 && (
             <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
@@ -124,8 +124,8 @@ const SocialNotificationsPanel = ({
           )}
         >
           <CheckCheck className="h-3.5 w-3.5" />
-          {!compact && <span>Đánh dấu đã đọc</span>}
-          {compact && <span className="sr-only">Đánh dấu đã đọc</span>}
+          {!compact && <span>Mark as read</span>}
+          {compact && <span className="sr-only">Mark as read</span>}
         </Button>
       </div>
 

@@ -142,14 +142,20 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="chat-header-shell sticky top-0 z-10 flex items-center px-3 py-2">
+      <header className="chat-header-shell chat-header-shell--elevated sticky top-0 z-10 flex items-center px-3 py-2">
         <div className="flex items-center gap-2 w-full justify-between">
           <div className="flex items-center gap-1.5 min-w-0">
             {/* Sidebar toggle — only on mobile */}
             <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
 
             {/* Avatar + name */}
-            <div className="chat-header-identity flex items-center gap-3 rounded-xl px-2 py-1.5 cursor-pointer min-w-0">
+            <div
+              className={`chat-header-identity chat-header-identity--enterprise ${
+                chat.type === "direct"
+                  ? "chat-header-identity--direct"
+                  : "chat-header-identity--group"
+              } flex items-center gap-3 rounded-xl px-2 py-1.5 cursor-pointer min-w-0`}
+            >
               {/* avatar */}
               <div className="relative flex-shrink-0">
                 {chat.type === "direct" ? (
@@ -253,7 +259,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="chat-header-dropdown w-52">
+              <DropdownMenuContent align="end" className="chat-header-dropdown chat-header-dropdown-panel w-52">
                 {chat.type === "direct" && otherUser?._id && (
                   <DropdownMenuItem
                     onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
@@ -280,7 +286,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent
-          className="chat-modal-shell max-w-sm"
+          className="chat-modal-shell chat-modal-shell--danger max-w-sm"
           aria-busy={isDeleting}
         >
           <AlertDialogHeader className="items-center text-center modal-stagger-item">
@@ -307,7 +313,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
-              className="chat-modal-btn chat-modal-btn--danger w-full"
+              className={`chat-modal-btn chat-modal-btn--danger w-full ${isDeleting ? "chat-modal-btn--busy" : ""}`}
             >
               {isDeleting ? "Deleting..." : "Yes, delete"}
             </AlertDialogAction>

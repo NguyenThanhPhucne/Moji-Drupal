@@ -9,12 +9,12 @@ const ChatWelcomeScreen = () => {
 
 
       <div className="flex-1 flex flex-col items-center justify-center bg-background px-6 text-center select-none relative">
-        {/* Đẳng cấp SaaS: Nền Grid lưới mượt mà, siêu nhạt */}
+        {/* SaaS-grade look: subtle smooth grid background */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,hsl(var(--muted-foreground)/0.05)_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--muted-foreground)/0.05)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
 
         <div className="relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 ease-out flex flex-col items-center">
           <div className="relative mx-auto mb-6 flex size-16 items-center justify-center">
-            {/* Hiệu ứng Sonar (Ping) nhẹ nhàng để chớp tắt chuyên nghiệp */}
+            {/* Subtle sonar ping effect for a polished pulse */}
             <div className="chat-welcome-ping chat-welcome-ping-primary" />
             <div className="chat-welcome-ping chat-welcome-ping-secondary" />
             

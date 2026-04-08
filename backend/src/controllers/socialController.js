@@ -8,7 +8,7 @@ import Notification from "../models/Notification.js";
 import { io } from "../socket/index.js";
 import { v2 as cloudinary } from "cloudinary";
 
-const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow"];
+const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"];
 
 const normalizeReactionType = (input) => {
   const normalized = String(input || "like").trim().toLowerCase();
@@ -26,6 +26,127 @@ const buildReactionSummary = (reactions) => {
   });
 
   return summary;
+};
+
+const MAX_REACTION_CAS_RETRIES = 25;
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const buildUpdatedReactionsForUser = (
+  reactions,
+  targetUserId,
+  nextReactionType,
+) => {
+  const normalizedTargetUserId = String(targetUserId);
+  const safeReactions = Array.isArray(reactions) ? reactions : [];
+  const reactionIndex = safeReactions.findIndex(
+    (item) => String(item?.userId) === normalizedTargetUserId,
+  );
+
+  const next = safeReactions.map((item) => ({
+    userId: item?.userId,
+    type: normalizeReactionType(item?.type),
+  }));
+
+  let finalReactionType = null;
+  let isNewReactionAdded = false;
+
+  if (reactionIndex === -1) {
+    next.push({ userId: targetUserId, type: nextReactionType });
+    finalReactionType = nextReactionType;
+    isNewReactionAdded = true;
+  } else {
+    const existingType = normalizeReactionType(next[reactionIndex]?.type);
+    if (existingType === nextReactionType) {
+      next.splice(reactionIndex, 1);
+    } else {
+      next[reactionIndex].type = nextReactionType;
+      finalReactionType = nextReactionType;
+    }
+  }
+
+  return {
+    nextReactions: next,
+    finalReactionType,
+    isNewReactionAdded,
+  };
+};
+
+const updatePostReactionWithCAS = async ({ postId, userId, nextReactionType }) => {
+  for (let attempt = 0; attempt < MAX_REACTION_CAS_RETRIES; attempt += 1) {
+    const post = await Post.findById(postId).select(
+      "_id authorId isDeleted likes reactions __v",
+    );
+
+    if (!post || post.isDeleted) {
+      return null;
+    }
+
+    const normalizedReactions = Array.isArray(post.reactions)
+      ? post.reactions
+      : Array.isArray(post.likes)
+        ? post.likes.map((item) => ({ userId: item, type: "like" }))
+        : [];
+
+    const { nextReactions, finalReactionType, isNewReactionAdded } =
+      buildUpdatedReactionsForUser(normalizedReactions, userId, nextReactionType);
+
+    const nextLikesCount = nextReactions.length;
+
+    const updateResult = await Post.updateOne(
+      {
+        _id: postId,
+        __v: post.__v,
+        isDeleted: false,
+      },
+      {
+        $set: {
+          reactions: nextReactions,
+          likesCount: nextLikesCount,
+        },
+        $inc: { __v: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 1) {
+      return {
+        authorId: post.authorId,
+        reactions: nextReactions,
+        likesCount: nextLikesCount,
+        finalReactionType,
+        isNewReactionAdded,
+      };
+    }
+
+    // Add bounded backoff to reduce hot-loop contention on the same document.
+    const backoffMs = Math.min(50, 5 + attempt * 3);
+    await wait(backoffMs);
+  }
+
+  throw new Error("RETRY_CONFLICT: reaction update contention too high");
+};
+
+const collectCommentDescendantIds = async (rootCommentId) => {
+  const ids = [String(rootCommentId)];
+  let frontier = [String(rootCommentId)];
+
+  while (frontier.length > 0) {
+    const children = await Comment.find({
+      parentCommentId: { $in: frontier },
+      isDeleted: false,
+    })
+      .select("_id")
+      .lean();
+
+    const childIds = children.map((item) => String(item._id));
+    if (childIds.length === 0) {
+      break;
+    }
+
+    ids.push(...childIds);
+    frontier = childIds;
+  }
+
+  return [...new Set(ids)];
 };
 
 const normalizePaging = (pageRaw, limitRaw) => {
@@ -80,22 +201,103 @@ const resolveProfileAccess = async (currentUserId, profileUserId) => {
   };
 };
 
-const toPostPayload = (post, currentUserId) => {
+const getViewerFriendIdSet = async (viewerUserId) => {
+  const viewerId = String(viewerUserId || "");
+  if (!viewerId) {
+    return new Set();
+  }
+
+  const friendships = await Friend.find({
+    $or: [{ userA: viewerId }, { userB: viewerId }],
+  })
+    .select("userA userB")
+    .lean();
+
+  const friendIds = new Set();
+  friendships.forEach((friendship) => {
+    const userA = String(friendship.userA || "");
+    const userB = String(friendship.userB || "");
+    if (userA && userA !== viewerId) {
+      friendIds.add(userA);
+    }
+    if (userB && userB !== viewerId) {
+      friendIds.add(userB);
+    }
+  });
+
+  return friendIds;
+};
+
+const extractNormalizedReactions = (postObject) => {
+  if (Array.isArray(postObject.reactions)) {
+    return postObject.reactions
+      .map((reaction) => ({
+        userId: String(reaction?.userId || ""),
+        type: normalizeReactionType(reaction?.type),
+      }))
+      .filter((reaction) => reaction.userId);
+  }
+
+  if (Array.isArray(postObject.likes)) {
+    return postObject.likes.map((userId) => ({
+      userId: String(userId),
+      type: "like",
+    }));
+  }
+
+  return [];
+};
+
+const buildVisibleReactorsMap = async (
+  posts,
+  viewerUserId,
+  viewerFriendIdSet,
+) => {
+  const viewerId = String(viewerUserId || "");
+  const allowedIds = new Set([viewerId, ...viewerFriendIdSet]);
+  const reactorIds = new Set();
+
+  posts.forEach((post) => {
+    const postObject = post?.toObject ? post.toObject() : post;
+    const normalizedReactions = extractNormalizedReactions(postObject);
+    normalizedReactions.forEach((reaction) => {
+      if (allowedIds.has(reaction.userId)) {
+        reactorIds.add(reaction.userId);
+      }
+    });
+  });
+
+  if (reactorIds.size === 0) {
+    return new Map();
+  }
+
+  const users = await User.find({
+    _id: { $in: Array.from(reactorIds) },
+  })
+    .select("_id displayName username avatarUrl")
+    .lean();
+
+  return new Map(
+    users.map((item) => [
+      String(item._id),
+      {
+        _id: item._id,
+        displayName: item.displayName,
+        username: item.username,
+        avatarUrl: item.avatarUrl || null,
+      },
+    ]),
+  );
+};
+
+const toPostPayload = (
+  post,
+  currentUserId,
+  options = { viewerFriendIdSet: null, visibleReactorsById: null },
+) => {
   const postObject = post.toObject ? post.toObject() : post;
 
-  const normalizedReactions = Array.isArray(postObject.reactions)
-    ? postObject.reactions
-        .map((reaction) => ({
-          userId: String(reaction?.userId || ""),
-          type: normalizeReactionType(reaction?.type),
-        }))
-        .filter((reaction) => reaction.userId)
-    : Array.isArray(postObject.likes)
-      ? postObject.likes.map((userId) => ({
-          userId: String(userId),
-          type: "like",
-        }))
-      : [];
+  const normalizedReactions = extractNormalizedReactions(postObject);
 
   const reactionSummary = buildReactionSummary(normalizedReactions);
 
@@ -104,11 +306,32 @@ const toPostPayload = (post, currentUserId) => {
       (reaction) => String(reaction.userId) === String(currentUserId),
     )?.type || null;
 
+  const viewerId = String(currentUserId || "");
+  const allowedIds = options.viewerFriendIdSet
+    ? new Set([viewerId, ...options.viewerFriendIdSet])
+    : null;
+
+  const visibleReactors =
+    allowedIds && options.visibleReactorsById
+      ? normalizedReactions
+          .filter((reaction) => allowedIds.has(reaction.userId))
+          .map((reaction) => options.visibleReactorsById.get(reaction.userId))
+          .filter(Boolean)
+          .filter(
+            (item, index, list) =>
+              list.findIndex(
+                (candidate) => String(candidate._id) === String(item._id),
+              ) === index,
+          )
+          .slice(0, 3)
+      : [];
+
   return {
     ...postObject,
     isLiked: ownReaction === "like",
     ownReaction,
     reactionSummary,
+    visibleReactors,
     likes: undefined,
     reactions: undefined,
   };
@@ -238,6 +461,31 @@ const emitSocialPostUpdated = ({ post, authorId }) => {
   if (authorId) {
     io.to(String(authorId)).emit("social-post-updated", { post });
   }
+};
+
+const emitSocialPostDeleted = ({ postId }) => {
+  io.emit("social-post-deleted", {
+    postId: String(postId),
+  });
+};
+
+const emitSocialCommentDeleted = ({
+  postId,
+  commentId,
+  deletedCommentIds,
+  commentsCount,
+}) => {
+  io.emit("social-post-comment-deleted", {
+    postId: String(postId),
+    commentId: String(commentId),
+    deletedCommentIds: (Array.isArray(deletedCommentIds)
+      ? deletedCommentIds
+      : [commentId]
+    )
+      .map((id) => String(id))
+      .filter(Boolean),
+    commentsCount,
+  });
 };
 
 export const createPost = async (req, res) => {
@@ -380,8 +628,17 @@ export const getHomeFeed = async (req, res) => {
       }),
     ]);
 
+    const viewerFriendIdSet = await getViewerFriendIdSet(userId);
+    const visibleReactorsById = await buildVisibleReactorsMap(
+      posts,
+      userId,
+      viewerFriendIdSet,
+    );
+
     return res.status(200).json({
-      posts: posts.map((post) => toPostPayload(post, userId)),
+      posts: posts.map((post) =>
+        toPostPayload(post, userId, { viewerFriendIdSet, visibleReactorsById }),
+      ),
       pagination: {
         page,
         limit,
@@ -422,8 +679,17 @@ export const getExploreFeed = async (req, res) => {
       Post.countDocuments(query),
     ]);
 
+    const viewerFriendIdSet = await getViewerFriendIdSet(userId);
+    const visibleReactorsById = await buildVisibleReactorsMap(
+      posts,
+      userId,
+      viewerFriendIdSet,
+    );
+
     return res.status(200).json({
-      posts: posts.map((post) => toPostPayload(post, userId)),
+      posts: posts.map((post) =>
+        toPostPayload(post, userId, { viewerFriendIdSet, visibleReactorsById }),
+      ),
       pagination: {
         page,
         limit,
@@ -469,8 +735,18 @@ export const getPostById = async (req, res) => {
       return res.status(403).json({ message: "You cannot view this post" });
     }
 
+    const viewerFriendIdSet = await getViewerFriendIdSet(currentUserId);
+    const visibleReactorsById = await buildVisibleReactorsMap(
+      [post],
+      currentUserId,
+      viewerFriendIdSet,
+    );
+
     return res.status(200).json({
-      post: toPostPayload(post, currentUserId),
+      post: toPostPayload(post, currentUserId, {
+        viewerFriendIdSet,
+        visibleReactorsById,
+      }),
     });
   } catch (error) {
     console.error("[social] getPostById error", error);
@@ -487,7 +763,7 @@ export const getProfile = async (req, res) => {
       return res.status(400).json({ message: "Invalid user id" });
     }
 
-    const [profile, followerCount, followingCount, postCount, access] =
+    const [profile, followerCount, followingCount, postCount, access, friendCount, friendships] =
       await Promise.all([
         User.findById(profileUserId).select(
           "displayName username avatarUrl bio createdAt",
@@ -496,11 +772,44 @@ export const getProfile = async (req, res) => {
         Follow.countDocuments({ followerId: profileUserId }),
         Post.countDocuments({ authorId: profileUserId, isDeleted: false }),
         resolveProfileAccess(currentUserId, profileUserId),
+        Friend.countDocuments({
+          $or: [{ userA: profileUserId }, { userB: profileUserId }],
+        }),
+        Friend.find({
+          $or: [{ userA: profileUserId }, { userB: profileUserId }],
+        })
+          .sort({ createdAt: -1 })
+          .limit(9)
+          .populate("userA", "_id displayName username avatarUrl")
+          .populate("userB", "_id displayName username avatarUrl")
+          .lean(),
       ]);
 
     if (!profile) {
       return res.status(404).json({ message: "Profile not found" });
     }
+
+    const friendsPreview = access.canViewProfile
+      ? friendships
+          .map((friendship) => {
+            const isUserA =
+              String(friendship.userA?._id || friendship.userA) ===
+              String(profileUserId);
+            const friendUser = isUserA ? friendship.userB : friendship.userA;
+
+            if (!friendUser?._id) {
+              return null;
+            }
+
+            return {
+              _id: friendUser._id,
+              displayName: friendUser.displayName,
+              username: friendUser.username,
+              avatarUrl: friendUser.avatarUrl || null,
+            };
+          })
+          .filter(Boolean)
+      : [];
 
     return res.status(200).json({
       profile: {
@@ -508,6 +817,8 @@ export const getProfile = async (req, res) => {
         followerCount,
         followingCount,
         postCount,
+        friendCount,
+        friendsPreview,
         isFollowing: access.isFollowing,
         isFriend: access.isFriend,
         canViewProfile: access.canViewProfile,
@@ -555,8 +866,20 @@ export const getUserPosts = async (req, res) => {
       Post.countDocuments(query),
     ]);
 
+    const viewerFriendIdSet = await getViewerFriendIdSet(currentUserId);
+    const visibleReactorsById = await buildVisibleReactorsMap(
+      posts,
+      currentUserId,
+      viewerFriendIdSet,
+    );
+
     return res.status(200).json({
-      posts: posts.map((post) => toPostPayload(post, currentUserId)),
+      posts: posts.map((post) =>
+        toPostPayload(post, currentUserId, {
+          viewerFriendIdSet,
+          visibleReactorsById,
+        }),
+      ),
       pagination: {
         page,
         limit,
@@ -682,62 +1005,60 @@ export const toggleLikePost = async (req, res) => {
       return res.status(400).json({ message: "Invalid post id" });
     }
 
-    const post = await Post.findById(postId);
-    if (!post || post.isDeleted) {
+    const nextReactionType = normalizeReactionType(req.body?.reaction || "like");
+    let updateOutcome = null;
+    try {
+      updateOutcome = await updatePostReactionWithCAS({
+        postId,
+        userId,
+        nextReactionType,
+      });
+    } catch (conflictError) {
+      if (String(conflictError?.message || "").includes("RETRY_CONFLICT")) {
+        return res.status(409).json({
+          message: "Reaction update conflict, please retry",
+        });
+      }
+
+      throw conflictError;
+    }
+
+    if (!updateOutcome) {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    if (!Array.isArray(post.reactions)) {
-      post.reactions = Array.isArray(post.likes)
-        ? post.likes.map((item) => ({ userId: item, type: "like" }))
-        : [];
-    }
-
-    const nextReactionType = normalizeReactionType(req.body?.reaction || "like");
-    const reactionIndex = post.reactions.findIndex(
-      (item) => String(item.userId) === String(userId),
-    );
-
-    let finalReactionType = null;
-
-    if (reactionIndex === -1) {
-      post.reactions.push({ userId, type: nextReactionType });
-      finalReactionType = nextReactionType;
-    } else {
-      const existingType = normalizeReactionType(post.reactions[reactionIndex]?.type);
-
-      if (existingType === nextReactionType) {
-        post.reactions.splice(reactionIndex, 1);
-      } else {
-        post.reactions[reactionIndex].type = nextReactionType;
-        finalReactionType = nextReactionType;
-      }
-    }
-
-    const isNewReactionAdded = reactionIndex === -1 && Boolean(finalReactionType);
+    const {
+      authorId,
+      reactions,
+      likesCount,
+      finalReactionType,
+      isNewReactionAdded,
+    } = updateOutcome;
 
     if (isNewReactionAdded) {
+      const reactionMessage =
+        finalReactionType && finalReactionType !== "like"
+          ? "reacted to your post"
+          : "liked your post";
+
       await createAndEmitNotification({
-        recipientId: post.authorId,
+        recipientId: authorId,
         actorId: userId,
         type: "like",
-        postId: post._id,
-        message: "liked your post",
+        postId,
+        message: reactionMessage,
       });
     }
-
-    post.likesCount = post.reactions.length;
-    await post.save();
 
     const actor = await User.findById(userId)
       .select("_id displayName username avatarUrl")
       .lean();
 
-    const reactionSummary = buildReactionSummary(post.reactions || []);
+    const reactionSummary = buildReactionSummary(reactions || []);
 
     emitSocialLikeUpdated({
-      postId: post._id,
-      likesCount: post.likesCount,
+      postId,
+      likesCount,
       liked: finalReactionType,
       reactionSummary,
       actor,
@@ -746,9 +1067,9 @@ export const toggleLikePost = async (req, res) => {
     return res.status(200).json({
       liked: Boolean(finalReactionType),
       ownReaction: finalReactionType,
-      likesCount: post.likesCount,
+      likesCount,
       reactionSummary,
-      postId: post._id,
+      postId,
     });
   } catch (error) {
     console.error("[social] toggleLikePost error", error);
@@ -775,10 +1096,31 @@ export const addComment = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
+    let validatedParentCommentId = null;
+    if (parentCommentId) {
+      if (!mongoose.Types.ObjectId.isValid(parentCommentId)) {
+        return res.status(400).json({ message: "Invalid parent comment id" });
+      }
+
+      const parentComment = await Comment.findOne({
+        _id: parentCommentId,
+        postId,
+        isDeleted: false,
+      })
+        .select("_id")
+        .lean();
+
+      if (!parentComment) {
+        return res.status(400).json({ message: "Parent comment is invalid" });
+      }
+
+      validatedParentCommentId = parentComment._id;
+    }
+
     const comment = await Comment.create({
       postId,
       authorId: userId,
-      parentCommentId: parentCommentId || null,
+      parentCommentId: validatedParentCommentId,
       content: String(content).trim(),
     });
 
@@ -813,6 +1155,135 @@ export const addComment = async (req, res) => {
     return res.status(201).json({ comment });
   } catch (error) {
     console.error("[social] addComment error", error);
+    return res.status(500).json({ message: "System error" });
+  }
+};
+
+export const deleteComment = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { postId, commentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ message: "Invalid post id" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(400).json({ message: "Invalid comment id" });
+    }
+
+    const [post, comment] = await Promise.all([
+      Post.findById(postId).select("_id authorId commentsCount isDeleted"),
+      Comment.findById(commentId).select(
+        "_id postId authorId parentCommentId isDeleted",
+      ),
+    ]);
+
+    if (!post || post.isDeleted) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (!comment || String(comment.postId) !== String(postId)) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    const canDelete =
+      String(comment.authorId) === String(userId) ||
+      String(post.authorId) === String(userId);
+
+    if (!canDelete) {
+      return res.status(403).json({ message: "You cannot delete this comment" });
+    }
+
+    const descendantIds = await collectCommentDescendantIds(comment._id);
+    const deletionOutcome = await Comment.updateMany(
+      {
+        _id: { $in: descendantIds },
+        postId,
+        isDeleted: false,
+      },
+      { $set: { isDeleted: true } },
+    );
+
+    const deletedCount = deletionOutcome.modifiedCount || 0;
+    if (deletedCount > 0) {
+      await Post.updateOne(
+        { _id: postId },
+        {
+          $set: {
+            commentsCount: Math.max(0, (post.commentsCount || 0) - deletedCount),
+          },
+        },
+      );
+
+      emitSocialCommentDeleted({
+        postId,
+        commentId,
+        deletedCommentIds: descendantIds,
+        commentsCount: Math.max(0, (post.commentsCount || 0) - deletedCount),
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      postId,
+      commentId,
+      deletedCount,
+    });
+  } catch (error) {
+    console.error("[social] deleteComment error", error);
+    return res.status(500).json({ message: "System error" });
+  }
+};
+
+export const deletePost = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { postId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+      return res.status(400).json({ message: "Invalid post id" });
+    }
+
+    const post = await Post.findById(postId).select(
+      "_id authorId isDeleted commentsCount",
+    );
+
+    if (!post || post.isDeleted) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    if (String(post.authorId) !== String(userId)) {
+      return res.status(403).json({ message: "You cannot delete this post" });
+    }
+
+    await Promise.all([
+      Post.updateOne(
+        { _id: postId, isDeleted: false },
+        {
+          $set: {
+            isDeleted: true,
+            commentsCount: 0,
+            likesCount: 0,
+            reactions: [],
+            likes: [],
+          },
+        },
+      ),
+      Comment.updateMany(
+        { postId, isDeleted: false },
+        { $set: { isDeleted: true } },
+      ),
+    ]);
+
+    emitSocialPostDeleted({ postId });
+
+    return res.status(200).json({
+      ok: true,
+      postId,
+    });
+  } catch (error) {
+    console.error("[social] deletePost error", error);
     return res.status(500).json({ message: "System error" });
   }
 };

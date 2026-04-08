@@ -44,12 +44,12 @@ export function DateDivider({ date }: Readonly<{ date: Date }>) {
   else label = format(date, "MMM d, yyyy");
 
   return (
-    <div className="flex items-center gap-2 my-4 px-2 select-none">
-      <div className="flex-1 h-px bg-border/60" />
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium px-2.5 py-1 bg-muted/60 rounded-full">
+    <div className="chat-date-divider-root">
+      <div className="chat-date-divider-line" />
+      <span className="chat-date-divider-pill">
         {label}
       </span>
-      <div className="flex-1 h-px bg-border/60" />
+      <div className="chat-date-divider-line" />
     </div>
   );
 }
@@ -66,16 +66,16 @@ const ReactionBar = memo(function ReactionBar({
   for (const r of reactions) grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1;
   if (Object.keys(grouped).length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
+    <div className="chat-reaction-bar-root">
       {Object.entries(grouped).map(([emoji, count]) => (
         <button
           key={emoji}
           type="button"
           onClick={() => onReact(emoji)}
-          className="flex items-center gap-0.5 text-xs bg-muted hover:bg-primary/10 border border-border/60 rounded-full px-2 py-0.5 transition-colors hover:scale-105 active:scale-95"
+          className="chat-reaction-bar-item"
         >
           <span>{emoji}</span>
-          <span className="font-medium text-muted-foreground">{count}</span>
+          <span className="chat-reaction-bar-count">{count}</span>
         </button>
       ))}
     </div>
@@ -93,11 +93,10 @@ const QuickReactBar = memo(function QuickReactBar({
   return (
     <div
       className={cn(
-        "absolute bottom-full mb-1 bg-background/95 backdrop-blur-sm border border-border/60 rounded-full px-2 py-1.5 flex gap-1 shadow-lg z-20",
-        "transition-all duration-150",
+        "chat-quick-react-bar",
         visible
-          ? "opacity-100 scale-100 translate-y-0"
-          : "opacity-0 scale-90 translate-y-2 pointer-events-none",
+          ? "chat-quick-react-bar--visible"
+          : "chat-quick-react-bar--hidden",
       )}
     >
       {QUICK_REACTIONS.map((em) => (
@@ -105,7 +104,7 @@ const QuickReactBar = memo(function QuickReactBar({
           key={em}
           type="button"
           onClick={() => onReact(em)}
-          className="text-base hover:scale-125 active:scale-95 transition-transform duration-100 p-0.5"
+          className="chat-quick-react-item"
         >
           {em}
         </button>
@@ -159,12 +158,12 @@ const ContextMenu = memo(function ContextMenu({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9998]">
+    <div className="chat-context-menu-backdrop">
       <button
         type="button"
         aria-label="Close menu"
         onClick={onClose}
-        className="absolute inset-0"
+        className="chat-context-menu-dismiss"
       />
       <div
         role="menu"
@@ -581,7 +580,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
   return (
     <>
       <ReactionBar
-        reactions={message.reactions ?? []}
+        reactions={message.isDeleted ? [] : (message.reactions ?? [])}
         onReact={onReact}
       />
 

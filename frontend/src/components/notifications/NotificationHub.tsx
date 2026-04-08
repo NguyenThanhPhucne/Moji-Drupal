@@ -26,9 +26,9 @@ const getGroup = (dateStr: string): "new" | "today" | "earlier" => {
 };
 
 const GROUP_LABELS: Record<"new" | "today" | "earlier", string> = {
-  new: "Mới",
-  today: "Hôm nay",
-  earlier: "Trước đó",
+  new: "New",
+  today: "Today",
+  earlier: "Earlier",
 };
 
 // ─── Skeleton loader ──────────────────────────────────────────────────────────
@@ -56,9 +56,9 @@ const NotificationHubSkeleton = () => (
       <Inbox className="h-7 w-7 text-muted-foreground/70" />
     </div>
     <div className="space-y-0.5">
-      <p className="text-[14px] font-semibold text-foreground">Bạn đã cập nhật hết</p>
+      <p className="text-[14px] font-semibold text-foreground">You're all caught up</p>
       <p className="text-[12.5px] text-muted-foreground">
-        Khi có tin mới, bạn sẽ thấy ở đây
+        New notifications will appear here
       </p>
     </div>
   </div>
@@ -109,7 +109,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
           displayName: req.from?.displayName ?? "Someone",
           avatarUrl: req.from?.avatarUrl ?? null,
         },
-        message: "đã gửi cho bạn lời mời kết bạn",
+        message: "sent you a friend request",
         isRead: seenRequests.includes(req._id),
         createdAt: req.createdAt,
         requestId: req._id,
@@ -207,16 +207,16 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   const handleMarkAllRead = async () => {
     await markAllNotificationsRead();
     resetUnreadCount();
-    toast.success("Đã đánh dấu tất cả là đã đọc");
+    toast.success("Marked all as read");
   };
 
   const handleAcceptFriend = async (requestId: string) => {
     setProcessingId(`fr-${requestId}`);
     try {
       await acceptRequest(requestId);
-      toast.success("Đã chấp nhận lời mời kết bạn!");
+      toast.success("Friend request accepted!");
     } catch {
-      toast.error("Không thể chấp nhận lời mời. Vui lòng thử lại.");
+      toast.error("Couldn't accept the request. Please try again.");
     } finally {
       setProcessingId(null);
     }
@@ -226,9 +226,9 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     setProcessingId(`fr-${requestId}`);
     try {
       await declineRequest(requestId);
-      toast.info("Đã từ chối lời mời kết bạn");
+      toast.info("Friend request declined");
     } catch {
-      toast.error("Không thể từ chối lời mời. Vui lòng thử lại.");
+      toast.error("Couldn't decline the request. Please try again.");
     } finally {
       setProcessingId(null);
     }
@@ -244,12 +244,12 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
         // Dismiss the notification & close the hub
         handleDismiss(notifId);
         setIsHubOpen(false);
-        toast.success(`Cuộc trò chuyện với ${actorName} đã được mở!`);
+        toast.success(`Chat with ${actorName} opened successfully!`);
       } else {
-        toast.error("Không thể mở cuộc trò chuyện. Vui lòng thử lại!");
+        toast.error("Couldn't open the chat. Please try again!");
       }
     } catch {
-      toast.error("Đã xảy ra lỗi. Vui lòng thử lại!");
+      toast.error("Something went wrong. Please try again!");
     } finally {
       setChatCreating(null);
     }
@@ -260,7 +260,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
     <div className="flex h-full flex-col">
       {/* ── Header ── */}
       <div className="flex h-14 shrink-0 items-center justify-between px-4">
-        <h2 className="text-[18px] font-bold text-foreground tracking-tight">Thông báo</h2>
+        <h2 className="text-[18px] font-bold text-foreground tracking-tight">Notifications</h2>
 
         <button
           type="button"
@@ -274,7 +274,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
           )}
         >
           <CheckCheck className="h-4 w-4" />
-          Đánh dấu tất cả
+          Mark all
         </button>
       </div>
 
@@ -290,13 +290,13 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
             value="all"
             className="rounded-none pb-2.5 px-1 text-[14px] font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:shadow-[0_2px_0_0_hsl(var(--primary))] bg-transparent shadow-none transition-colors"
           >
-            Tất cả
+            All
           </TabsTrigger>
           <TabsTrigger
             value="unread"
             className="rounded-none pb-2.5 px-1 text-[14px] font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:shadow-[0_2px_0_0_hsl(var(--primary))] bg-transparent shadow-none transition-colors"
           >
-            Chưa đọc
+            Unread
             {unreadCount > 0 && (
               <span className="ml-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}

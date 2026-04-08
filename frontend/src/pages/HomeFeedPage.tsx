@@ -1,10 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import PostComposer from "@/components/social/PostComposer";
+import SocialStoriesRow from "@/components/social/SocialStoriesRow";
+import SocialTopHeader from "@/components/social/SocialTopHeader";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import SocialNotificationsPanel from "@/components/social/SocialNotificationsPanel";
+import SocialMiniChatDock from "@/components/social/SocialMiniChatDock";
+import SocialRightRail from "@/components/social/SocialRightRail";
 import PostComposerSkeleton from "@/components/skeleton/PostComposerSkeleton";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
 import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
@@ -29,6 +33,8 @@ const HomeFeedPage = () => {
     createPost,
     fetchHomeFeed,
     toggleLike,
+    deletePost,
+    deleteComment,
     fetchComments,
     loadMoreComments,
     setCommentsSortBy,
@@ -40,6 +46,72 @@ const HomeFeedPage = () => {
     markNotificationRead,
     markAllNotificationsRead,
   } = useSocialStore();
+  const [composerOpenKey, setComposerOpenKey] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [feedTab, setFeedTab] = useState<"all" | "photos" | "text">("all");
+
+  const filteredHomeFeed = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const currentUserId = String(user?._id || "");
+    const interactedAuthorIds = new Set<string>();
+
+    homeFeed.forEach((post) => {
+      if (post.ownReaction) {
+        interactedAuthorIds.add(String(post.authorId._id || ""));
+      }
+
+      const commentsForPost = postComments[post._id] || [];
+      const userCommented = commentsForPost.some(
+        (comment) => String(comment.authorId?._id || "") === currentUserId,
+      );
+
+      if (userCommented) {
+        interactedAuthorIds.add(String(post.authorId._id || ""));
+      }
+    });
+
+    const computeFeedScore = (post: (typeof homeFeed)[number]) => {
+      const createdAtTs = new Date(post.createdAt).getTime();
+      const ageHours = Math.max(0, (Date.now() - createdAtTs) / (1000 * 60 * 60));
+      const recencyScore = Math.max(0, 72 - ageHours) * 1.1;
+      const mediaScore = (post.mediaUrls?.length || 0) > 0 ? 14 : 0;
+      const reactionScore = Math.min(28, Number(post.likesCount || 0) * 1.6);
+      const commentScore = Math.min(34, Number(post.commentsCount || 0) * 2.2);
+      const contextBoost = interactedAuthorIds.has(String(post.authorId._id || ""))
+        ? 20
+        : 0;
+
+      return recencyScore + mediaScore + reactionScore + commentScore + contextBoost;
+    };
+
+    return homeFeed
+      .filter((post) => {
+        const hasMedia = Boolean(post.mediaUrls?.length);
+        const matchesTab =
+          feedTab === "all" ||
+          (feedTab === "photos" && hasMedia) ||
+          (feedTab === "text" && !hasMedia);
+
+        if (!matchesTab) {
+          return false;
+        }
+
+        if (!normalizedQuery) {
+          return true;
+        }
+
+        const caption = String(post.caption || "").toLowerCase();
+        const author = String(post.authorId.displayName || "").toLowerCase();
+        const tags = (post.tags || []).join(" ").toLowerCase();
+
+        return (
+          caption.includes(normalizedQuery) ||
+          author.includes(normalizedQuery) ||
+          tags.includes(normalizedQuery)
+        );
+      })
+      .sort((a, b) => computeFeedScore(b) - computeFeedScore(a));
+  }, [feedTab, homeFeed, postComments, searchQuery, user?._id]);
 
   const isInitialHomeLoading = loadingHome && homeFeed.length === 0;
   const isLoadingMoreHome = loadingHome && homeFeed.length > 0;
@@ -65,22 +137,28 @@ const HomeFeedPage = () => {
     <SidebarProvider>
       <AppSidebar />
 
-      <div className="app-shell-bg">
-        <div className="app-shell-panel p-4 md:p-6">
-          <div className="grid w-full min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="min-h-0 overflow-y-auto beautiful-scrollbar pr-1 space-stack-lg">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="section-eyebrow">Social</p>
-                  <h1 className="text-title-1">Home Feed</h1>
-                  <p className="text-body-sm text-muted-foreground">
-                    Updates from people you follow
-                  </p>
-                </div>
-                <div className="self-start sm:self-auto">
-                  <BackToChatCard onClick={() => navigate("/")} />
-                </div>
+      <div className="social-page-shell">
+        <div className="app-shell-panel social-shell-panel p-4 md:p-6">
+          <div className="social-two-column-frame grid min-h-0 gap-4 xl:grid-cols-[minmax(0,700px)_320px]">
+            <section className="social-feed-column min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
+              <SocialTopHeader
+                title="Home"
+                subtitle="Connect with friends and discover updates"
+                searchPlaceholder="Search people, posts, and groups"
+                searchValue={searchQuery}
+                onSearchValueChange={setSearchQuery}
+              />
+
+              <div className="flex justify-end">
+                <BackToChatCard onClick={() => navigate("/")} />
               </div>
+
+              <SocialStoriesRow
+                currentUser={user}
+                posts={homeFeed}
+                onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+                onCreateStory={() => setComposerOpenKey((current) => current + 1)}
+              />
 
               {isInitialHomeLoading ? (
                 <>
@@ -92,12 +170,39 @@ const HomeFeedPage = () => {
                   </div>
                 </>
               ) : (
-                <PostComposer onCreate={createPost} />
+                    <PostComposer onCreate={createPost} openRequestKey={composerOpenKey} />
               )}
+
+              <div className="social-card social-home-filter-bar p-2">
+                <button
+                  type="button"
+                  className="social-home-filter-chip"
+                  data-active={feedTab === "all"}
+                  onClick={() => setFeedTab("all")}
+                >
+                  All posts
+                </button>
+                <button
+                  type="button"
+                  className="social-home-filter-chip"
+                  data-active={feedTab === "photos"}
+                  onClick={() => setFeedTab("photos")}
+                >
+                  Photos
+                </button>
+                <button
+                  type="button"
+                  className="social-home-filter-chip"
+                  data-active={feedTab === "text"}
+                  onClick={() => setFeedTab("text")}
+                >
+                  Text
+                </button>
+              </div>
 
               <div className="space-stack-md">
                 {isInitialHomeLoading && <SocialPostSkeleton count={3} />}
-                {homeFeed.map((post, index) => (
+                {filteredHomeFeed.map((post, index) => (
                   <div
                     key={post._id}
                     className={getStaggerEnterClass(index)}
@@ -115,6 +220,8 @@ const HomeFeedPage = () => {
                       onSetCommentsSortBy={setCommentsSortBy}
                       onFetchEngagement={fetchPostEngagement}
                       onComment={addComment}
+                      onDeletePost={deletePost}
+                      onDeleteComment={deleteComment}
                       onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
                     />
                   </div>
@@ -122,9 +229,9 @@ const HomeFeedPage = () => {
                 {isLoadingMoreHome && (
                   <SocialPostSkeleton count={2} staggerFrom={homeFeed.length} />
                 )}
-                {!loadingHome && homeFeed.length === 0 && (
-                  <div className="elevated-card p-8 text-center text-muted-foreground">
-                    Your home feed is empty. Follow people to see their posts.
+                {!loadingHome && filteredHomeFeed.length === 0 && (
+                  <div className="social-card-empty p-8 text-center">
+                    No posts match your current filters.
                   </div>
                 )}
               </div>
@@ -142,7 +249,15 @@ const HomeFeedPage = () => {
               )}
             </section>
 
-            <div className="order-last xl:hidden">
+            <div className="order-last space-y-3 xl:space-y-4">
+              <div className="xl:hidden">
+                <SocialRightRail compact />
+              </div>
+
+              <div className="hidden xl:block">
+                <SocialRightRail />
+              </div>
+
               <SocialNotificationsPanel
                 notifications={notifications}
                 loading={loadingNotifications}
@@ -151,18 +266,11 @@ const HomeFeedPage = () => {
                 onReadAll={markAllNotificationsRead}
               />
             </div>
-
-            <div className="hidden xl:block xl:sticky xl:top-0 xl:self-start">
-              <SocialNotificationsPanel
-                notifications={notifications}
-                loading={loadingNotifications}
-                onReadOne={markNotificationRead}
-                onReadAll={markAllNotificationsRead}
-              />
-            </div>
           </div>
         </div>
       </div>
+
+      <SocialMiniChatDock />
     </SidebarProvider>
   );
 };

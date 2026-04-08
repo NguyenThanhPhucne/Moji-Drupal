@@ -41,9 +41,9 @@ const FriendRequestDialog = ({ open, setOpen }: FriendRequestDialogProps) => {
         showCloseButton={false}
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>Thông báo</DialogTitle>
+          <DialogTitle>Notifications</DialogTitle>
           <DialogDescription>
-            Xem và quản lý tất cả thông báo của bạn
+            View and manage all your notifications
           </DialogDescription>
         </DialogHeader>
 

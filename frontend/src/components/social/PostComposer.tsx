@@ -1,8 +1,16 @@
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ImagePlus, SendHorizontal, X } from "lucide-react";
+import { Camera, ImagePlus, SendHorizontal, Smile, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuthStore } from "@/stores/useAuthStore";
 
 interface PostComposerProps {
   onCreate: (payload: {
@@ -11,25 +19,25 @@ interface PostComposerProps {
     tags?: string[];
     privacy?: "public" | "followers";
   }) => Promise<boolean>;
+  openRequestKey?: number;
 }
 
-const PostComposer = ({ onCreate }: PostComposerProps) => {
+const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
   const IMAGE_LIMIT = 10;
   const DRAFT_STORAGE_KEY = "social-post-composer-draft-v1";
+  const { user } = useAuthStore();
+  const [isOpen, setIsOpen] = useState(false);
   const [caption, setCaption] = useState("");
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
   const [tags, setTags] = useState("");
   const [privacy, setPrivacy] = useState<"public" | "followers">("public");
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!globalThis.window) {
-      return;
-    }
-
     try {
       const rawDraft = globalThis.localStorage.getItem(DRAFT_STORAGE_KEY);
       if (!rawDraft) {
@@ -44,7 +52,11 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
       };
 
       setCaption(parsed.caption || "");
-      setMediaUrls(Array.isArray(parsed.mediaUrls) ? parsed.mediaUrls.slice(0, IMAGE_LIMIT) : []);
+      setMediaUrls(
+        Array.isArray(parsed.mediaUrls)
+          ? parsed.mediaUrls.slice(0, IMAGE_LIMIT)
+          : [],
+      );
       setTags(parsed.tags || "");
       setPrivacy(parsed.privacy === "followers" ? "followers" : "public");
     } catch (error) {
@@ -53,10 +65,12 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
   }, []);
 
   useEffect(() => {
-    if (!globalThis.window) {
-      return;
+    if (openRequestKey > 0) {
+      setIsOpen(true);
     }
+  }, [openRequestKey]);
 
+  useEffect(() => {
     const hasContent = Boolean(caption.trim() || mediaUrls.length || tags.trim());
     if (!hasContent) {
       globalThis.localStorage.removeItem(DRAFT_STORAGE_KEY);
@@ -66,12 +80,7 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
     try {
       globalThis.localStorage.setItem(
         DRAFT_STORAGE_KEY,
-        JSON.stringify({
-          caption,
-          mediaUrls,
-          tags,
-          privacy,
-        }),
+        JSON.stringify({ caption, mediaUrls, tags, privacy }),
       );
     } catch (error) {
       console.error("[social] failed to persist post composer draft", error);
@@ -141,9 +150,8 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
       setMediaUrls([]);
       setTags("");
       setPrivacy("public");
-      if (globalThis.window) {
-        globalThis.localStorage.removeItem(DRAFT_STORAGE_KEY);
-      }
+      setIsOpen(false);
+      globalThis.localStorage.removeItem(DRAFT_STORAGE_KEY);
     } finally {
       setSubmitting(false);
     }
@@ -157,7 +165,9 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
     }
 
     const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-    const dataUrls = await Promise.all(imageFiles.map((file) => readFileAsDataUrl(file)));
+    const dataUrls = await Promise.all(
+      imageFiles.map((file) => readFileAsDataUrl(file)),
+    );
 
     setMediaUrls((current) => [...current, ...dataUrls].slice(0, IMAGE_LIMIT));
 
@@ -167,7 +177,20 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
   };
 
   const removeMediaAt = (index: number) => {
-    setMediaUrls((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setMediaUrls((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index),
+    );
+    setActiveMediaIndex((current) => {
+      if (index < current) {
+        return Math.max(0, current - 1);
+      }
+
+      if (index === current) {
+        return Math.max(0, current - 1);
+      }
+
+      return current;
+    });
   };
 
   const moveMediaItem = (fromIndex: number, toIndex: number) => {
@@ -191,10 +214,7 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
     setDraggingIndex(index);
   };
 
-  const handleDragOver = (
-    event: DragEvent<HTMLDivElement>,
-    index: number,
-  ) => {
+  const handleDragOver = (event: DragEvent<HTMLElement>, index: number) => {
     event.preventDefault();
     setDragOverIndex(index);
   };
@@ -205,6 +225,7 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
     }
 
     moveMediaItem(draggingIndex, index);
+    setActiveMediaIndex(index);
     setDraggingIndex(null);
     setDragOverIndex(null);
   };
@@ -214,128 +235,206 @@ const PostComposer = ({ onCreate }: PostComposerProps) => {
     setDragOverIndex(null);
   };
 
+  const displayName = user?.displayName || "You";
+  const avatarUrl = user?.avatarUrl || "";
+
   return (
-    <div className="elevated-card p-4 space-stack-md">
-      <h2 className="text-title-2">Create post</h2>
-
-      <Textarea
-        value={caption}
-        onChange={(event) => setCaption(event.target.value)}
-        placeholder="What are you sharing today?"
-        className="min-h-24"
-      />
-
-      <div className="grid gap-2 md:grid-cols-2">
-        <Input
-          value={tags}
-          onChange={(event) => setTags(event.target.value)}
-          placeholder="extra tags, comma separated"
-        />
-        <div className="flex items-center justify-end">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="hidden"
-            onChange={handlePickImages}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <ImagePlus className="size-4" />
-            Add photos
-          </Button>
-        </div>
-      </div>
-
-      {mediaUrls.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-muted-foreground">
-            {mediaUrls.length}/{IMAGE_LIMIT} photos selected
-          </p>
-          <p className="text-xs text-muted-foreground/85">
-            Drag and drop to reorder photos before posting.
-          </p>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {mediaUrls.map((media, index) => (
-            <div
-              key={`${index}-${media.slice(0, 24)}`}
-              draggable
-              onDragStart={() => handleDragStart(index)}
-              onDragOver={(event) => handleDragOver(event, index)}
-              onDrop={() => handleDrop(index)}
-              onDragEnd={clearDragState}
-              className={
-                "group relative flex aspect-[4/3] cursor-grab items-center justify-center overflow-hidden rounded-lg border bg-muted/30 transition-all active:cursor-grabbing " +
-                (draggingIndex === index
-                  ? "border-primary/50 opacity-60"
-                  : dragOverIndex === index
-                    ? "border-primary/60 shadow-[0_0_0_2px_hsl(var(--primary)/0.22)]"
-                    : "border-border/70")
-              }
-            >
-              <img
-                src={media}
-                alt={`upload preview ${index + 1}`}
-                className="max-h-full max-w-full rounded-md object-contain"
-              />
-              <span className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold text-white">
-                {index + 1}
-              </span>
-              <button
-                type="button"
-                className="absolute right-1.5 top-1.5 inline-flex size-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={() => removeMediaAt(index)}
-                aria-label="Remove image"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          ))}
+    <>
+      <div className="social-card social-composer-card p-4">
+        <div className="flex items-center gap-3">
+          <div className="social-avatar-badge social-composer-avatar flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+            ) : (
+              displayName.slice(0, 1).toUpperCase()
+            )}
           </div>
+          <button
+            type="button"
+            className="social-composer-prompt social-composer-trigger h-11 flex-1 rounded-full px-4 text-left text-sm transition-colors"
+            onClick={() => setIsOpen(true)}
+          >
+            What's on your mind?
+          </button>
         </div>
-      )}
 
-      {mergedTags.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {mergedTags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary"
-            >
-              #{tag}
-            </span>
-          ))}
+        <div className="social-divider social-composer-action-row mt-3 grid grid-cols-3 gap-2 border-t pt-2">
+          <button type="button" className="social-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium">
+            <Video className="social-icon-live h-4 w-4" />
+            Live Video
+          </button>
+          <button type="button" className="social-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
+            <ImagePlus className="social-icon-media h-4 w-4" />
+            Photo/Video
+          </button>
+          <button type="button" className="social-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
+            <Smile className="social-icon-feeling h-4 w-4" />
+            Feeling/Activity
+          </button>
         </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          value={privacy}
-          onChange={(event) =>
-            setPrivacy(event.target.value as "public" | "followers")
-          }
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          <option value="public">Public</option>
-          <option value="followers">Followers only</option>
-        </select>
-
-        <Button
-          type="button"
-          className="ml-auto gap-2"
-          onClick={submit}
-          disabled={submitting}
-        >
-          <SendHorizontal className="size-4" />
-          {submitting ? "Posting..." : "Post"}
-        </Button>
       </div>
-    </div>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent
+          contentClassMode="bare"
+          className="social-modal-shell social-composer-modal max-w-2xl rounded-xl p-0"
+        >
+          <DialogHeader className="social-composer-modal__header social-divider border-b px-5 py-4">
+            <DialogTitle className="social-text-main text-center text-lg font-bold">
+              Create post
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a new social post
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="social-composer-modal__body space-y-4 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="social-avatar-badge flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                ) : (
+                  displayName.slice(0, 1).toUpperCase()
+                )}
+              </div>
+              <div>
+                <p className="social-text-main text-sm font-semibold">{displayName}</p>
+                <select
+                  value={privacy}
+                  onChange={(event) => setPrivacy(event.target.value as "public" | "followers")}
+                  className="social-select-chip mt-1 rounded-md border px-2 py-1 text-xs font-medium"
+                >
+                  <option value="public">Public</option>
+                  <option value="followers">Friends</option>
+                </select>
+              </div>
+            </div>
+
+            <Textarea
+              value={caption}
+              onChange={(event) => setCaption(event.target.value)}
+              placeholder="What's on your mind?"
+              className="social-textarea min-h-32 resize-none border-0 bg-transparent px-0 text-lg shadow-none focus-visible:ring-0"
+            />
+
+            <div className="social-divider rounded-xl border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="social-text-main text-sm font-semibold">Add to your post</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handlePickImages}
+                />
+                <button
+                  type="button"
+                  className="social-input-surface inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Camera className="social-icon-media h-4 w-4" />
+                  Photo
+                </button>
+              </div>
+
+              {mediaUrls.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="social-text-muted text-xs font-medium">
+                    {mediaUrls.length}/{IMAGE_LIMIT} photos selected
+                  </p>
+                  <div className="social-composer-stage group relative overflow-hidden rounded-xl border">
+                    <img
+                      src={mediaUrls[Math.min(activeMediaIndex, Math.max(0, mediaUrls.length - 1))]}
+                      alt="selected preview"
+                      className="social-composer-stage-image"
+                    />
+                    <button
+                      type="button"
+                      className="social-media-remove-btn absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full opacity-90 transition-opacity group-hover:opacity-100"
+                      onClick={() => removeMediaAt(activeMediaIndex)}
+                      aria-label="Remove selected image"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="social-composer-strip beautiful-scrollbar">
+                    {mediaUrls.map((media, index) => {
+                      let dragStateClass = "";
+                      if (draggingIndex === index) {
+                        dragStateClass = "opacity-60";
+                      } else if (dragOverIndex === index) {
+                        dragStateClass = "ring-2 ring-primary/40";
+                      }
+
+                      const isActive = index === activeMediaIndex;
+
+                      return (
+                        <div
+                          key={`${index}-${media.slice(0, 24)}`}
+                          className={`social-media-tile social-composer-thumb group relative overflow-hidden rounded-lg border ${dragStateClass} ${isActive ? "social-composer-thumb--active" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            draggable
+                            aria-label={`Selected photo ${index + 1}. Press Delete to remove.`}
+                            onDragStart={() => handleDragStart(index)}
+                            onDragOver={(event) => handleDragOver(event, index)}
+                            onDrop={() => handleDrop(index)}
+                            onDragEnd={clearDragState}
+                            onClick={() => setActiveMediaIndex(index)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Delete" || event.key === "Backspace") {
+                                event.preventDefault();
+                                removeMediaAt(index);
+                              }
+                            }}
+                            className="flex h-full w-full cursor-grab items-center justify-center active:cursor-grabbing"
+                          >
+                            <img src={media} alt={`preview ${index + 1}`} className="h-full w-full object-cover" />
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    {mediaUrls.length < IMAGE_LIMIT ? (
+                      <button
+                        type="button"
+                        className="social-composer-add-more"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Camera className="h-4 w-4" />
+                        Add
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Input
+              value={tags}
+              onChange={(event) => setTags(event.target.value)}
+              placeholder="Add tags, separated by commas"
+              className="social-input-surface h-10 border"
+            />
+          </div>
+
+          <div className="social-composer-modal__footer social-divider border-t px-5 py-3">
+            <Button
+              type="button"
+              className="social-primary-btn h-10 w-full text-sm font-semibold"
+              onClick={submit}
+              disabled={submitting}
+            >
+              <SendHorizontal className="mr-2 h-4 w-4" />
+              {submitting ? "Posting..." : "Post"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

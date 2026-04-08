@@ -36,6 +36,470 @@ const pendingCommentUpdates = new Map<
 
 const pendingCreatedPosts = new Map<string, SocialPost>();
 const pendingUpdatedPosts = new Map<string, SocialPost>();
+const pendingDeletedPostIds = new Set<string>();
+const pendingDeletedCommentUpdates = new Map<
+  string,
+  { deletedCommentIds: string[]; commentsCount?: number }
+>();
+
+type SocialBurstPayload = {
+  likeUpdates: Map<
+    string,
+    {
+      likesCount: number;
+      ownReaction: SocialReactionType | null;
+      reactionSummary?: SocialReactionSummary;
+      actor?: SocialUserLite;
+    }
+  >;
+  commentUpdates: Map<string, { commentsCount?: number; comments: SocialComment[] }>;
+  createdPosts: SocialPost[];
+  updatedPosts: Map<string, SocialPost>;
+  deletedPostIds: Set<string>;
+  deletedCommentUpdates: Map<string, { deletedCommentIds: string[]; commentsCount?: number }>;
+};
+
+const cloneAndResetSocialBurstPayload = (): SocialBurstPayload => {
+  const payload: SocialBurstPayload = {
+    likeUpdates: new Map(pendingLikeUpdates),
+    commentUpdates: new Map(pendingCommentUpdates),
+    createdPosts: Array.from(pendingCreatedPosts.values()),
+    updatedPosts: new Map(pendingUpdatedPosts),
+    deletedPostIds: new Set(pendingDeletedPostIds),
+    deletedCommentUpdates: new Map(pendingDeletedCommentUpdates),
+  };
+
+  pendingLikeUpdates.clear();
+  pendingCommentUpdates.clear();
+  pendingCreatedPosts.clear();
+  pendingUpdatedPosts.clear();
+  pendingDeletedPostIds.clear();
+  pendingDeletedCommentUpdates.clear();
+
+  return payload;
+};
+
+const isSocialBurstPayloadEmpty = (payload: SocialBurstPayload) => {
+  return (
+    payload.likeUpdates.size === 0 &&
+    payload.commentUpdates.size === 0 &&
+    payload.createdPosts.length === 0 &&
+    payload.updatedPosts.size === 0 &&
+    payload.deletedPostIds.size === 0 &&
+    payload.deletedCommentUpdates.size === 0
+  );
+};
+
+const buildCreatedCandidates = ({
+  posts,
+  listType,
+  profileId,
+  currentUserId,
+  createdPosts,
+}: {
+  posts: SocialPost[];
+  listType: "home" | "explore" | "profile";
+  profileId: string;
+  currentUserId: string;
+  createdPosts: SocialPost[];
+}) => {
+  return createdPosts.filter((post) => {
+    if (posts.some((existingPost) => existingPost._id === post._id)) {
+      return false;
+    }
+
+    if (listType === "explore") {
+      if (post.privacy !== "public") {
+        return false;
+      }
+
+      return String(post.authorId?._id || "") !== currentUserId;
+    }
+
+    if (listType === "profile") {
+      return profileId === String(post.authorId?._id || "");
+    }
+
+    return true;
+  });
+};
+
+const applyLikeUpdatesToPosts = ({
+  posts,
+  currentUserId,
+  likeUpdates,
+}: {
+  posts: SocialPost[];
+  currentUserId: string;
+  likeUpdates: SocialBurstPayload["likeUpdates"];
+}) => {
+  if (likeUpdates.size === 0) {
+    return posts;
+  }
+
+  return posts.map((post) => {
+    const likeUpdate = likeUpdates.get(post._id);
+    if (!likeUpdate) {
+      return post;
+    }
+
+    const actorId = String(likeUpdate.actor?._id || "");
+    const shouldApplyIsLiked = Boolean(currentUserId) && actorId === currentUserId;
+
+    return {
+      ...post,
+      likesCount: likeUpdate.likesCount,
+      ownReaction: shouldApplyIsLiked ? likeUpdate.ownReaction : post.ownReaction,
+      isLiked: shouldApplyIsLiked ? likeUpdate.ownReaction === "like" : post.isLiked,
+      reactionSummary: likeUpdate.reactionSummary || post.reactionSummary,
+    };
+  });
+};
+
+const applyCommentCountUpdatesToPosts = ({
+  posts,
+  commentUpdates,
+  deletedCommentUpdates,
+}: {
+  posts: SocialPost[];
+  commentUpdates: SocialBurstPayload["commentUpdates"];
+  deletedCommentUpdates: SocialBurstPayload["deletedCommentUpdates"];
+}) => {
+  const hasCommentCountUpdates =
+    commentUpdates.size > 0 || deletedCommentUpdates.size > 0;
+  if (!hasCommentCountUpdates) {
+    return posts;
+  }
+
+  return posts.map((post) => {
+    const commentUpdate = commentUpdates.get(post._id);
+    const deletedCommentUpdate = deletedCommentUpdates.get(post._id);
+
+    if (!commentUpdate && !deletedCommentUpdate) {
+      return post;
+    }
+
+    let nextCommentsCount = post.commentsCount;
+    if (typeof commentUpdate?.commentsCount === "number") {
+      nextCommentsCount = commentUpdate.commentsCount;
+    }
+    if (typeof deletedCommentUpdate?.commentsCount === "number") {
+      nextCommentsCount = deletedCommentUpdate.commentsCount;
+    }
+
+    return {
+      ...post,
+      commentsCount: nextCommentsCount,
+    };
+  });
+};
+
+const applyPostMutations = ({
+  posts,
+  listType,
+  profileId,
+  currentUserId,
+  payload,
+}: {
+  posts: SocialPost[];
+  listType: "home" | "explore" | "profile";
+  profileId: string;
+  currentUserId: string;
+  payload: SocialBurstPayload;
+}) => {
+  const createdCandidates = buildCreatedCandidates({
+    posts,
+    listType,
+    profileId,
+    currentUserId,
+    createdPosts: payload.createdPosts,
+  });
+
+  let nextPosts = [...createdCandidates, ...posts];
+
+  if (payload.updatedPosts.size > 0) {
+    nextPosts = nextPosts.map((post) => {
+      const updated = payload.updatedPosts.get(post._id);
+      return updated ? { ...post, ...updated } : post;
+    });
+  }
+
+  if (payload.deletedPostIds.size > 0) {
+    nextPosts = nextPosts.filter((post) => !payload.deletedPostIds.has(post._id));
+  }
+
+  nextPosts = applyLikeUpdatesToPosts({
+    posts: nextPosts,
+    currentUserId,
+    likeUpdates: payload.likeUpdates,
+  });
+
+  nextPosts = applyCommentCountUpdatesToPosts({
+    posts: nextPosts,
+    commentUpdates: payload.commentUpdates,
+    deletedCommentUpdates: payload.deletedCommentUpdates,
+  });
+
+  return nextPosts;
+};
+
+const buildNextPostComments = ({
+  statePostComments,
+  payload,
+}: {
+  statePostComments: ReturnType<typeof useSocialStore.getState>["postComments"];
+  payload: SocialBurstPayload;
+}) => {
+  const nextPostComments = { ...statePostComments };
+
+  payload.commentUpdates.forEach((commentUpdate, postId) => {
+    const mergedComments = [...(nextPostComments[postId] || [])];
+    commentUpdate.comments.forEach((incomingComment) => {
+      if (!mergedComments.some((comment) => comment._id === incomingComment._id)) {
+        mergedComments.push(incomingComment);
+      }
+    });
+    nextPostComments[postId] = mergedComments;
+  });
+
+  payload.deletedPostIds.forEach((postId) => {
+    delete nextPostComments[postId];
+  });
+
+  payload.deletedCommentUpdates.forEach((deletedCommentUpdate, postId) => {
+    const currentComments = nextPostComments[postId];
+    if (!Array.isArray(currentComments) || currentComments.length === 0) {
+      return;
+    }
+
+    const deletedSet = new Set(deletedCommentUpdate.deletedCommentIds);
+    nextPostComments[postId] = currentComments.filter(
+      (comment) => !deletedSet.has(comment._id),
+    );
+  });
+
+  return nextPostComments;
+};
+
+const applyLikeUpdatesToEngagement = ({
+  nextPostEngagement,
+  payload,
+}: {
+  nextPostEngagement: ReturnType<typeof useSocialStore.getState>["postEngagement"];
+  payload: SocialBurstPayload;
+}) => {
+  payload.likeUpdates.forEach((likeUpdate, postId) => {
+    const currentEngagement = nextPostEngagement[postId];
+    if (!currentEngagement) {
+      return;
+    }
+
+    let nextLikers = currentEngagement.likers;
+    const actorId = String(likeUpdate.actor?._id || "");
+    if (actorId) {
+      if (likeUpdate.ownReaction) {
+        const actorAlreadyExists = nextLikers.some(
+          (liker) => String(liker._id) === actorId,
+        );
+
+        if (!actorAlreadyExists && likeUpdate.actor?._id) {
+          nextLikers = [likeUpdate.actor, ...nextLikers].slice(0, 50);
+        }
+      } else {
+        nextLikers = nextLikers.filter((liker) => String(liker._id) !== actorId);
+      }
+    }
+
+    nextPostEngagement[postId] = {
+      ...currentEngagement,
+      likers: nextLikers,
+    };
+  });
+};
+
+const applyCommentUpdatesToEngagement = ({
+  nextPostEngagement,
+  payload,
+}: {
+  nextPostEngagement: ReturnType<typeof useSocialStore.getState>["postEngagement"];
+  payload: SocialBurstPayload;
+}) => {
+  payload.commentUpdates.forEach((commentUpdate, postId) => {
+    const currentEngagement = nextPostEngagement[postId];
+    if (!currentEngagement) {
+      return;
+    }
+
+    let nextRecentComments = [...currentEngagement.recentComments];
+    let nextCommenters = [...currentEngagement.commenters];
+
+    commentUpdate.comments.forEach((incomingComment) => {
+      nextRecentComments = [
+        {
+          _id: incomingComment._id,
+          authorId: incomingComment.authorId,
+          content: incomingComment.content,
+          createdAt: incomingComment.createdAt,
+        },
+        ...nextRecentComments.filter(
+          (recentComment) => recentComment._id !== incomingComment._id,
+        ),
+      ].slice(0, 30);
+
+      const commenterId = String(incomingComment.authorId?._id || "");
+      if (
+        commenterId &&
+        !nextCommenters.some((commenter) => String(commenter._id) === commenterId)
+      ) {
+        nextCommenters = [incomingComment.authorId, ...nextCommenters].slice(0, 50);
+      }
+    });
+
+    nextPostEngagement[postId] = {
+      ...currentEngagement,
+      recentComments: nextRecentComments,
+      commenters: nextCommenters,
+    };
+  });
+};
+
+const applyDeletedPostAndCommentUpdatesToEngagement = ({
+  nextPostEngagement,
+  payload,
+}: {
+  nextPostEngagement: ReturnType<typeof useSocialStore.getState>["postEngagement"];
+  payload: SocialBurstPayload;
+}) => {
+  payload.deletedPostIds.forEach((postId) => {
+    delete nextPostEngagement[postId];
+  });
+
+  payload.deletedCommentUpdates.forEach((deletedCommentUpdate, postId) => {
+    const currentEngagement = nextPostEngagement[postId];
+    if (!currentEngagement) {
+      return;
+    }
+
+    const deletedSet = new Set(deletedCommentUpdate.deletedCommentIds);
+    const nextRecentComments = currentEngagement.recentComments.filter(
+      (comment) => !deletedSet.has(comment._id),
+    );
+
+    nextPostEngagement[postId] = {
+      ...currentEngagement,
+      recentComments: nextRecentComments,
+    };
+  });
+};
+
+const buildNextPostEngagement = ({
+  statePostEngagement,
+  payload,
+}: {
+  statePostEngagement: ReturnType<typeof useSocialStore.getState>["postEngagement"];
+  payload: SocialBurstPayload;
+}) => {
+  const nextPostEngagement = { ...statePostEngagement };
+
+  applyLikeUpdatesToEngagement({
+    nextPostEngagement,
+    payload,
+  });
+
+  applyCommentUpdatesToEngagement({
+    nextPostEngagement,
+    payload,
+  });
+
+  applyDeletedPostAndCommentUpdatesToEngagement({
+    nextPostEngagement,
+    payload,
+  });
+
+  return nextPostEngagement;
+};
+
+const buildNextProfile = ({
+  state,
+  payload,
+}: {
+  state: ReturnType<typeof useSocialStore.getState>;
+  payload: SocialBurstPayload;
+}) => {
+  if (!state.profile) {
+    return state.profile;
+  }
+
+  const profileId = String(state.profile._id || "");
+  const createdByProfileCount = payload.createdPosts.filter(
+    (post) => String(post.authorId?._id || "") === profileId,
+  ).length;
+  const deletedByProfileCount = state.profilePosts.filter(
+    (post) =>
+      String(post.authorId?._id || "") === profileId &&
+      payload.deletedPostIds.has(post._id),
+  ).length;
+
+  if (createdByProfileCount === 0 && deletedByProfileCount === 0) {
+    return state.profile;
+  }
+
+  return {
+    ...state.profile,
+    postCount: Math.max(
+      0,
+      state.profile.postCount + createdByProfileCount - deletedByProfileCount,
+    ),
+  };
+};
+
+const applySocialBurstState = (
+  state: ReturnType<typeof useSocialStore.getState>,
+  payload: SocialBurstPayload,
+) => {
+  const currentUserId = String(useAuthStore.getState().user?._id || "");
+  const profileId = String(state.profile?._id || "");
+
+  const homeFeed = applyPostMutations({
+    posts: state.homeFeed,
+    listType: "home",
+    profileId,
+    currentUserId,
+    payload,
+  });
+  const exploreFeed = applyPostMutations({
+    posts: state.exploreFeed,
+    listType: "explore",
+    profileId,
+    currentUserId,
+    payload,
+  });
+  const profilePosts = applyPostMutations({
+    posts: state.profilePosts,
+    listType: "profile",
+    profileId,
+    currentUserId,
+    payload,
+  });
+
+  const postComments = buildNextPostComments({
+    statePostComments: state.postComments,
+    payload,
+  });
+  const postEngagement = buildNextPostEngagement({
+    statePostEngagement: state.postEngagement,
+    payload,
+  });
+
+  return {
+    homeFeed,
+    exploreFeed,
+    profilePosts,
+    profile: buildNextProfile({ state, payload }),
+    postComments,
+    postEngagement,
+  };
+};
 
 const scheduleSocialBurstFlush = () => {
   if (socialBurstTimer) {
@@ -45,203 +509,13 @@ const scheduleSocialBurstFlush = () => {
   socialBurstTimer = setTimeout(() => {
     socialBurstTimer = null;
 
-    const likeUpdates = new Map(pendingLikeUpdates);
-    const commentUpdates = new Map(pendingCommentUpdates);
-    const createdPosts = Array.from(pendingCreatedPosts.values());
-    const updatedPosts = new Map(pendingUpdatedPosts);
+    const payload = cloneAndResetSocialBurstPayload();
 
-    pendingLikeUpdates.clear();
-    pendingCommentUpdates.clear();
-    pendingCreatedPosts.clear();
-    pendingUpdatedPosts.clear();
-
-    if (
-      likeUpdates.size === 0 &&
-      commentUpdates.size === 0 &&
-      createdPosts.length === 0 &&
-      updatedPosts.size === 0
-    ) {
+    if (isSocialBurstPayloadEmpty(payload)) {
       return;
     }
 
-    useSocialStore.setState((state) => {
-      const currentUserId = String(useAuthStore.getState().user?._id || "");
-
-      const applyPostMutations = (posts: SocialPost[], listType: "home" | "explore" | "profile") => {
-        const createdCandidates = createdPosts.filter((post) => {
-          if (posts.some((existingPost) => existingPost._id === post._id)) {
-            return false;
-          }
-
-          if (listType === "explore") {
-            if (post.privacy !== "public") {
-              return false;
-            }
-
-            return String(post.authorId?._id || "") !== currentUserId;
-          }
-
-          if (listType === "profile") {
-            return String(state.profile?._id || "") === String(post.authorId?._id || "");
-          }
-
-          return true;
-        });
-
-        let nextPosts = [...createdCandidates, ...posts];
-
-        if (updatedPosts.size > 0) {
-          nextPosts = nextPosts.map((post) => {
-            const updated = updatedPosts.get(post._id);
-            return updated ? { ...post, ...updated } : post;
-          });
-        }
-
-        if (likeUpdates.size > 0) {
-          nextPosts = nextPosts.map((post) => {
-            const likeUpdate = likeUpdates.get(post._id);
-            if (!likeUpdate) {
-              return post;
-            }
-
-            const actorId = String(likeUpdate.actor?._id || "");
-            const shouldApplyIsLiked = Boolean(currentUserId) && actorId === currentUserId;
-
-            return {
-              ...post,
-              likesCount: likeUpdate.likesCount,
-              ownReaction: shouldApplyIsLiked
-                ? likeUpdate.ownReaction
-                : post.ownReaction,
-              isLiked: shouldApplyIsLiked
-                ? likeUpdate.ownReaction === "like"
-                : post.isLiked,
-              reactionSummary: likeUpdate.reactionSummary || post.reactionSummary,
-            };
-          });
-        }
-
-        if (commentUpdates.size > 0) {
-          nextPosts = nextPosts.map((post) => {
-            const commentUpdate = commentUpdates.get(post._id);
-            if (!commentUpdate) {
-              return post;
-            }
-
-            return {
-              ...post,
-              commentsCount:
-                typeof commentUpdate.commentsCount === "number"
-                  ? commentUpdate.commentsCount
-                  : post.commentsCount,
-            };
-          });
-        }
-
-        return nextPosts;
-      };
-
-      const nextPostComments = { ...state.postComments };
-      commentUpdates.forEach((commentUpdate, postId) => {
-        const mergedComments = [...(nextPostComments[postId] || [])];
-        commentUpdate.comments.forEach((incomingComment) => {
-          if (!mergedComments.some((comment) => comment._id === incomingComment._id)) {
-            mergedComments.push(incomingComment);
-          }
-        });
-        nextPostComments[postId] = mergedComments;
-      });
-
-      const nextPostEngagement = { ...state.postEngagement };
-
-      likeUpdates.forEach((likeUpdate, postId) => {
-        const currentEngagement = nextPostEngagement[postId];
-        if (!currentEngagement) {
-          return;
-        }
-
-        let nextLikers = currentEngagement.likers;
-        const actorId = String(likeUpdate.actor?._id || "");
-        if (actorId) {
-          if (likeUpdate.ownReaction) {
-            const actorAlreadyExists = nextLikers.some(
-              (liker) => String(liker._id) === actorId,
-            );
-
-            if (!actorAlreadyExists && likeUpdate.actor?._id) {
-              nextLikers = [likeUpdate.actor, ...nextLikers].slice(0, 50);
-            }
-          } else {
-            nextLikers = nextLikers.filter(
-              (liker) => String(liker._id) !== actorId,
-            );
-          }
-        }
-
-        nextPostEngagement[postId] = {
-          ...currentEngagement,
-          likers: nextLikers,
-        };
-      });
-
-      commentUpdates.forEach((commentUpdate, postId) => {
-        const currentEngagement = nextPostEngagement[postId];
-        if (!currentEngagement) {
-          return;
-        }
-
-        let nextRecentComments = [...currentEngagement.recentComments];
-        let nextCommenters = [...currentEngagement.commenters];
-
-        commentUpdate.comments.forEach((incomingComment) => {
-          nextRecentComments = [
-            {
-              _id: incomingComment._id,
-              authorId: incomingComment.authorId,
-              content: incomingComment.content,
-              createdAt: incomingComment.createdAt,
-            },
-            ...nextRecentComments.filter(
-              (recentComment) => recentComment._id !== incomingComment._id,
-            ),
-          ].slice(0, 30);
-
-          const commenterId = String(incomingComment.authorId?._id || "");
-          if (
-            commenterId &&
-            !nextCommenters.some((commenter) => String(commenter._id) === commenterId)
-          ) {
-            nextCommenters = [incomingComment.authorId, ...nextCommenters].slice(0, 50);
-          }
-        });
-
-        nextPostEngagement[postId] = {
-          ...currentEngagement,
-          recentComments: nextRecentComments,
-          commenters: nextCommenters,
-        };
-      });
-
-      return {
-        homeFeed: applyPostMutations(state.homeFeed, "home"),
-        exploreFeed: applyPostMutations(state.exploreFeed, "explore"),
-        profilePosts: applyPostMutations(state.profilePosts, "profile"),
-        profile:
-          state.profile &&
-          createdPosts.some(
-            (post) => String(post.authorId?._id || "") === String(state.profile?._id || ""),
-          )
-            ? {
-                ...state.profile,
-                postCount: state.profile.postCount + createdPosts.filter(
-                  (post) => String(post.authorId?._id || "") === String(state.profile?._id || ""),
-                ).length,
-              }
-            : state.profile,
-        postComments: nextPostComments,
-        postEngagement: nextPostEngagement,
-      };
-    });
+    useSocialStore.setState((state) => applySocialBurstState(state, payload));
   }, SOCIAL_BURST_DEBOUNCE_MS);
 };
 
@@ -294,6 +568,40 @@ const queueSocialCreatedPost = (post: SocialPost) => {
 
 const queueSocialUpdatedPost = (post: SocialPost) => {
   pendingUpdatedPosts.set(post._id, post);
+  scheduleSocialBurstFlush();
+};
+
+const queueSocialDeletedPost = (postId: string) => {
+  if (!postId) {
+    return;
+  }
+
+  pendingDeletedPostIds.add(postId);
+  scheduleSocialBurstFlush();
+};
+
+const queueSocialDeletedComments = (payload: {
+  postId: string;
+  deletedCommentIds: string[];
+  commentsCount?: number;
+}) => {
+  if (!payload.postId || payload.deletedCommentIds.length === 0) {
+    return;
+  }
+
+  const current = pendingDeletedCommentUpdates.get(payload.postId);
+  const mergedDeletedIds = new Set([
+    ...(current?.deletedCommentIds || []),
+    ...payload.deletedCommentIds,
+  ]);
+
+  pendingDeletedCommentUpdates.set(payload.postId, {
+    deletedCommentIds: [...mergedDeletedIds],
+    commentsCount:
+      typeof payload.commentsCount === "number"
+        ? payload.commentsCount
+        : current?.commentsCount,
+  });
   scheduleSocialBurstFlush();
 };
 
@@ -653,17 +961,32 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         .updateMessage(conversationId, messageId, { reactions });
     });
 
-    socket.on("message-deleted", ({ conversationId, messageId, conversation }) => {
+    socket.on(
+      "message-deleted",
+      ({
+        conversationId,
+        messageId,
+        conversation,
+        editedAt,
+        reactions,
+        readBy,
+        replyTo,
+      }) => {
       useChatStore.getState().updateMessage(conversationId, messageId, {
         isDeleted: true,
         content: "This message was removed",
         imgUrl: null,
+        editedAt: editedAt ?? new Date().toISOString(),
+        reactions: Array.isArray(reactions) ? reactions : [],
+        readBy: Array.isArray(readBy) ? readBy : [],
+        replyTo: replyTo ?? null,
       });
 
       if (conversation?._id) {
         useChatStore.getState().updateConversation(conversation);
       }
-    });
+      },
+    );
 
     socket.on("message-hidden-for-user", ({ conversationId, messageId }) => {
       useChatStore
@@ -741,9 +1064,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         console.error("Error adding notification:", error);
       }
       toast.success(message, {
-        description: `${from?.displayName} đã trở thành bạn bè của bạn!`,
+        description: `${from?.displayName} is now your friend!`,
         action: {
-          label: "Xem",
+          label: "View",
           onClick: () => {
             useNotificationStore.getState().setIsHubOpen(true);
           },
@@ -841,6 +1164,45 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
       queueSocialUpdatedPost(post);
     });
+
+    socket.on("social-post-deleted", ({ postId }: { postId: string }) => {
+      if (!postId) {
+        return;
+      }
+
+      queueSocialDeletedPost(postId);
+    });
+
+    socket.on(
+      "social-post-comment-deleted",
+      ({
+        postId,
+        commentId,
+        deletedCommentIds,
+        commentsCount,
+      }: {
+        postId: string;
+        commentId: string;
+        deletedCommentIds?: string[];
+        commentsCount?: number;
+      }) => {
+        if (!postId) {
+          return;
+        }
+
+        const effectiveDeletedCommentIds = (
+          Array.isArray(deletedCommentIds) && deletedCommentIds.length > 0
+            ? deletedCommentIds
+            : [commentId]
+        ).filter(Boolean);
+
+        queueSocialDeletedComments({
+          postId,
+          deletedCommentIds: effectiveDeletedCommentIds,
+          commentsCount,
+        });
+      },
+    );
   },
   disconnectSocket: () => {
     const socket = get().socket;

@@ -31,7 +31,7 @@ export function NavUser({ user, compact = false }: Readonly<{ user: User; compac
   const [profileOpen, setProfileOpen] = useState(false);
   const { getAllFriendRequests } = useFriendStore();
 
-  // Load friend requests khi mở dialog
+  // Load friend requests when the dialog opens
   useEffect(() => {
     if (friendRequestOpen) {
       getAllFriendRequests();
@@ -102,7 +102,7 @@ export function NavUser({ user, compact = false }: Readonly<{ user: User; compac
                 >
                   <div className="flex items-center gap-2">
                     <NotificationBadge showBell className="h-4 w-4" />
-                    <span>Thông báo</span>
+                    <span>Notifications</span>
                   </div>
                   <NotificationBadge showBell={false} className="ml-auto" />
                 </DropdownMenuItem>

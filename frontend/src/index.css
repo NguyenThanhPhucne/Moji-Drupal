@@ -2,6 +2,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./styles/chat-enterprise-polish.css";
+@import "./styles/social-enterprise-polish.css";
 @import "./styles/chat-contrast-qa.css";
 
 @custom-variant dark (&:is(.dark *));

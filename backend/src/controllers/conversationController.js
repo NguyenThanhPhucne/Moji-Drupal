@@ -505,8 +505,32 @@ export const deleteConversation = async (req, res) => {
           .json({ message: "Bạn không có quyền xoá conversation này" });
       }
 
-      await Message.deleteMany({ conversationId });
-      await Conversation.findOneAndDelete({ _id: conversation._id });
+      const conversationSnapshot = conversation.toObject({
+        depopulate: true,
+      });
+
+      const deletedConversation = await Conversation.findOneAndDelete({
+        _id: conversation._id,
+      });
+
+      if (!deletedConversation) {
+        return res.status(404).json({ message: "Conversation không tồn tại" });
+      }
+
+      try {
+        await Message.deleteMany({ conversationId });
+      } catch (messageDeleteError) {
+        try {
+          await Conversation.create(conversationSnapshot);
+        } catch (restoreError) {
+          console.error(
+            "Failed to restore conversation after message deletion error",
+            restoreError,
+          );
+        }
+
+        throw messageDeleteError;
+      }
     }
 
     // 4. Emit to all participants that conversation was deleted

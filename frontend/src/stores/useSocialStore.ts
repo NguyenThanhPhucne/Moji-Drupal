@@ -14,6 +14,15 @@ import type {
   SocialReactionType,
 } from "@/types/social";
 
+const getSocialErrorMessage = (error: unknown, fallback: string) => {
+  const maybeAxios = error as {
+    response?: { data?: { message?: string } };
+    message?: string;
+  };
+
+  return maybeAxios?.response?.data?.message || maybeAxios?.message || fallback;
+};
+
 interface SocialState {
   homeFeed: SocialPost[];
   exploreFeed: SocialPost[];
@@ -39,6 +48,7 @@ interface SocialState {
     tags?: string[];
     privacy?: "public" | "followers";
   }) => Promise<boolean>;
+  deletePost: (postId: string) => Promise<boolean>;
   fetchHomeFeed: (page?: number, append?: boolean) => Promise<void>;
   fetchExploreFeed: (page?: number, append?: boolean) => Promise<void>;
   fetchProfile: (userId: string) => Promise<boolean>;
@@ -65,6 +75,7 @@ interface SocialState {
     content: string,
     parentCommentId?: string | null,
   ) => Promise<boolean>;
+  deleteComment: (postId: string, commentId: string) => Promise<number>;
   toggleFollow: (userId: string) => Promise<boolean>;
   fetchNotifications: () => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
@@ -135,6 +146,56 @@ export const useSocialStore = create<SocialState>((set) => ({
     } catch (error) {
       console.error("[social] createPost error", error);
       toast.error("Cannot create post right now");
+      return false;
+    }
+  },
+
+  deletePost: async (postId) => {
+    const previousState = {
+      homeFeed: useSocialStore.getState().homeFeed,
+      exploreFeed: useSocialStore.getState().exploreFeed,
+      profilePosts: useSocialStore.getState().profilePosts,
+      profile: useSocialStore.getState().profile,
+      postComments: useSocialStore.getState().postComments,
+      postCommentsPagination: useSocialStore.getState().postCommentsPagination,
+      postEngagement: useSocialStore.getState().postEngagement,
+    };
+
+    set((state) => {
+      const removePost = (posts: SocialPost[]) => posts.filter((post) => post._id !== postId);
+      const nextProfile =
+        state.profile && state.profile.postCount > 0
+          ? { ...state.profile, postCount: state.profile.postCount - 1 }
+          : state.profile;
+
+      const nextPostComments = { ...state.postComments };
+      delete nextPostComments[postId];
+
+      const nextPostCommentsPagination = { ...state.postCommentsPagination };
+      delete nextPostCommentsPagination[postId];
+
+      const nextPostEngagement = { ...state.postEngagement };
+      delete nextPostEngagement[postId];
+
+      return {
+        homeFeed: removePost(state.homeFeed),
+        exploreFeed: removePost(state.exploreFeed),
+        profilePosts: removePost(state.profilePosts),
+        profile: nextProfile,
+        postComments: nextPostComments,
+        postCommentsPagination: nextPostCommentsPagination,
+        postEngagement: nextPostEngagement,
+      };
+    });
+
+    try {
+      await socialService.deletePost(postId);
+      toast.success("Post deleted");
+      return true;
+    } catch (error) {
+      set(previousState);
+      console.error("[social] deletePost error", error);
+      toast.error(getSocialErrorMessage(error, "Cannot delete this post"));
       return false;
     }
   },
@@ -266,7 +327,7 @@ export const useSocialStore = create<SocialState>((set) => ({
       return true;
     } catch (error) {
       console.error("[social] toggleLike error", error);
-      toast.error("Cannot like this post");
+      toast.error(getSocialErrorMessage(error, "Cannot react to this post"));
       return false;
     }
   },
@@ -441,6 +502,100 @@ export const useSocialStore = create<SocialState>((set) => ({
       console.error("[social] addComment error", error);
       toast.error("Cannot add comment");
       return false;
+    }
+  },
+
+  deleteComment: async (postId, commentId) => {
+    const previousState = {
+      postComments: useSocialStore.getState().postComments,
+      postCommentsPagination: useSocialStore.getState().postCommentsPagination,
+      homeFeed: useSocialStore.getState().homeFeed,
+      exploreFeed: useSocialStore.getState().exploreFeed,
+      profilePosts: useSocialStore.getState().profilePosts,
+    };
+
+    let optimisticDeletedCount = 0;
+    const targetComments = previousState.postComments[postId] || [];
+    if (targetComments.some((item) => item._id === commentId)) {
+      const queue = [commentId];
+      const removed = new Set<string>();
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || removed.has(current)) {
+          continue;
+        }
+
+        removed.add(current);
+
+        targetComments.forEach((comment) => {
+          if (String(comment.parentCommentId || "") === current) {
+            queue.push(comment._id);
+          }
+        });
+      }
+
+      optimisticDeletedCount = removed.size;
+      const nextComments = targetComments.filter((item) => !removed.has(item._id));
+
+      set((state) => {
+        const applyCount = (post: SocialPost) =>
+          post._id === postId
+            ? { ...post, commentsCount: Math.max(0, post.commentsCount - optimisticDeletedCount) }
+            : post;
+
+        return {
+          postComments: {
+            ...state.postComments,
+            [postId]: nextComments,
+          },
+          postCommentsPagination: {
+            ...state.postCommentsPagination,
+            [postId]: state.postCommentsPagination[postId]
+              ? {
+                  ...state.postCommentsPagination[postId],
+                  total: Math.max(
+                    0,
+                    state.postCommentsPagination[postId].total - optimisticDeletedCount,
+                  ),
+                }
+              : state.postCommentsPagination[postId],
+          },
+          homeFeed: state.homeFeed.map(applyCount),
+          exploreFeed: state.exploreFeed.map(applyCount),
+          profilePosts: state.profilePosts.map(applyCount),
+        };
+      });
+    }
+
+    try {
+      const response = await socialService.deleteComment(postId, commentId);
+      const deletedCount = Number(response.deletedCount || optimisticDeletedCount || 1);
+
+      if (deletedCount !== optimisticDeletedCount && optimisticDeletedCount > 0) {
+        const delta = deletedCount - optimisticDeletedCount;
+        if (delta !== 0) {
+          set((state) => {
+            const applyCount = (post: SocialPost) =>
+              post._id === postId
+                ? { ...post, commentsCount: Math.max(0, post.commentsCount - delta) }
+                : post;
+
+            return {
+              homeFeed: state.homeFeed.map(applyCount),
+              exploreFeed: state.exploreFeed.map(applyCount),
+              profilePosts: state.profilePosts.map(applyCount),
+            };
+          });
+        }
+      }
+
+      return deletedCount;
+    } catch (error) {
+      set(previousState);
+      console.error("[social] deleteComment error", error);
+      toast.error(getSocialErrorMessage(error, "Cannot delete this comment"));
+      return 0;
     }
   },
 

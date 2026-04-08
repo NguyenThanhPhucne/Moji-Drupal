@@ -7,6 +7,177 @@ import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 import { toast } from "sonner";
 
+const buildTempDirectConversationId = (recipientId: string) => {
+  return `temp-direct-${String(recipientId)}`;
+};
+
+const isPersistedConversationId = (value?: string | null) => {
+  return /^[a-f\d]{24}$/i.test(String(value || "").trim());
+};
+
+const buildOptimisticDirectConversation = ({
+  conversationId,
+  recipientId,
+  currentUserId,
+  currentUserDisplayName,
+  currentUserAvatar,
+  knownRecipientDisplayName,
+  knownRecipientAvatar,
+  previewContent,
+  previewCreatedAt,
+}: {
+  conversationId: string;
+  recipientId: string;
+  currentUserId: string;
+  currentUserDisplayName: string;
+  currentUserAvatar?: string | null;
+  knownRecipientDisplayName?: string;
+  knownRecipientAvatar?: string | null;
+  previewContent: string;
+  previewCreatedAt: string;
+}): Conversation => {
+  return {
+    _id: conversationId,
+    type: "direct",
+    group: {
+      name: "",
+      createdBy: currentUserId,
+    },
+    participants: [
+      {
+        _id: currentUserId,
+        displayName: currentUserDisplayName,
+        avatarUrl: currentUserAvatar ?? null,
+        joinedAt: previewCreatedAt,
+      },
+      {
+        _id: recipientId,
+        displayName: knownRecipientDisplayName || "New chat",
+        avatarUrl: knownRecipientAvatar ?? null,
+        joinedAt: previewCreatedAt,
+      },
+    ],
+    lastMessageAt: previewCreatedAt,
+    seenBy: [],
+    lastMessage: {
+      _id: `${conversationId}-preview`,
+      content: previewContent,
+      createdAt: previewCreatedAt,
+      sender: {
+        _id: currentUserId,
+        displayName: currentUserDisplayName,
+        avatarUrl: currentUserAvatar ?? null,
+      },
+    },
+    unreadCounts: {
+      [currentUserId]: 0,
+    },
+    createdAt: previewCreatedAt,
+    updatedAt: previewCreatedAt,
+  };
+};
+
+const ensureOptimisticDirectConversation = ({
+  recipientId,
+  targetConversationId,
+  nowIso,
+  optimisticPreviewContent,
+  user,
+  getState,
+  setState,
+}: {
+  recipientId: string;
+  targetConversationId: string | null;
+  nowIso: string;
+  optimisticPreviewContent: string;
+  user: {
+    _id?: string;
+    displayName?: string;
+    avatarUrl?: string | null;
+  } | null;
+  getState: () => {
+    conversations: Conversation[];
+    activeConversationId: string | null;
+  };
+  setState: typeof useChatStore.setState;
+}) => {
+  if (targetConversationId || !recipientId) {
+    return {
+      optimisticConversationId: targetConversationId,
+      createdTempConversation: false,
+    };
+  }
+
+  const optimisticConversationId = buildTempDirectConversationId(recipientId);
+  const state = getState();
+  const existingTempConversation = state.conversations.find(
+    (conversationItem) => conversationItem._id === optimisticConversationId,
+  );
+
+  if (!existingTempConversation) {
+    const knownRecipient = state.conversations
+      .flatMap((conversationItem) => conversationItem.participants)
+      .find((participant) => String(participant._id) === String(recipientId));
+
+    const optimisticConversation = buildOptimisticDirectConversation({
+      conversationId: optimisticConversationId,
+      recipientId: String(recipientId),
+      currentUserId: String(user?._id || ""),
+      currentUserDisplayName: String(user?.displayName || "You"),
+      currentUserAvatar: user?.avatarUrl ?? null,
+      knownRecipientDisplayName: knownRecipient?.displayName,
+      knownRecipientAvatar: knownRecipient?.avatarUrl ?? null,
+      previewContent: optimisticPreviewContent,
+      previewCreatedAt: nowIso,
+    });
+
+    setState((stateSnapshot) => ({
+      conversations: [optimisticConversation, ...stateSnapshot.conversations],
+      activeConversationId: optimisticConversationId,
+    }));
+
+    return {
+      optimisticConversationId,
+      createdTempConversation: true,
+    };
+  }
+
+  if (!state.activeConversationId) {
+    setState({ activeConversationId: optimisticConversationId });
+  }
+
+  return {
+    optimisticConversationId,
+    createdTempConversation: false,
+  };
+};
+
+const pruneTempConversationState = ({
+  optimisticConversationId,
+  fallbackActiveConversationId,
+  setState,
+}: {
+  optimisticConversationId: string;
+  fallbackActiveConversationId: string | null;
+  setState: typeof useChatStore.setState;
+}) => {
+  setState((state) => {
+    const nextMessages = { ...state.messages };
+    delete nextMessages[optimisticConversationId];
+
+    return {
+      conversations: state.conversations.filter(
+        (conversationItem) => conversationItem._id !== optimisticConversationId,
+      ),
+      messages: nextMessages,
+      activeConversationId:
+        state.activeConversationId === optimisticConversationId
+          ? fallbackActiveConversationId
+          : state.activeConversationId,
+    };
+  });
+};
+
 const toTimestamp = (value?: string) => {
   const ts = value ? new Date(value).getTime() : 0;
   return Number.isFinite(ts) ? ts : 0;
@@ -148,12 +319,36 @@ export const useChatStore = create<ChatState>()(
         };
         const targetConversationId =
           conversationIdOverride ?? activeConversationId;
+        const resolvedConversationId = isPersistedConversationId(
+          targetConversationId,
+        )
+          ? targetConversationId
+          : null;
+        const nowIso = new Date().toISOString();
+        const optimisticPreviewContent =
+          String(content || "").trim() || (imgUrl ? "📷 Photo" : "New message");
+
+        const {
+          optimisticConversationId,
+          createdTempConversation,
+        } = ensureOptimisticDirectConversation({
+          recipientId,
+          targetConversationId,
+          nowIso,
+          optimisticPreviewContent,
+          user,
+          getState: () => ({
+            conversations: get().conversations,
+            activeConversationId: get().activeConversationId,
+          }),
+          setState: set,
+        });
 
         // Build an optimistic message to show immediately
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const optimisticMessage = {
           _id: tempId,
-          conversationId: targetConversationId ?? "",
+          conversationId: optimisticConversationId ?? "",
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
@@ -163,12 +358,12 @@ export const useChatStore = create<ChatState>()(
           editedAt: null,
           readBy: [],
           hiddenFor: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
           isOwn: true,
         };
 
-        if (targetConversationId) {
+        if (optimisticConversationId) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           get().addMessage(optimisticMessage as any);
         }
@@ -178,29 +373,55 @@ export const useChatStore = create<ChatState>()(
             recipientId,
             content,
             imgUrl,
-            conversationIdOverride ?? activeConversationId ?? undefined,
+            resolvedConversationId ?? undefined,
             replyTo,
           );
 
           // Replace temp message with real one from server
-          if (targetConversationId) {
-            get().removeMessageFromConversation(targetConversationId, tempId);
+          if (optimisticConversationId) {
+            get().removeMessageFromConversation(optimisticConversationId, tempId);
           }
-          get().addMessage(message);
 
           const realConvoId =
             conversationIdOverride ?? message.conversationId ?? activeConversationId;
+
+          if (
+            optimisticConversationId &&
+            realConvoId &&
+            optimisticConversationId !== realConvoId
+          ) {
+            pruneTempConversationState({
+              optimisticConversationId,
+              fallbackActiveConversationId: realConvoId,
+              setState: set,
+            });
+          }
+
+          get().addMessage(message);
 
           set((state) => ({
             conversations: state.conversations.map((c) =>
               c._id === realConvoId ? { ...c, seenBy: [] } : c,
             ),
           }));
+
+          if (createdTempConversation) {
+            void get().fetchConversations();
+          }
         } catch (error) {
           // Rollback: remove the optimistic message
-          if (targetConversationId) {
-            get().removeMessageFromConversation(targetConversationId, tempId);
+          if (optimisticConversationId) {
+            get().removeMessageFromConversation(optimisticConversationId, tempId);
           }
+
+          if (createdTempConversation && optimisticConversationId) {
+            pruneTempConversationState({
+              optimisticConversationId,
+              fallbackActiveConversationId: null,
+              setState: set,
+            });
+          }
+
           toast.error("Failed to send message. Please try again.");
           console.error("Error sending direct message", error);
         }
@@ -389,6 +610,10 @@ export const useChatStore = create<ChatState>()(
           isDeleted: true,
           content: "This message was removed",
           imgUrl: null,
+          replyTo: null,
+          reactions: [],
+          readBy: [],
+          editedAt: new Date().toISOString(),
         });
 
         try {
@@ -399,6 +624,9 @@ export const useChatStore = create<ChatState>()(
               isDeleted: Boolean(result.message.isDeleted),
               content: result.message.content ?? "",
               imgUrl: result.message.imgUrl ?? null,
+              replyTo: result.message.replyTo ?? null,
+              reactions: result.message.reactions ?? [],
+              readBy: result.message.readBy ?? [],
               editedAt: result.message.editedAt ?? null,
             });
           }
@@ -436,6 +664,9 @@ export const useChatStore = create<ChatState>()(
             isDeleted: previousMessage.isDeleted ?? false,
             content: previousMessage.content,
             imgUrl: previousMessage.imgUrl ?? null,
+            replyTo: previousMessage.replyTo ?? null,
+            reactions: previousMessage.reactions ?? [],
+            readBy: previousMessage.readBy ?? [],
             editedAt: previousMessage.editedAt ?? null,
           });
           toast.error("Could not remove message for everyone. Restored.");

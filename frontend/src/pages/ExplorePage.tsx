@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Compass } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
+import SocialMiniChatDock from "@/components/social/SocialMiniChatDock";
+import SocialStoriesRow from "@/components/social/SocialStoriesRow";
+import SocialTopHeader from "@/components/social/SocialTopHeader";
 import SocialPostCard from "@/components/social/SocialPostCard";
+import SocialRightRail from "@/components/social/SocialRightRail";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
 import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { getStaggerEnterClass } from "@/lib/utils";
@@ -28,6 +30,8 @@ const ExplorePage = () => {
     loadingExplore,
     fetchExploreFeed,
     toggleLike,
+    deletePost,
+    deleteComment,
     fetchComments,
     loadMoreComments,
     setCommentsSortBy,
@@ -49,18 +53,51 @@ const ExplorePage = () => {
 
   const filteredExploreFeed = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
+    const currentUserId = String(user?._id || "");
+    const interactedAuthorIds = new Set<string>();
 
-    return exploreFeed.filter((post) => {
-      const matchesTag =
-        !activeTag ||
-        post.tags.some((tag) => tag.toLowerCase() === activeTag.toLowerCase());
+    exploreFeed.forEach((post) => {
+      if (post.ownReaction) {
+        interactedAuthorIds.add(String(post.authorId._id || ""));
+      }
 
-      const caption = post.caption?.toLowerCase() || "";
-      const matchesQuery = !normalizedQuery || caption.includes(normalizedQuery);
+      const commentsForPost = postComments[post._id] || [];
+      const userCommented = commentsForPost.some(
+        (comment) => String(comment.authorId?._id || "") === currentUserId,
+      );
 
-      return matchesTag && matchesQuery;
+      if (userCommented) {
+        interactedAuthorIds.add(String(post.authorId._id || ""));
+      }
     });
-  }, [activeTag, searchQuery, exploreFeed]);
+
+    const computeExploreScore = (post: (typeof exploreFeed)[number]) => {
+      const createdAtTs = new Date(post.createdAt).getTime();
+      const ageHours = Math.max(0, (Date.now() - createdAtTs) / (1000 * 60 * 60));
+      const recencyScore = Math.max(0, 96 - ageHours) * 0.95;
+      const mediaScore = (post.mediaUrls?.length || 0) > 0 ? 16 : 0;
+      const reactionScore = Math.min(30, Number(post.likesCount || 0) * 1.75);
+      const commentScore = Math.min(36, Number(post.commentsCount || 0) * 2.35);
+      const contextBoost = interactedAuthorIds.has(String(post.authorId._id || ""))
+        ? 18
+        : 0;
+
+      return recencyScore + mediaScore + reactionScore + commentScore + contextBoost;
+    };
+
+    return exploreFeed
+      .filter((post) => {
+        const matchesTag =
+          !activeTag ||
+          post.tags.some((tag) => tag.toLowerCase() === activeTag.toLowerCase());
+
+        const caption = post.caption?.toLowerCase() || "";
+        const matchesQuery = !normalizedQuery || caption.includes(normalizedQuery);
+
+        return matchesTag && matchesQuery;
+      })
+      .sort((a, b) => computeExploreScore(b) - computeExploreScore(a));
+  }, [activeTag, exploreFeed, postComments, searchQuery, user?._id]);
 
   useEffect(() => {
     if (!accessToken || !user) {
@@ -82,58 +119,59 @@ const ExplorePage = () => {
     <SidebarProvider>
       <AppSidebar />
 
-      <div className="app-shell-bg">
-        <div className="app-shell-panel p-4 md:p-6">
-          <section className="w-full min-h-0 overflow-y-auto beautiful-scrollbar pr-1 space-stack-lg">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="section-eyebrow">Discover</p>
-                <h1 className="text-title-1 flex items-center gap-2">
-                  <Compass className="size-6" />
-                  Explore
-                </h1>
-                <p className="text-body-sm text-muted-foreground">
-                  Trending posts from the community
-                </p>
-              </div>
-              <div className="self-start sm:self-auto">
+      <div className="social-page-shell">
+        <div className="app-shell-panel social-shell-panel p-4 md:p-6">
+          <div className="social-two-column-frame grid min-h-0 gap-4 xl:grid-cols-[minmax(0,700px)_320px]">
+            <section className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
+              <SocialTopHeader
+                title="Explore"
+                subtitle="Discover trending posts, people, and topics"
+                searchPlaceholder="Search on explore"
+                searchValue={searchQuery}
+                onSearchValueChange={setSearchQuery}
+              />
+
+              <div className="flex justify-end">
                 <BackToChatCard onClick={() => navigate("/")} />
               </div>
-            </div>
 
-            <div className="space-stack-md">
-              <div className="elevated-card p-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search captions in explore"
-                    className="sm:max-w-sm"
-                  />
-                  {activeTag && (
-                    <div className="flex items-center gap-2">
-                      <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
-                        #{activeTag}
+              <SocialStoriesRow
+                currentUser={user}
+                posts={exploreFeed}
+                onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+              />
+
+              <div className="space-stack-md">
+                <div className="social-card p-3">
+                  <div className="flex items-center gap-2">
+                    {activeTag ? (
+                      <>
+                        <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
+                          #{activeTag}
+                        </span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setActiveTag("");
+                            setSearchParams((params) => {
+                              const next = new URLSearchParams(params);
+                              next.delete("tag");
+                              return next;
+                            });
+                          }}
+                        >
+                          Clear tag
+                        </Button>
+                      </>
+                    ) : (
+                      <span className="social-text-muted text-sm">
+                        Use the top search bar to filter posts by caption.
                       </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setActiveTag("");
-                          setSearchParams((params) => {
-                            const next = new URLSearchParams(params);
-                            next.delete("tag");
-                            return next;
-                          });
-                        }}
-                      >
-                        Clear tag
-                      </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
 
               {isInitialExploreLoading && <SocialPostSkeleton count={3} />}
               {filteredExploreFeed.map((post, index) => (
@@ -154,6 +192,8 @@ const ExplorePage = () => {
                     onSetCommentsSortBy={setCommentsSortBy}
                     onFetchEngagement={fetchPostEngagement}
                     onComment={addComment}
+                    onDeletePost={deletePost}
+                    onDeleteComment={deleteComment}
                     onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
                     onSelectTag={(tag) => {
                       setActiveTag(tag);
@@ -173,30 +213,41 @@ const ExplorePage = () => {
                 />
               )}
               {!loadingExplore && filteredExploreFeed.length === 0 && (
-                <div className="elevated-card p-8 text-center text-muted-foreground">
+                <div className="social-card-empty p-8 text-center">
                   No posts match your current filters.
                 </div>
               )}
             </div>
 
-            {explorePagination.hasNextPage && (
-              <div className="flex justify-center">
-                {loadingExplore ? (
-                  <LoadingMoreSkeleton />
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={loadMore}
-                  >
-                    Load more
-                  </Button>
-                )}
-              </div>
-            )}
-          </section>
+              {explorePagination.hasNextPage && (
+                <div className="flex justify-center">
+                  {loadingExplore ? (
+                    <LoadingMoreSkeleton />
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={loadMore}
+                    >
+                      Load more
+                    </Button>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <div className="order-last xl:hidden">
+              <SocialRightRail compact explorePosts={exploreFeed} />
+            </div>
+
+            <div className="hidden xl:block">
+              <SocialRightRail explorePosts={exploreFeed} />
+            </div>
+          </div>
         </div>
       </div>
+
+      <SocialMiniChatDock />
     </SidebarProvider>
   );
 };

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { MessageCircle, Trash2, Users } from "lucide-react";
+import { MessageCircle, Trash2, UserMinus, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useFriendStore } from "@/stores/useFriendStore";
@@ -27,6 +27,10 @@ const FriendsManagerDialog = () => {
   const [processingFriendId, setProcessingFriendId] = useState<string | null>(
     null,
   );
+  const [friendPendingRemoval, setFriendPendingRemoval] = useState<{
+    friendId: string;
+    displayName: string;
+  } | null>(null);
 
   const { friends, getFriends, removeFriend, loading: friendLoading } =
     useFriendStore();
@@ -66,14 +70,16 @@ const FriendsManagerDialog = () => {
     }
   };
 
-  const handleRemoveFriend = async (friendId: string, displayName: string) => {
-    const confirmed = globalThis.confirm(
-      `Remove ${displayName} from your friends list?`,
-    );
+  const requestRemoveFriend = (friendId: string, displayName: string) => {
+    setFriendPendingRemoval({ friendId, displayName });
+  };
 
-    if (!confirmed) {
+  const handleRemoveFriend = async () => {
+    if (!friendPendingRemoval) {
       return;
     }
+
+    const { friendId, displayName } = friendPendingRemoval;
 
     setProcessingFriendId(friendId);
     const result = await removeFriend(friendId);
@@ -85,6 +91,7 @@ const FriendsManagerDialog = () => {
     }
 
     setProcessingFriendId(null);
+    setFriendPendingRemoval(null);
   };
 
   return (
@@ -100,7 +107,7 @@ const FriendsManagerDialog = () => {
         </button>
       </DialogTrigger>
 
-      <DialogContent className="modal-content-shell sm:max-w-xl">
+      <DialogContent className="people-manager-modal sm:max-w-2xl">
         <DialogHeader className="modal-stagger-item">
           <DialogTitle>Friends</DialogTitle>
           <DialogDescription>
@@ -108,14 +115,38 @@ const FriendsManagerDialog = () => {
           </DialogDescription>
         </DialogHeader>
 
-        <Input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by name or username"
-          className="modal-stagger-item"
-        />
+        <div className="people-manager-toolbar modal-stagger-item">
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name or username"
+          />
 
-        <div className="max-h-[420px] min-h-[320px] space-y-2 overflow-y-auto pr-1 modal-stagger-item">
+          <div className="people-manager-summary-row">
+            <p className="people-manager-summary-text">
+              Showing {filteredFriends.length} of {friends.length} friends
+            </p>
+            {query.trim() ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs"
+                onClick={() => setQuery("")}
+              >
+                Clear search
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="people-manager-list-shell modal-stagger-item">
+          <div className="people-manager-list-head">
+            <span>People</span>
+            <span>{filteredFriends.length}</span>
+          </div>
+
+          <div className="people-manager-list-scroll">
           {isInitialFriendsLoading ? (
             <DialogFriendListSkeleton count={6} showActions />
           ) : (
@@ -133,7 +164,7 @@ const FriendsManagerDialog = () => {
                 return (
                   <div
                     key={friend._id}
-                    className="flex flex-row items-center justify-between gap-3 rounded-xl border border-border/70 p-2.5 pl-3 transition-colors bg-card hover:bg-muted/40"
+                    className="people-manager-row"
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <FriendProfileMiniCard
@@ -145,9 +176,7 @@ const FriendsManagerDialog = () => {
                         navigate(`/profile/${friend._id}`);
                       }}
                       onChat={() => handleStartChat(friend._id)}
-                      onRemove={() =>
-                        handleRemoveFriend(friend._id, friend.displayName)
-                      }
+                      onRemove={() => requestRemoveFriend(friend._id, friend.displayName)}
                       disabled={disabled}
                     >
                       <UserAvatar
@@ -181,9 +210,7 @@ const FriendsManagerDialog = () => {
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          handleRemoveFriend(friend._id, friend.displayName)
-                        }
+                        onClick={() => requestRemoveFriend(friend._id, friend.displayName)}
                         disabled={disabled}
                         className="text-destructive hover:text-destructive"
                       >
@@ -196,8 +223,58 @@ const FriendsManagerDialog = () => {
               })}
             </>
           )}
+          </div>
         </div>
       </DialogContent>
+
+      <Dialog
+        open={Boolean(friendPendingRemoval)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen && !processingFriendId) {
+            setFriendPendingRemoval(null);
+          }
+        }}
+      >
+        <DialogContent
+          contentClassMode="bare"
+          className="social-confirm-dialog social-confirm-dialog--warning sm:max-w-md"
+        >
+          <DialogHeader className="social-confirm-head modal-stagger-item">
+            <span className="social-confirm-icon social-confirm-icon--warning" aria-hidden="true">
+              <UserMinus className="h-4.5 w-4.5" />
+            </span>
+            <div>
+              <DialogTitle className="social-confirm-title">Remove friend?</DialogTitle>
+              <DialogDescription className="social-confirm-description">
+                {friendPendingRemoval
+                  ? `This is a permanent action. ${friendPendingRemoval.displayName} will be removed from your friends list and quick chat access.`
+                  : "This is a permanent action. The selected friend will be removed from your friends list."}
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+
+          <div className="social-confirm-actions modal-stagger-item">
+            <Button
+              type="button"
+              variant="outline"
+              className="social-confirm-cancel"
+              onClick={() => setFriendPendingRemoval(null)}
+              disabled={Boolean(processingFriendId)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="social-confirm-danger social-confirm-danger--warning"
+              onClick={() => void handleRemoveFriend()}
+              disabled={Boolean(processingFriendId)}
+            >
+              {processingFriendId ? "Removing..." : "Remove"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 };

@@ -103,7 +103,7 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
       >
         {uploadingCover && (
           <div className="profile-cover-uploading">
-            <div className="profile-cover-spinner" />
+            <div className="social-uploading-skeleton h-8 w-28 rounded-full bg-white/25" />
           </div>
         )}
 
@@ -156,7 +156,7 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
             )}
             {uploadingAvatar && (
               <div className="profile-avatar-uploading">
-                <div className="profile-cover-spinner" />
+                <div className="social-uploading-skeleton h-8 w-8 rounded-full bg-white/25" />
               </div>
             )}
           </div>
