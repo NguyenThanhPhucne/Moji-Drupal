@@ -60,6 +60,11 @@ export const checkFriendship = async (req, res, next) => {
     const memberIds = req.body?.memberIds ?? [];
     const type = req.body?.type;
 
+    // Bỏ qua kiểm tra Friendship nếu đã là cuộc trò chuyện tồn tại
+    if (req.body?.conversationId) {
+      return next();
+    }
+
     // Nếu là direct chat và chỉ có 1 member, kiểm tra friendship với member đó
     if (type === "direct" && memberIds.length === 1) {
       const [userA, userB] = pair(me, memberIds[0]);
@@ -82,6 +87,16 @@ export const checkFriendship = async (req, res, next) => {
 
     if (recipientId) {
       const [userA, userB] = pair(me, recipientId);
+
+      // Nếu đã có lịch sử chat với nhau thì cho phép tiếp tục nhắn tin
+      const directKey = [String(userA), String(userB)]
+        .sort((left, right) => left.localeCompare(right))
+        .join(":");
+      const conversationExists = await Conversation.exists({ type: "direct", directKey });
+      
+      if (conversationExists) {
+        return next();
+      }
 
       const isFriend = await checkFriendshipStatus(userA, userB);
 

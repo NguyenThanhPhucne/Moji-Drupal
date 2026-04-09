@@ -1316,6 +1316,7 @@ const MessageItem = memo(function MessageItem({
         onOpenChange={handleDeleteDialogOpenChange}
       >
         <DialogContent
+          aria-describedby={undefined}
           className="chat-modal-shell sm:max-w-xl"
           showCloseButton={!deleteActionLoading}
           dismissible={!deleteActionLoading}
