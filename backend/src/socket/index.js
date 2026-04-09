@@ -91,8 +91,8 @@ io.on("connection", async (socket) => {
   const user = socket.user;
   const userId = user._id.toString();
 
-  console.log(
-    `[Socket] User connected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
+  console.info(
+    `[Socket] connected: ${user.displayName} (${userId})`
   );
 
   if (!onlineUsers.has(userId)) {
@@ -180,8 +180,8 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("disconnect", async () => {
-    console.log(
-      `[Socket] User disconnected: ${user.displayName} (${userId}) - socketId: ${socket.id}`,
+    console.info(
+      `[Socket] disconnected: ${user.displayName} (${userId})`
     );
     typingEmitTimelineBySocket.delete(socket.id);
     removeSocketFromOnlineUsers(userId, socket.id);

@@ -9,8 +9,8 @@ const isMongoObjectId = (value) => MONGO_ID_REGEX.test(String(value || ""));
 const verifyAccessToken = (token) => {
   try {
     return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
-  } catch (error) {
-    console.warn("Invalid access token:", error?.message || error);
+  } catch {
+    // Silently reject — invalid/expired tokens are expected traffic, not errors.
     return null;
   }
 };

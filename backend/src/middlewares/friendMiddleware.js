@@ -17,7 +17,6 @@ const shouldBypassFriendshipChecks = () => {
 const checkFriendshipStatus = async (userA, userB) => {
   // Development-only explicit bypass to avoid accidental auth holes.
   if (shouldBypassFriendshipChecks()) {
-    console.log("Development mode: Skipping friend check (explicit bypass)");
     return true;
   }
 
@@ -29,11 +28,10 @@ const checkFriendshipStatus = async (userA, userB) => {
       userB: normalizedB,
     });
     if (friend) {
-      console.log("Found friendship in MongoDB");
       return true;
     }
   } catch (error) {
-    console.log("MongoDB friend check failed:", error.message);
+    console.error("[friendMiddleware] MongoDB friend check failed:", error.message);
   }
 
   // 2. Kiểm tra Drupal (cho user mới)
@@ -46,11 +44,10 @@ const checkFriendshipStatus = async (userA, userB) => {
     });
 
     if (response.data?.isFriend) {
-      console.log("Found friendship in Drupal");
       return true;
     }
   } catch (error) {
-    console.log("Drupal friend check failed:", error.message);
+    console.error("[friendMiddleware] Drupal friend check failed:", error.message);
   }
 
   return false;

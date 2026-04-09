@@ -6,6 +6,7 @@ import {
   emitNewMessage,
   updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
+import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
 
 const buildDirectConversationKey = (userA, userB) => {
@@ -550,6 +551,10 @@ export const unsendMessage = async (req, res) => {
         message,
         conversation: null,
       });
+    }
+
+    if (message.imgUrl) {
+      await destroyImageFromUrl(message.imgUrl);
     }
 
     message.isDeleted = true;

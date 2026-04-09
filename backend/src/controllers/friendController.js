@@ -166,6 +166,16 @@ export const declineFriendRequest = async (req, res) => {
 
     await FriendRequest.findByIdAndDelete(requestId);
 
+    // Clean up any stale friend-request or friend-accepted notifications
+    // between these two users so they don't linger as zombie entries.
+    await Notification.deleteMany({
+      type: { $in: ["friend_accepted"] },
+      $or: [
+        { recipientId: userId, actorId: request.from },
+        { recipientId: request.from, actorId: userId },
+      ],
+    });
+
     return res.sendStatus(204);
   } catch (error) {
     console.error("Lỗi khi từ chối lời mời kết bạn", error);
@@ -251,6 +261,16 @@ export const removeFriend = async (req, res) => {
         message: "Người này không còn trong danh sách bạn bè",
       });
     }
+
+    // Purge all friend-related notifications between these two users so
+    // they don't leave behind zombie notification entries.
+    await Notification.deleteMany({
+      type: { $in: ["friend_accepted"] },
+      $or: [
+        { recipientId: userId, actorId: friendId },
+        { recipientId: friendId, actorId: userId },
+      ],
+    });
 
     return res.status(200).json({ message: "Đã xoá bạn thành công" });
   } catch (error) {

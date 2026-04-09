@@ -3,6 +3,7 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
+import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
@@ -440,6 +441,7 @@ export const deleteConversation = async (req, res) => {
 
     let conversation;
     let deletedWithTransaction = false;
+    let imageUrlsToDestroy = [];
 
     if (canUseTransactions) {
       const session = await mongoose.connection.startSession();
@@ -457,6 +459,13 @@ export const deleteConversation = async (req, res) => {
           if (!verifyPermission(scopedConversation)) {
             throw new Error("FORBIDDEN");
           }
+
+          const messagesWithImages = await Message.find({
+            conversationId,
+            imgUrl: { $ne: null },
+          }).select("imgUrl").session(session);
+
+          imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
 
           await Message.deleteMany({ conversationId }).session(session);
           await Conversation.findOneAndDelete(
@@ -518,6 +527,12 @@ export const deleteConversation = async (req, res) => {
       }
 
       try {
+        const messagesWithImages = await Message.find({
+          conversationId,
+          imgUrl: { $ne: null },
+        }).select("imgUrl");
+        imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
+
         await Message.deleteMany({ conversationId });
       } catch (messageDeleteError) {
         try {
@@ -540,6 +555,12 @@ export const deleteConversation = async (req, res) => {
       });
     });
 
+    // 5. Enterprise Fire-and-Forget: Dọn rác Cloudinary chạy nền
+    if (imageUrlsToDestroy.length > 0) {
+      Promise.allSettled(imageUrlsToDestroy.map(url => destroyImageFromUrl(url)))
+        .catch(err => console.error("[conversation] Bulk Cloudinary destroy error during deleteConversation", err));
+    }
+
     return res.status(200).json({
       message: "Xoá conversation thành công",
       conversationId,
@@ -560,18 +581,29 @@ export const getAdminConversations = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // Get all conversations with populated data
-    const conversations = await Conversation.find()
-      .populate({
-        path: "participants.userId",
-        select: "_id displayName avatarUrl drupalId",
-      })
-      .populate({
-        path: "lastMessage.senderId",
-        select: "_id displayName",
-      })
-      .sort({ lastMessageAt: -1 })
-      .lean();
+    const { normalizePaging } = await import("../utils/pagingHelper.js").catch(
+      () => ({ normalizePaging: (p, l) => ({ page: Number(p)||1, limit: Number(l)||50, skip: ((Number(p)||1)-1)*(Number(l)||50) }) })
+    );
+
+    const { page, limit, skip } = normalizePaging(req.query.page, req.query.limit);
+
+    // Bounding Enterprise: Không còn query mù quáng kéo toàn bộ CSDL
+    const [conversations, totalCount] = await Promise.all([
+      Conversation.find()
+        .populate({
+          path: "participants.userId",
+          select: "_id displayName avatarUrl drupalId",
+        })
+        .populate({
+          path: "lastMessage.senderId",
+          select: "_id displayName",
+        })
+        .sort({ lastMessageAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Conversation.countDocuments(),
+    ]);
 
     // Enrich data
     const enriched = conversations.map((conv) => {
@@ -618,29 +650,48 @@ export const getAdminConversations = async (req, res) => {
       };
     });
 
-    // Statistics
+    // Enterprise Statistics via Aggregation / countDocuments to prevent Memory Leaks
+    const [
+      directCount,
+      groupCount,
+      activeTodayCount,
+      aggStats
+    ] = await Promise.all([
+      Conversation.countDocuments({ type: "direct" }),
+      Conversation.countDocuments({ type: "group" }),
+      Conversation.countDocuments({
+        lastMessageAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      }),
+      Conversation.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalMessages: { $sum: "$messageCount" },
+            avgParticipants: { $avg: { $size: { $ifNull: ["$participants", []] } } }
+          }
+        }
+      ]),
+    ]);
+
     const stats = {
-      totalConversations: enriched.length,
-      privateConversations: enriched.filter((c) => c.type === "direct").length,
-      groupConversations: enriched.filter((c) => c.type === "group").length,
-      activeTodayCount: enriched.filter(
-        (c) =>
-          c.lastMessageAt &&
-          c.lastMessageAt > new Date(Date.now() - 24 * 60 * 60 * 1000),
-      ).length,
-      totalMessages: enriched.reduce((sum, c) => sum + c.messageCount, 0),
-      avgParticipants:
-        Math.round(
-          (enriched.reduce((sum, c) => sum + c.participantCount, 0) /
-            enriched.length) *
-            100,
-        ) / 100,
+      totalConversations: totalCount,
+      privateConversations: directCount,
+      groupConversations: groupCount,
+      activeTodayCount: activeTodayCount,
+      totalMessages: aggStats[0]?.totalMessages || 0,
+      avgParticipants: Math.round((aggStats[0]?.avgParticipants || 0) * 100) / 100,
     };
 
     return res.status(200).json({
       success: true,
       data: enriched,
       stats,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit) || 1,
+      },
       lastUpdated: new Date(),
     });
   } catch (error) {

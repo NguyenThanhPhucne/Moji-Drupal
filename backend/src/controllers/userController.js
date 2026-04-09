@@ -6,6 +6,7 @@ import bcrypt from "bcrypt";
 import crypto from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
 import { broadcastOnlineUsers } from "../socket/index.js";
+import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 
 const isBcryptHash = (hash) => /^\$2[aby]\$\d{2}\$/.test(String(hash || ""));
 const isSha256Hex = (hash) => /^[a-f0-9]{64}$/i.test(String(hash || ""));
@@ -75,6 +76,16 @@ export const uploadAvatar = async (req, res) => {
     }
 
     const result = await uploadImageFromBuffer(file.buffer);
+
+    // Xóa avatar cũ trên Cloudinary để tránh rác
+    const currentUser = await User.findById(userId).select("avatarUrl avatarId");
+    if (currentUser?.avatarId) {
+      // Logic cũ có lưu avatarId
+      await cloudinary.uploader.destroy(currentUser.avatarId);
+    } else if (currentUser?.avatarUrl) {
+      // Xoá qua URL parser
+      await destroyImageFromUrl(currentUser.avatarUrl);
+    }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,

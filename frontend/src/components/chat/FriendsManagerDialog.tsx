@@ -15,6 +15,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "../ui/dialog";
 import UserAvatar from "./UserAvatar";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
@@ -239,7 +247,7 @@ const FriendsManagerDialog = () => {
         </div>
       </DialogContent>
 
-      <Dialog
+      <AlertDialog
         open={Boolean(friendPendingRemoval)}
         onOpenChange={(nextOpen) => {
           if (!nextOpen && !processingFriendId) {
@@ -247,46 +255,40 @@ const FriendsManagerDialog = () => {
           }
         }}
       >
-        <DialogContent
-          contentClassMode="bare"
-          className="social-confirm-dialog social-confirm-dialog--warning sm:max-w-md"
+        <AlertDialogContent
+          className="chat-modal-shell chat-modal-shell--danger max-w-sm"
+          aria-busy={Boolean(processingFriendId)}
         >
-          <DialogHeader className="social-confirm-head modal-stagger-item">
-            <span className="social-confirm-icon social-confirm-icon--warning" aria-hidden="true">
-              <UserMinus className="h-4.5 w-4.5" />
-            </span>
-            <div>
-              <DialogTitle className="social-confirm-title">Remove friend?</DialogTitle>
-              <DialogDescription className="social-confirm-description">
-                {friendPendingRemoval
-                  ? `This is a permanent action. ${friendPendingRemoval.displayName} will be removed from your friends list and quick chat access.`
-                  : "This is a permanent action. The selected friend will be removed from your friends list."}
-              </DialogDescription>
+          <AlertDialogHeader className="items-center text-center modal-stagger-item">
+            <div className="dialog-danger-icon">
+              <UserMinus className="size-6" />
             </div>
-          </DialogHeader>
+            <AlertDialogTitle className="text-base font-semibold">Remove friend?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              {friendPendingRemoval
+                ? `This is a permanent action. ${friendPendingRemoval.displayName} will be removed from your friends list and quick chat access.`
+                : "This is a permanent action. The selected friend will be removed from your friends list."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
-          <div className="social-confirm-actions modal-stagger-item">
-            <Button
-              type="button"
-              variant="outline"
-              className="social-confirm-cancel"
+          <AlertDialogFooter className="sm:flex-col-reverse gap-2 sm:gap-2 mt-4 modal-stagger-item">
+            <AlertDialogCancel
+              className="mt-0 sm:mt-0"
               onClick={() => setFriendPendingRemoval(null)}
               disabled={Boolean(processingFriendId)}
             >
               Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="social-confirm-danger social-confirm-danger--warning"
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void handleRemoveFriend()}
               disabled={Boolean(processingFriendId)}
             >
               {processingFriendId ? "Removing..." : "Remove"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

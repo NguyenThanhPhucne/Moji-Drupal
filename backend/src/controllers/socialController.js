@@ -7,6 +7,7 @@ import Friend from "../models/Friend.js";
 import Notification from "../models/Notification.js";
 import { io } from "../socket/index.js";
 import { v2 as cloudinary } from "cloudinary";
+import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 
 const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"];
 
@@ -1175,7 +1176,7 @@ export const deleteComment = async (req, res) => {
     const [post, comment] = await Promise.all([
       Post.findById(postId).select("_id authorId commentsCount isDeleted"),
       Comment.findById(commentId).select(
-        "_id postId authorId parentCommentId isDeleted",
+        "_id postId authorId parentCommentId isDeleted imgUrl",
       ),
     ]);
 
@@ -1196,14 +1197,26 @@ export const deleteComment = async (req, res) => {
     }
 
     const descendantIds = await collectCommentDescendantIds(comment._id);
-    const deletionOutcome = await Comment.updateMany(
-      {
-        _id: { $in: descendantIds },
-        postId,
-        isDeleted: false,
-      },
-      { $set: { isDeleted: true } },
-    );
+    const allAffectedCommentIds = [...new Set([commentId, ...descendantIds])];
+
+    // Enterprise Fire-and-Forget: Lấy danh sách URL ảnh để dọn rác nền, không chạy bằng await tuần tự 
+    // chặn HTTP response
+    const commentsToDelete = await Comment.find({ _id: { $in: allAffectedCommentIds }, isDeleted: false }).select("imgUrl");
+    const imageUrlsToDestroy = commentsToDelete.map(c => c.imgUrl).filter(Boolean);
+
+    const [deletionOutcome] = await Promise.all([
+      Comment.updateMany(
+        {
+          _id: { $in: descendantIds },
+          postId,
+          isDeleted: false,
+        },
+        { $set: { isDeleted: true } },
+      ),
+      // Cascade-delete notifications for all affected comments to eliminate
+      // Zombie Notifications that link to now-deleted comment threads.
+      Notification.deleteMany({ commentId: { $in: allAffectedCommentIds } }),
+    ]);
 
     const deletedCount = deletionOutcome.modifiedCount || 0;
     if (deletedCount > 0) {
@@ -1222,6 +1235,12 @@ export const deleteComment = async (req, res) => {
         deletedCommentIds: descendantIds,
         commentsCount: Math.max(0, (post.commentsCount || 0) - deletedCount),
       });
+    }
+
+    // Background Garbage Collection
+    if (imageUrlsToDestroy.length > 0) {
+      Promise.allSettled(imageUrlsToDestroy.map(url => destroyImageFromUrl(url)))
+        .catch(err => console.error("[social] Cloudinary background destroy error:", err));
     }
 
     return res.status(200).json({
@@ -1246,7 +1265,7 @@ export const deletePost = async (req, res) => {
     }
 
     const post = await Post.findById(postId).select(
-      "_id authorId isDeleted commentsCount",
+      "_id authorId isDeleted commentsCount media",
     );
 
     if (!post || post.isDeleted) {
@@ -1256,6 +1275,20 @@ export const deletePost = async (req, res) => {
     if (String(post.authorId) !== String(userId)) {
       return res.status(403).json({ message: "You cannot delete this post" });
     }
+
+    // Enterprise Fire-and-Forget: Thu thập tất cả Image URLs để dọn rác nền
+    const imageUrlsToDestroy = [];
+
+    if (post.media && post.media.length > 0) {
+      post.media.forEach(m => {
+        if (m.url) imageUrlsToDestroy.push(m.url);
+      });
+    }
+
+    const commentsToDelete = await Comment.find({ postId, isDeleted: false }).select("imgUrl");
+    commentsToDelete.forEach(c => {
+      if (c.imgUrl) imageUrlsToDestroy.push(c.imgUrl);
+    });
 
     await Promise.all([
       Post.updateOne(
@@ -1274,9 +1307,18 @@ export const deletePost = async (req, res) => {
         { postId, isDeleted: false },
         { $set: { isDeleted: true } },
       ),
+      // Cascade-delete all notifications tied to this post so stale
+      // notifications (Zombie Notifications) don't remain for other users.
+      Notification.deleteMany({ postId }),
     ]);
 
     emitSocialPostDeleted({ postId });
+
+    // Background Garbage Collection
+    if (imageUrlsToDestroy.length > 0) {
+      Promise.allSettled(imageUrlsToDestroy.map(url => destroyImageFromUrl(url)))
+        .catch(err => console.error("[social] Cloudinary background destroy error:", err));
+    }
 
     return res.status(200).json({
       ok: true,

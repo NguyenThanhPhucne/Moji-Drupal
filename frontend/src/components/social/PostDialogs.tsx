@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronLeft, ChevronRight, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw, ZoomIn, ZoomOut, Trash2, ThumbsUp, MessageSquare } from "lucide-react";
 import type { TouchEvent } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,9 +7,19 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { SocialPostEngagement } from "@/types/social";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import UserAvatar from "@/components/chat/UserAvatar";
 
 type DeleteIntent =
   | { type: "post" }
@@ -70,99 +80,128 @@ const PostDialogs = ({
     <>
       <Dialog open={showEngagement} onOpenChange={onCloseEngagement}>
         <DialogContent
-          contentClassMode="bare"
-          className="social-engagement-dialog sm:max-w-xl"
+          className="sm:max-w-md p-0 overflow-hidden gap-0"
           aria-describedby={engagementDescriptionId}
         >
-          <DialogHeader>
-            <DialogTitle>Post engagement</DialogTitle>
-            <DialogDescription id={engagementDescriptionId}>
+          <DialogHeader className="pt-6 px-6 pb-4">
+            <DialogTitle className="text-xl">Post engagement</DialogTitle>
+            <DialogDescription id={engagementDescriptionId} className="hidden">
               See people who liked this post and recent comment content.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <p className="social-text-main text-sm font-semibold">Likes ({engagement?.likers.length || 0})</p>
-              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                {(engagement?.likers || []).map((liker) => (
-                  <button
-                    key={liker._id}
-                    type="button"
-                    className="social-input-surface flex w-full items-center justify-between rounded-md border px-3 py-2 text-left"
-                    onClick={() => onOpenProfile?.(liker._id)}
-                  >
-                    <span className="social-text-main text-sm font-medium">{liker.displayName}</span>
-                    <span className="social-text-muted text-xs">@{liker.username}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="social-text-main text-sm font-semibold">Commenters ({engagement?.commenters.length || 0})</p>
-              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                {(engagement?.recentComments || []).map((comment) => (
-                  <div key={comment._id} className="social-input-surface rounded-md border px-3 py-2">
-                    <button
-                      type="button"
-                      className="social-text-main text-left text-sm font-semibold hover:underline"
-                      onClick={() => onOpenProfile?.(comment.authorId._id)}
-                    >
-                      {comment.authorId.displayName}
-                    </button>
-                    <p className="social-text-main text-sm">{comment.content}</p>
+          <Tabs defaultValue="likes" className="w-full flex-1 flex flex-col">
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-6 py-0 h-auto gap-6 opacity-100">
+              <TabsTrigger 
+                value="likes"
+                className="relative rounded-none border-b-2 border-transparent px-1 py-3 font-semibold text-muted-foreground data-[state=active]:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                <ThumbsUp className="h-4 w-4 mr-2" />
+                Likes ({engagement?.likers.length || 0})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="comments"
+                className="relative rounded-none border-b-2 border-transparent px-1 py-3 font-semibold text-muted-foreground data-[state=active]:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Comments ({engagement?.commenters.length || 0})
+              </TabsTrigger>
+            </TabsList>
+            
+            <div className="max-h-[50vh] overflow-y-auto w-full beautiful-scrollbar bg-card/40">
+              <TabsContent value="likes" className="m-0 outline-none p-2">
+                {engagement?.likers.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No likes yet.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(engagement?.likers || []).map((liker) => (
+                      <button
+                        key={liker._id}
+                        type="button"
+                        className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-muted/80 transition-colors focus-visible:outline-none focus-visible:bg-muted/80"
+                        onClick={() => onOpenProfile?.(liker._id)}
+                      >
+                        <UserAvatar type="sidebar" name={liker.displayName} avatarUrl={liker.avatarUrl} />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[13px] font-semibold text-foreground truncate leading-tight">{liker.displayName}</span>
+                          <span className="text-[11px] text-muted-foreground truncate leading-tight">@{liker.username}</span>
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="comments" className="m-0 outline-none p-2">
+                {engagement?.recentComments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">No comments yet.</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(engagement?.recentComments || []).map((comment) => (
+                      <div key={comment._id} className="flex gap-3 rounded-xl p-2 hover:bg-muted/40 transition-colors">
+                        <button 
+                          className="shrink-0 outline-none focus-visible:ring-2 ring-primary rounded-full h-fit mt-0.5"
+                          onClick={() => onOpenProfile?.(comment.authorId._id)}
+                        >
+                          <UserAvatar type="sidebar" name={comment.authorId.displayName} avatarUrl={comment.authorId.avatarUrl} />
+                        </button>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <button
+                            type="button"
+                            className="text-left text-[13px] font-semibold text-foreground hover:underline outline-none w-fit leading-tight"
+                            onClick={() => onOpenProfile?.(comment.authorId._id)}
+                          >
+                            {comment.authorId.displayName}
+                          </button>
+                          <p className="text-[13px] text-foreground/90 mt-0.5 break-words leading-snug">{comment.content}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
             </div>
-          </div>
+          </Tabs>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(deleteIntent)} onOpenChange={onCloseDeleteDialog}>
-        <DialogContent
-          contentClassMode="bare"
-          className="social-confirm-dialog social-confirm-dialog--danger sm:max-w-md"
+      <AlertDialog open={Boolean(deleteIntent)} onOpenChange={onCloseDeleteDialog}>
+        <AlertDialogContent
+          className="chat-modal-shell chat-modal-shell--danger max-w-sm"
+          aria-busy={deletePending}
         >
-          <DialogHeader className="social-confirm-head modal-stagger-item">
-            <span className="social-confirm-icon social-confirm-icon--danger" aria-hidden="true">
-              <AlertTriangle className="h-4.5 w-4.5" />
-            </span>
-            <div>
-              <DialogTitle className="social-confirm-title">
-                {deleteIntent?.type === "post" ? "Delete this post?" : "Delete this comment?"}
-              </DialogTitle>
-              <DialogDescription className="social-confirm-description">
-                {deleteIntent?.type === "post"
-                  ? "This is a permanent action. The post, reactions, and comment thread history will be removed from your workspace feed."
-                  : "This is a permanent action. The selected comment and its context in the thread will be removed."}
-              </DialogDescription>
+          <AlertDialogHeader className="items-center text-center modal-stagger-item">
+            <div className="dialog-danger-icon">
+              <Trash2 className="size-6" />
             </div>
-          </DialogHeader>
+            <AlertDialogTitle className="text-base font-semibold">
+              {deleteIntent?.type === "post" ? "Delete this post?" : "Delete this comment?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              {deleteIntent?.type === "post"
+                ? "This is a permanent action. The post, reactions, and comment thread history will be removed from your workspace feed."
+                : "This is a permanent action. The selected comment and its context in the thread will be removed."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
 
-          <div className="social-confirm-actions modal-stagger-item">
-            <Button
-              type="button"
-              variant="outline"
-              className="social-confirm-cancel"
+          <AlertDialogFooter className="sm:flex-col-reverse gap-2 sm:gap-2 mt-4 modal-stagger-item">
+            <AlertDialogCancel
+              className="mt-0 sm:mt-0"
               onClick={onCancelDelete}
               disabled={deletePending}
             >
               Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              className="social-confirm-danger social-confirm-danger--danger"
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={onConfirmDelete}
               disabled={deletePending}
             >
               {deleteActionLabel}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={lightboxOpen} onOpenChange={onCloseLightbox}>
         <DialogContent
