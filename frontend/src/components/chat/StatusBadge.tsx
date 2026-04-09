@@ -17,8 +17,8 @@ const StatusBadge = ({
 
   if (status === "online") {
     return (
-      <span className="absolute -bottom-0.5 -right-0.5 inline-flex h-[13px] w-[13px] items-center justify-center rounded-full bg-background">
-        <span className="chat-presence-online-dot h-2 w-2 rounded-full" />
+      <span className="absolute -bottom-[1px] -right-[1px] flex h-[13px] w-[13px] items-center justify-center rounded-full bg-background ring-[1.5px] ring-background">
+        <span className="h-[9px] w-[9px] rounded-full bg-[#31a24c] shadow-[0_0_0_1px_rgba(255,255,255,0.6)]" />
       </span>
     );
   }
@@ -26,8 +26,8 @@ const StatusBadge = ({
   if (status === "recently-active" && lastActiveAt) {
     const timeStr = formatOnlineTime(new Date(lastActiveAt));
     return (
-      <span className="absolute -bottom-1 -right-2 inline-flex items-center justify-center rounded-full bg-background px-[2px] py-[2px]">
-        <span className="chat-presence-recent-pill flex h-3.5 items-center justify-center rounded-full px-1.5 text-[9px] font-bold">
+      <span className="absolute -bottom-1 -right-2 flex items-center justify-center rounded-full bg-background p-[1.5px]">
+        <span className="flex h-[14px] items-center justify-center rounded-full bg-amber-400/90 px-1.5 text-[9px] font-bold text-white leading-none shadow-sm">
           {timeStr}
         </span>
       </span>

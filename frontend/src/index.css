@@ -65,10 +65,10 @@
     --accent-foreground: 210 100% 98%;
 
     /* Chat colors */
-    --chat-bubble-sent: 204 89% 51%;
+    --chat-bubble-sent: 211 100% 55%;           /* #0084FF — Messenger exact blue */
     --chat-bubble-sent-foreground: 0 0% 100%;
-    --chat-bubble-received: 0 0% 96%;
-    --chat-bubble-received-foreground: 240 15% 15%;
+    --chat-bubble-received: 220 14% 94%;         /* #f0f2f5 — Messenger exact gray */
+    --chat-bubble-received-foreground: 222 47% 11%;
 
     /* Status colors */
     --online: 140 100% 50%;
@@ -136,6 +136,13 @@
       hsla(0, 0%, 100%, 1) 40%,
       hsla(204, 89%, 51%, 0.5) 100%
     );
+
+    /* Avatar Fallback Gradients */
+    --gradient-avatar-1: linear-gradient(135deg, hsl(320, 80%, 65%), hsl(280, 85%, 65%)); /* Pink to Purple */
+    --gradient-avatar-2: linear-gradient(135deg, hsl(200, 95%, 55%), hsl(230, 90%, 65%)); /* Blue to Indigo */
+    --gradient-avatar-3: linear-gradient(135deg, hsl(40, 95%, 65%), hsl(10, 90%, 65%));   /* Mango to Coral */
+    --gradient-avatar-4: linear-gradient(135deg, hsl(150, 85%, 50%), hsl(190, 90%, 55%)); /* Mint to Cyan */
+    --gradient-avatar-5: linear-gradient(135deg, hsl(250, 85%, 65%), hsl(340, 85%, 65%)); /* Violet to Rose */
 
     /* Shadows */
     --shadow-soft: 0 8px 32px -8px hsl(204 89% 51% / 0.15);
@@ -205,11 +212,11 @@
     --accent: 174 100% 50%;
     --accent-foreground: 210 25% 8%;
 
-    /* Chat bubbles in dark mode */
-    --chat-bubble-sent: 204 89% 60%;
+    /* Chat bubbles in dark mode — matching Messenger dark (#3a3b3c received, bright blue sent) */
+    --chat-bubble-sent: 211 100% 58%;           /* Messenger blue, slightly lighter for dark bg contrast */
     --chat-bubble-sent-foreground: 0 0% 100%;
-    --chat-bubble-received: 210 25% 15%;
-    --chat-bubble-received-foreground: 204 89% 85%;
+    --chat-bubble-received: 220 4% 23%;          /* #3a3b3c — Messenger dark received */
+    --chat-bubble-received-foreground: 210 20% 92%;
 
     /* Status colors */
     --online: 140 100% 60%;
@@ -251,6 +258,13 @@
       hsla(0, 0%, 0%, 1) 40%,
       hsla(204, 89%, 40%, 0.5) 100%
     );
+
+    /* Avatar Fallback Gradients (Dark adjustments) */
+    --gradient-avatar-1: linear-gradient(135deg, hsl(320, 70%, 55%), hsl(280, 75%, 55%));
+    --gradient-avatar-2: linear-gradient(135deg, hsl(200, 85%, 45%), hsl(230, 80%, 55%));
+    --gradient-avatar-3: linear-gradient(135deg, hsl(40, 85%, 55%), hsl(10, 80%, 55%));
+    --gradient-avatar-4: linear-gradient(135deg, hsl(150, 75%, 40%), hsl(190, 80%, 45%));
+    --gradient-avatar-5: linear-gradient(135deg, hsl(250, 75%, 55%), hsl(340, 75%, 55%));
 
     /* Dark shadows with glow */
     --shadow-soft: 0 8px 32px -8px hsl(204 89% 60% / 0.25);
@@ -650,19 +664,23 @@ html[data-motion="reduced"] * {
     color: hsl(var(--chat-bubble-sent-foreground));
     background: var(--gradient-chat);
     box-shadow: var(--shadow-bubble);
-    transition: transform 0.3s ease, box-shadow 0.3s ease, filter 0.3s ease;
+    transition: filter 0.2s ease;
     transform-origin: bottom right;
     position: relative;
   }
   .chat-bubble-sent:hover {
-    transform: scale(1.02);
-    box-shadow: 0 8px 24px -4px hsl(var(--primary)/0.34);
-    filter: saturate(1.03) brightness(1.01);
+    filter: brightness(1.04);
   }
 
   .chat-bubble-received {
-    @apply bg-[hsl(var(--chat-bubble-received))] text-[hsl(var(--chat-bubble-received-foreground))] border border-border/50 transition-all duration-300 origin-top-left;
+    background: hsl(var(--chat-bubble-received));
+    color: hsl(var(--chat-bubble-received-foreground));
+    border: 1px solid hsl(var(--border) / 0.35);
+    transition: filter 0.15s ease;
     position: relative;
+  }
+  .chat-bubble-received:hover {
+    filter: brightness(0.98);
   }
 
   .chat-message-row {
@@ -749,6 +767,12 @@ html[data-motion="reduced"] * {
   .bg-gradient-purple {
     background: var(--gradient-purple);
   }
+
+  .bg-avatar-1 { background: var(--gradient-avatar-1); color: white; }
+  .bg-avatar-2 { background: var(--gradient-avatar-2); color: white; }
+  .bg-avatar-3 { background: var(--gradient-avatar-3); color: white; }
+  .bg-avatar-4 { background: var(--gradient-avatar-4); color: white; }
+  .bg-avatar-5 { background: var(--gradient-avatar-5); color: white; }
 
   /* Shadows */
   .shadow-soft {
@@ -843,6 +867,25 @@ html[data-motion="reduced"] * {
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  /* ─── Chat bubble base classes (Messenger color system) ─────────── */
+  .chat-bubble-shell {
+    /* Base properties shared by all bubbles */
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    font-size: var(--chat-font-size, 14px);
+    line-height: var(--chat-line-height, 1.46);
+  }
+
+  .chat-bubble-sent {
+    background: hsl(var(--chat-bubble-sent));
+    color: hsl(var(--chat-bubble-sent-foreground));
+  }
+
+  .chat-bubble-received {
+    background: hsl(var(--chat-bubble-received));
+    color: hsl(var(--chat-bubble-received-foreground));
   }
 
   /* Keep sent bubble shape clean and color-consistent. */
@@ -1102,20 +1145,9 @@ html[data-motion="reduced"] * {
   }
 
   .modal-overlay {
-    background:
-      radial-gradient(
-        circle at 20% 15%,
-        hsl(var(--primary) / 0.12),
-        transparent 38%
-      ),
-      radial-gradient(
-        circle at 80% 10%,
-        hsl(var(--accent) / 0.1),
-        transparent 34%
-      ),
-      hsl(var(--background) / 0.4);
-    backdrop-filter: blur(16px) saturate(160%);
-    -webkit-backdrop-filter: blur(16px) saturate(160%);
+    background: hsl(var(--background) / 0.7);
+    backdrop-filter: blur(4px) saturate(120%);
+    -webkit-backdrop-filter: blur(4px) saturate(120%);
   }
 
   .modal-overlay[data-state="open"] {
@@ -1313,6 +1345,13 @@ html[data-motion="reduced"] * {
   }
 
   .chat-header-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;          /* gap-3 */
+    border-radius: 0.75rem; /* rounded-xl */
+    padding: 0.375rem 0.5rem; /* py-1.5 px-2 */
+    cursor: pointer;
+    min-width: 0;
     transition: background-color 0.18s ease, transform 0.18s ease;
   }
 
@@ -1327,22 +1366,28 @@ html[data-motion="reduced"] * {
   }
 
   .chat-header-action-btn {
-    border-radius: 0.75rem;
-    border: 1px solid hsl(var(--border) / 0.62);
-    background: hsl(var(--background) / 0.86);
-    transition: border-color 0.18s ease, background-color 0.18s ease,
-      color 0.18s ease, transform 0.14s ease;
+    border-radius: 9999px;
+    border: none;
+    background: transparent;
+    color: hsl(var(--primary));
+    transition: background-color 0.1s ease, color 0.1s ease, transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   .chat-header-action-btn:hover {
-    border-color: hsl(var(--primary) / 0.28);
-    background: hsl(var(--muted) / 0.7);
+    background: hsl(var(--muted)/0.8);
     color: hsl(var(--primary));
-    transform: translateY(-1px);
   }
 
   .chat-header-action-btn:active {
-    transform: scale(0.96);
+    transform: scale(0.92);
+  }
+
+  /* ─── Search Input Pill (Messenger / Meta style) ───────────── */
+  .search-input-pill {
+    @apply border-none bg-muted/60 h-9 rounded-full px-4 w-full min-w-0 transition-colors focus-visible:ring-0 focus-visible:bg-muted/80 text-[14.5px] shadow-none;
+  }
+  .search-input-pill::placeholder {
+    @apply text-muted-foreground/75 font-normal;
   }
 
   .chat-header-context-pill {
@@ -1505,28 +1550,29 @@ html[data-motion="reduced"] * {
   }
 
   .chat-context-menu {
-    min-width: 170px;
+    min-width: 160px;
     overflow: hidden;
-    border-radius: 0.85rem;
-    border: 1px solid hsl(var(--border) / 0.78);
-    background: hsl(var(--popover) / 0.92);
-    backdrop-filter: blur(12px) saturate(135%);
-    -webkit-backdrop-filter: blur(12px) saturate(135%);
+    border-radius: 12px;
+    border: 0.5px solid hsl(var(--border) / 0.7);
+    background: hsl(var(--popover) / 0.96);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
     box-shadow:
-      0 18px 36px -18px hsl(0 0% 0% / 0.45),
-      0 1px 0 hsl(0 0% 100% / 0.08) inset;
+      0 12px 28px -12px hsl(0 0% 0% / 0.3),
+      0 4px 10px hsl(0 0% 0% / 0.08),
+      0 1px 0 hsl(0 0% 100% / 0.1) inset;
   }
 
   .chat-context-menu-item {
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.62rem 0.9rem;
-    font-size: 0.875rem;
+    gap: 0.625rem;
+    padding: 0.5rem 0.85rem;
+    font-size: 14px;
+    font-weight: 450;
     text-align: left;
-    transition: background-color 0.14s ease, color 0.14s ease,
-      transform 0.08s ease;
+    transition: background-color 0.1s ease;
   }
 
   .chat-context-menu-item:hover {
@@ -1614,26 +1660,27 @@ html[data-motion="reduced"] * {
   /* ─── Scroll-to-bottom FAB ───────────────────────────────────────── */
   .scroll-to-bottom-fab {
     position: absolute;
-    bottom: 20px;
-    right: 20px;
+    bottom: 16px;
+    right: 16px;
     z-index: 20;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
-    border: none;
+    border: 1px solid hsl(var(--border) / 0.6);
     cursor: pointer;
-    background: hsl(var(--primary));
-    color: white;
-    box-shadow: 0 4px 16px hsl(var(--primary) / 0.4), 0 1px 4px hsl(0 0% 0% / 0.15);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground) / 0.8);
+    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.12), 0 1px 3px hsl(0 0% 0% / 0.08);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
 
   .scroll-to-bottom-fab:hover {
-    transform: translateY(-2px) scale(1.06);
-    box-shadow: 0 6px 22px hsl(var(--primary) / 0.55), 0 2px 6px hsl(0 0% 0% / 0.18);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px hsl(0 0% 0% / 0.18), 0 1px 4px hsl(0 0% 0% / 0.1);
+    color: hsl(var(--foreground));
   }
 
   .scroll-to-bottom-fab:active {
@@ -1642,21 +1689,20 @@ html[data-motion="reduced"] * {
 
   .scroll-fab-badge {
     position: absolute;
-    top: -6px;
-    right: -6px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
-    border-radius: 9px;
-    background: hsl(0 78% 42%);
+    top: -5px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    background: hsl(0 78% 50%);
     color: white;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
-    line-height: 18px;
+    line-height: 16px;
     text-align: center;
-    border: 2px solid hsl(var(--background));
-    box-shadow: 0 1px 4px hsl(0 0% 0% / 0.25);
-    animation: badgePop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border: 1.5px solid hsl(var(--background));
+    animation: badgePop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
   @keyframes badgePop {
@@ -1665,18 +1711,18 @@ html[data-motion="reduced"] * {
   }
 
   .scroll-btn-enter {
-    animation: scrollBtnSlideUp 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: scrollBtnSlideUp 0.18s ease forwards;
   }
   .scroll-btn-exit {
-    animation: scrollBtnSlideDown 0.16s ease forwards;
+    animation: scrollBtnSlideDown 0.14s ease forwards;
   }
   @keyframes scrollBtnSlideUp {
-    from { opacity: 0; transform: translateY(14px) scale(0.82); }
-    to   { opacity: 1; transform: translateY(0)   scale(1); }
+    from { opacity: 0; transform: translateY(10px) scale(0.88); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
   }
   @keyframes scrollBtnSlideDown {
-    from { opacity: 1; transform: translateY(0)   scale(1); }
-    to   { opacity: 0; transform: translateY(10px) scale(0.88); }
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(8px) scale(0.9); }
   }
 
   /* ─── Send button: active glow state ────────────────────────────── */
@@ -3129,31 +3175,32 @@ html[data-motion="reduced"] * {
 .typing-bubble-wrap {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 16px;
+  gap: 6px;
+  padding: 2px 12px;
   margin-bottom: 4px;
-  animation: slideUpFade 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: slideUpFade 0.2s ease forwards;
 }
 
 @keyframes slideUpFade {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ── Avatars ── */
 .typing-avatars {
   display: flex;
-  margin-right: 4px;
+  margin-right: 2px;
 }
 
 .typing-avatar {
   position: relative;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  border: 2px solid hsl(var(--primary-foreground));
-  margin-left: -8px;
+  border: 1.5px solid hsl(var(--background));
+  margin-left: -6px;
   background: hsl(var(--muted));
+  flex-shrink: 0;
 }
 
 .typing-avatars .typing-avatar:first-child {
@@ -3172,56 +3219,66 @@ html[data-motion="reduced"] * {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: hsl(var(--muted-foreground));
 }
 
+/* No pulse ring — Messenger doesn't animate avatar ring */
 .typing-avatar-pulse {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid hsl(var(--primary));
-  opacity: 0;
-  animation: typingPulse 1.5s infinite;
+  display: none;
 }
 
-@keyframes typingPulse {
-  0%   { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
-
-/* ── Bubble & Dots ── */
+/* ── Bubble & Dots — Messenger exact style ── */
 .typing-bubble {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
-  background: hsl(var(--muted) / 0.7);
-  padding: 8px 12px;
-  border-radius: 16px;
+  background: hsl(var(--chat-bubble-received));
+  padding: 10px 14px;
+  border-radius: 18px;
   border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.05);
 }
 
 .typing-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: hsl(var(--muted-foreground) / 0.7);
+  background: hsl(var(--muted-foreground) / 0.55);
   animation: typingDotWave 1.4s ease-in-out infinite;
 }
 
 .typing-dot--1 { animation-delay: 0s; }
-.typing-dot--2 { animation-delay: 0.15s; }
-.typing-dot--3 { animation-delay: 0.3s; }
+.typing-dot--2 { animation-delay: 0.18s; }
+.typing-dot--3 { animation-delay: 0.36s; }
 
 @keyframes typingDotWave {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.6; }
-  30%           { transform: translateY(-4px); opacity: 1; background: hsl(var(--primary)); }
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.55; }
+  30%           { transform: translateY(-4px); opacity: 1; }
 }
 
-/* ── Label ── */
+/* ── Label — hidden in Messenger style ── */
 .typing-label {
-  font-size: 12px;
-  color: hsl(var(--muted-foreground));
+  display: none;
+}
+
+/* ── SeenStatus wrapper (extracted from MessageItem inline Tailwind) ── */
+.chat-seen-status {
+  margin-top: 0.125rem;   /* mt-0.5 */
+  padding: 0 0.125rem;    /* px-0.5 */
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;           /* gap-1 */
+  font-size: 10px;
+  color: hsl(var(--muted-foreground) / 0.9);
+}
+
+@media (min-width: 640px) {
+  .chat-seen-status {
+    margin-top: 0.25rem;  /* sm:mt-1 */
+    padding: 0 0.25rem;   /* sm:px-1 */
+    gap: 0.375rem;        /* sm:gap-1.5 */
+    font-size: 11px;
+  }
 }

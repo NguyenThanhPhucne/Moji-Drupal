@@ -91,21 +91,22 @@ const GroupChatList = () => {
 
   if (groupchats.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-center text-sm text-muted-foreground">
-        No group chats
+      <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+        <div className="size-10 rounded-full bg-muted/40 flex items-center justify-center mb-2">
+          <span className="text-xl">📭</span>
+        </div>
+        <p className="text-[13px] font-medium text-foreground/70">No group chats</p>
+        <p className="text-[11px] text-muted-foreground/60 mt-0.5">Your teams will appear here</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-      <div className="mb-1 flex items-center justify-between px-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/85">
-          Text Channels
+    <div className="flex-1 overflow-y-auto pb-2 space-y-0.5">
+      <div className="mb-1.5 flex items-center justify-between px-3 pt-3 pb-1">
+        <p className="text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
+          Groups
         </p>
-        <span className="rounded-full border border-border/60 bg-muted/45 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-          {groupchats.length}
-        </span>
       </div>
 
       {channelsByCategory.map(({ category, items }, categoryIndex) => {
@@ -121,18 +122,18 @@ const GroupChatList = () => {
                   [category]: !isCollapsed,
                 }))
               }
-              className="mb-1 flex w-full items-center justify-between rounded-lg px-1 py-1 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+              className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
             >
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/85">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/60">
                 {category}
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="rounded-full border border-border/60 bg-muted/45 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                <span className="text-[10px] text-muted-foreground/50 font-medium">
                   {items.length}
                 </span>
                 <ChevronDown
                   className={cn(
-                    "size-3.5 text-muted-foreground transition-transform duration-150",
+                    "size-3 text-muted-foreground/50 transition-transform duration-150",
                     isCollapsed && "-rotate-90",
                   )}
                 />

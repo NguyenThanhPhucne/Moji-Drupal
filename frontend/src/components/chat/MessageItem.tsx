@@ -12,7 +12,6 @@ import {
   MoreHorizontal,
   Bookmark,
   Link2,
-  Quote,
   ZoomIn,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
@@ -243,7 +242,7 @@ const SeenStatus = memo(function SeenStatus({
   return (
     <div
       className={cn(
-        "mt-0.5 sm:mt-1 px-0.5 sm:px-1 flex items-center justify-end gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] text-muted-foreground/90",
+        "chat-seen-status",
         !reduceMotion &&
           seenJustUpdated &&
           "animate-in zoom-in-95 fade-in-0 duration-300",
@@ -587,16 +586,17 @@ const MessageMetaSection = memo(function MessageMetaSection({
       <div
         className={cn(
           "flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 px-0.5 sm:px-1",
+          "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
           isOwn ? "flex-row-reverse" : "flex-row",
         )}
       >
         {message.editedAt && !message.isDeleted && (
-          <span className="text-[10px] sm:text-[11px] text-muted-foreground/90 italic leading-none">
+          <span className="text-[10px] sm:text-[11px] text-muted-foreground/70 italic leading-none">
             edited
           </span>
         )}
-        <span className="text-[10px] sm:text-[11px] text-muted-foreground/90 font-medium tabular-nums tracking-wide leading-none">
-          {format(new Date(message.createdAt), "hh:mm a")}
+        <span className="text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium tabular-nums tracking-wide leading-none">
+          {format(new Date(message.createdAt), "HH:mm")}
         </span>
       </div>
 
@@ -678,15 +678,16 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
       {message.replyTo && !message.isDeleted && (
         <div
           className={cn(
-            "mb-1 max-w-full rounded-xl border border-border/60 px-3 py-2 bg-gradient-to-r from-muted/55 to-muted/25",
-            isOwn ? "ring-1 ring-primary/15" : "",
+            "mb-1.5 max-w-full rounded-r-lg px-2.5 py-1.5 border-l-2",
+            isOwn
+              ? "border-l-primary/60 bg-primary/[0.07]"
+              : "border-l-muted-foreground/35 bg-muted/40",
           )}
         >
-          <p className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-            <Quote className="size-3" />
-            Replying to
+          <p className="text-[10px] font-semibold mb-0.5 uppercase tracking-[0.04em] text-muted-foreground/60">
+            Reply
           </p>
-          <p className="text-xs truncate text-muted-foreground max-w-[200px]">
+          <p className="text-[12px] truncate text-muted-foreground/80 max-w-[220px] leading-snug">
             {message.replyTo.content}
           </p>
         </div>
@@ -759,6 +760,7 @@ interface MessageItemProps {
   message: Message;
   index: number;
   prevSenderId?: string;
+  nextSenderId?: string; // for cluster-aware bubble radius
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
   lastOwnMessageId?: string | null;
@@ -780,6 +782,7 @@ const MessageItem = memo(function MessageItem({
   message,
   index,
   prevSenderId,
+  nextSenderId,
   selectedConvo,
   lastMessageStatus,
   lastOwnMessageId,
@@ -826,6 +829,9 @@ const MessageItem = memo(function MessageItem({
 
   const isLastFromSender =
     index === 0 || prevSenderId !== String(message.senderId);
+  // True when the NEXT message is from a DIFFERENT sender (= current is the last in cluster)
+  const isClusterBottom =
+    !nextSenderId || nextSenderId !== String(message.senderId);
 
   const senderParticipant = selectedConvo.participants.find(
     (p) => p._id === message.senderId,
@@ -928,6 +934,13 @@ const MessageItem = memo(function MessageItem({
       const rect = e.currentTarget.getBoundingClientRect();
       const menuWidth = 176;
       const viewportPadding = 8;
+      // Account for iOS safe-area-inset-bottom (adds ~34px on notched devices)
+      const safeAreaBottom =
+        typeof globalThis.CSS !== "undefined" &&
+        typeof globalThis.CSS.supports === "function" &&
+        globalThis.CSS.supports("padding-bottom: env(safe-area-inset-bottom)")
+          ? 44
+          : 8;
       const rawX = isOwn ? rect.left - menuWidth + rect.width : rect.right;
       const rawY = rect.bottom + 6;
 
@@ -940,7 +953,7 @@ const MessageItem = memo(function MessageItem({
       );
       const y = Math.max(
         viewportPadding,
-        Math.min(rawY, globalThis.window.innerHeight - 220),
+        Math.min(rawY, globalThis.window.innerHeight - 220 - safeAreaBottom),
       );
 
       setContextMenu({ x, y });
@@ -1067,15 +1080,39 @@ const MessageItem = memo(function MessageItem({
   const actionBarVisible =
     isMessageHovered || reactBarVisible || Boolean(contextMenu);
   const wrapperClassName = cn(
-    "flex gap-2 px-2 py-0.5 group relative",
+    "flex gap-2 px-2 group relative",
     isOwn ? "flex-row-reverse" : "flex-row",
     isNew && "message-slide-in",
+    isLastFromSender ? "pt-2 pb-[2px]" : "py-[2px]",
   );
 
   const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted);
+
+  // Cluster-aware border-radius — Messenger style
+  // Sent: tail corner (br) is small when cluster bottom, large otherwise
+  // Received: tail corner (tl) is small when cluster bottom, large otherwise
   const bubbleToneClass = isOwn
-    ? "bg-primary text-primary-foreground rounded-[20px] rounded-br-[4px]"
-    : "bg-muted text-foreground/90 rounded-[20px] rounded-tl-[4px]";
+    ? cn(
+        "chat-bubble-sent chat-bubble-shell",
+        isLastFromSender && isClusterBottom
+          ? "rounded-[20px] rounded-br-[4px]" // solo bubble
+          : isLastFromSender
+          ? "rounded-[20px] rounded-br-[8px]" // cluster top
+          : isClusterBottom
+          ? "rounded-[20px] rounded-br-[4px]" // cluster bottom
+          : "rounded-[20px] rounded-br-[8px]", // cluster middle
+      )
+    : cn(
+        "chat-bubble-received chat-bubble-shell",
+        isLastFromSender && isClusterBottom
+          ? "rounded-[20px] rounded-tl-[4px]" // solo bubble
+          : isLastFromSender
+          ? "rounded-[20px] rounded-tl-[8px]" // cluster top
+          : isClusterBottom
+          ? "rounded-[20px] rounded-tl-[4px]" // cluster bottom
+          : "rounded-[20px] rounded-tl-[8px]", // cluster middle
+      );
+
   const imageCornerClass = isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]";
 
   const renderReadOnlyBubble = () => (

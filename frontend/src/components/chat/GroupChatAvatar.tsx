@@ -1,6 +1,6 @@
 import type { Participant } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
-import { Ellipsis } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface GroupChatAvatarProps {
   participants: Participant[];
@@ -24,13 +24,18 @@ const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
   }
 
   return (
-    <div className="relative flex -space-x-2 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-2">
+    <div className="relative flex -space-x-1.5 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-[1.5px] hover:-space-x-1 transition-all duration-200">
       {avatars}
 
       {/* if there are more than 4 avatars, render overflow indicator */}
       {participants.length > limit && (
-        <div className="flex items-center z-10 justify-center size-8 rounded-full bg-muted ring-2 ring-background text-muted-foreground">
-          <Ellipsis className="size-4" />
+        <div 
+          className={cn(
+            "flex items-center z-10 justify-center rounded-full bg-primary/10 ring-[1.5px] ring-background text-primary font-bold transition-all",
+            type === "sidebar" ? "size-[42px] text-sm" : "size-8 text-xs"
+          )}
+        >
+          +{participants.length - limit}
         </div>
       )}
     </div>

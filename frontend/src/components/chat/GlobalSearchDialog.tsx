@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pin, Search, Star, Users, MessagesSquare } from "lucide-react";
+import { Pin, Search, Star, Users, MessagesSquare, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -377,15 +377,31 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
           </DialogDescription>
         </DialogHeader>
 
-        <Input
-          data-autofocus="true"
-          autoFocus
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search people, groups, messages..."
-          aria-label="Global search"
-          className="modal-stagger-item"
-        />
+        <div className="relative flex items-center w-full modal-stagger-item">
+          <Search className="absolute left-4 size-4 text-muted-foreground/60 pointer-events-none" />
+          <Input
+            data-autofocus="true"
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search people, groups, messages..."
+            aria-label="Global search"
+            className="search-input-pill h-11 text-base pl-10 pr-10"
+          />
+          {query.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                document.querySelector<HTMLInputElement>('[data-autofocus="true"]')?.focus();
+              }}
+              className="absolute right-3 p-1 rounded-full text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              aria-label="Clear search"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
 
         {query.trim().length < 2 && (
           <div className="space-y-3 modal-stagger-item">
@@ -498,12 +514,17 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                         key={toResultKey(item)}
                         className="flex items-center gap-3 rounded-lg border border-border/70 p-2.5 hover:bg-muted/40 focus-within:ring-2 focus-within:ring-primary/25"
                       >
-                        <div className="size-8 rounded-full bg-muted flex items-center justify-center">
-                          {item.type === "people" && <Users className="size-4" />}
-                          {item.type === "groups" && (
-                            <MessagesSquare className="size-4" />
+                        <div
+                          className={cn(
+                            "size-8 rounded-full flex items-center justify-center border",
+                            item.type === "people" && "bg-blue-500/10 text-blue-600 border-blue-500/20",
+                            item.type === "groups" && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+                            item.type === "messages" && "bg-purple-500/10 text-purple-600 border-purple-500/20"
                           )}
-                          {item.type === "messages" && <Search className="size-4" />}
+                        >
+                          {item.type === "people" && <Users className="size-[18px]" />}
+                          {item.type === "groups" && <MessagesSquare className="size-[18px]" />}
+                          {item.type === "messages" && <Search className="size-[18px]" />}
                         </div>
 
                         <button

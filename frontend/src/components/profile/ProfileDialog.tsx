@@ -458,8 +458,8 @@ function NotificationsSection() {
             <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
             <p id={`${id}-hint`} className="text-xs text-muted-foreground mt-0.5">{sub}</p>
           </div>
-          <Switch id={id} checked={val} disabled={savingKey !== null} aria-describedby={`${id}-hint`} onCheckedChange={(checked) => updatePreference(key, checked)}
-            className="data-[state=checked]:bg-primary shrink-0" />
+          <Switch id={id} checked={val} disabled={savingKey === key} aria-describedby={`${id}-hint`} onCheckedChange={(checked) => updatePreference(key, checked)}
+            className="data-[state=checked]:bg-primary shrink-0 transition-all duration-200" />
         </div>
       ))}
       </div>

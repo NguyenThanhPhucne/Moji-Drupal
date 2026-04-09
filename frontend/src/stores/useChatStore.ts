@@ -422,6 +422,9 @@ export const useChatStore = create<ChatState>()(
             });
           }
 
+          // Reset reply context so user doesn't get stuck with stale reply preview
+          set({ replyingTo: null });
+
           toast.error("Failed to send message. Please try again.");
           console.error("Error sending direct message", error);
         }
@@ -472,6 +475,8 @@ export const useChatStore = create<ChatState>()(
         } catch (error) {
           // Rollback
           get().removeMessageFromConversation(conversationId, tempId);
+          // Reset reply context so user doesn't get stuck with stale reply preview
+          set({ replyingTo: null });
           toast.error("Failed to send message. Please try again.");
           console.error("Error sending group message", error);
         }
@@ -483,9 +488,25 @@ export const useChatStore = create<ChatState>()(
           const convoId = message.conversationId;
 
           set((state) => {
-            const currentItems = state.messages[convoId]?.items ?? [];
+            let currentItems = state.messages[convoId]?.items ?? [];
             if (currentItems.some((m) => m._id === message._id)) {
               return state;
+            }
+
+            // Defend against Socket/API race condition where socket broadcasts the real message
+            // before our local API call resolves and tears down the optimistic (temp-) message.
+            if (message.isOwn && !message._id.startsWith("temp-")) {
+              const matchedTempIndex = currentItems.findIndex(
+                (m) =>
+                  m.isOwn &&
+                  String(m._id).startsWith("temp-") &&
+                  m.content === message.content
+              );
+
+              if (matchedTempIndex !== -1) {
+                // If we found the phantom optimistic message, destroy it early
+                currentItems = currentItems.filter((_, idx) => idx !== matchedTempIndex);
+              }
             }
 
             const normalized = sortMessagesChronologically([
@@ -769,11 +790,20 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateConversation: (conversation) => {
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
+        set((state) => {
+          const nextList = state.conversations.map((c) =>
             c._id === conversation._id ? { ...c, ...conversation } : c,
-          ),
-        }));
+          );
+
+          // Sort conversations chronologically so the latest updated conversation bubbles to the top
+          nextList.sort((a, b) => {
+            const timeA = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+            const timeB = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+            return timeB - timeA;
+          });
+
+          return { conversations: nextList };
+        });
       },
       markAsSeen: async () => {
         try {

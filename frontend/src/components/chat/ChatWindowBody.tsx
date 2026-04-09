@@ -11,11 +11,12 @@ import {
 } from "react";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { ArrowDown, MessageCircle } from "lucide-react";
+import { ArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Message } from "@/types/chat";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { ChatWindowSkeleton } from "@/components/skeleton/ChatWindowSkeleton";
 import {
   exposeChatThreadBenchApi,
   isChatThreadBenchEnabled,
@@ -74,10 +75,14 @@ const ChatWindowBody = () => {
     activeConversationId,
     conversations,
     messages: allMessages,
+    messageLoading,
     fetchMessages,
   } = useChatStore();
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
+
+  // Track truly new messages — only animate the first render of a brand-new _id
+  const lastNewMessageIdRef = useRef<string | null>(null);
 
   const [typingUsers, setTypingUsers] = useState<Record<string, TypingEntry>>(
     {},
@@ -363,6 +368,11 @@ const ChatWindowBody = () => {
       const newestMsg = messages.at(-1);
       const isSentByMe = newestMsg?.senderId === currentUser?._id;
 
+      // Mark this specific message ID as the new one to animate
+      if (newestMsg?._id) {
+        lastNewMessageIdRef.current = newestMsg._id;
+      }
+
       // Keep chat pinned to bottom for outgoing messages or when already at bottom.
       if (isSentByMe || isAtBottom) {
         virtuosoRef.current?.scrollToIndex({
@@ -386,18 +396,24 @@ const ChatWindowBody = () => {
       const showDateDivider =
         !nextMessage || !isSameDay(message.createdAt, nextMessage.createdAt);
 
+      // Only animate a message if it matches the latest newly arrived ID.
+      // This prevents every re-render of the last item (e.g. reaction updates)
+      // from triggering the slide-in animation.
+      const isNew = message._id === lastNewMessageIdRef.current;
+
       return (
         <MessageItem
           message={message}
           index={index}
           prevSenderId={prevMessage?.senderId ? String(prevMessage.senderId) : ""}
+          nextSenderId={nextMessage?.senderId ? String(nextMessage.senderId) : ""}
           selectedConvo={selectedConvo as NonNullable<typeof selectedConvo>}
           lastMessageStatus={lastMessageStatus}
           lastOwnMessageId={lastOwnMessage?._id ?? null}
           seenUser={directSeenUser}
           seenUsers={groupSeenUsers}
           showDateDivider={showDateDivider}
-          isNew={index === messages.length - 1}
+          isNew={isNew}
         />
       );
     },
@@ -477,16 +493,26 @@ const ChatWindowBody = () => {
 
   if (!selectedConvo) return <ChatWelcomeScreen />;
 
+  // Show skeleton while fetching the first page of messages (avoids CLS flash)
+  const isInitialLoad = messageLoading && !messages?.length;
+  if (isInitialLoad) {
+    return (
+      <div className="h-full bg-background">
+        <ChatWindowSkeleton />
+      </div>
+    );
+  }
+
   if (!messages?.length) {
     return (
-      <div className="flex h-full items-center justify-center flex-col gap-4 text-muted-foreground px-8 text-center bg-background">
-        <div className="size-16 rounded-full bg-muted flex items-center justify-center animate-bounce">
-          <MessageCircle className="size-8 text-muted-foreground" />
+      <div className="flex h-full items-center justify-center flex-col gap-2.5 text-muted-foreground px-8 text-center bg-background animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <span className="text-4xl select-none">👋</span>
+        <div>
+          <p className="text-[14px] font-semibold text-foreground/80">No messages yet</p>
+          <p className="text-[12px] text-muted-foreground/60 mt-0.5">
+            Be the first to say something!
+          </p>
         </div>
-        <p className="text-sm font-medium">No messages yet</p>
-        <p className="text-xs">
-          Send the first message to start the conversation!
-        </p>
       </div>
     );
   }

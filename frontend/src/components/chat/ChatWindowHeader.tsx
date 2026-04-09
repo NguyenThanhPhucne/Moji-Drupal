@@ -7,6 +7,7 @@ import StatusBadge from "./StatusBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { Button } from "../ui/button";
+import { cn, formatOnlineTime } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { MoreVertical, Trash2, Phone, Video, UserCircle, Users, Circle } from "lucide-react";
+import { MoreVertical, Trash2, Phone, Video, UserCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -59,7 +60,7 @@ function getPresenceText(
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
-  const { getUserPresence } = useSocketStore();
+  const { getUserPresence, getLastActiveAt } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
@@ -90,7 +91,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   }
 
   const presenceText = getPresenceText(chat, otherUser?._id, getUserPresence);
-  const contextLabel = chat.type === "direct" ? "Direct message" : "Group chat";
+  // contextLabel kept for future use (e.g. tooltip, accessibility aria-label)
 
   const handleDeleteConversation = async () => {
     try {
@@ -150,11 +151,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
             {/* Avatar + name */}
             <div
-              className={`chat-header-identity chat-header-identity--enterprise ${
+              className={cn(
+                "chat-header-identity chat-header-identity--enterprise",
                 chat.type === "direct"
                   ? "chat-header-identity--direct"
-                  : "chat-header-identity--group"
-              } flex items-center gap-3 rounded-xl px-2 py-1.5 cursor-pointer min-w-0`}
+                  : "chat-header-identity--group",
+              )}
             >
               {/* avatar */}
               <div className="relative flex-shrink-0">
@@ -192,23 +194,44 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
               {/* name + presence */}
               <div key={chat._id} className="header-info-enter min-w-0">
-                <h2 className="truncate font-semibold tracking-[-0.01em] text-[15px] text-foreground">
+                <h2 className="truncate font-semibold tracking-tight text-[15px] text-foreground leading-tight">
                   {chat.type === "direct"
                     ? otherUser?.displayName
                     : chat.group?.name}
                 </h2>
-                <div className="mt-0.5 flex items-center gap-1.5">
-                  <span className="chat-header-context-pill">
-                    {chat.type === "direct" ? (
-                      <Circle className="size-2.5 fill-current" />
-                    ) : (
-                      <Users className="size-2.5" />
-                    )}
-                    {contextLabel}
-                  </span>
-                  <p className="text-[11px] text-muted-foreground leading-none">
-                    {presenceText}
-                  </p>
+                <div className="flex items-center gap-1.5 mt-[2px]">
+                  {chat.type === "direct" && (() => {
+                    const pres = getUserPresence(otherUser?._id);
+                    const lastActiveAt = getLastActiveAt(otherUser?._id);
+                    if (pres === "online") {
+                      return (
+                        <span className="flex items-center gap-1">
+                          <span className="inline-block h-[7px] w-[7px] rounded-full bg-[#31a24c] shadow-[0_0_0_1.5px_rgba(255,255,255,0.7)]" />
+                          <span className="text-[12px] font-medium text-[#31a24c] leading-none">
+                            Active now
+                          </span>
+                        </span>
+                      );
+                    }
+                    if (pres === "recently-active" && lastActiveAt) {
+                      const timeStr = formatOnlineTime(new Date(lastActiveAt));
+                      return (
+                        <span className="text-[12px] text-muted-foreground/70 leading-none">
+                          Active {timeStr} ago
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="text-[12px] text-muted-foreground/50 leading-none">
+                        Offline
+                      </span>
+                    );
+                  })()}
+                  {chat.type === "group" && (
+                    <span className="text-[12px] text-muted-foreground/70 leading-none">
+                      {presenceText}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -313,7 +336,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
-              className={`chat-modal-btn chat-modal-btn--danger w-full ${isDeleting ? "chat-modal-btn--busy" : ""}`}
+              className={cn(
+                "chat-modal-btn chat-modal-btn--danger w-full",
+                isDeleting && "chat-modal-btn--busy",
+              )}
             >
               {isDeleting ? "Deleting..." : "Yes, delete"}
             </AlertDialogAction>

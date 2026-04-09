@@ -1,26 +1,24 @@
-import { Card } from "../ui/card";
+
 
 const ConversationSkeleton = () => {
   return (
-    <>
-      {Array.from({ length: 3 }).map((_, index) => (
-        <Card
+    <div className="flex flex-col gap-1 px-1 py-1">
+      {Array.from({ length: 4 }).map((_, index) => (
+        <div
           key={index}
-          className="border-none p-3 glass skeleton-shimmer"
+          className="flex flex-row items-center gap-3 rounded-xl border border-transparent px-3 py-[9px] bg-transparent"
         >
-          <div className="flex items-center gap-3">
-            {/* Avatar skeleton */}
-            <div className="size-10 rounded-full bg-muted" />
+          {/* Avatar skeleton */}
+          <div className="size-[42px] rounded-full skeleton-shimmer flex-shrink-0" />
 
-            {/* Info skeleton */}
-            <div className="flex-1 space-y-2">
-              <div className="h-3 w-1/2 bg-muted rounded" />
-              <div className="h-3 w-3/4 bg-muted rounded" />
-            </div>
+          {/* Info skeleton */}
+          <div className="flex flex-col flex-1 justify-center gap-1.5 min-w-0 pr-1">
+            <div className="h-3.5 w-24 rounded-md skeleton-shimmer" />
+            <div className="h-2.5 w-3/4 rounded-sm skeleton-shimmer opacity-70" />
           </div>
-        </Card>
+        </div>
       ))}
-    </>
+    </div>
   );
 };
 

@@ -561,19 +561,30 @@ export const unsendMessage = async (req, res) => {
     message.editedAt = new Date();
     await message.save();
 
-    const updatedConversation = await Conversation.findOneAndUpdate(
-      {
-        _id: message.conversationId,
-        "lastMessage._id": message._id.toString(),
-      },
-      {
-        $set: {
-          "lastMessage.content": REMOVED_MESSAGE_CONTENT,
-          "lastMessage.createdAt": message.createdAt,
+    // Update conversation preview independently — message deletion succeeds even if
+    // this step fails, avoiding partial-rollback confusion. Log discrepancy clearly.
+    let updatedConversation = null;
+    try {
+      updatedConversation = await Conversation.findOneAndUpdate(
+        {
+          _id: message.conversationId,
+          "lastMessage._id": message._id.toString(),
         },
-      },
-      { new: true },
-    );
+        {
+          $set: {
+            "lastMessage.content": REMOVED_MESSAGE_CONTENT,
+            "lastMessage.createdAt": message.createdAt,
+          },
+        },
+        { new: true },
+      );
+    } catch (convUpdateError) {
+      console.error(
+        "[unsendMessage] Conversation preview update failed after message deletion. " +
+          "Message is deleted in DB but lastMessage preview may be stale.",
+        convUpdateError,
+      );
+    }
 
     io.to(message.conversationId.toString()).emit("message-deleted", {
       conversationId: message.conversationId,

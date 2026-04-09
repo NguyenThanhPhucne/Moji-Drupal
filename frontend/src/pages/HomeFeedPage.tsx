@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
@@ -13,10 +13,29 @@ import PostComposerSkeleton from "@/components/skeleton/PostComposerSkeleton";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
 import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { getStaggerEnterClass } from "@/lib/utils";
+import { cn, getStaggerEnterClass } from "@/lib/utils";
+import type { SocialPost } from "@/types/social";
+
+// ── Feed scoring — defined outside component so it is referentially stable ──
+const computeFeedScore = (
+  post: SocialPost,
+  interactedAuthorIds: Set<string>,
+) => {
+  const ageHours = Math.max(
+    0,
+    (Date.now() - new Date(post.createdAt).getTime()) / (1000 * 60 * 60),
+  );
+  const recencyScore = Math.max(0, 72 - ageHours) * 1.1;
+  const mediaScore = (post.mediaUrls?.length || 0) > 0 ? 14 : 0;
+  const reactionScore = Math.min(28, Number(post.likesCount || 0) * 1.6);
+  const commentScore = Math.min(34, Number(post.commentsCount || 0) * 2.2);
+  const contextBoost = interactedAuthorIds.has(String(post.authorId._id || ""))
+    ? 20
+    : 0;
+  return recencyScore + mediaScore + reactionScore + commentScore + contextBoost;
+};
 
 const HomeFeedPage = () => {
   const navigate = useNavigate();
@@ -46,44 +65,50 @@ const HomeFeedPage = () => {
     markNotificationRead,
     markAllNotificationsRead,
   } = useSocialStore();
+
   const [composerOpenKey, setComposerOpenKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [feedTab, setFeedTab] = useState<"all" | "photos" | "text">("all");
 
-  const filteredHomeFeed = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+  // ── Infinite scroll sentinel ─────────────────────────────────────────────
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadMoreInFlight = useRef(false);
+
+  const loadMore = useCallback(async () => {
+    if (!homePagination.hasNextPage || loadingHome || loadMoreInFlight.current) return;
+    loadMoreInFlight.current = true;
+    await fetchHomeFeed(homePagination.page + 1, true);
+    loadMoreInFlight.current = false;
+  }, [homePagination.hasNextPage, homePagination.page, loadingHome, fetchHomeFeed]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) void loadMore(); },
+      { rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  // ── Feed scoring — stable memoization ───────────────────────────────────
+  // interactedAuthorIds is separated so scoring only recalcs when homeFeed changes
+  const interactedAuthorIds = useMemo(() => {
     const currentUserId = String(user?._id || "");
-    const interactedAuthorIds = new Set<string>();
-
+    const ids = new Set<string>();
     homeFeed.forEach((post) => {
-      if (post.ownReaction) {
-        interactedAuthorIds.add(String(post.authorId._id || ""));
-      }
-
+      if (post.ownReaction) ids.add(String(post.authorId._id || ""));
       const commentsForPost = postComments[post._id] || [];
-      const userCommented = commentsForPost.some(
-        (comment) => String(comment.authorId?._id || "") === currentUserId,
-      );
-
-      if (userCommented) {
-        interactedAuthorIds.add(String(post.authorId._id || ""));
+      if (commentsForPost.some((c) => String(c.authorId?._id || "") === currentUserId)) {
+        ids.add(String(post.authorId._id || ""));
       }
     });
+    return ids;
+  }, [homeFeed, postComments, user?._id]);
 
-    const computeFeedScore = (post: (typeof homeFeed)[number]) => {
-      const createdAtTs = new Date(post.createdAt).getTime();
-      const ageHours = Math.max(0, (Date.now() - createdAtTs) / (1000 * 60 * 60));
-      const recencyScore = Math.max(0, 72 - ageHours) * 1.1;
-      const mediaScore = (post.mediaUrls?.length || 0) > 0 ? 14 : 0;
-      const reactionScore = Math.min(28, Number(post.likesCount || 0) * 1.6);
-      const commentScore = Math.min(34, Number(post.commentsCount || 0) * 2.2);
-      const contextBoost = interactedAuthorIds.has(String(post.authorId._id || ""))
-        ? 20
-        : 0;
-
-      return recencyScore + mediaScore + reactionScore + commentScore + contextBoost;
-    };
-
+  const filteredHomeFeed = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
     return homeFeed
       .filter((post) => {
         const hasMedia = Boolean(post.mediaUrls?.length);
@@ -91,47 +116,31 @@ const HomeFeedPage = () => {
           feedTab === "all" ||
           (feedTab === "photos" && hasMedia) ||
           (feedTab === "text" && !hasMedia);
-
-        if (!matchesTab) {
-          return false;
-        }
-
-        if (!normalizedQuery) {
-          return true;
-        }
-
+        if (!matchesTab) return false;
+        if (!normalizedQuery) return true;
         const caption = String(post.caption || "").toLowerCase();
         const author = String(post.authorId.displayName || "").toLowerCase();
         const tags = (post.tags || []).join(" ").toLowerCase();
-
-        return (
-          caption.includes(normalizedQuery) ||
-          author.includes(normalizedQuery) ||
-          tags.includes(normalizedQuery)
-        );
+        return caption.includes(normalizedQuery) || author.includes(normalizedQuery) || tags.includes(normalizedQuery);
       })
-      .sort((a, b) => computeFeedScore(b) - computeFeedScore(a));
-  }, [feedTab, homeFeed, postComments, searchQuery, user?._id]);
+      .sort((a, b) => computeFeedScore(b, interactedAuthorIds) - computeFeedScore(a, interactedAuthorIds));
+  }, [feedTab, homeFeed, interactedAuthorIds, searchQuery]);
+
+  // Live count badges per tab
+  const tabCounts = useMemo(() => ({
+    all: homeFeed.length,
+    photos: homeFeed.filter((p) => Boolean(p.mediaUrls?.length)).length,
+    text: homeFeed.filter((p) => !p.mediaUrls?.length).length,
+  }), [homeFeed]);
 
   const isInitialHomeLoading = loadingHome && homeFeed.length === 0;
-  const isLoadingMoreHome = loadingHome && homeFeed.length > 0;
+  const isLoadingMore = loadingHome && homeFeed.length > 0;
 
   useEffect(() => {
-    if (!accessToken || !user) {
-      return;
-    }
-
+    if (!accessToken || !user) return;
     fetchHomeFeed(1, false);
     fetchNotifications();
   }, [accessToken, user, fetchHomeFeed, fetchNotifications]);
-
-  const loadMore = async () => {
-    if (!homePagination.hasNextPage || loadingHome) {
-      return;
-    }
-
-    await fetchHomeFeed(homePagination.page + 1, true);
-  };
 
   return (
     <SidebarProvider>
@@ -170,43 +179,44 @@ const HomeFeedPage = () => {
                   </div>
                 </>
               ) : (
-                    <PostComposer onCreate={createPost} openRequestKey={composerOpenKey} />
+                <PostComposer onCreate={createPost} openRequestKey={composerOpenKey} />
               )}
 
+              {/* ── Filter bar with live count badges ────────────────────── */}
               <div className="social-card social-home-filter-bar p-2">
-                <button
-                  type="button"
-                  className="social-home-filter-chip"
-                  data-active={feedTab === "all"}
-                  onClick={() => setFeedTab("all")}
-                >
-                  All posts
-                </button>
-                <button
-                  type="button"
-                  className="social-home-filter-chip"
-                  data-active={feedTab === "photos"}
-                  onClick={() => setFeedTab("photos")}
-                >
-                  Photos
-                </button>
-                <button
-                  type="button"
-                  className="social-home-filter-chip"
-                  data-active={feedTab === "text"}
-                  onClick={() => setFeedTab("text")}
-                >
-                  Text
-                </button>
+                {(["all", "photos", "text"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className="social-home-filter-chip"
+                    data-active={feedTab === tab}
+                    onClick={() => setFeedTab(tab)}
+                  >
+                    <span>
+                      {tab === "all" ? "All posts" : tab === "photos" ? "Photos" : "Text"}
+                    </span>
+                    {homeFeed.length > 0 && (
+                      <span
+                        className={cn(
+                          "ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors",
+                          feedTab === tab
+                            ? "bg-primary/20 text-primary"
+                            : "bg-muted text-muted-foreground",
+                        )}
+                      >
+                        {tabCounts[tab]}
+                      </span>
+                    )}
+                  </button>
+                ))}
               </div>
 
+              {/* ── Post list ─────────────────────────────────────────────── */}
               <div className="space-stack-md">
                 {isInitialHomeLoading && <SocialPostSkeleton count={3} />}
+
                 {filteredHomeFeed.map((post, index) => (
-                  <div
-                    key={post._id}
-                    className={getStaggerEnterClass(index)}
-                  >
+                  <div key={post._id} className={getStaggerEnterClass(index)}>
                     <SocialPostCard
                       post={post}
                       comments={postComments[post._id]}
@@ -226,25 +236,42 @@ const HomeFeedPage = () => {
                     />
                   </div>
                 ))}
-                {isLoadingMoreHome && (
+
+                {isLoadingMore && (
                   <SocialPostSkeleton count={2} staggerFrom={homeFeed.length} />
                 )}
+
+                {/* ── Contextual empty state ──────────────────────────────── */}
                 {!loadingHome && filteredHomeFeed.length === 0 && (
-                  <div className="social-card-empty p-8 text-center">
-                    No posts match your current filters.
+                  <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+                    <div className="size-14 rounded-full bg-muted/50 flex items-center justify-center mb-3 ring-4 ring-background shadow-sm">
+                      <span className="text-2xl">
+                        {feedTab === "photos" ? "🖼️" : feedTab === "text" ? "📝" : searchQuery ? "🔍" : "🌱"}
+                      </span>
+                    </div>
+                    <p className="text-[14px] font-semibold text-foreground/80">
+                      {searchQuery
+                        ? `No results for "${searchQuery}"`
+                        : feedTab === "photos"
+                        ? "No photo posts yet"
+                        : feedTab === "text"
+                        ? "No text-only posts yet"
+                        : "Your feed is empty"}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground/70 mt-1 max-w-[240px]">
+                      {searchQuery
+                        ? "Try adjusting your search terms"
+                        : "Follow people or share something to get started"}
+                    </p>
                   </div>
                 )}
               </div>
 
-              {homePagination.hasNextPage && (
-                <div className="flex justify-center">
-                  {loadingHome ? (
-                    <LoadingMoreSkeleton />
-                  ) : (
-                    <Button type="button" variant="outline" onClick={loadMore}>
-                      Load more
-                    </Button>
-                  )}
+              {/* ── Infinite scroll sentinel ──────────────────────────────── */}
+              <div ref={sentinelRef} className="h-4" aria-hidden="true" />
+              {isLoadingMore && (
+                <div className="flex justify-center pb-4">
+                  <LoadingMoreSkeleton />
                 </div>
               )}
             </section>

@@ -81,10 +81,8 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   } = useNotificationStore();
 
   const { markNotificationRead, markAllNotificationsRead } = useSocialStore();
-  const { createConversation, setIsHubOpen } = {
-    createConversation: useChatStore((s) => s.createConversation),
-    setIsHubOpen: useNotificationStore((s) => s.setIsHubOpen),
-  };
+  const createConversation = useChatStore((s) => s.createConversation);
+  const setIsHubOpen = useNotificationStore((s) => s.setIsHubOpen);
 
   const {
     receivedList: pendingRequests,

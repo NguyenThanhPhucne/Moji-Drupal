@@ -25,28 +25,28 @@ const BUBBLE_PATTERN: BubbleVariant[] = [
 function ShimmerBubble({ isOwn, widthClass, hasAvatar }: BubbleVariant) {
   return (
     <div
-      className={`flex items-end gap-2 px-3 py-0.5 ${isOwn ? "flex-row-reverse" : "flex-row"}`}
+      className={`flex items-end gap-2 px-3 py-0.5 mt-0.5 ${isOwn ? "flex-row-reverse" : "flex-row"}`}
     >
       {/* Avatar placeholder (received only, first of cluster) */}
-      <div className="w-8 flex-shrink-0">
+      <div className="w-8 flex-shrink-0 flex items-end">
         {!isOwn && hasAvatar && (
-          <div className="size-8 rounded-full skeleton-shimmer" />
+          <div className="size-8 rounded-full skeleton-shimmer bg-muted" />
         )}
       </div>
 
       {/* Bubble */}
       <div
-        className={`flex flex-col gap-1 ${isOwn ? "items-end" : "items-start"}`}
+        className={`flex flex-col gap-0.5 ${isOwn ? "items-end" : "items-start"}`}
       >
         <div
           className={cn(
-            "h-9 rounded-2xl skeleton-shimmer",
+            "h-[34px] rounded-[18px] skeleton-shimmer opacity-70",
             widthClass,
-            isOwn ? "rounded-br-md" : "rounded-bl-md"
+            isOwn ? "rounded-br-[4px] bg-[hsl(var(--chat-bubble-sent))]" : "rounded-bl-[4px] bg-[hsl(var(--chat-bubble-received))]"
           )}
         />
         {/* Timestamp */}
-        <div className="w-10 h-2.5 rounded skeleton-shimmer opacity-60" />
+        <div className="w-8 h-2 rounded skeleton-shimmer opacity-30 mt-0.5" />
       </div>
     </div>
   );

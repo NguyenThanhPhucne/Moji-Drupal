@@ -90,21 +90,6 @@ const DEFAULT_PAGINATION: PaginationPayload = {
   hasNextPage: false,
 };
 
-const updatePostLike = (
-  posts: SocialPost[],
-  postId: string,
-  liked: boolean,
-  likesCount: number,
-) =>
-  posts.map((post) =>
-    post._id === postId
-      ? {
-          ...post,
-          isLiked: liked,
-          likesCount,
-        }
-      : post,
-  );
 
 export const useSocialStore = create<SocialState>((set) => ({
   homeFeed: [],
@@ -290,42 +275,75 @@ export const useSocialStore = create<SocialState>((set) => ({
   },
 
   toggleLike: async (postId, reaction = "like") => {
+    const currentState = useSocialStore.getState();
+
+    // ── Snapshot for rollback ────────────────────────────────────────────
+    const previousHomeFeed = currentState.homeFeed;
+    const previousExploreFeed = currentState.exploreFeed;
+    const previousProfilePosts = currentState.profilePosts;
+
+    // ── Derive next state optimistically ────────────────────────────────
+    const applyOptimistic = (posts: SocialPost[]) =>
+      posts.map((post) => {
+        if (post._id !== postId) return post;
+
+        const prevReaction = post.ownReaction ?? null;
+        const nextReaction = prevReaction === reaction ? null : reaction;
+
+        // Build new reaction summary
+        const prevSummary = { ...(post.reactionSummary ?? { like: post.likesCount || 0, love: 0, haha: 0, wow: 0, sad: 0, angry: 0 }) };
+        if (prevReaction && prevSummary[prevReaction] !== undefined) {
+          prevSummary[prevReaction] = Math.max(0, prevSummary[prevReaction] - 1);
+        }
+        if (nextReaction) {
+          prevSummary[nextReaction] = (prevSummary[nextReaction] || 0) + 1;
+        }
+        const nextLikesCount = Object.values(prevSummary).reduce((sum, v) => sum + v, 0);
+
+        return {
+          ...post,
+          ownReaction: nextReaction,
+          isLiked: nextReaction === "like",
+          reactionSummary: prevSummary,
+          likesCount: nextLikesCount,
+        };
+      });
+
+    // Apply optimistic update immediately
+    set({
+      homeFeed: applyOptimistic(previousHomeFeed),
+      exploreFeed: applyOptimistic(previousExploreFeed),
+      profilePosts: applyOptimistic(previousProfilePosts),
+    });
+
     try {
       const result = await socialService.reactToPost(postId, reaction);
-      set((state) => ({
-        homeFeed: updatePostLike(state.homeFeed, result.postId, Boolean(result.ownReaction), result.likesCount).map((post) =>
+      // Reconcile with authoritative server response
+      const reconcile = (posts: SocialPost[]) =>
+        posts.map((post) =>
           post._id === result.postId
             ? {
                 ...post,
                 ownReaction: result.ownReaction,
                 isLiked: result.ownReaction === "like",
+                likesCount: result.likesCount,
                 reactionSummary: result.reactionSummary,
               }
             : post,
-        ),
-        exploreFeed: updatePostLike(state.exploreFeed, result.postId, Boolean(result.ownReaction), result.likesCount).map((post) =>
-          post._id === result.postId
-            ? {
-                ...post,
-                ownReaction: result.ownReaction,
-                isLiked: result.ownReaction === "like",
-                reactionSummary: result.reactionSummary,
-              }
-            : post,
-        ),
-        profilePosts: updatePostLike(state.profilePosts, result.postId, Boolean(result.ownReaction), result.likesCount).map((post) =>
-          post._id === result.postId
-            ? {
-                ...post,
-                ownReaction: result.ownReaction,
-                isLiked: result.ownReaction === "like",
-                reactionSummary: result.reactionSummary,
-              }
-            : post,
-        ),
-      }));
+        );
+      set({
+        homeFeed: reconcile(useSocialStore.getState().homeFeed),
+        exploreFeed: reconcile(useSocialStore.getState().exploreFeed),
+        profilePosts: reconcile(useSocialStore.getState().profilePosts),
+      });
       return true;
     } catch (error) {
+      // Full rollback on failure
+      set({
+        homeFeed: previousHomeFeed,
+        exploreFeed: previousExploreFeed,
+        profilePosts: previousProfilePosts,
+      });
       console.error("[social] toggleLike error", error);
       toast.error(getSocialErrorMessage(error, "Cannot react to this post"));
       return false;

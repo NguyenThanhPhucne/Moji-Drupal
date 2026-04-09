@@ -40,14 +40,25 @@ const UserAvatar = ({
     setAvatarPreviewOpen(true);
   };
 
+  // Hash name to a deterministic number 1-5 for vibrant gradients
+  const getAvatarGradient = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return `bg-avatar-${(Math.abs(hash) % 5) + 1}`;
+  };
+
+  const gradientClass = getAvatarGradient(name);
+
   return (
     <>
       <Avatar
         className={cn(
-          type === "sidebar" && "size-12 text-base",
+          type === "sidebar" && "size-[42px] text-sm",
           type === "chat" && "size-8 text-sm",
           type === "profile" && "size-24 text-3xl shadow-md",
-          canPreview && "cursor-zoom-in",
+          canPreview && "cursor-zoom-in hover:brightness-110 focus-visible:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all duration-200",
           className ?? "",
         )}
         role={canPreview ? "button" : undefined}
@@ -66,8 +77,8 @@ const UserAvatar = ({
         aria-label={canPreview ? `View ${name} avatar` : undefined}
       >
         <AvatarImage src={avatarUrl} alt={name} />
-        <AvatarFallback className="avatar-fallback-accent font-semibold">
-          {name.charAt(0)}
+        <AvatarFallback className={cn(gradientClass, "font-semibold pointer-events-none")}>
+          {name.charAt(0).toUpperCase()}
         </AvatarFallback>
       </Avatar>
 

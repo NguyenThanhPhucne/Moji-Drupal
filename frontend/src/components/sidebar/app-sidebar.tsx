@@ -118,36 +118,29 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }
         {...props}
       >
-        {/* Header */}
-        <SidebarHeader>
+        <SidebarHeader className="pb-0">
           <SidebarMenu>
             <SidebarMenuItem>
               <div className={cn(
-                "flex w-full items-center justify-between rounded-2xl bg-gradient-primary px-3 py-2.5 shadow-soft",
-                isCompact && "px-2 justify-center"
+                "flex w-full items-center justify-between px-3 py-2.5",
+                isCompact && "px-1 justify-center"
               )}>
                 {!isCompact && (
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-white/70">
-                      Workspace
-                    </p>
-                    <h1 className="text-base font-bold text-white tracking-[0.02em]">
-                      Coming
-                    </h1>
-                    <div className="flex items-center gap-2">
-                      <p className="text-[11px] text-white/80">
-                        Realtime Messaging
+                  <div className="flex items-center gap-2">
+                    <div className="size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                      <span className="text-[13px] font-black text-white tracking-tight">M</span>
+                    </div>
+                    <div>
+                      <h1 className="text-[15px] font-bold text-foreground tracking-tight leading-none">
+                        Moji
+                      </h1>
+                      <p className="text-[10px] text-muted-foreground/60 leading-none mt-0.5">
+                        Messaging
                       </p>
-                      {unreadSocialCount > 0 && (
-                        <span className="rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                          {unreadSocialCount > 99 ? "99+" : unreadSocialCount}
-                        </span>
-                      )}
                     </div>
                   </div>
                 )}
 
-                {/* Appearance button — replaces old Sun/Moon switch */}
                 <button
                   type="button"
                   data-keep-chat-open="true"
@@ -158,13 +151,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   title="Appearance"
                   aria-label="Open appearance settings"
                   className={cn(
-                    "flex items-center gap-1.5 rounded-full border border-white/20 bg-white/15 px-2 py-1.5",
-                    "text-white/80 hover:bg-white/25 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/55 focus-visible:ring-offset-2 focus-visible:ring-offset-primary/40",
-                    isCompact && "size-9 p-0 justify-center rounded-xl"
+                    "flex items-center justify-center rounded-full size-8 text-muted-foreground/70 hover:bg-muted/80 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                   )}
                 >
-                  <Palette className="size-3.5" />
-                  {!isCompact && <span className="text-[11px] font-medium">Theme</span>}
+                  <Palette className="size-4" />
                 </button>
               </div>
             </SidebarMenuItem>
@@ -177,7 +167,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarGroupContent>
               {isCompact ? (
                 /* ── Compact rail: vertical icon list ───────────────────── */
-                <div className="flex flex-col items-center gap-1.5 py-1">
+                <div className="flex flex-col items-center gap-1 py-1">
                   {[...navItems, ...bottomNavItems].map((item) => {
                     const Icon = item.icon;
                     return (
@@ -189,84 +179,47 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         aria-current={item.isActive ? "page" : undefined}
                         onClick={() => navigate(item.to)}
                         className={cn(
-                          "relative flex size-10 items-center justify-center rounded-xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
+                          "relative flex size-10 items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
                           item.isActive
-                            ? "nav-rail-active border-primary/60 bg-primary text-primary-foreground"
-                            : "border-border/50 bg-muted/40 text-foreground/80 hover:bg-muted/75"
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
                         )}
                       >
-                        {item.isActive && (
-                          <span className="absolute -left-2 h-4 w-1 rounded-full bg-primary" />
-                        )}
-                        <Icon className="size-4" />
+                        <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
                         {(item.badge ?? 0) > 0 && (
-                          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                            {(item.badge ?? 0) > 9 ? "9+" : item.badge}
-                          </span>
+                          <span className="absolute top-1 right-1 flex size-[7px] rounded-full bg-primary" />
                         )}
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                /* ── Full: nav grid (3-col top + 2-col bottom) ──────────── */
-                <div className="flex flex-col gap-1 p-1">
-                  {/* Top row: Chats / Feed / Explore */}
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {navItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          aria-current={item.isActive ? "page" : undefined}
-                          onClick={() => navigate(item.to)}
-                          className={cn(
-                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
-                            item.isActive
-                              ? "bg-primary text-primary-foreground shadow-soft"
-                              : "bg-muted/50 text-foreground/80 hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          <Icon className="size-4" />
-                          <span className="leading-none">{item.label}</span>
-                          {(item.badge ?? 0) > 0 && (
-                            <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                              {(item.badge ?? 0) > 9 ? "9+" : item.badge}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {/* Bottom row: Saved / Profile — 2 equal columns */}
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {bottomNavItems.map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          aria-current={item.isActive ? "page" : undefined}
-                          onClick={() => navigate(item.to)}
-                          className={cn(
-                            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
-                            item.isActive
-                              ? "bg-primary text-primary-foreground shadow-soft"
-                              : "bg-muted/50 text-foreground/80 hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          <Icon className="size-4" />
-                          <span className="leading-none">{item.label}</span>
-                          {(item.badge ?? 0) > 0 && (
-                            <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-                              {(item.badge ?? 0) > 9 ? "9+" : item.badge}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                /* ── Full: single-row horizontal tab bar ──────────────── */
+                <div className="flex gap-1 px-1 pb-1">
+                  {[...navItems, ...bottomNavItems].map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        aria-current={item.isActive ? "page" : undefined}
+                        onClick={() => navigate(item.to)}
+                        title={item.label}
+                        className={cn(
+                          "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          item.isActive
+                            ? "bg-primary/[0.09] text-primary"
+                            : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80",
+                        )}
+                      >
+                        <Icon className={cn("size-[18px]", item.isActive && "stroke-[2.2]")} />
+                        <span className="leading-none">{item.label}</span>
+                        {(item.badge ?? 0) > 0 && (
+                          <span className="absolute top-1.5 right-2 flex size-[7px] rounded-full bg-primary" />
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </SidebarGroupContent>

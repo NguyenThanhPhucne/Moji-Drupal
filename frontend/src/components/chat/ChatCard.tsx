@@ -36,12 +36,12 @@ const ChatCard = ({
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "cursor-pointer rounded-[14px] border border-transparent px-3 py-2.5 transition-all duration-200",
+        "cursor-pointer rounded-xl border border-transparent px-3 py-[9px] transition-all duration-150 active:scale-[0.98]",
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
-        "group select-none relative overflow-hidden active:scale-[0.98]",
+        "group select-none relative overflow-hidden",
         isActive
-          ? "bg-muted/80 shadow-sm text-foreground border-border/40"
-          : "bg-transparent hover:bg-muted/50 hover:border-border/30",
+          ? "bg-primary/[0.08] border-primary/10 text-foreground"
+          : "bg-transparent hover:bg-muted/55",
       )}
       onClick={() => onSelect(convoId)}
       onKeyDown={(event) => {
@@ -52,7 +52,7 @@ const ChatCard = ({
       }}
     >
       {isActive && (
-        <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-primary" />
+        <span className="absolute left-0 top-2 bottom-2 w-[3.5px] rounded-r-full bg-primary" />
       )}
 
       <div className="flex flex-row items-center gap-3">
@@ -64,10 +64,8 @@ const ChatCard = ({
           <div className="flex items-center justify-between mb-0.5">
             <h3
               className={cn(
-                "text-sm truncate",
-                hasUnread
-                  ? "font-bold text-foreground"
-                  : "font-semibold text-foreground/90",
+                "text-sm leading-tight truncate",
+                hasUnread ? "font-bold text-foreground" : "font-medium text-foreground/85",
                 isActive && "text-primary",
               )}
             >
@@ -75,10 +73,10 @@ const ChatCard = ({
             </h3>
             <span
               className={cn(
-                "text-[11px] flex-shrink-0 ml-2",
+                "text-[11px] flex-shrink-0 ml-2 tabular-nums",
                 hasUnread
                   ? "text-primary font-semibold"
-                  : "text-muted-foreground",
+                  : "text-muted-foreground/60 font-normal",
               )}
             >
               {timestamp ? formatOnlineTime(timestamp) : ""}
@@ -99,12 +97,12 @@ const ChatCard = ({
 
             <div className="flex flex-shrink-0 items-center gap-1.5">
               {hasMention && (
-                <span className="unread-badge-entry inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white shadow-sm">
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white">
                   @{(mentionCount ?? 0) > 9 ? "9+" : mentionCount}
                 </span>
               )}
               {hasUnread && (
-                <span className="unread-badge-entry inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow-sm">
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
                   {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
                 </span>
               )}

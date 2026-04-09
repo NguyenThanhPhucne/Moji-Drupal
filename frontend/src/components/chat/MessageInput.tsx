@@ -81,6 +81,21 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     };
   }, [socket, selectedConvo._id]);
 
+  // ── Reset draft when user switches conversation ──────────────────────────
+  // Prevents carrying typed text, image, or reply context to a different chat.
+  useEffect(() => {
+    setValue("");
+    setImagePreview(null);
+    setReplyingTo(null);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+    // Reset typing state for the previous conversation
+    lastTypingEmitAtRef.current = 0;
+    setTyping(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConvo._id]);
+
   if (!user) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,45 +163,28 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
 
   const hasSendable = value.trim() || imagePreview;
   const charsLeft = MAX_MESSAGE_LENGTH - value.length;
-  const showActionChips = focused || value.length > 0 || Boolean(imagePreview);
-
-  const injectTemplate = (type: "code" | "spoiler" | "mention") => {
-    const trimmed = value.trim();
-    if (type === "code") {
-      setValue(trimmed ? `${value}\n\`\`\`\n\n\`\`\`` : "```\n\n```");
-      return;
-    }
-
-    if (type === "spoiler") {
-      setValue(trimmed ? `${value} ||spoiler||` : "||spoiler||");
-      return;
-    }
-
-    setValue(trimmed ? `${value} @` : "@");
-  };
 
   return (
-    <div className="flex flex-col bg-background/95 backdrop-blur-sm relative z-10 w-full shrink-0 border-t border-border/40">
-      {/* Reply preview */}
+    <div className="flex flex-col bg-background relative z-10 w-full shrink-0 border-t border-border/30">
+      {/* Reply preview — Messenger minimal top-border style */}
       {replyingTo && (
-        <div className="flex items-center justify-between px-4 py-2 bg-muted/40 border-b border-border/30 animate-in slide-in-from-bottom-2 fade-in duration-200">
-          <div className="flex flex-col text-sm border-l-4 border-primary pl-3">
-            <span className="font-semibold text-primary text-xs">
-              Replying to message
-            </span>
-            <span className="text-muted-foreground truncate max-w-[240px] text-xs mt-0.5">
-              {replyingTo.content}
-            </span>
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border/25 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex-1 border-l-2 border-primary/70 pl-2.5 py-0.5">
+            <p className="text-[10px] font-semibold text-primary uppercase tracking-[0.04em] leading-none mb-0.5">
+              Reply
+            </p>
+            <p className="text-[12px] text-muted-foreground/75 truncate max-w-[260px] leading-snug">
+              {replyingTo.content || "(image)"}
+            </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded-full hover:bg-muted-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+          <button
+            type="button"
             aria-label="Cancel reply"
             onClick={() => setReplyingTo(null)}
+            className="flex-shrink-0 p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
           >
-            <X className="size-4 text-muted-foreground" />
-          </Button>
+            <X className="size-3.5" />
+          </button>
         </div>
       )}
 
@@ -209,39 +207,13 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         </div>
       )}
 
-      {/* Action chips (shown when focused) */}
-      {showActionChips && (
-        <div className="flex flex-wrap items-center gap-1.5 px-4 pt-2.5">
-          <button
-            type="button"
-            onClick={() => injectTemplate("mention")}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
-            aria-label="Mention someone"
-          >
-            @ Mention
-          </button>
-          <button
-            type="button"
-            onClick={() => injectTemplate("code")}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
-            aria-label="Insert code"
-          >
-            Code
-          </button>
-          <button
-            type="button"
-            onClick={() => injectTemplate("spoiler")}
-            className="rounded-full border border-border/70 bg-muted/40 px-2.5 py-0.5 text-[11px] font-medium text-foreground/75 transition-all hover:bg-muted hover:text-foreground hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
-            aria-label="Insert spoiler"
-          >
-            Spoiler
-          </button>
+      {/* Char counter — show only when approaching limit */}
+      {charsLeft < 120 && (
+        <div className="flex justify-end px-4 pt-1.5">
           <span
             className={cn(
-              "ml-auto text-[10px] tabular-nums",
-              charsLeft < 120
-                ? "chat-counter-warning"
-                : "text-muted-foreground/60",
+              "text-[10px] tabular-nums",
+              charsLeft < 50 ? "chat-counter-warning" : "text-muted-foreground/50",
             )}
           >
             {charsLeft}
@@ -256,15 +228,15 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           variant="ghost"
           size="icon"
           className={cn(
-            "mb-0.5 flex-shrink-0 size-9 rounded-xl transition-all duration-200",
-            "border border-transparent hover:border-border/60 hover:bg-primary/10 hover:text-primary",
-            imagePreview && "text-primary border-primary/40 bg-primary/10"
+            "mb-0.5 flex-shrink-0 size-9 rounded-full transition-colors duration-150",
+            "text-muted-foreground/70 hover:bg-primary/10 hover:text-primary",
+            imagePreview && "text-primary bg-primary/10"
           )}
           onClick={() => fileInputRef.current?.click()}
           title="Send image"
           aria-label="Attach image"
         >
-          <ImagePlus className="size-4" />
+          <ImagePlus className="size-[18px]" />
         </Button>
         <input
           ref={fileInputRef}
@@ -277,11 +249,11 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         {/* Textarea wrapper with focus ring */}
         <div
           className={cn(
-            "flex-1 relative rounded-2xl transition-all duration-200",
-            "border bg-muted/30",
+            "flex-1 relative rounded-[22px] transition-all duration-150",
+            "border bg-muted/25",
             focused
-              ? "border-primary/50 shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]"
-              : "border-border/50 hover:border-border/80",
+              ? "border-primary/40 shadow-[0_0_0_2.5px_hsl(var(--primary)/0.14)]"
+              : "border-border/60 hover:border-border/90",
           )}
         >
           <textarea
@@ -292,14 +264,14 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder="Type a message... (Shift+Enter for new line)"
+            placeholder="Aa"
             aria-label="Message input"
             className={cn(
               "w-full resize-none overflow-hidden bg-transparent",
-              "px-4 py-2.5 pr-10 text-[14px] leading-relaxed text-foreground",
+              "px-3.5 py-2.5 pr-10 text-[14px] leading-relaxed text-foreground",
               "focus:outline-none focus:ring-0",
               "transition-all duration-200 max-h-[140px]",
-              "placeholder:text-muted-foreground/50",
+              "placeholder:text-muted-foreground/45 placeholder:font-normal",
             )}
           />
           {/* Emoji picker inside the box */}
@@ -319,21 +291,25 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           </div>
         </div>
 
-        {/* Send button */}
+        {/* Send / Like button */}
         <Button
           onClick={sendMessage}
           size="icon"
           disabled={!hasSendable}
-          aria-label="Send message"
+          aria-label={hasSendable ? "Send message" : "Like"}
           className={cn(
-            "flex-shrink-0 mb-0.5 size-9 rounded-xl transition-all duration-200",
+            "flex-shrink-0 mb-0.5 size-9 rounded-full transition-all duration-150",
             hasSendable
-              ? "bg-primary text-primary-foreground shadow-md hover:brightness-110 hover:scale-105 active:scale-95"
-              : "bg-muted text-muted-foreground opacity-40 cursor-not-allowed",
+              ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95"
+              : "bg-transparent text-primary hover:bg-primary/10 opacity-80 hover:opacity-100",
           )}
-          title="Send (Enter)"
+          title={hasSendable ? "Send (Enter)" : "Like"}
         >
-          <Send className="size-4" />
+          {hasSendable ? (
+            <Send className="size-4" />
+          ) : (
+            <span className="text-[18px] leading-none select-none">👍</span>
+          )}
         </Button>
       </div>
     </div>

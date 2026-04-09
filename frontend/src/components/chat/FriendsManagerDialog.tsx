@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { MessageCircle, Trash2, UserMinus, Users } from "lucide-react";
+import { MessageCircle, Trash2, UserMinus, Users, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useFriendStore } from "@/stores/useFriendStore";
@@ -116,11 +116,15 @@ const FriendsManagerDialog = () => {
         </DialogHeader>
 
         <div className="people-manager-toolbar modal-stagger-item">
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name or username"
-          />
+          <div className="relative flex items-center w-full">
+            <Search className="absolute left-3.5 size-[15px] text-muted-foreground/60 pointer-events-none" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by name or username"
+              className="search-input-pill pl-9"
+            />
+          </div>
 
           <div className="people-manager-summary-row">
             <p className="people-manager-summary-text">
@@ -152,8 +156,16 @@ const FriendsManagerDialog = () => {
           ) : (
             <>
               {filteredFriends.length === 0 && (
-                <div className="rounded-lg border border-dashed border-border/80 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-                  No friends found.
+                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+                  <div className="size-12 rounded-full bg-muted/50 flex items-center justify-center mb-3 ring-4 ring-background shadow-sm">
+                    <UserMinus className="size-5 text-muted-foreground/80" />
+                  </div>
+                  <p className="text-[13px] font-semibold text-foreground/80">No friends found</p>
+                  <p className="text-[11.5px] text-muted-foreground/70 mt-1 max-w-[200px]">
+                    {query.trim()
+                      ? `No matches for "${query}"`
+                      : "You don't have any friends yet."}
+                  </p>
                 </div>
               )}
 

@@ -5,7 +5,6 @@ import { useChatStore } from "@/stores/useChatStore";
 import { cn, formatOnlineTime } from "@/lib/utils";
 import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
-import UnreadCountBadge from "./UnreadCountBadge";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -104,24 +103,25 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             status={getUserPresence(otherUser?._id)}
             userId={otherUser?._id}
           />
-          {unreadCount > 0 && <UnreadCountBadge unreadCount={unreadCount} />}
         </>
       }
       subtitle={
-        <div className="flex flex-col gap-0.5 mt-0.5">
+        <div className="mt-[1px]">
           <p
             className={cn(
               "text-[13px] truncate leading-snug",
               unreadCount > 0
-                ? "font-medium text-foreground"
-                : "text-muted-foreground",
+                ? "font-semibold text-foreground"
+                : "font-normal text-muted-foreground/80",
             )}
           >
-            {lastMessage}
+            {lastMessage || "\u00A0"}
           </p>
-          <p className="text-[11px] font-medium text-muted-foreground/75 truncate">
-            {activeStatusText}
-          </p>
+          {userPresence !== "offline" && (
+            <p className="text-[11px] text-muted-foreground/60 truncate leading-tight">
+              {activeStatusText}
+            </p>
+          )}
         </div>
       }
     />
