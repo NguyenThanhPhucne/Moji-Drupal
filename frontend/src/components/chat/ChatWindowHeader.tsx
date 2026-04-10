@@ -209,8 +209,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     if (pres === "online") {
                       return (
                         <span className="flex items-center gap-1">
-                          <span className="inline-block h-[7px] w-[7px] rounded-full bg-[#31a24c] shadow-[0_0_0_1.5px_rgba(255,255,255,0.7)]" />
-                          <span className="text-[12px] font-medium text-[#31a24c] leading-none">
+                          <span className="inline-block h-[7px] w-[7px] rounded-full bg-[hsl(var(--se-success))] shadow-[0_0_0_1.5px_hsl(var(--background))]" />
+                          <span className="text-[12px] font-bold text-[hsl(var(--se-success))] leading-none">
                             Active now
                           </span>
                         </span>

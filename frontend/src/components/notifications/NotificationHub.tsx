@@ -4,7 +4,7 @@ import { CheckCheck, Inbox } from "lucide-react";
 import { toast } from "sonner";
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
+
 import { cn } from "@/lib/utils";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useFriendStore } from "@/stores/useFriendStore";
@@ -38,11 +38,11 @@ const NotificationHubSkeleton = () => (
   <div className="divide-y divide-border/40">
     {SKEL_KEYS.map((key) => (
       <div key={key} className="flex items-start gap-3 px-4 py-3.5">
-        <Skeleton className="h-11 w-11 rounded-full flex-shrink-0" />
+        <div className="h-11 w-11 rounded-full flex-shrink-0 bg-muted skeleton-shimmer" />
         <div className="flex-1 space-y-2 pt-1">
-          <Skeleton className="h-3.5 w-4/5" />
-          <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-1/4" />
+          <div className="h-3.5 w-4/5 rounded bg-muted skeleton-shimmer" />
+          <div className="h-3 w-full rounded bg-muted skeleton-shimmer" />
+          <div className="h-3 w-1/4 rounded bg-muted skeleton-shimmer" />
         </div>
       </div>
     ))}

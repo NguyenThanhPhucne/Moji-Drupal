@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef } from "react";
 import {
   ExternalLink,
   ImagePlus,
-  Loader2,
   Maximize2,
   MessageCircle,
   Minimize2,
@@ -20,6 +19,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import MiniChatSkeleton from "@/components/skeleton/MiniChatSkeleton";
 
 const formatMessageTime = (value: string) => {
   const date = new Date(value);
@@ -382,9 +382,8 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
             }
           >
             {!conversationId ? (
-              <div className="social-mini-chat-state">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Preparing conversation...
+              <div className="flex-1 flex flex-col justify-end w-full overflow-hidden pb-1">
+                <MiniChatSkeleton />
               </div>
             ) : currentMessages.length ? (
               currentMessages.slice(-18).map((messageItem) => {
