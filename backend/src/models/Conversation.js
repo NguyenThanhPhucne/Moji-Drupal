@@ -96,6 +96,14 @@ const conversationSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    // Denormalized counter — kept in sync by Message schema post-hooks via adjustMessageCountInDrupal.
+    // Used by the admin API to avoid expensive JOIN aggregations on every page load.
+    messageCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
   },
   {
     timestamps: true,

@@ -81,7 +81,7 @@ messageSchema.pre("save", function (next) {
   next();
 });
 
-// Update message count in Drupal after new message.
+// Update message count in Drupal + MongoDB after new message.
 messageSchema.post("save", async function (doc) {
   try {
     if (!doc._wasNew) {
@@ -89,6 +89,17 @@ messageSchema.post("save", async function (doc) {
     }
 
     const conversationId = doc.conversationId.toString();
+
+    // Fire-and-forget: Update MongoDB Conversation.messageCount atomically
+    import("./Conversation.js").then(({ default: Conversation }) => {
+      Conversation.updateOne(
+        { _id: doc.conversationId },
+        { $inc: { messageCount: 1 } },
+      ).catch((err) =>
+        console.error("[Message.post.save] Failed to increment messageCount in MongoDB:", err),
+      );
+    }).catch(() => {/* Circular import guard */});
+
     await adjustMessageCountInDrupal(conversationId, 1);
   } catch (error) {
     console.error("Failed to update message count in Drupal:", error);
@@ -101,6 +112,17 @@ messageSchema.post("deleteOne", async function () {
     const query = this.getQuery();
     if (query.conversationId) {
       const conversationId = query.conversationId.toString();
+
+      // Fire-and-forget: Decrement MongoDB Conversation.messageCount
+      import("./Conversation.js").then(({ default: Conversation }) => {
+        Conversation.updateOne(
+          { _id: query.conversationId },
+          { $inc: { messageCount: -1 } },
+        ).catch((err) =>
+          console.error("[Message.post.deleteOne] Failed to decrement messageCount in MongoDB:", err),
+        );
+      }).catch(() => {/* Circular import guard */});
+
       await adjustMessageCountInDrupal(conversationId, -1);
     }
   } catch (error) {
@@ -133,6 +155,16 @@ messageSchema.post("deleteMany", async function (result) {
         : this._bulkDeleteMessageCount || 0;
 
     if (deletedCount > 0) {
+      // Fire-and-forget: Bulk decrement MongoDB Conversation.messageCount
+      import("./Conversation.js").then(({ default: Conversation }) => {
+        Conversation.updateOne(
+          { _id: conversationId },
+          { $inc: { messageCount: -deletedCount } },
+        ).catch((err) =>
+          console.error("[Message.post.deleteMany] Failed to bulk-decrement messageCount in MongoDB:", err),
+        );
+      }).catch(() => {/* Circular import guard */});
+
       await adjustMessageCountInDrupal(conversationId, -deletedCount);
     }
   } catch (error) {

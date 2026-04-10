@@ -1140,7 +1140,7 @@ const MessageItem = memo(function MessageItem({
             >
               <img 
                 src={message.imgUrl} 
-                alt="media" 
+                alt={`Image sent by ${senderParticipant?.displayName ?? "user"} at ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
                 className={cn(
                   "max-w-[240px] max-h-[320px] w-full object-cover shadow-sm",
                   hasOnlyImage 

@@ -13,7 +13,8 @@ interface LinkPreviewState {
   pruneExpired: () => void;
 }
 
-const DEFAULT_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_CACHE_SIZE = 200; // max unique URLs to keep in memory
 
 const normalizeUrlKey = (url: string) => String(url || "").trim();
 
@@ -51,15 +52,19 @@ export const useLinkPreviewStore = create<LinkPreviewState>((set, get) => ({
 
     const expiresAt = Date.now() + Math.max(1000, ttlMs);
 
-    set((state) => ({
-      cache: {
-        ...state.cache,
-        [key]: {
-          preview,
-          expiresAt,
-        },
-      },
-    }));
+    set((state) => {
+      const next = { ...state.cache, [key]: { preview, expiresAt } };
+
+      // LRU-lite eviction: if over cap, remove the soonest-expiring entries first
+      const entries = Object.entries(next);
+      if (entries.length > MAX_CACHE_SIZE) {
+        entries.sort(([, a], [, b]) => a.expiresAt - b.expiresAt);
+        const pruned = Object.fromEntries(entries.slice(entries.length - MAX_CACHE_SIZE));
+        return { cache: pruned };
+      }
+
+      return { cache: next };
+    });
   },
 
   pruneExpired: () => {
@@ -69,7 +74,20 @@ export const useLinkPreviewStore = create<LinkPreviewState>((set, get) => ({
         Object.entries(state.cache).filter(([, entry]) => entry.expiresAt > now),
       );
 
+      // Only trigger re-render if something actually changed
+      if (Object.keys(next).length === Object.keys(state.cache).length) {
+        return state;
+      }
+
       return { cache: next };
     });
   },
 }));
+
+// Auto-prune every 5 minutes to reclaim memory without waiting for cache hits
+if (typeof globalThis.setInterval === "function") {
+  globalThis.setInterval(() => {
+    useLinkPreviewStore.getState().pruneExpired();
+  }, 5 * 60 * 1000);
+}
+

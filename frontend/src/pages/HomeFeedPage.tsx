@@ -276,15 +276,9 @@ const HomeFeedPage = () => {
               )}
             </section>
 
-            <div className="order-last space-y-3 xl:space-y-4">
-              <div className="xl:hidden">
-                <SocialRightRail compact />
-              </div>
-
-              <div className="hidden xl:block">
-                <SocialRightRail />
-              </div>
-
+            {/* ── Right rail ──────────────────────────────────────────────── */}
+            <div className="order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5">
+              {/* Notifications first — always visible above the fold */}
               <SocialNotificationsPanel
                 notifications={notifications}
                 loading={loadingNotifications}
@@ -292,6 +286,14 @@ const HomeFeedPage = () => {
                 onReadOne={markNotificationRead}
                 onReadAll={markAllNotificationsRead}
               />
+
+              <div className="xl:hidden">
+                <SocialRightRail compact />
+              </div>
+
+              <div className="hidden xl:block">
+                <SocialRightRail embedded />
+              </div>
             </div>
           </div>
         </div>

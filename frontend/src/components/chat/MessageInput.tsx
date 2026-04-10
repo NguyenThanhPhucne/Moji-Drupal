@@ -133,7 +133,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           otherUser._id,
           currValue,
           currImage ?? undefined,
-          undefined,
+          selectedConvo._id, // explicit: avoid stale activeConversationId race
           replyingTo?._id,
         );
       } else {

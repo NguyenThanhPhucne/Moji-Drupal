@@ -42,25 +42,26 @@ function resolveDirectPeer(chat: Conversation, userId?: string) {
   return otherUsers.length > 0 ? otherUsers[0] : null;
 }
 
-function getPresenceText(
+function getGroupPresenceText(
   chat: Conversation,
-  otherUserId: string | undefined,
-  getUserPresence: (userId?: string) => "online" | "recently-active" | "offline",
+  onlineUsers: string[],
 ) {
-  if (chat.type !== "direct") {
-    return `${chat.participants.length} members`;
-  }
+  const total = chat.participants.length;
+  const onlineSet = new Set(onlineUsers);
+  const onlineCount = chat.participants.filter(
+    (p) => onlineSet.has(String(p._id)),
+  ).length;
 
-  const presence = getUserPresence(otherUserId);
-  if (presence === "online") return "Active now";
-  if (presence === "recently-active") return "Recently active";
-  return "Offline";
+  if (onlineCount > 0) {
+    return `${total} members · ${onlineCount} online`;
+  }
+  return `${total} members`;
 }
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
-  const { getUserPresence, getLastActiveAt } = useSocketStore();
+  const { getUserPresence, getLastActiveAt, onlineUsers } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
@@ -90,7 +91,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     if (!user || !otherUser) return null;
   }
 
-  const presenceText = getPresenceText(chat, otherUser?._id, getUserPresence);
+  const groupPresenceText = chat.type === "group"
+    ? getGroupPresenceText(chat, onlineUsers)
+    : null;
   // contextLabel kept for future use (e.g. tooltip, accessibility aria-label)
 
   const handleDeleteConversation = async () => {
@@ -229,7 +232,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   })()}
                   {chat.type === "group" && (
                     <span className="text-[12px] text-muted-foreground/70 leading-none">
-                      {presenceText}
+                      {groupPresenceText}
                     </span>
                   )}
                 </div>

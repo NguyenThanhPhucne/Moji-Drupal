@@ -19,6 +19,8 @@ import type { SocialPost } from "@/types/social";
 interface SocialRightRailProps {
   explorePosts?: SocialPost[];
   compact?: boolean;
+  /** When true, the rail is inside an already-scrollable container — skip sticky/h-screen */
+  embedded?: boolean;
 }
 
 const SPONSORED_ITEMS = [
@@ -46,7 +48,7 @@ const getPresenceClassName = (
   return "social-contact-presence--offline";
 };
 
-const SocialRightRail = ({ explorePosts = [], compact = false }: SocialRightRailProps) => {
+const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false }: SocialRightRailProps) => {
   const navigate = useNavigate();
   const { friends, getFriends, loading } = useFriendStore();
   const { getUserPresence } = useSocketStore();
@@ -126,7 +128,13 @@ const SocialRightRail = ({ explorePosts = [], compact = false }: SocialRightRail
   };
 
   return (
-    <aside className={compact ? "space-y-3" : "social-right-rail sticky top-0 h-screen overflow-y-auto space-y-4 pr-1"}>
+    <aside className={
+      compact
+        ? "space-y-3"
+        : embedded
+        ? "space-y-4"  // no sticky/h-screen — parent container handles scroll
+        : "social-right-rail sticky top-0 h-screen overflow-y-auto space-y-4 pr-1"
+    }>
       <section className="social-rail-card">
         <div className="social-rail-head">
           <span className="social-rail-title">

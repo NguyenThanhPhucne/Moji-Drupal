@@ -757,17 +757,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     set({ socket });
 
     socket.on("connect", () => {
-      // Proactively join known rooms to reduce missed events
-      // while backend is still fetching conversations.
+      // Proactively join known rooms to reduce missed events while backend is still
+      // fetching conversations. Filter out temp IDs ("temp-direct-...") that are
+      // never persisted on the server — joining them would be a no-op but wastes bandwidth.
       const conversations = useChatStore.getState().conversations || [];
       conversations.forEach((conversationItem) => {
-        if (conversationItem?._id) {
-          socket.emit("join-conversation", conversationItem._id);
+        const id = conversationItem?._id;
+        if (id && /^[a-f\d]{24}$/i.test(String(id))) {
+          socket.emit("join-conversation", id);
         }
       });
 
       const activeConversationId = useChatStore.getState().activeConversationId;
-      if (activeConversationId) {
+      if (activeConversationId && /^[a-f\d]{24}$/i.test(String(activeConversationId))) {
         socket.emit("join-conversation", activeConversationId);
       }
     });
@@ -824,10 +826,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on("reconnect", () => {
-      const activeConversationId = useChatStore.getState().activeConversationId;
-      if (activeConversationId) {
-        socket.emit("join-conversation", activeConversationId);
-      }
+      // Refetch conversation list from server after reconnect to evict stale data
+      // (deleted conversations, groups the user was kicked from, etc.).
+      // Once fetched, rejoin rooms for all valid conversations.
+      useChatStore.getState().fetchConversations().then(() => {
+        const freshConversations = useChatStore.getState().conversations || [];
+        freshConversations.forEach((conversationItem) => {
+          const id = conversationItem?._id;
+          if (id && /^[a-f\d]{24}$/i.test(String(id))) {
+            socket.emit("join-conversation", id);
+          }
+        });
+
+        const activeConversationId = useChatStore.getState().activeConversationId;
+        if (activeConversationId && /^[a-f\d]{24}$/i.test(String(activeConversationId))) {
+          socket.emit("join-conversation", activeConversationId);
+        }
+      }).catch(() => {
+        // Fallback: rejoin activeConversationId only if fetch fails
+        const activeConversationId = useChatStore.getState().activeConversationId;
+        if (activeConversationId && /^[a-f\d]{24}$/i.test(String(activeConversationId))) {
+          socket.emit("join-conversation", activeConversationId);
+        }
+      });
     });
 
     // online users
