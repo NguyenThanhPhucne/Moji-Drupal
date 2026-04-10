@@ -8,51 +8,10 @@ import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
 
-const buildDirectConversationKey = (userA, userB) => {
-  return [String(userA), String(userB)]
-    .sort((left, right) => left.localeCompare(right))
-    .join(":");
-};
-
-// Helper to get MongoDB user ID from Drupal ID
-const getMongoUserIdFromDrupalId = async (drupalId) => {
-  // If it's already a valid MongoDB ObjectId, return as-is
-  if (/^[0-9a-fA-F]{24}$/.test(drupalId)) {
-    return drupalId;
-  }
-
-  // Convert to integer for Drupal ID lookup
-  const drupalIdInt = Number.parseInt(drupalId, 10);
-
-  try {
-    // 1. Find user by drupalId field (preferred)
-    let user = await User.findOne({ drupalId: drupalIdInt });
-
-    if (user) {
-      return user._id.toString();
-    }
-
-    // 2. Fallback: find by legacy username/email pattern
-    user = await User.findOne({
-      $or: [
-        { username: `drupal_${drupalId}` },
-        { email: `drupal_${drupalId}@temp.local` },
-      ],
-    });
-
-    if (user) {
-      return user._id.toString();
-    }
-
-    // 3. User not found — fail loudly instead of creating garbage records
-    throw new Error(
-      `User with Drupal ID "${drupalId}" not found in MongoDB. Ensure the user is properly synced before creating conversations.`,
-    );
-  } catch (error) {
-    console.error("Error mapping Drupal ID to MongoDB:", error.message);
-    throw error;
-  }
-};
+import {
+  buildDirectConversationKey,
+  getMongoUserIdFromDrupalId,
+} from "../services/conversationService.js";
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export const createConversation = async (req, res) => {

@@ -108,6 +108,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
           avatarUrl: req.from?.avatarUrl ?? null,
         },
         message: "sent you a friend request",
+        introMessage: req.message,
         isRead: seenRequests.includes(req._id),
         createdAt: req.createdAt,
         requestId: req._id,

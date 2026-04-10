@@ -1,20 +1,22 @@
-// reset_mongo.js
-require("dotenv").config();
-const mongoose = require("mongoose");
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+
+dotenv.config();
 
 const reset = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_CONNECTIONSTRING);
     console.log("🔥 Đã kết nối MongoDB...");
 
-    // Xóa sạch tin nhắn và hội thoại
-    await mongoose.connection.collection("messages").deleteMany({});
-    await mongoose.connection.collection("conversations").deleteMany({});
+    const db = mongoose.connection.db;
+    const collections = await db.collections();
 
-    // Tùy chọn: Xóa luôn User bên Mongo để nó tự Sync lại từ Drupal
-    // await mongoose.connection.collection('users').deleteMany({});
+    for (const collection of collections) {
+      await collection.deleteMany({});
+      console.log(`🧹 Đã dọn sạch collection: ${collection.collectionName}`);
+    }
 
-    console.log("✅ Đã xóa sạch: Messages, Conversations.");
+    console.log("✅ XÓA SẠCH DATABASE THÀNH CÔNG!");
     process.exit(0);
   } catch (error) {
     console.error(error);

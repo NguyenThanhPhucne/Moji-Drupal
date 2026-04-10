@@ -9,11 +9,7 @@ import {
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
 
-const buildDirectConversationKey = (userA, userB) => {
-  return [String(userA), String(userB)]
-    .sort((left, right) => left.localeCompare(right))
-    .join(":");
-};
+import { buildDirectConversationKey } from "../services/conversationService.js";
 
 const createHttpError = (status, message) => {
   const error = new Error(message);

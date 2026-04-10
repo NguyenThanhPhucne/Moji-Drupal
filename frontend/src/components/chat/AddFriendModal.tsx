@@ -104,7 +104,7 @@ const AddFriendModal = () => {
       </DialogTrigger>
 
       <DialogContent
-        className="modal-content-shell sm:max-w-[425px] border-none"
+        className="sm:max-w-[425px]"
         dismissible={!loading}
         showCloseButton={!loading}
         onOpenAutoFocus={(e) => {

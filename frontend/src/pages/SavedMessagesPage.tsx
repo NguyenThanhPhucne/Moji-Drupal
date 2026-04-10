@@ -207,7 +207,7 @@ const SavedMessagesPage = () => {
       <AppSidebar />
 
       <div className="saved-page-shell">
-        <div className="app-shell-panel p-4 md:p-6">
+        <div className="app-shell-panel p-3 md:p-4">
           <div className="mx-auto w-full max-w-3xl flex flex-col gap-5 min-h-0">
 
             {/* ── Hero Header ─────────────────────────────────────────── */}

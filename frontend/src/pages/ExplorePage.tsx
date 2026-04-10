@@ -120,8 +120,8 @@ const ExplorePage = () => {
       <AppSidebar />
 
       <div className="social-page-shell">
-        <div className="app-shell-panel social-shell-panel p-4 md:p-6">
-          <div className="social-two-column-frame grid min-h-0 gap-4 xl:grid-cols-[minmax(0,700px)_320px]">
+        <div className="app-shell-panel social-shell-panel p-3 md:p-4">
+          <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
               <SocialTopHeader
                 title="Explore"

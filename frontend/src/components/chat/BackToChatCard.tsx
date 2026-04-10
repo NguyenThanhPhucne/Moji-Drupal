@@ -31,13 +31,11 @@ const BackToChatCard = ({ onClick }: BackToChatCardProps) => {
         }
         onClick();
       }}
-      className="flex flex-col gap-6 text-body-sm cursor-pointer rounded-xl border px-3 py-2.5 transition-all duration-200 hover:border-border/70 hover:bg-muted/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 group select-none border-primary/30 bg-gradient-to-r from-primary/10 to-primary-foreground ring-1 ring-primary/20 shadow-sm"
+      className="inline-flex items-center gap-2 select-none cursor-pointer rounded-full border border-primary/25 bg-primary/6 px-4 py-2 text-[13px] font-semibold text-primary shadow-sm transition-all duration-150 hover:bg-primary/12 hover:border-primary/40 hover:shadow hover:-translate-y-px active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1"
       aria-label="Back to chat"
     >
-      <span className="inline-flex items-center gap-2 font-semibold tracking-[-0.01em] text-foreground">
-        <MessageSquare className="size-4 text-primary" />
-        Back to chat
-      </span>
+      <MessageSquare className="size-4" />
+      Back to chat
     </button>
   );
 };

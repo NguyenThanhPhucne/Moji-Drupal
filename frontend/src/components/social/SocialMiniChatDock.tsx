@@ -9,6 +9,7 @@ import {
   Pin,
   PinOff,
   SendHorizontal,
+  Sparkles,
   X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -215,16 +216,22 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
   }
 
   const handleSend = async () => {
-    const content = windowItem.draft.trim();
-    if (!content && !windowItem.imagePreview) {
+    // Read directly from the store to guarantee we don't accidentally double-send
+    // if React hasn't flushed the closure state yet.
+    const currentWindow = useMiniChatDockStore.getState().windows.find((w) => w.userId === userId);
+    if (!currentWindow) return;
+
+    const content = currentWindow.draft.trim();
+    if (!content && !currentWindow.imagePreview) {
       return;
     }
 
-    setDraft(windowItem.userId, "");
-    const imgUrl = windowItem.imagePreview || undefined;
-    setImagePreview(windowItem.userId, null);
+    // Immediately clear the state in the store so synchronous events reading next will get ""
+    setDraft(userId, "");
+    const imgUrl = currentWindow.imagePreview || undefined;
+    setImagePreview(userId, null);
 
-    await sendDirectMessage(windowItem.userId, content, imgUrl, conversationId || undefined);
+    await sendDirectMessage(userId, content, imgUrl, conversationId || undefined);
   };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -294,12 +301,23 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
           className="social-mini-chat-user"
           onClick={() => toggleMinimized(windowItem.userId)}
         >
-          <UserAvatar
-            type="chat"
-            name={windowItem.displayName}
-            avatarUrl={windowItem.avatarUrl}
-            className="social-mini-chat-avatar"
-          />
+          {/* Avatar with online indicator */}
+          <div className="relative flex-shrink-0">
+            <UserAvatar
+              type="chat"
+              name={windowItem.displayName}
+              avatarUrl={windowItem.avatarUrl}
+              className="social-mini-chat-avatar"
+            />
+            <span
+              className="absolute bottom-0 right-0 block size-2.5 rounded-full ring-2 ring-white dark:ring-background"
+              style={{
+                background: presenceLabel === "Online"
+                  ? "hsl(145 53% 50%)"
+                  : "hsl(var(--se-muted))",
+              }}
+            />
+          </div>
           <span className="social-mini-chat-identity">
             <span className="social-mini-chat-name">
               {windowItem.displayName}
@@ -396,7 +414,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
                     className={`social-mini-chat-msg ${ownMessage ? "social-mini-chat-msg--own" : ""}`}
                   >
                     <div className="social-mini-chat-bubble">
-                      {messageItem.content || (messageItem.imgUrl ? "(Image)" : "(Attachment)")}
+                      {messageItem.content || (messageItem.imgUrl ? "" : "(Attachment)")}
                       {messageItem.imgUrl ? (
                         <img
                           src={messageItem.imgUrl}
@@ -410,54 +428,68 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
                 );
               })
             ) : (
-              <p className="social-mini-chat-state">Say hi to start this conversation.</p>
+              <div className="flex flex-col items-center justify-center gap-2 text-center my-auto py-6">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                </div>
+                <p className="social-mini-chat-state">
+                  Say hi to {windowItem.displayName.split(" ")[0]}! 👋
+                </p>
+              </div>
             )}
           </div>
 
-          {windowItem.imagePreview ? (
-            <div className="social-mini-chat-image-preview">
-              <img src={windowItem.imagePreview} alt="Selected" className="social-mini-chat-preview-image" />
-              <button
-                type="button"
-                className="social-mini-chat-preview-remove"
-                onClick={() => setImagePreview(windowItem.userId, null)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          ) : null}
-
           <div className="social-mini-chat-input-row">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="social-mini-chat-attach"
-              onClick={() => fileInputRef.current?.click()}
-              title="Attach image"
-            >
-              <ImagePlus className="h-4 w-4" />
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageSelect}
-            />
-            <textarea
-              value={windowItem.draft}
-              placeholder="Write a message..."
-              onChange={(event) => setDraft(windowItem.userId, event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void handleSend();
-                }
-              }}
-              className="social-mini-chat-input"
-              rows={1}
-            />
+            {/* Pill: Attach + (image preview if any) + Textarea */}
+            <div className="social-mini-chat-input-pill">
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="social-mini-chat-attach"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach image"
+              >
+                <ImagePlus className="h-[15px] w-[15px]" />
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+              <div className="flex flex-col flex-1 min-w-0">
+                {windowItem.imagePreview ? (
+                  <div className="social-mini-chat-image-preview">
+                    <img src={windowItem.imagePreview} alt="Selected" className="social-mini-chat-preview-image" />
+                    <button
+                      type="button"
+                      className="social-mini-chat-preview-remove"
+                      onClick={() => setImagePreview(windowItem.userId, null)}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : null}
+                <textarea
+                  value={windowItem.draft}
+                  placeholder="Write a message..."
+                  onChange={(event) => setDraft(windowItem.userId, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.nativeEvent.isComposing) return;
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  }}
+                  className="social-mini-chat-input"
+                  rows={1}
+                />
+              </div>
+            </div>
+
+            {/* Circular send button outside pill */}
             <Button
               type="button"
               size="icon"
@@ -466,7 +498,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
               onClick={() => void handleSend()}
               title="Send"
             >
-              <SendHorizontal className="h-4 w-4" />
+              <SendHorizontal className="h-[15px] w-[15px]" />
             </Button>
           </div>
 

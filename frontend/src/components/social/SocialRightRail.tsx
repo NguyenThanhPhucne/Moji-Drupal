@@ -1,10 +1,8 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Compass,
-  Ellipsis,
   Flag,
   MessageCircle,
-  Store,
   Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -13,6 +11,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import UserAvatar from "@/components/chat/UserAvatar";
 import type { SocialPost } from "@/types/social";
 
@@ -23,16 +22,6 @@ interface SocialRightRailProps {
   embedded?: boolean;
 }
 
-const SPONSORED_ITEMS = [
-  {
-    title: "Build better communities",
-    url: "meta.example.com",
-  },
-  {
-    title: "Ship products faster with AI tools",
-    url: "github.example.com",
-  },
-];
 
 const getPresenceClassName = (
   presence: "online" | "recently-active" | "offline",
@@ -54,12 +43,14 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
   const { getUserPresence } = useSocketStore();
   const { createConversation } = useChatStore();
   const { openWindow } = useMiniChatDockStore();
+  const hasFetchedRef = useRef(false);
 
   useEffect(() => {
-    if (!friends.length && !loading) {
+    if (!hasFetchedRef.current && !loading) {
+      hasFetchedRef.current = true;
       void getFriends();
     }
-  }, [friends.length, loading, getFriends]);
+  }, [loading, getFriends]);
 
   const contacts = useMemo(() => {
     const rank = (presence: "online" | "recently-active" | "offline") => {
@@ -133,7 +124,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
         ? "space-y-3"
         : embedded
         ? "space-y-4"  // no sticky/h-screen — parent container handles scroll
-        : "social-right-rail sticky top-0 h-screen overflow-y-auto space-y-4 pr-1"
+        : "social-right-rail sticky top-0 h-screen overflow-y-auto beautiful-scrollbar space-y-4 pr-1 pl-0.5"
     }>
       <section className="social-rail-card">
         <div className="social-rail-head">
@@ -144,10 +135,22 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
           <span className="social-rail-counter">{contacts.length}</span>
         </div>
 
-        <div className="social-rail-list">
-          {contacts.slice(0, 12).map((friend) => (
-            <button
-              key={friend._id}
+        <div className="social-rail-list relative">
+          {(!hasFetchedRef.current || loading) ? (
+            <div className="space-y-1 py-1" aria-hidden="true">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={`contact-skel-${i}`} className="social-contact-item">
+                  <div className="relative">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-28 rounded-md bg-muted/60" />
+                </div>
+              ))}
+            </div>
+          ) : contacts.length > 0 ? (
+            contacts.slice(0, 24).map((friend) => (
+              <button
+                key={friend._id}
               type="button"
               className="social-contact-item"
               onClick={() => void openDirectChat(friend)}
@@ -165,35 +168,13 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               </div>
               <span className="social-contact-name">{friend.displayName}</span>
             </button>
-          ))}
-
-          {!contacts.length && <p className="social-rail-empty">No contacts yet.</p>}
+            ))
+          ) : (
+            <p className="social-rail-empty">No contacts yet.</p>
+          )}
         </div>
       </section>
 
-      <section className="social-rail-card">
-        <div className="social-rail-head">
-          <span className="social-rail-title">
-            <Store className="h-4 w-4" />
-            Sponsored
-          </span>
-          <button type="button" className="social-rail-more-btn" aria-label="More sponsored options">
-            <Ellipsis className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          {SPONSORED_ITEMS.map((item) => (
-            <div key={item.title} className="social-activity-item social-sponsored-item">
-              <div className="social-sponsored-thumb" aria-hidden="true" />
-              <div className="min-w-0">
-                <p className="social-sponsored-title">{item.title}</p>
-                <p className="social-sponsored-url">{item.url}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
 
       <section className="social-rail-card">
         <div className="social-rail-head">
@@ -203,19 +184,34 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
           </span>
         </div>
 
-        <div className="space-y-2">
-          {suggestions.map((person) => (
-            <div key={person._id} className="social-suggestion-item">
-              <div className="flex items-center gap-2 min-w-0">
-                <UserAvatar type="chat" name={person.displayName} avatarUrl={person.avatarUrl || undefined} />
-                <span className="truncate text-sm font-medium">{person.displayName}</span>
-              </div>
-              <Button type="button" size="sm" variant="outline" onClick={() => navigate(`/profile/${person._id}`)}>
-                View
-              </Button>
+        <div className="space-y-2 relative">
+          {(!hasFetchedRef.current || loading) ? (
+             <div className="space-y-3 py-1" aria-hidden="true">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={`sugg-skel-${i}`} className="social-suggestion-item">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Skeleton className="h-9 w-9 rounded-full" />
+                      <Skeleton className="h-4 w-28 rounded-md bg-muted/60" />
+                    </div>
+                    <Skeleton className="h-8 w-14 rounded-full bg-muted/40" />
+                  </div>
+                ))}
             </div>
-          ))}
-          {!suggestions.length && <p className="social-rail-empty">Suggestions will appear soon.</p>}
+          ) : suggestions.length > 0 ? (
+            suggestions.map((person) => (
+              <div key={person._id} className="social-suggestion-item">
+                <div className="flex items-center gap-2 min-w-0">
+                  <UserAvatar type="chat" name={person.displayName} avatarUrl={person.avatarUrl || undefined} />
+                  <span className="truncate text-sm font-medium">{person.displayName}</span>
+                </div>
+                <Button type="button" size="sm" variant="outline" className="rounded-full shadow-sm hover:border-primary/50 text-[12px] h-7 px-3 active:scale-95 transition-all" onClick={() => navigate(`/profile/${person._id}`)}>
+                  View
+                </Button>
+              </div>
+            ))
+          ) : (
+             <p className="social-rail-empty">Suggestions will appear soon.</p>
+          )}
         </div>
       </section>
 

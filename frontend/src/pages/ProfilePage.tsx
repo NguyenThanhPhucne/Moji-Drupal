@@ -126,7 +126,7 @@ const ProfilePage = () => { // NOSONAR
       <AppSidebar />
 
       <div className="social-page-shell">
-        <div className="app-shell-panel social-shell-panel p-4 md:p-6">
+        <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <section className="social-profile-layout social-profile-frame min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
             {loadingProfile && !profile ? (
               <ProfileHeaderSkeleton />

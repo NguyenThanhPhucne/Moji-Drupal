@@ -11,7 +11,7 @@ const MODAL_CONTENT_LAYOUT_CLASS =
   "modal-content-shell pointer-events-auto relative z-10 w-full max-w-[calc(100%-2rem)] max-h-[min(88dvh,720px)] overflow-hidden outline-none";
 
 const MODAL_CONTENT_DEFAULT_CLASS =
-  "bg-background grid gap-4 rounded-2xl border border-border/80 p-5 shadow-xl ring-1 ring-black/5 sm:max-w-lg sm:p-6";
+  "bg-card/95 backdrop-blur-2xl grid gap-4 rounded-[1.75rem] border border-border/60 p-5 shadow-2xl ring-1 ring-white/5 sm:max-w-lg sm:p-7";
 
 function Dialog({
   ...props

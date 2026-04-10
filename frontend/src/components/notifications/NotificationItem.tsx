@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Check,
   Trash2,
+  Loader2,
 } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -45,6 +46,7 @@ export interface UnifiedNotification {
   isRead: boolean;
   createdAt: string;
   requestId?: string;
+  introMessage?: string;
 }
 
 // ─── Kind metadata ────────────────────────────────────────────────────────────
@@ -151,12 +153,18 @@ const NotificationItem = ({
 
       {/* ── Content ── */}
       <div className="min-w-0 flex-1">
-        {/* Main text */}
         <p className="text-[13.5px] leading-snug text-foreground line-clamp-3 pr-1">
           <span className="font-semibold">{notification.actor.displayName}</span>
           {" "}
           <span className="text-foreground/80">{notification.message}</span>
         </p>
+
+        {/* Intro Message from Request */}
+        {notification.introMessage && (
+          <div className="mt-2.5 rounded-r-lg bg-muted/30 border-l-2 border-primary p-3 text-[13px] text-foreground/80 relative shadow-sm transition-colors hover:bg-muted/40">
+            <span className="italic leading-relaxed align-middle">" {notification.introMessage} "</span>
+          </div>
+        )}
 
         {/* Timestamp */}
         <p
@@ -189,32 +197,40 @@ const NotificationItem = ({
           onAcceptFriend &&
           onDeclineFriend && (
             <div
-              className="mt-2.5 flex gap-2"
+              className="mt-3 flex items-center gap-2"
               onClick={(e) => e.stopPropagation()}
             >
               <Button
                 size="sm"
-                className="h-8 px-4 text-[13px] font-semibold rounded-lg"
+                className="h-[34px] px-4 text-[13px] font-semibold rounded-[10px] shadow-sm transition-all active:scale-95"
                 onClick={() => {
                   onAcceptFriend(notification.requestId!);
                   onRead(notification.id);
                 }}
                 disabled={isLoading}
               >
-                <Check className="mr-1.5 h-3.5 w-3.5" />
+                {isLoading ? (
+                  <Loader2 className="mr-1.5 h-[15px] w-[15px] animate-spin" />
+                ) : (
+                  <Check className="mr-1.5 h-[15px] w-[15px]" />
+                )}
                 Confirm
               </Button>
               <Button
                 size="sm"
                 variant="secondary"
-                className="h-8 px-4 text-[13px] font-semibold rounded-lg text-foreground/80"
+                className="h-[34px] px-4 text-[13px] font-semibold rounded-[10px] text-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95"
                 onClick={() => {
                   onDeclineFriend(notification.requestId!);
                   onRead(notification.id);
                 }}
                 disabled={isLoading}
               >
-                Delete
+                {isLoading ? (
+                  <Loader2 className="mr-1.5 h-[15px] w-[15px] animate-spin text-muted-foreground mr-0" />
+                ) : (
+                  "Delete"
+                )}
               </Button>
             </div>
           )}

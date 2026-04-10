@@ -121,7 +121,7 @@ const PostDialogs = ({
                         className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-muted/80 transition-colors focus-visible:outline-none focus-visible:bg-muted/80"
                         onClick={() => onOpenProfile?.(liker._id)}
                       >
-                        <UserAvatar type="sidebar" name={liker.displayName} avatarUrl={liker.avatarUrl} />
+                        <UserAvatar type="sidebar" name={liker.displayName} avatarUrl={liker.avatarUrl ?? undefined} />
                         <div className="flex flex-col min-w-0">
                           <span className="text-[13px] font-semibold text-foreground truncate leading-tight">{liker.displayName}</span>
                           <span className="text-[11px] text-muted-foreground truncate leading-tight">@{liker.username}</span>
@@ -143,7 +143,7 @@ const PostDialogs = ({
                           className="shrink-0 outline-none focus-visible:ring-2 ring-primary rounded-full h-fit mt-0.5"
                           onClick={() => onOpenProfile?.(comment.authorId._id)}
                         >
-                          <UserAvatar type="sidebar" name={comment.authorId.displayName} avatarUrl={comment.authorId.avatarUrl} />
+                          <UserAvatar type="sidebar" name={comment.authorId.displayName} avatarUrl={comment.authorId.avatarUrl ?? undefined} />
                         </button>
                         <div className="flex flex-col min-w-0 flex-1">
                           <button

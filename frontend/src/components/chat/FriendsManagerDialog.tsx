@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { MessageCircle, Trash2, UserMinus, Users, Search } from "lucide-react";
+import { UserMinus, Users, Search, Target, Compass } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useChatStore } from "@/stores/useChatStore";
+import { useSocialStore } from "@/stores/useSocialStore";
 import { Button } from "../ui/button";
-// removed Card import
 import { Input } from "../ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -24,30 +25,35 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/dialog";
-import UserAvatar from "./UserAvatar";
-import FriendProfileMiniCard from "./FriendProfileMiniCard";
-import DialogFriendListSkeleton from "@/components/skeleton/DialogFriendListSkeleton";
+
+import DialogFriendListSkeleton from "../skeleton/DialogFriendListSkeleton";
+import { FriendListItem } from "./FriendListItem";
+import { ExploreUserItem } from "./ExploreUserItem";
+import { EmptyListState } from "./EmptyListState";
 
 const FriendsManagerDialog = () => {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [processingFriendId, setProcessingFriendId] = useState<string | null>(
-    null,
-  );
+  const [processingFriendId, setProcessingFriendId] = useState<string | null>(null);
   const [friendPendingRemoval, setFriendPendingRemoval] = useState<{
     friendId: string;
     displayName: string;
   } | null>(null);
+  const [activeTab, setActiveTab] = useState("all-friends");
+  const [hasFetched, setHasFetched] = useState(false);
 
-  const { friends, getFriends, removeFriend, loading: friendLoading } =
-    useFriendStore();
+  const { friends, getFriends, removeFriend, loading: friendLoading } = useFriendStore();
   const { createConversation, loading: chatLoading } = useChatStore();
-  const isInitialFriendsLoading = friendLoading && friends.length === 0;
+  const { homeFeed } = useSocialStore();
+  
+  const isInitialFriendsLoading = friendLoading && !hasFetched;
 
   useEffect(() => {
     if (open) {
-      getFriends();
+      void getFriends().finally(() => setHasFetched(true));
+    } else {
+      setHasFetched(false);
     }
   }, [open, getFriends]);
 
@@ -63,6 +69,22 @@ const FriendsManagerDialog = () => {
       return displayName.includes(normalized) || username.includes(normalized);
     });
   }, [friends, query]);
+
+  // Suggestions logic leveraging Feed authors completely mapped from DB
+  const suggestions = useMemo(() => {
+    const friendIds = new Set(friends.map((f) => String(f._id)));
+    const map = new Map<string, { _id?: string; displayName?: string; avatarUrl?: string | null; username?: string; }>();
+    
+    homeFeed.forEach((post) => {
+      const authorId = String(post.authorId?._id || "");
+      if (!authorId || friendIds.has(authorId)) return;
+      if (!map.has(authorId)) {
+        map.set(authorId, post.authorId);
+      }
+    });
+
+    return Array.from(map.values()).slice(0, 10);
+  }, [homeFeed, friends]);
 
   const handleStartChat = async (friendId: string) => {
     try {
@@ -107,144 +129,147 @@ const FriendsManagerDialog = () => {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="flex items-center justify-center size-5 rounded-full hover:bg-sidebar-accent/80 cursor-pointer"
+          className="flex items-center justify-center size-5 rounded-full hover:bg-sidebar-accent/80 cursor-pointer transition-colors"
           aria-label="Open friends list"
           title="Friends"
         >
-          <Users className="size-4" />
+          <Users className="size-4 text-muted-foreground hover:text-foreground" />
         </button>
       </DialogTrigger>
 
-      <DialogContent className="people-manager-modal sm:max-w-2xl">
-        <DialogHeader className="modal-stagger-item">
-          <DialogTitle>Friends</DialogTitle>
+      <DialogContent className="people-manager-modal sm:max-w-[700px] p-0 overflow-hidden gap-0 flex flex-col bg-card">
+        <DialogHeader className="modal-stagger-item px-6 pt-6 pb-2">
+          <DialogTitle className="text-xl">Friends Hub</DialogTitle>
           <DialogDescription>
-            View your friends, start a chat, or remove a friend.
+            Manage your network, message connections, and discover new people.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="people-manager-toolbar modal-stagger-item">
-          <div className="relative flex items-center w-full">
-            <Search className="absolute left-3.5 size-[15px] text-muted-foreground/60 pointer-events-none" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by name or username"
-              className="search-input-pill pl-9"
-            />
-          </div>
-
-          <div className="people-manager-summary-row">
-            <p className="people-manager-summary-text">
-              Showing {filteredFriends.length} of {friends.length} friends
-            </p>
-            {query.trim() ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="h-7 px-2 text-xs"
-                onClick={() => setQuery("")}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
+          <div className="px-6 relative">
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto gap-6">
+              <TabsTrigger
+                value="all-friends"
+                className="relative rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all outline-none"
               >
-                Clear search
-              </Button>
-            ) : null}
+                <Users className="h-4 w-4 mr-2" />
+                My Friends
+                <span className="ml-2 inline-flex items-center justify-center rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+                  {friends.length}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="explore"
+                className="relative rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all outline-none"
+              >
+                <Compass className="h-4 w-4 mr-2" />
+                Explore
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </div>
 
-        <div className="people-manager-list-shell modal-stagger-item">
-          <div className="people-manager-list-head">
-            <span>People</span>
-            <span>{filteredFriends.length}</span>
-          </div>
-
-          <div className="people-manager-list-scroll">
-          {isInitialFriendsLoading ? (
-            <DialogFriendListSkeleton count={6} showActions />
-          ) : (
-            <>
-              {filteredFriends.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
-                  <div className="size-12 rounded-full bg-muted/50 flex items-center justify-center mb-3 ring-4 ring-background shadow-sm">
-                    <UserMinus className="size-5 text-muted-foreground/80" />
-                  </div>
-                  <p className="text-[13px] font-semibold text-foreground/80">No friends found</p>
-                  <p className="text-[11.5px] text-muted-foreground/70 mt-1 max-w-[200px]">
-                    {query.trim()
-                      ? `No matches for "${query}"`
-                      : "You don't have any friends yet."}
-                  </p>
+          <div className="flex-1 overflow-y-auto beautiful-scrollbar bg-card/40 h-[65vh] sm:h-[60vh] pb-4">
+            {/* -- TAB 1: ALL FRIENDS -- */}
+            <TabsContent value="all-friends" className="m-0 h-full p-6 outline-none animate-in fade-in slide-in-from-bottom-2 duration-300 flex flex-col">
+              <div className="people-manager-toolbar mb-4 mt-0 shrink-0">
+                <div className="relative flex items-center w-full">
+                  <Search className="absolute left-3.5 size-[15px] text-muted-foreground/60 pointer-events-none" />
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search by name or username"
+                    className="search-input-pill pl-9 h-10 border-border/80 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all rounded-xl"
+                  />
                 </div>
-              )}
 
-              {filteredFriends.map((friend) => {
-                const busy = processingFriendId === friend._id;
-                const disabled = busy || chatLoading;
-
-                return (
-                  <div
-                    key={friend._id}
-                    className="people-manager-row"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <FriendProfileMiniCard
-                      userId={friend._id}
-                      displayName={friend.displayName}
-                      avatarUrl={friend.avatarUrl}
-                      onViewProfile={() => {
-                        setOpen(false);
-                        navigate(`/profile/${friend._id}`);
-                      }}
-                      onChat={() => handleStartChat(friend._id)}
-                      onRemove={() => requestRemoveFriend(friend._id, friend.displayName)}
-                      disabled={disabled}
+                <div className="people-manager-summary-row mt-3">
+                  <p className="people-manager-summary-text text-sm">
+                    Showing {filteredFriends.length} of {friends.length} friends
+                  </p>
+                  {query.trim() ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-primary/80 hover:text-primary rounded-lg"
+                      onClick={() => setQuery("")}
                     >
-                      <UserAvatar
-                        type="sidebar"
-                        name={friend.displayName}
-                        avatarUrl={friend.avatarUrl}
+                      Clear search
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="people-manager-list-shell bg-transparent border-0 min-h-0 flex-1">
+                <div className="people-manager-list-scroll pb-6">
+                {isInitialFriendsLoading ? (
+                  <DialogFriendListSkeleton count={5} showActions />
+                ) : (
+                  <>
+                    {filteredFriends.length === 0 && (
+                      <EmptyListState 
+                        type={query.trim() ? "no-match" : "no-friends"} 
+                        query={query} 
+                        onExploreClick={query.trim() ? undefined : () => setActiveTab("explore")} 
                       />
-                    </FriendProfileMiniCard>
+                    )}
 
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold">
-                          {friend.displayName}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          @{friend.username}
-                        </p>
-                      </div>
-                    </div>
+                    {filteredFriends.map((friend) => {
+                      const busy = processingFriendId === friend._id;
+                      const disabled = busy || chatLoading;
 
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleStartChat(friend._id)}
-                        disabled={disabled}
-                      >
-                        <MessageCircle className="size-4" />
-                        Chat
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => requestRemoveFriend(friend._id, friend.displayName)}
-                        disabled={disabled}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="size-4" />
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
+                      return (
+                        <FriendListItem
+                          key={String(friend._id)}
+                          friend={friend}
+                          disabled={disabled}
+                          onChat={handleStartChat}
+                          onRemove={requestRemoveFriend}
+                          onViewProfile={(id) => {
+                            setOpen(false);
+                            navigate(`/profile/${id}`);
+                          }}
+                        />
+                      );
+                    })}
+                  </>
+                )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* -- TAB 2: EXPLORE (PEOPLE YOU MAY KNOW) -- */}
+            <TabsContent value="explore" className="m-0 h-full p-6 outline-none animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="grid gap-2 outline-none">
+                 <div className="bg-primary/5 p-4 rounded-xl border border-primary/15 flex items-center gap-3 w-full shrink-0 mb-3 shadow-inner">
+                   <Target className="size-8 text-primary shadow-primary/20" />
+                   <div>
+                      <p className="text-sm font-semibold text-primary/90 tracking-tight">Expand your network</p>
+                      <p className="text-[12px] text-muted-foreground/80 font-medium">Connect with active people from the community</p>
+                   </div>
+                 </div>
+
+                 {suggestions.length === 0 ? (
+                   <EmptyListState type="no-suggestions" />
+                 ) : (
+                   <div className="grid gap-1">
+                     {suggestions.map((person) => (
+                       <ExploreUserItem 
+                         key={person._id} 
+                         person={person} 
+                         onViewProfile={(id) => {
+                           setOpen(false);
+                           navigate(`/profile/${id}`);
+                         }} 
+                       />
+                     ))}
+                   </div>
+                 )}
+              </div>
+            </TabsContent>
           </div>
-        </div>
+        </Tabs>
+
       </DialogContent>
 
       <AlertDialog
@@ -256,31 +281,31 @@ const FriendsManagerDialog = () => {
         }}
       >
         <AlertDialogContent
-          className="chat-modal-shell chat-modal-shell--danger max-w-sm"
+          className="chat-modal-shell chat-modal-shell--danger max-w-[340px] p-6 rounded-[28px] overflow-hidden"
           aria-busy={Boolean(processingFriendId)}
         >
-          <AlertDialogHeader className="items-center text-center modal-stagger-item">
-            <div className="dialog-danger-icon">
-              <UserMinus className="size-6" />
+          <AlertDialogHeader className="items-center text-center modal-stagger-item gap-1">
+            <div className="dialog-danger-icon size-12 bg-destructive/10 text-destructive mb-2 rounded-full flex items-center justify-center">
+              <UserMinus className="size-5" />
             </div>
-            <AlertDialogTitle className="text-base font-semibold">Remove friend?</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">
+            <AlertDialogTitle className="text-lg font-bold tracking-tight">Remove friend?</AlertDialogTitle>
+            <AlertDialogDescription className="text-[13.5px] leading-snug text-muted-foreground/80 px-2 font-medium">
               {friendPendingRemoval
-                ? `This is a permanent action. ${friendPendingRemoval.displayName} will be removed from your friends list and quick chat access.`
-                : "This is a permanent action. The selected friend will be removed from your friends list."}
+                ? `You won't be able to quick-chat with ${friendPendingRemoval.displayName} anymore.`
+                : "This is a permanent action. The user will be removed from your lists."}
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <AlertDialogFooter className="sm:flex-col-reverse gap-2 sm:gap-2 mt-4 modal-stagger-item">
+          <AlertDialogFooter className="sm:flex-col-reverse gap-2 sm:space-x-0 mt-5 modal-stagger-item">
             <AlertDialogCancel
-              className="mt-0 sm:mt-0"
+              className="mt-0 sm:mt-0 font-semibold rounded-xl h-10 border-0 hover:bg-muted/80 transition-colors"
               onClick={() => setFriendPendingRemoval(null)}
               disabled={Boolean(processingFriendId)}
             >
-              Cancel
+              Keep Friend
             </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-md font-semibold focus:ring-destructive rounded-xl h-10 transition-all active:scale-[0.98]"
               onClick={() => void handleRemoveFriend()}
               disabled={Boolean(processingFriendId)}
             >
