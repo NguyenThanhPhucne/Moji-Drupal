@@ -99,8 +99,9 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           >
             {lastMessagePreview || "\u00A0"}
           </p>
-          <p className="text-[11px] text-muted-foreground/60 truncate leading-tight">
-            {convo.participants.length} members
+          <p className="text-[11px] text-muted-foreground/55 truncate leading-tight flex items-center gap-1">
+            <span className="inline-block">{convo.participants.length}</span>
+            <span>members</span>
           </p>
         </div>
       }

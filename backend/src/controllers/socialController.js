@@ -5,9 +5,9 @@ import Comment from "../models/Comment.js";
 import Follow from "../models/Follow.js";
 import Friend from "../models/Friend.js";
 import Notification from "../models/Notification.js";
-import { io } from "../socket/index.js";
 import { v2 as cloudinary } from "cloudinary";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
+import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 
 const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"];
 
@@ -117,6 +117,8 @@ const updatePostReactionWithCAS = async ({ postId, userId, nextReactionType }) =
         isNewReactionAdded,
       };
     }
+
+    await invalidateCache(`feed:*`);
 
     // Add bounded backoff to reduce hot-loop contention on the same document.
     const backoffMs = Math.min(50, 5 + attempt * 3);
@@ -525,10 +527,10 @@ export const createPost = async (req, res) => {
       privacy,
     });
 
-    await post.populate("authorId", "displayName username avatarUrl");
-
     const payload = toPostPayload(post, userId);
     emitSocialPostCreated({ post: payload, authorId: userId });
+
+    await invalidateCache(`feed:*`);
 
     return res.status(201).json({ post: payload });
   } catch (error) {
@@ -587,10 +589,10 @@ export const editPost = async (req, res) => {
     }
 
     await post.save();
-    await post.populate("authorId", "displayName username avatarUrl");
-
     const payload = toPostPayload(post, userId);
     emitSocialPostUpdated({ post: payload, authorId: userId });
+
+    await invalidateCache(`feed:*`);
 
     return res.status(200).json({ post: payload });
   } catch (error) {
@@ -598,7 +600,6 @@ export const editPost = async (req, res) => {
     return res.status(500).json({ message: "System error" });
   }
 };
-
 export const getHomeFeed = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -606,6 +607,12 @@ export const getHomeFeed = async (req, res) => {
       req.query.page,
       req.query.limit,
     );
+    
+    const cacheKey = `feed:home:${userId}:p${page}`;
+    const cached = await getCachedData(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
 
     const follows = await Follow.find({ followerId: userId }).select(
       "followingId",
@@ -636,7 +643,7 @@ export const getHomeFeed = async (req, res) => {
       viewerFriendIdSet,
     );
 
-    return res.status(200).json({
+    const responseData = {
       posts: posts.map((post) =>
         toPostPayload(post, userId, { viewerFriendIdSet, visibleReactorsById }),
       ),
@@ -647,7 +654,11 @@ export const getHomeFeed = async (req, res) => {
         totalPages: Math.max(1, Math.ceil(total / limit)),
         hasNextPage: skip + posts.length < total,
       },
-    });
+    };
+
+    await setCachedData(cacheKey, responseData, 60);
+
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error("[social] getHomeFeed error", error);
     return res.status(500).json({ message: "System error" });
@@ -662,6 +673,12 @@ export const getExploreFeed = async (req, res) => {
       req.query.limit,
     );
 
+    const cacheKey = `feed:explore:${userId}:p${page}`;
+    const cached = await getCachedData(cacheKey);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+    
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const query = {
@@ -687,7 +704,7 @@ export const getExploreFeed = async (req, res) => {
       viewerFriendIdSet,
     );
 
-    return res.status(200).json({
+    const responseData = {
       posts: posts.map((post) =>
         toPostPayload(post, userId, { viewerFriendIdSet, visibleReactorsById }),
       ),
@@ -698,7 +715,11 @@ export const getExploreFeed = async (req, res) => {
         totalPages: Math.max(1, Math.ceil(total / limit)),
         hasNextPage: skip + posts.length < total,
       },
-    });
+    };
+
+    await setCachedData(cacheKey, responseData, 60);
+
+    return res.status(200).json(responseData);
   } catch (error) {
     console.error("[social] getExploreFeed error", error);
     return res.status(500).json({ message: "System error" });
@@ -1062,8 +1083,9 @@ export const toggleLikePost = async (req, res) => {
       likesCount,
       liked: finalReactionType,
       reactionSummary,
-      actor,
     });
+
+    await invalidateCache(`feed:*`);
 
     return res.status(200).json({
       liked: Boolean(finalReactionType),
@@ -1152,6 +1174,8 @@ export const addComment = async (req, res) => {
         ? `commented: "${compactPreview}"`
         : "commented on your post",
     });
+
+    await invalidateCache(`feed:*`);
 
     return res.status(201).json({ comment });
   } catch (error) {
@@ -1243,6 +1267,8 @@ export const deleteComment = async (req, res) => {
         .catch(err => console.error("[social] Cloudinary background destroy error:", err));
     }
 
+    await invalidateCache(`feed:*`);
+
     return res.status(200).json({
       ok: true,
       postId,
@@ -1319,6 +1345,8 @@ export const deletePost = async (req, res) => {
       Promise.allSettled(imageUrlsToDestroy.map(url => destroyImageFromUrl(url)))
         .catch(err => console.error("[social] Cloudinary background destroy error:", err));
     }
+
+    await invalidateCache(`feed:*`);
 
     return res.status(200).json({
       ok: true,

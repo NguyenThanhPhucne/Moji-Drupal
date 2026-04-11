@@ -118,7 +118,15 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             {lastMessage || "\u00A0"}
           </p>
           {userPresence !== "offline" && (
-            <p className="text-[11px] text-muted-foreground/60 truncate leading-tight">
+            <p className={cn(
+              "text-[11px] truncate leading-tight flex items-center gap-1",
+              userPresence === "online"
+                ? "text-emerald-600 dark:text-emerald-400 font-medium"
+                : "text-muted-foreground/60",
+            )}>
+              {userPresence === "online" && (
+                <span className="size-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+              )}
               {activeStatusText}
             </p>
           )}
@@ -129,3 +137,4 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
 };
 
 export default DirectMessageCard;
+

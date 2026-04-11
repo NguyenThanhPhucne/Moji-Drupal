@@ -249,7 +249,7 @@ const SavedMessagesPage = () => {
             </div>
 
             {/* ── Search bar ──────────────────────────────────────────── */}
-            <div className="relative">
+            <div className="relative saved-search-focus-ring rounded-xl">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60 pointer-events-none" />
               <Input
                 value={searchQuery}
@@ -401,17 +401,18 @@ const SavedMessagesPage = () => {
               )}
 
               {!loading && filteredBookmarks.length === 0 && (
-                <div className="saved-empty-state">
-                  <div className="saved-empty-icon">
+                <div className="saved-empty-state animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="saved-empty-icon relative">
                     <Bookmark className="size-7 text-muted-foreground/50" />
+                    <span className="absolute inset-0 rounded-full border border-muted-foreground/20 animate-ping opacity-20" />
                   </div>
-                  <p className="text-[15px] font-semibold text-foreground/80 mt-3">
-                    {searchQuery ? `No results for "${searchQuery}"` : "No saved messages"}
+                  <p className="text-[15px] font-semibold text-foreground/80 mt-4">
+                    {searchQuery ? `No results for "${searchQuery}"` : "No saved messages yet"}
                   </p>
-                  <p className="text-sm text-muted-foreground/60 mt-1 max-w-[260px]">
+                  <p className="text-sm text-muted-foreground/60 mt-1 max-w-[240px] leading-relaxed">
                     {searchQuery
                       ? "Try different keywords or clear your search"
-                      : "Bookmark messages in chat to save them here"}
+                      : "Long-press any message in chat to bookmark it here"}
                   </p>
                 </div>
               )}
@@ -433,7 +434,7 @@ const SavedMessagesPage = () => {
                   <div
                     key={bookmark._id}
                     className={cn(
-                      "saved-bookmark-card",
+                      "saved-bookmark-card bookmark-card-hover",
                       isSelected && "saved-bookmark-card--selected",
                       index < 6 && `animate-in fade-in slide-in-from-bottom-2 duration-300`,
                     )}

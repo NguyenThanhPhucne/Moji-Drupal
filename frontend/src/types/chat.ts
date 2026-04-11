@@ -69,6 +69,12 @@ export interface Message {
   isDeleted?: boolean;
   editedAt?: string | null;
   readBy?: string[];
+  isForwardable?: boolean;
+  forwardedFrom?: {
+    _id: string;
+    displayName: string;
+    avatarUrl?: string | null;
+  } | null;
 }
 
 export interface ProfileLite {

@@ -91,7 +91,7 @@ const PostCardActions = ({
       </div>
 
       <div
-        className="social-divider social-post-action-row mt-2 grid grid-cols-3 border-t pt-1"
+        className="social-divider social-post-action-row mt-2 grid grid-cols-3 border-t border-border/30 pt-1.5"
         data-testid="post-card-actions"
       >
         <div className="group relative">
@@ -105,7 +105,7 @@ const PostCardActions = ({
           <button
             type="button"
             className={cn(
-              "social-post-comment-action social-post-action-btn flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold",
+              "post-action-btn-hover social-post-comment-action social-post-action-btn flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold",
               displayedReactionColorClass,
             )}
             data-testid="post-like-button"
@@ -146,7 +146,7 @@ const PostCardActions = ({
 
         <button
           type="button"
-          className="social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold"
+          className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold"
           onClick={onToggleComments}
           data-testid="post-comment-button"
         >
@@ -156,7 +156,7 @@ const PostCardActions = ({
 
         <button
           type="button"
-          className="social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-semibold"
+          className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold"
           onClick={onSharePost}
           data-testid="post-share-button"
         >

@@ -12,6 +12,7 @@ import {
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { ArrowDown } from "lucide-react";
+import { ForwardMessageModal } from "./ForwardMessageModal";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import type { Message } from "@/types/chat";
@@ -23,6 +24,7 @@ import {
   pushChatThreadSample,
   startChatThreadBench,
 } from "@/lib/chatThreadBenchmark";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function isSameDay(a: string, b: string) {
   return (
@@ -88,6 +90,7 @@ const ChatWindowBody = () => {
     {},
   );
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
 
   const messages = useMemo(() => {
     if (!activeConversationId) {
@@ -414,6 +417,7 @@ const ChatWindowBody = () => {
           seenUsers={groupSeenUsers}
           showDateDivider={showDateDivider}
           isNew={isNew}
+          onForward={() => setForwardMessageId(message._id)}
         />
       );
     },
@@ -540,6 +544,15 @@ const ChatWindowBody = () => {
                 void fetchMoreMessages();
               }
             }}
+            components={{
+              Header: () => (
+                <div className={cn("flex justify-center transition-all duration-300 overflow-hidden", messageLoading && messages.length > 0 ? "h-10 opacity-100 mt-4 mb-2" : "h-0 opacity-0 mt-0 mb-0")}>
+                  <div className="flex flex-col gap-2 w-full max-w-[65%] items-center opacity-70">
+                    <Skeleton className="h-[28px] w-[50%] rounded-2xl bg-muted/60" />
+                  </div>
+                </div>
+              ),
+            }}
             itemContent={renderMessageItem}
           />
         </div>
@@ -595,6 +608,12 @@ const ChatWindowBody = () => {
           </span>
         )}
       </button>
+
+      <ForwardMessageModal
+        isOpen={!!forwardMessageId}
+        onClose={() => setForwardMessageId(null)}
+        messageId={forwardMessageId}
+      />
     </div>
   );
 };

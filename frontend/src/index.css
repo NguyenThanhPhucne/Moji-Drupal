@@ -968,6 +968,586 @@ html[data-motion="reduced"] * {
     animation-duration: 2s;
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     UI/UX UPGRADE — Animation Tokens & New Utility Classes
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* ─── Badge pop animation (for new unread counts) ────────────────── */
+  .badge-pop {
+    animation: badgePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  @keyframes badgePop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.18); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ─── Float gentle (for welcome screen emoji particles) ─────────── */
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    33%       { transform: translateY(-8px) rotate(4deg); }
+    66%       { transform: translateY(-4px) rotate(-3deg); }
+  }
+
+  @keyframes float-delayed {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    33%       { transform: translateY(-6px) rotate(-4deg); }
+    66%       { transform: translateY(-10px) rotate(3deg); }
+  }
+
+  .animate-float {
+    animation: float 3.8s ease-in-out infinite;
+  }
+
+  .animate-float-delayed {
+    animation: float-delayed 4.5s ease-in-out infinite;
+    animation-delay: 0.9s;
+  }
+
+  /* ─── Shimmer slide (for skeleton loaders) ───────────────────────── */
+  @keyframes shimmerSlide {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--muted-foreground) / 0.15) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmerSlide 1.6s ease-in-out infinite;
+  }
+
+  /* ─── Active nav pill indicator (sliding underline/pill) ─────────── */
+  .nav-pill-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+    background: var(--gradient-primary);
+    transition: opacity 0.2s ease;
+  }
+
+  /* ─── Scroll-to-bottom FAB ───────────────────────────────────────── */
+  .scroll-fab {
+    @apply fixed flex items-center justify-center size-9 rounded-full shadow-lg border border-border/50;
+    background: hsl(var(--background) / 0.95);
+    backdrop-filter: blur(8px);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .scroll-fab:hover {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-bubble);
+  }
+
+  .scroll-fab-enter {
+    animation: scrollFabIn 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+  }
+
+  .scroll-fab-exit {
+    animation: scrollFabOut 0.2s ease forwards;
+  }
+
+  @keyframes scrollFabIn {
+    0%   { opacity: 0; transform: scale(0.6) translateY(8px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  @keyframes scrollFabOut {
+    0%   { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: scale(0.7); }
+  }
+
+  /* ─── Frosted glass date divider ─────────────────────────────────── */
+  .date-divider-pill {
+    @apply inline-flex items-center px-4 py-1 rounded-full text-[11px] font-medium text-muted-foreground select-none;
+    background: hsl(var(--background) / 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.07);
+  }
+
+  .dark .date-divider-pill {
+    background: hsl(var(--card) / 0.75);
+    border-color: hsl(var(--border) / 0.4);
+  }
+
+  /* ─── Presence pill badge (Active now) ───────────────────────────── */
+  .presence-pill-online {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold;
+    background: linear-gradient(135deg, hsl(142 76% 90%), hsl(158 70% 88%));
+    color: hsl(142 60% 30%);
+    border: 1px solid hsl(142 70% 82%);
+  }
+
+  .dark .presence-pill-online {
+    background: linear-gradient(135deg, hsl(142 50% 20%), hsl(158 45% 18%));
+    color: hsl(142 70% 60%);
+    border-color: hsl(142 45% 30%);
+  }
+
+  /* ─── Drag & drop zone visual ────────────────────────────────────── */
+  .drop-zone-active {
+    @apply relative;
+  }
+
+  .drop-zone-active::after {
+    content: "";
+    @apply absolute inset-0 rounded-2xl pointer-events-none;
+    border: 2px dashed hsl(var(--primary) / 0.6);
+    background: hsl(var(--primary) / 0.05);
+    animation: dropZonePulse 1s ease infinite;
+  }
+
+  @keyframes dropZonePulse {
+    0%, 100% { border-color: hsl(var(--primary) / 0.6); background: hsl(var(--primary) / 0.05); }
+    50%       { border-color: hsl(var(--primary) / 0.9); background: hsl(var(--primary) / 0.09); }
+  }
+
+  /* ─── Circular char progress ring ───────────────────────────────── */
+  .char-progress-ring {
+    transform: rotate(-90deg);
+    transition: stroke-dashoffset 0.2s ease;
+  }
+
+  /* ─── Chat card hover micro-slide ────────────────────────────────── */
+  .chat-card-hover-slide {
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.15s ease;
+  }
+
+  .chat-card-hover-slide:hover {
+    transform: translateX(2px);
+  }
+
+  /* ─── Profile stats animated counter container ───────────────────── */
+  .stat-counter {
+    @apply tabular-nums font-bold;
+    transition: opacity 0.3s ease;
+  }
+
+  /* ─── Frosted glass access denied card ───────────────────────────── */
+  .access-denied-card {
+    @apply rounded-2xl p-8 text-center;
+    background: hsl(var(--background) / 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    box-shadow: 0 8px 32px hsl(0 0% 0% / 0.08);
+  }
+
+  .dark .access-denied-card {
+    background: hsl(var(--card) / 0.7);
+    border-color: hsl(var(--border) / 0.35);
+    box-shadow: 0 8px 32px hsl(0 0% 0% / 0.2);
+  }
+
+  /* ─── Gradient bottom border (header) ────────────────────────────── */
+  .gradient-border-bottom {
+    border-bottom: none;
+    position: relative;
+  }
+
+  .gradient-border-bottom::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--primary) / 0.3) 30%,
+      hsl(var(--primary) / 0.5) 50%,
+      hsl(var(--primary) / 0.3) 70%,
+      transparent 100%
+    );
+  }
+
+  /* ─── Sidebar tab active pill ────────────────────────────────────── */
+  .sidebar-tab-active {
+    position: relative;
+  }
+
+  .sidebar-tab-active::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: hsl(var(--primary) / 0.1);
+    animation: tabPillIn 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes tabPillIn {
+    0%   { opacity: 0; transform: scaleX(0.7); }
+    100% { opacity: 1; transform: scaleX(1); }
+  }
+
+  /* ─── Icon hover bounce ──────────────────────────────────────────── */
+  .icon-hover-bounce {
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .icon-hover-bounce:hover {
+    transform: scale(1.2) rotate(-5deg);
+  }
+
+  /* ─── Welcome screen ring animation ─────────────────────────────── */
+  @keyframes welcomeRingExpand {
+    0%   { transform: scale(1); opacity: 0.4; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+
+  .welcome-ring {
+    @apply absolute inset-0 rounded-[22px];
+    border: 1.5px solid hsl(var(--primary) / 0.25);
+    animation: welcomeRingExpand 2.4s ease-out infinite;
+  }
+
+  .welcome-ring-2 {
+    animation-delay: 0.8s;
+  }
+
+  .welcome-ring-3 {
+    animation-delay: 1.6s;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     UI/UX UPGRADE ROUND 2 — Social & Mini-Chat Tokens
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* ─── Story rainbow gradient ring ───────────────────────────────── */
+  .story-card-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: linear-gradient(135deg,
+      hsl(262 80% 58%) 0%,
+      hsl(330 80% 60%) 25%,
+      hsl(38 92% 55%) 50%,
+      hsl(142 70% 45%) 75%,
+      hsl(204 89% 55%) 100%
+    );
+    padding: 2.5px;
+    box-shadow: 0 0 12px hsl(262 80% 58% / 0.3);
+  }
+
+  .story-card-ring::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: inherit;
+    animation: storyRingRotate 3s linear infinite;
+  }
+
+  @keyframes storyRingRotate {
+    0%   { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+  }
+
+  /* ─── Story create button pulse ─────────────────────────────────── */
+  .story-create-plus {
+    position: relative;
+  }
+
+  .story-create-plus::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: hsl(var(--primary) / 0.3);
+    animation: createPlusPulse 2s ease-out infinite;
+  }
+
+  @keyframes createPlusPulse {
+    0%   { transform: scale(1); opacity: 0.5; }
+    70%  { transform: scale(1.4); opacity: 0; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+
+  /* ─── Post action button hover glow ─────────────────────────────── */
+  .post-action-btn-hover {
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .post-action-btn-hover:hover {
+    background: hsl(var(--primary) / 0.07);
+    color: hsl(var(--primary));
+    transform: translateY(-1px);
+  }
+
+  .post-action-btn-hover:active {
+    transform: scale(0.96) translateY(0);
+  }
+
+  /* ─── Like button active bounce ─────────────────────────────────── */
+  @keyframes likeBounce {
+    0%   { transform: scale(1); }
+    30%  { transform: scale(1.35) rotate(-8deg); }
+    60%  { transform: scale(0.9) rotate(4deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+
+  .like-bounce {
+    animation: likeBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* ─── Social contact item hover ─────────────────────────────────── */
+  .social-contact-hover {
+    border-radius: 10px;
+    transition: all 0.14s ease;
+    padding: 5px 8px;
+    margin: 0 -8px;
+  }
+
+  .social-contact-hover:hover {
+    background: hsl(var(--primary) / 0.06);
+    transform: translateX(2px);
+  }
+
+  /* ─── Post author avatar ring on hover ──────────────────────────── */
+  .author-avatar-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .author-avatar-wrap::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: -1;
+  }
+
+  .author-avatar-wrap:hover::after {
+    opacity: 0.6;
+  }
+
+  /* ─── Post card premium elevation ───────────────────────────────── */
+  .post-card-elevated {
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+  }
+
+  .post-card-elevated:hover {
+    box-shadow: 0 4px 24px hsl(var(--primary) / 0.08), 0 1px 4px hsl(0 0% 0% / 0.06);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Mini chat glassmorphism header ────────────────────────────── */
+  .mini-chat-glass-head {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--card) / 0.96) 0%,
+      hsl(var(--background) / 0.9) 100%
+    );
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid hsl(var(--primary) / 0.12);
+    box-shadow: 0 1px 8px hsl(0 0% 0% / 0.06);
+  }
+
+  /* ─── Trending tag chip upgrade ─────────────────────────────────── */
+  .trending-chip-upgrade {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid hsl(var(--border) / 0.6);
+    background: hsl(var(--muted) / 0.5);
+    color: hsl(var(--foreground) / 0.8);
+    transition: all 0.15s ease;
+  }
+
+  .trending-chip-upgrade:hover {
+    background: hsl(var(--primary) / 0.1);
+    border-color: hsl(var(--primary) / 0.35);
+    color: hsl(var(--primary));
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.12);
+  }
+
+  /* ─── NavUser avatar online ring ────────────────────────────────── */
+  .nav-user-avatar-online {
+    box-shadow: 0 0 0 2px hsl(142 70% 45%), 0 0 0 4px hsl(142 70% 45% / 0.25);
+  }
+
+  /* ─── Stats counter shimmer on load ─────────────────────────────── */
+  @keyframes counterSlideUp {
+    0%   { opacity: 0; transform: translateY(6px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+
+  .counter-slide-up {
+    animation: counterSlideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* ─── Section card hover outline ────────────────────────────────── */
+  .rail-card-hover {
+    border: 1px solid transparent;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    border-radius: 16px;
+  }
+
+  .rail-card-hover:hover {
+    border-color: hsl(var(--primary) / 0.12);
+    box-shadow: 0 2px 16px hsl(var(--primary) / 0.06);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     UI/UX UPGRADE ROUND 3 — Profile, Saved, Explore Tokens
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* ─── Profile stat chip ─────────────────────────────────────────── */
+  .profile-stat-chip {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 10px 18px;
+    border-radius: 14px;
+    background: hsl(var(--card) / 0.7);
+    border: 1px solid hsl(var(--border) / 0.5);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: default;
+  }
+
+  .profile-stat-chip:hover {
+    background: hsl(var(--primary) / 0.06);
+    border-color: hsl(var(--primary) / 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px hsl(var(--primary) / 0.08);
+  }
+
+  .profile-stat-chip-value {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: hsl(var(--foreground));
+    line-height: 1;
+    animation: counterSlideUp 0.5s cubic-bezier(0.4,0,0.2,1) forwards;
+  }
+
+  .profile-stat-chip-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground) / 0.8);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* ─── Profile avatar online ring ────────────────────────────────── */
+  .profile-avatar-ring-online {
+    border: 3px solid hsl(142 70% 48%) !important;
+    box-shadow: 0 0 0 4px hsl(142 70% 48% / 0.18), 0 0 16px hsl(142 70% 48% / 0.25) !important;
+  }
+
+  /* ─── Profile cover shimmer overlay ─────────────────────────────── */
+  .profile-cover-shimmer {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.04) 0%,
+      transparent 50%,
+      hsl(var(--primary) / 0.06) 100%
+    );
+    transition: opacity 0.3s ease;
+  }
+
+  /* ─── Bookmark card — elevated hover ────────────────────────────── */
+  .bookmark-card-hover {
+    transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+  }
+
+  .bookmark-card-hover:hover {
+    border-color: hsl(var(--primary) / 0.2) !important;
+    box-shadow: 0 4px 20px hsl(var(--primary) / 0.07), 0 1px 3px hsl(0 0% 0% / 0.04);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Saved page search input focus ─────────────────────────────── */
+  .saved-search-focus-ring {
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  }
+
+  .saved-search-focus-ring:focus-within {
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.12);
+    border-color: hsl(var(--primary) / 0.4);
+  }
+
+  /* ─── Profile action buttons ─────────────────────────────────────── */
+  .profile-action-gradient {
+    background: var(--gradient-primary) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 14px hsl(var(--primary) / 0.3) !important;
+    transition: all 0.2s ease !important;
+  }
+
+  .profile-action-gradient:hover {
+    box-shadow: 0 6px 20px hsl(var(--primary) / 0.4) !important;
+    transform: translateY(-1px) !important;
+    filter: brightness(1.05);
+  }
+
+  .profile-action-gradient:active {
+    transform: scale(0.97) !important;
+  }
+
+  /* ─── Follow button states ───────────────────────────────────────── */
+  .follow-btn-following {
+    border: 1px solid hsl(var(--border));
+    transition: all 0.2s ease;
+  }
+
+  .follow-btn-following:hover {
+    border-color: hsl(var(--destructive) / 0.4);
+    color: hsl(var(--destructive));
+    background: hsl(var(--destructive) / 0.05);
+  }
+
+  /* ─── Explore page tag chip ──────────────────────────────────────── */
+  .explore-tag-active {
+    background: var(--gradient-primary) !important;
+    color: white !important;
+    border-color: transparent !important;
+    box-shadow: 0 2px 10px hsl(var(--primary) / 0.25) !important;
+  }
+
+  /* ─── Section header accent line ────────────────────────────────── */
+  .section-title-accent {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title-accent::before {
+    content: "";
+    display: block;
+    width: 3px;
+    height: 1em;
+    border-radius: 2px;
+    background: var(--gradient-primary);
+    flex-shrink: 0;
+  }
+
   /* ─── Message action toolbar ─────────────────────────────────────── */
   .msg-action-bar {
     @apply flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/95 backdrop-blur-sm shadow-md p-0.5 opacity-0 scale-90 transition-all duration-150 pointer-events-none;

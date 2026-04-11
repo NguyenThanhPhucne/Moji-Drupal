@@ -36,12 +36,14 @@ const ChatCard = ({
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "cursor-pointer rounded-xl border border-transparent px-3 py-[9px] transition-all duration-150 active:scale-[0.98]",
-        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40",
-        "group select-none relative overflow-hidden",
+        "cursor-pointer rounded-xl border border-transparent px-3 py-[9px] select-none relative overflow-hidden",
+        "transition-all duration-200 active:scale-[0.98]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1",
+        "group",
+        !isActive && "hover:bg-muted/55 hover:translate-x-[2px]",
         isActive
-          ? "bg-primary/[0.08] border-primary/10 text-foreground"
-          : "bg-transparent hover:bg-muted/55",
+          ? "bg-primary/[0.08] border-primary/10 text-foreground translate-x-0"
+          : "bg-transparent",
       )}
       onClick={() => onSelect(convoId)}
       onKeyDown={(event) => {
@@ -51,9 +53,13 @@ const ChatCard = ({
         }
       }}
     >
-      {isActive && (
-        <span className="absolute left-0 top-2 bottom-2 w-[3.5px] rounded-r-full bg-primary" />
-      )}
+      {/* Active left pill indicator — always rendered, width transitions */}
+      <span
+        className={cn(
+          "absolute left-0 top-2 bottom-2 rounded-r-full bg-primary transition-all duration-250 ease-out",
+          isActive ? "w-[3.5px] opacity-100" : "w-0 opacity-0"
+        )}
+      />
 
       <div className="flex flex-row items-center gap-3">
         {/* Avatar */}
@@ -97,12 +103,12 @@ const ChatCard = ({
 
             <div className="flex flex-shrink-0 items-center gap-1.5">
               {hasMention && (
-                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white">
+                <span className="badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white shadow-sm">
                   @{(mentionCount ?? 0) > 9 ? "9+" : mentionCount}
                 </span>
               )}
               {hasUnread && (
-                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                <span className="badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow-sm">
                   {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
                 </span>
               )}

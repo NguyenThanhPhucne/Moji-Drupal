@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import {
   emitNewMessage,
   updateConversationAfterCreateMessage,
+  invalidateConversationParticipantsCache
 } from "../utils/messageHelper.js";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
@@ -598,6 +599,9 @@ export const unsendMessage = async (req, res) => {
       conversation: formatConversationSyncPayload(updatedConversation),
     });
 
+    const conversationToInvalidate = await Conversation.findById(message.conversationId).select("participants");
+    invalidateConversationParticipantsCache(conversationToInvalidate).catch(console.error);
+
     return res.status(200).json({
       message,
       conversation: formatConversationSyncPayload(updatedConversation),
@@ -777,5 +781,131 @@ export const getLinkPreview = async (req, res) => {
 
     console.error("Link preview error:", error);
     return res.status(500).json({ message: "System error" });
+  }
+};
+
+export const forwardMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { recipientIds = [], groupIds = [] } = req.body;
+    const senderId = req.user._id;
+
+    if (!recipientIds.length && !groupIds.length) {
+      return res.status(400).json({ message: "Thiếu danh sách người nhận đích" });
+    }
+
+    const originalMessage = await Message.findById(messageId);
+    if (!originalMessage) {
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn gốc" });
+    }
+
+    if (originalMessage.isDeleted) {
+      return res.status(400).json({ message: "Không thể forward tin nhắn đã thu hồi" });
+    }
+
+    // Privacy check
+    if (originalMessage.isForwardable === false && String(originalMessage.senderId) !== String(senderId)) {
+      return res.status(403).json({ message: "Chủ sở hữu tin nhắn không cho phép forward" });
+    }
+
+    const forwardedMessages = [];
+
+    // Forward to Direct Conversations
+    for (const recipientId of recipientIds) {
+      try {
+        const { conversation, isNewConversation } = await ensureDirectConversationForSend({
+          conversationId: null,
+          senderId,
+          recipientId
+        });
+
+        let message = await Message.create({
+          conversationId: conversation._id,
+          senderId,
+          content: originalMessage.content,
+          imgUrl: originalMessage.imgUrl,
+          forwardedFrom: originalMessage.senderId,
+        });
+
+        message = await message.populate("forwardedFrom", "displayName avatarUrl");
+
+        updateConversationAfterCreateMessage(conversation, message, senderId);
+        await conversation.save();
+
+        if (isNewConversation) {
+          await emitDirectConversationCreated({ conversation, senderId });
+        }
+
+        emitNewMessage(io, conversation, message);
+        forwardedMessages.push(message);
+      } catch (err) {
+        console.error(`Error forwarding to user ${recipientId}:`, err);
+      }
+    }
+
+    // Forward to Group Conversations
+    for (const groupId of groupIds) {
+      try {
+        const conversation = await Conversation.findById(groupId);
+        if (!conversation) continue;
+
+        const isMember = conversation.participants.some(p => String(p.userId) === String(senderId));
+        if (!isMember) continue;
+
+        let message = await Message.create({
+          conversationId: conversation._id,
+          senderId,
+          content: originalMessage.content,
+          imgUrl: originalMessage.imgUrl,
+          forwardedFrom: originalMessage.senderId,
+        });
+
+        message = await message.populate("forwardedFrom", "displayName avatarUrl");
+
+        updateConversationAfterCreateMessage(conversation, message, senderId);
+        await conversation.save();
+
+        emitNewMessage(io, conversation, message);
+        forwardedMessages.push(message);
+      } catch (err) {
+        console.error(`Error forwarding to group ${groupId}:`, err);
+      }
+    }
+
+    return res.status(201).json({ message: "Chuyển tiếp thành công", count: forwardedMessages.length });
+  } catch (error) {
+    console.error("Lỗi khi forward tin nhắn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống khi forward" });
+  }
+};
+
+export const toggleForwardable = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { isForwardable } = req.body;
+    const senderId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
+
+    if (String(message.senderId) !== String(senderId)) {
+      return res.status(403).json({ message: "Chỉ người gửi mới có quyền thay đổi bảo mật của tin nhắn" });
+    }
+
+    message.isForwardable = isForwardable;
+    await message.save();
+
+    // Inform clients via socket that the message was updated (optional, or just rely on state)
+    io.to(message.conversationId.toString()).emit("message-updated", {
+      conversationId: message.conversationId,
+      message,
+    });
+
+    return res.status(200).json({ message: "Đã cập nhật quyền privacy của tin nhắn", isForwardable: message.isForwardable });
+  } catch (error) {
+    console.error("Lỗi khi toggle privacy tin nhắn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

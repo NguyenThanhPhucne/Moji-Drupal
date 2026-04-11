@@ -207,7 +207,7 @@ const SocialStoriesRow = ({
           aria-label="Create story"
         >
           <div className="social-story-cover" style={createStoryCoverStyle} />
-          <div className="social-story-avatar social-story-avatar--create">
+          <div className="social-story-avatar social-story-avatar--create story-create-plus">
             <Plus className="h-4 w-4" />
           </div>
           <span className="social-story-name">Create story</span>
@@ -222,16 +222,20 @@ const SocialStoriesRow = ({
             aria-label={`Open ${story.displayName} story`}
           >
             <div className="social-story-cover" />
-            <div className="social-story-avatar">
-              {story.avatarUrl ? (
-                <img
-                  src={story.avatarUrl}
-                  alt={story.displayName}
-                  className="h-full w-full rounded-full object-cover"
-                />
-              ) : (
-                <span>{story.displayName.slice(0, 1).toUpperCase()}</span>
-              )}
+            {/* Rainbow ring wrapper */}
+            <div className="relative">
+              <span className="story-card-ring" aria-hidden="true" />
+              <div className="social-story-avatar">
+                {story.avatarUrl ? (
+                  <img
+                    src={story.avatarUrl}
+                    alt={story.displayName}
+                    className="h-full w-full rounded-full object-cover"
+                  />
+                ) : (
+                  <span>{story.displayName.slice(0, 1).toUpperCase()}</span>
+                )}
+              </div>
             </div>
             <span className="social-story-name">{story.displayName}</span>
           </button>

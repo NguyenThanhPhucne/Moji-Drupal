@@ -148,26 +148,32 @@ const ProfilePage = () => { // NOSONAR
                   </div>
 
                   <div className="social-profile-heading flex flex-wrap items-end justify-between gap-4">
-                    <div className="social-profile-identity space-y-1">
-                      <h1 className="social-text-main social-profile-name text-3xl font-bold">
+                    <div className="social-profile-identity space-y-1.5">
+                      <h1 className="social-text-main social-profile-name text-3xl font-bold tracking-tight">
                         {profile?.displayName || "Profile"}
                       </h1>
                       <p className="social-text-muted social-profile-username text-sm">@{profile?.username || "user"}</p>
-                      {profile?.bio && <p className="social-text-main social-profile-bio text-sm">{profile.bio}</p>}
-                      <p className="social-text-muted social-profile-stats social-profile-stat-row text-sm">
-                        <span className="social-profile-stat-item">{profile?.postCount || 0} posts</span>
-                        <span className="social-profile-stat-separator" aria-hidden="true">·</span>
-                        <span className="social-profile-stat-item">{profile?.friendCount || 0} friends</span>
-                        <span className="social-profile-stat-separator" aria-hidden="true">·</span>
-                        <span className="social-profile-stat-item">{profile?.followerCount || 0} followers</span>
-                        <span className="social-profile-stat-separator" aria-hidden="true">·</span>
-                        <span className="social-profile-stat-item">{profile?.followingCount || 0} following</span>
-                      </p>
+                      {profile?.bio && <p className="social-text-main social-profile-bio text-sm leading-relaxed">{profile.bio}</p>}
+
+                      {/* Premium stat chips */}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {[
+                          { value: profile?.postCount ?? 0, label: "Posts" },
+                          { value: profile?.friendCount ?? 0, label: "Friends" },
+                          { value: profile?.followerCount ?? 0, label: "Followers" },
+                          { value: profile?.followingCount ?? 0, label: "Following" },
+                        ].map(({ value, label }) => (
+                          <div key={label} className="profile-stat-chip">
+                            <span className="profile-stat-chip-value">{value.toLocaleString()}</span>
+                            <span className="profile-stat-chip-label">{label}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="social-profile-actions flex items-center gap-2">
+                    <div className="social-profile-actions flex items-center gap-2 flex-wrap">
                       {profile?._id === user?._id ? (
-                        <Button type="button" variant="secondary" className="social-profile-action-btn social-avatar-badge social-text-main hover:opacity-90">
+                        <Button type="button" variant="secondary" className="social-profile-action-btn social-avatar-badge social-text-main hover:opacity-90 transition-all hover:shadow-md">
                           Edit profile
                         </Button>
                       ) : null}
@@ -176,7 +182,7 @@ const ProfilePage = () => { // NOSONAR
                         <Button
                           type="button"
                           variant={profile.isFollowing ? "outline" : "default"}
-                          className="social-profile-action-btn"
+                          className={profile.isFollowing ? "social-profile-action-btn follow-btn-following" : "social-profile-action-btn profile-action-gradient"}
                           onClick={() => toggleFollow(profile._id)}
                         >
                           {profile.isFollowing ? "Following" : "Follow"}
@@ -193,15 +199,15 @@ const ProfilePage = () => { // NOSONAR
             )}
 
             {profileAccessDenied ? (
-              <div className="rounded-xl bg-white p-8 text-center shadow-sm">
-                <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                  <Lock className="size-6" />
+              <div className="access-denied-card">
+                <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-full bg-primary/8 text-primary ring-8 ring-primary/5">
+                  <Lock className="size-7" />
                 </div>
-                <h2 className="text-title-2">
-                  Only friends can view this profile
+                <h2 className="text-title-2 text-foreground">
+                  Private profile
                 </h2>
-                <p className="mt-2 text-body-sm text-muted-foreground">
-                  Send a friend request and connect to unlock this profile.
+                <p className="mt-2 text-body-sm text-muted-foreground/80 max-w-[280px] mx-auto leading-relaxed">
+                  Only friends can view this profile. Send a friend request to unlock their posts and photos.
                 </p>
               </div>
             ) : (

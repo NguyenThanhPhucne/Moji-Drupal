@@ -295,7 +295,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
         event.preventDefault();
       }}
     >
-      <header className={`social-mini-chat-head ${shouldPulse ? "social-mini-chat-head--pulse" : ""}`}>
+      <header className={`social-mini-chat-head mini-chat-glass-head ${shouldPulse ? "social-mini-chat-head--pulse" : ""}`}>
         <button
           type="button"
           className="social-mini-chat-user"
@@ -413,7 +413,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
                     key={messageItem._id}
                     className={`social-mini-chat-msg ${ownMessage ? "social-mini-chat-msg--own" : ""}`}
                   >
-                    <div className="social-mini-chat-bubble">
+                    <div className={`social-mini-chat-bubble ${ownMessage ? "animate-in fade-in slide-in-from-bottom-1 duration-200" : "animate-in fade-in slide-in-from-left-1 duration-200"}`}>
                       {messageItem.content || (messageItem.imgUrl ? "" : "(Attachment)")}
                       {messageItem.imgUrl ? (
                         <img
@@ -428,11 +428,12 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
                 );
               })
             ) : (
-              <div className="flex flex-col items-center justify-center gap-2 text-center my-auto py-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <div className="flex flex-col items-center justify-center gap-2.5 text-center my-auto py-6 px-3">
+                <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
                   <Sparkles className="h-5 w-5 text-primary" />
+                  <span className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-30" />
                 </div>
-                <p className="social-mini-chat-state">
+                <p className="social-mini-chat-state text-[13px] font-medium">
                   Say hi to {windowItem.displayName.split(" ")[0]}! 👋
                 </p>
               </div>

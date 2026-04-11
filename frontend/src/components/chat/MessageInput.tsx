@@ -4,7 +4,67 @@ import { Button } from "../ui/button";
 import { ImagePlus, Send, X } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
 import { cn } from "@/lib/utils";
-import { useMessageInput } from "@/hooks/useMessageInput";
+import { useMessageInput, MAX_MESSAGE_LENGTH } from "@/hooks/useMessageInput";
+import { useState, useRef, useCallback } from "react";
+
+// Circular SVG progress ring for character count
+const CharRing = ({ value, max }: { value: number; max: number }) => {
+  const RADIUS = 10;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  const progress = Math.min(1, value / max);
+  const offset = CIRCUMFERENCE * (1 - progress);
+  const isWarning = value > max * 0.85;
+  const isDanger = value > max * 0.95;
+
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" className="shrink-0">
+      {/* Track */}
+      <circle
+        cx="12"
+        cy="12"
+        r={RADIUS}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        className="text-muted/60"
+      />
+      {/* Progress */}
+      <circle
+        cx="12"
+        cy="12"
+        r={RADIUS}
+        fill="none"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={CIRCUMFERENCE}
+        strokeDashoffset={offset}
+        className={cn(
+          "char-progress-ring transition-all duration-200",
+          isDanger
+            ? "stroke-destructive"
+            : isWarning
+            ? "stroke-warning"
+            : "stroke-primary"
+        )}
+      />
+      {/* Inner number only in danger zone */}
+      {isDanger && (
+        <text
+          x="12"
+          y="16"
+          textAnchor="middle"
+          fontSize="7"
+          className={cn(
+            "fill-current font-bold",
+            isDanger ? "text-destructive" : "text-muted-foreground"
+          )}
+        >
+          {max - value}
+        </text>
+      )}
+    </svg>
+  );
+};
 
 const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const { user } = useAuthStore();
@@ -27,13 +87,72 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     charsLeft,
   } = useMessageInput(selectedConvo);
 
+  // Drag & drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current += 1;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      dragCounter.current = 0;
+      setIsDragOver(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file && file.type.startsWith("image/")) {
+        const mockEvent = {
+          target: { files: e.dataTransfer.files },
+        } as unknown as React.ChangeEvent<HTMLInputElement>;
+        handleFileChange(mockEvent);
+      }
+    },
+    [handleFileChange],
+  );
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
   if (!user) return null;
 
+  const charsUsed = value.length;
+  const showRing = charsLeft < 120;
+
   return (
-    <div className="flex flex-col bg-background relative z-10 w-full shrink-0 border-t border-border/30">
+    <div
+      className={cn(
+        "flex flex-col bg-background relative z-10 w-full shrink-0 border-t border-border/30 transition-all duration-200",
+        isDragOver && "drop-zone-active",
+      )}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay label */}
+      {isDragOver && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center rounded-2xl pointer-events-none animate-in fade-in duration-150">
+          <p className="text-[13px] font-semibold text-primary">Drop image to attach</p>
+        </div>
+      )}
+
       {/* Reply preview */}
       {replyingTo && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border/25 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border/25 animate-in fade-in slide-in-from-bottom-1 duration-150">
           <div className="flex-1 border-l-2 border-primary/70 pl-2.5 py-0.5">
             <p className="text-[10px] font-semibold text-primary uppercase tracking-[0.04em] leading-none mb-0.5">
               Reply
@@ -69,20 +188,6 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           >
             <X className="size-3.5 text-muted-foreground" />
           </button>
-        </div>
-      )}
-
-      {/* Char counter */}
-      {charsLeft < 120 && (
-        <div className="flex justify-end px-4 pt-1.5">
-          <span
-            className={cn(
-              "text-[10px] tabular-nums",
-              charsLeft < 50 ? "chat-counter-warning" : "text-muted-foreground/50",
-            )}
-          >
-            {charsLeft}
-          </span>
         </div>
       )}
 
@@ -151,15 +256,22 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           </div>
         </div>
 
+        {/* Char progress ring */}
+        {showRing && (
+          <div className="mb-0.5 flex-shrink-0 animate-in fade-in duration-200">
+            <CharRing value={charsUsed} max={MAX_MESSAGE_LENGTH} />
+          </div>
+        )}
+
         <Button
           onClick={() => void sendMessage()}
           size="icon"
           disabled={!hasSendable}
           aria-label={hasSendable ? "Send message" : "Like"}
           className={cn(
-            "flex-shrink-0 mb-0.5 size-9 rounded-full transition-all duration-150",
+            "flex-shrink-0 mb-0.5 size-9 rounded-full transition-all duration-200",
             hasSendable
-              ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95"
+              ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95 animate-in zoom-in-75 duration-200"
               : "bg-transparent text-primary hover:bg-primary/10 opacity-80 hover:opacity-100",
           )}
           title={hasSendable ? "Send (Enter)" : "Like"}

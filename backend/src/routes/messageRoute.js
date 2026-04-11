@@ -9,6 +9,8 @@ import {
   editMessage,
   markMessageRead,
   getLinkPreview,
+  forwardMessage,
+  toggleForwardable,
 } from "../controllers/messageController.js";
 import {
   checkFriendship,
@@ -24,6 +26,8 @@ router.delete("/:messageId/unsend", unsendMessage);
 router.delete("/:messageId/remove-for-me", removeMessageForMe);
 router.put("/:messageId/edit", editMessage);
 router.post("/:messageId/read", markMessageRead);
+router.post("/:messageId/forward", forwardMessage);
+router.put("/:messageId/toggle-forward", toggleForwardable);
 router.get("/link-preview/meta", getLinkPreview);
 
 export default router;

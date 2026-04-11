@@ -26,6 +26,15 @@ const messageSchema = new mongoose.Schema(
       ref: "Message",
       default: null,
     },
+    forwardedFrom: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    isForwardable: {
+      type: Boolean,
+      default: true,
+    },
     reactions: [
       {
         userId: {

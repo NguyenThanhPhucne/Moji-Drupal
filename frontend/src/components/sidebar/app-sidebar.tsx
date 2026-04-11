@@ -127,7 +127,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               )}>
                 {!isCompact && (
                   <div className="flex items-center gap-2">
-                    <div className="size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0">
+                    <div className="size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0 transition-all duration-200 hover:shadow-md hover:shadow-primary/30 hover:scale-105">
                       <span className="text-[13px] font-black text-white tracking-tight">M</span>
                     </div>
                     <div>
@@ -179,10 +179,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         aria-current={item.isActive ? "page" : undefined}
                         onClick={() => navigate(item.to)}
                         className={cn(
-                          "relative flex size-10 items-center justify-center rounded-xl transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+                          "relative flex size-10 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
                           item.isActive
-                            ? "bg-primary/10 text-primary"
-                            : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
+                            ? "bg-primary/10 text-primary sidebar-tab-active"
+                            : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground hover:scale-105"
                         )}
                       >
                         <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
@@ -206,10 +206,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         onClick={() => navigate(item.to)}
                         title={item.label}
                         className={cn(
-                          "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                           item.isActive
-                            ? "bg-primary/[0.09] text-primary"
-                            : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80",
+                            ? "bg-primary/[0.09] text-primary sidebar-tab-active"
+                            : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80 hover:scale-[1.03]",
                         )}
                       >
                         <Icon className={cn("size-[18px]", item.isActive && "stroke-[2.2]")} />

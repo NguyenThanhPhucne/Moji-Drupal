@@ -13,6 +13,9 @@ import {
   Bookmark,
   Link2,
   ZoomIn,
+  SendHorizontal,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -43,15 +46,16 @@ export function DateDivider({ date }: Readonly<{ date: Date }>) {
   else label = format(date, "MMM d, yyyy");
 
   return (
-    <div className="chat-date-divider-root">
-      <div className="chat-date-divider-line" />
-      <span className="chat-date-divider-pill">
+    <div className="flex items-center gap-3 my-3 px-2 select-none">
+      <div className="flex-1 h-px bg-border/30" />
+      <span className="date-divider-pill">
         {label}
       </span>
-      <div className="chat-date-divider-line" />
+      <div className="flex-1 h-px bg-border/30" />
     </div>
   );
 }
+
 
 /* ---------- Reaction summary bar ---------- */
 const ReactionBar = memo(function ReactionBar({
@@ -119,6 +123,9 @@ const ContextMenu = memo(function ContextMenu({
   isOwn,
   isDeleted,
   canEdit,
+  isForwardable,
+  onForward,
+  onToggleForwardable,
   onReply,
   onCopy,
   onEdit,
@@ -130,6 +137,9 @@ const ContextMenu = memo(function ContextMenu({
   isOwn: boolean;
   isDeleted: boolean;
   canEdit: boolean;
+  isForwardable: boolean;
+  onForward: () => void;
+  onToggleForwardable?: () => void;
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
@@ -139,8 +149,12 @@ const ContextMenu = memo(function ContextMenu({
   const items = [
     { icon: Reply, label: "Reply", onClick: onReply },
     { icon: Copy, label: "Copy", onClick: onCopy, disabled: isDeleted },
+    { icon: SendHorizontal, label: "Forward", onClick: onForward, disabled: isDeleted || (!isForwardable && !isOwn) },
     ...(isOwn && canEdit && !isDeleted
       ? [{ icon: Edit2, label: "Edit", onClick: onEdit }]
+      : []),
+    ...(isOwn && onToggleForwardable && !isDeleted
+      ? [{ icon: isForwardable ? Lock : Unlock, label: isForwardable ? "Disable forwarding" : "Allow forwarding", onClick: onToggleForwardable }]
       : []),
     ...(isDeleted
       ? []
@@ -481,8 +495,8 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
           ? "right-[calc(100%+0.35rem)]"
           : "left-[calc(100%+0.35rem)]",
         actionBarVisible
-          ? "opacity-100 translate-x-0 pointer-events-auto"
-          : cn("opacity-0 pointer-events-none", hiddenActionOffsetClass),
+          ? "opacity-100 scale-100 pointer-events-auto"
+          : cn("opacity-0 scale-95 pointer-events-none", hiddenActionOffsetClass),
       )}
     >
       <div className="relative">
@@ -595,7 +609,17 @@ const MessageMetaSection = memo(function MessageMetaSection({
             edited
           </span>
         )}
-        <span className="text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium tabular-nums tracking-wide leading-none">
+        <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium tabular-nums tracking-wide leading-none">
+          {message.isForwardable === false && !message.isDeleted && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Lock className="size-2.5 text-muted-foreground/60" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                Forwarding disabled
+              </TooltipContent>
+            </Tooltip>
+          )}
           {format(new Date(message.createdAt), "HH:mm")}
         </span>
       </div>
@@ -678,16 +702,16 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
       {message.replyTo && !message.isDeleted && (
         <div
           className={cn(
-            "mb-1.5 max-w-full rounded-r-lg px-2.5 py-1.5 border-l-2",
+            "mb-1 max-w-full rounded-r-[12px] px-2.5 py-1.5 border-l-[3px]",
             isOwn
-              ? "border-l-primary/60 bg-primary/[0.07]"
-              : "border-l-muted-foreground/35 bg-muted/40",
+              ? "border-l-blue-500 bg-blue-50 text-blue-900/80 dark:bg-blue-950/40 dark:text-blue-100"
+              : "border-l-gray-300 bg-gray-50 text-gray-700 dark:border-l-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-300",
           )}
         >
-          <p className="text-[10px] font-semibold mb-0.5 uppercase tracking-[0.04em] text-muted-foreground/60">
-            Reply
+          <p className="text-[10px] font-bold mb-[1px] uppercase tracking-wider opacity-80">
+            Replied to
           </p>
-          <p className="text-[12px] truncate text-muted-foreground/80 max-w-[220px] leading-snug">
+          <p className="text-[12.5px] truncate max-w-[200px] leading-snug">
             {message.replyTo.content}
           </p>
         </div>
@@ -776,6 +800,7 @@ interface MessageItemProps {
   }>;
   showDateDivider?: boolean;
   isNew?: boolean; // only animate truly new messages
+  onForward?: () => void;
 }
 
 const MessageItem = memo(function MessageItem({
@@ -790,6 +815,7 @@ const MessageItem = memo(function MessageItem({
   seenUsers = [],
   showDateDivider,
   isNew = false,
+  onForward,
 }: MessageItemProps) {
   const { user } = useAuthStore();
   const {
@@ -798,6 +824,7 @@ const MessageItem = memo(function MessageItem({
     removeMessageForMe,
     editMessage,
     setReplyingTo,
+    toggleMessageForwardable,
     activeConversationId,
   } = useChatStore();
   const { isBookmarked, toggleBookmark } = useBookmarkStore();
@@ -829,9 +856,7 @@ const MessageItem = memo(function MessageItem({
 
   const isLastFromSender =
     index === 0 || prevSenderId !== String(message.senderId);
-  // True when the NEXT message is from a DIFFERENT sender (= current is the last in cluster)
-  const isClusterBottom =
-    !nextSenderId || nextSenderId !== String(message.senderId);
+
 
   const senderParticipant = selectedConvo.participants.find(
     (p) => p._id === message.senderId,
@@ -971,9 +996,28 @@ const MessageItem = memo(function MessageItem({
   );
   const handleEnterEditMode = useCallback(() => setEditMode(true), []);
   const handleReply = useCallback(
-    () => setReplyingTo(message),
+    () => {
+      setReplyingTo(message);
+      setContextMenu(null);
+    },
     [message, setReplyingTo],
   );
+
+  const handleForward = useCallback(() => {
+    if (onForward) onForward();
+    setContextMenu(null);
+  }, [onForward]);
+
+  const handleToggleForwardable = useCallback(async () => {
+    if (!message._id || typeof message.isForwardable === "undefined") return;
+    try {
+      await toggleMessageForwardable(message._id, !message.isForwardable);
+      toast.success(message.isForwardable ? "Disabled forwarding for this message" : "Enabled forwarding for this message");
+    } catch (e) {
+      toast.error("Failed to update message privacy");
+    }
+    setContextMenu(null);
+  }, [message._id, message.isForwardable, toggleMessageForwardable]);
 
   const handleToggleBookmark = useCallback(async () => {
     const result = await toggleBookmark(message._id);
@@ -1088,42 +1132,32 @@ const MessageItem = memo(function MessageItem({
 
   const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted);
 
-  // Cluster-aware border-radius — Messenger style
-  // Sent: tail corner (br) is small when cluster bottom, large otherwise
-  // Received: tail corner (tl) is small when cluster bottom, large otherwise
-  const bubbleToneClass = isOwn
-    ? cn(
-        "chat-bubble-sent chat-bubble-shell",
-        isLastFromSender && isClusterBottom
-          ? "rounded-[20px] rounded-br-[4px]" // solo bubble
-          : isLastFromSender
-          ? "rounded-[20px] rounded-br-[8px]" // cluster top
-          : isClusterBottom
-          ? "rounded-[20px] rounded-br-[4px]" // cluster bottom
-          : "rounded-[20px] rounded-br-[8px]", // cluster middle
-      )
-    : cn(
-        "chat-bubble-received chat-bubble-shell",
-        isLastFromSender && isClusterBottom
-          ? "rounded-[20px] rounded-tl-[4px]" // solo bubble
-          : isLastFromSender
-          ? "rounded-[20px] rounded-tl-[8px]" // cluster top
-          : isClusterBottom
-          ? "rounded-[20px] rounded-tl-[4px]" // cluster bottom
-          : "rounded-[20px] rounded-tl-[8px]", // cluster middle
-      );
+
 
   const imageCornerClass = isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]";
 
   const renderReadOnlyBubble = () => (
     <div
       className={cn(
-        "relative transition-opacity duration-150 text-[14.5px] leading-relaxed",
+        "relative leading-[1.35] transition-colors duration-150 mt-0.5 shadow-sm border",
         hasOnlyImage
-          ? "bg-transparent p-0"
+          ? "bg-transparent p-0 border-transparent shadow-none"
           : cn(
-              "px-3.5 py-2",
-              bubbleToneClass,
+              "px-3.5 py-2.5",
+              isOwn
+                ? "bg-blue-600 text-white border-blue-500/10"
+                : "bg-gray-100/90 text-gray-900 border-black/5 dark:bg-zinc-800/80 dark:text-zinc-100 dark:border-white/5",
+            ),
+        isOwn
+          ? cn(
+              prevSenderId === String(user?._id) ? "rounded-tr-[4px]" : "rounded-tr-[18px]",
+              nextSenderId === String(user?._id) ? "rounded-br-[4px]" : "rounded-br-[18px]",
+              "rounded-tl-[18px] rounded-bl-[18px]"
+            )
+          : cn(
+              prevSenderId === message.senderId ? "rounded-tl-[4px]" : "rounded-tl-[18px]",
+              nextSenderId === message.senderId ? "rounded-bl-[4px]" : "rounded-bl-[18px]",
+              "rounded-tr-[18px] rounded-br-[18px]"
             ),
         message.isDeleted && "opacity-50 italic",
         "select-text",
@@ -1133,6 +1167,12 @@ const MessageItem = memo(function MessageItem({
         <span className="text-sm">This message was removed</span>
       ) : (
         <>
+          {message.forwardedFrom && (
+            <div className="flex items-center gap-1.5 mb-1.5 text-[11.5px] opacity-80 border-b border-foreground/10 pb-1 font-medium">
+              <SendHorizontal className="size-3" />
+              <span>Forwarded from {message.forwardedFrom.displayName}</span>
+            </div>
+          )}
           {message.imgUrl && (
             <span
               className={cn("lightbox-thumb-btn block w-full relative", !hasOnlyImage && "mb-1")}
@@ -1303,6 +1343,9 @@ const MessageItem = memo(function MessageItem({
           isOwn={isOwn}
           isDeleted={!!message.isDeleted}
           canEdit={canEdit}
+          isForwardable={message.isForwardable ?? true}
+          onForward={handleForward}
+          onToggleForwardable={handleToggleForwardable}
           onReply={handleReply}
           onCopy={handleCopy}
           onEdit={handleEnterEditMode}
@@ -1317,36 +1360,40 @@ const MessageItem = memo(function MessageItem({
       >
         <DialogContent
           aria-describedby={undefined}
-          className="chat-modal-shell sm:max-w-xl"
+          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-all"
           showCloseButton={!deleteActionLoading}
           dismissible={!deleteActionLoading}
         >
-          <DialogHeader className="modal-stagger-item">
-            <DialogTitle>
-              Who do you want to remove this message for?
-            </DialogTitle>
-            <DialogDescription>
-              Choose the scope that fits your intent. Some participants may have
-              already seen or forwarded this message.
-            </DialogDescription>
+          <DialogHeader className="items-center text-center space-y-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 ring-8 ring-red-50 dark:ring-red-500/10">
+              <Trash2 className="size-6 text-red-600 dark:text-red-400" />
+            </div>
+            <div className="space-y-1.5">
+              <DialogTitle className="text-xl font-bold tracking-tight">
+                Remove this message?
+              </DialogTitle>
+              <DialogDescription className="text-[15px] font-medium leading-relaxed text-muted-foreground/80 px-2">
+                Choose the scope that fits your intent. Some participants may have
+                already seen or forwarded this message.
+              </DialogDescription>
+            </div>
           </DialogHeader>
 
-          <div className="grid gap-3 modal-stagger-item">
+          <div className="grid gap-3">
             {isOwn && (
               <button
                 type="button"
                 disabled={!!deleteActionLoading}
                 onClick={handleConfirmUnsendForEveryone}
-                className="chat-delete-scope-option chat-delete-scope-option--danger disabled:opacity-60 disabled:cursor-not-allowed"
+                className="flex flex-col items-start text-left p-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/20 dark:hover:bg-red-950/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group"
               >
-                <p className="text-sm font-semibold">Unsend for everyone</p>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                <p className="text-[15px] font-semibold text-red-700 dark:text-red-400">Unsend for everyone</p>
+                <p className="mt-1.5 text-[13px] text-red-600/80 dark:text-red-300/70 leading-relaxed font-medium">
                   This message will be removed for everyone in this chat. Others
-                  may have already seen or forwarded it. Unsent messages can
-                  still be reported.
+                  may have already seen or forwarded it.
                 </p>
                 {deleteActionLoading === "for-everyone" && (
-                  <p className="chat-processing-pill mt-2 text-xs text-primary">Processing...</p>
+                  <p className="mt-2 text-xs font-semibold animate-pulse text-red-600">Processing...</p>
                 )}
               </button>
             )}
@@ -1355,25 +1402,25 @@ const MessageItem = memo(function MessageItem({
               type="button"
               disabled={!!deleteActionLoading}
               onClick={handleConfirmRemoveForMe}
-              className="chat-delete-scope-option disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex flex-col items-start text-left p-4 rounded-xl border border-border/80 bg-background hover:bg-muted/50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-ring focus:outline-none"
             >
-              <p className="text-sm font-semibold">Remove for you</p>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+              <p className="text-[15px] font-semibold text-foreground">Remove for you</p>
+              <p className="mt-1.5 text-[13px] text-muted-foreground leading-relaxed font-medium">
                 This message will be removed from your devices only. It will
                 remain visible to other chat participants.
               </p>
               {deleteActionLoading === "for-me" && (
-                <p className="chat-processing-pill mt-2 text-xs text-primary">Processing...</p>
+                <p className="mt-2 text-xs font-semibold animate-pulse text-primary">Processing...</p>
               )}
             </button>
           </div>
 
-          <div className="flex justify-end modal-stagger-item">
+          <div className="flex justify-end pt-2">
             <button
               type="button"
               disabled={!!deleteActionLoading}
               onClick={() => setDeleteDialogOpen(false)}
-              className="chat-modal-btn chat-modal-btn--secondary disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex items-center justify-center rounded-full h-10 px-6 font-semibold border border-transparent hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Cancel
             </button>

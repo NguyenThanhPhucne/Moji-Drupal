@@ -121,4 +121,23 @@ export const chatService = {
     });
     return res.data.preview;
   },
+
+  async forwardMessage(
+    messageId: string,
+    recipientIds: string[],
+    groupIds: string[],
+  ) {
+    const res = await api.post(`/messages/${messageId}/forward`, {
+      recipientIds,
+      groupIds,
+    });
+    return res.data;
+  },
+
+  async toggleMessageForwardable(messageId: string, isForwardable: boolean) {
+    const res = await api.put(`/messages/${messageId}/toggle-forward`, {
+      isForwardable,
+    });
+    return res.data;
+  },
 };

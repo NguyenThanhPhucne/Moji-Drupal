@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
 import { broadcastOnlineUsers } from "../socket/index.js";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
+import { invalidateCache } from "../libs/redis.js";
 
 const isBcryptHash = (hash) => /^\$2[aby]\$\d{2}\$/.test(String(hash || ""));
 const isSha256Hex = (hash) => /^[a-f0-9]{64}$/i.test(String(hash || ""));
@@ -101,6 +102,8 @@ export const uploadAvatar = async (req, res) => {
     if (!updatedUser.avatarUrl) {
       return res.status(400).json({ message: "Avatar trả về null" });
     }
+
+    await invalidateCache(`auth_profile:${userId}`);
 
     return res.status(200).json({ avatarUrl: updatedUser.avatarUrl });
   } catch (error) {
@@ -237,6 +240,7 @@ export const updateOnlineStatusVisibility = async (req, res) => {
     }
 
     await broadcastOnlineUsers();
+    await invalidateCache(`auth_profile:${userId}`);
 
     return res.status(200).json({
       message: "Cập nhật trạng thái hoạt động thành công",
@@ -278,6 +282,8 @@ export const updateNotificationPreferences = async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
+
+    await invalidateCache(`auth_profile:${userId}`);
 
     return res.status(200).json({
       message: "Cập nhật thông báo thành công",
@@ -326,6 +332,8 @@ export const updateProfile = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy người dùng" });
     }
 
+    await invalidateCache(`auth_profile:${userId}`);
+
     return res.status(200).json({
       message: "Cập nhật profile thành công",
       user: updatedUser,
@@ -360,6 +368,8 @@ export const uploadCoverPhoto = async (req, res) => {
       { new: true },
     ).select("coverPhotoUrl");
 
+    await invalidateCache(`auth_profile:${userId}`);
+
     return res.status(200).json({ coverPhotoUrl: updatedUser.coverPhotoUrl });
   } catch (error) {
     console.error("Lỗi khi uploadCoverPhoto", error);
@@ -379,6 +389,8 @@ export const removeCoverPhoto = async (req, res) => {
     await User.findByIdAndUpdate(userId, {
       $unset: { coverPhotoUrl: "", coverPhotoId: "" },
     });
+
+    await invalidateCache(`auth_profile:${userId}`);
 
     return res.status(200).json({ message: "Cover photo removed" });
   } catch (error) {

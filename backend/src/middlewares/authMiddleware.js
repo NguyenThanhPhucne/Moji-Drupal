@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { randomUUID } from "node:crypto";
 import User from "../models/User.js";
+import { getCachedData, setCachedData } from "../libs/redis.js";
 
 const MONGO_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
@@ -85,7 +86,33 @@ export const protectedRoute = async (req, res, next) => {
         .json({ message: "Token không hợp lệ hoặc hết hạn" });
     }
 
-    let user = await findUserByDecodedToken(decodedUser);
+    let user = null;
+
+    // 1. Try Redis cache first if we have a resolved userId or username
+    const cacheKey = decodedUser.userId 
+      ? `auth_profile:${decodedUser.userId}` 
+      : decodedUser.username 
+        ? `auth_profile:uname_${decodedUser.username}` 
+        : null;
+
+    if (cacheKey) {
+      const cachedProfile = await getCachedData(cacheKey);
+      if (cachedProfile) {
+        user = cachedProfile;
+      }
+    }
+
+    // 2. Fallback to DB
+    if (!user) {
+      user = await findUserByDecodedToken(decodedUser);
+
+      // Save to cache for next time (1 hour TTL)
+      if (user && cacheKey) {
+        // we convert to lean object if not already to safely cache
+        const userObj = user.toObject ? user.toObject() : user;
+        await setCachedData(cacheKey, userObj, 3600);
+      }
+    }
 
     if (!user && decodedUser?.username) {
       console.log(

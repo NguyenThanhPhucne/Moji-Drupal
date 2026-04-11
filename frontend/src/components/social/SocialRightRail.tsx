@@ -152,10 +152,10 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               <button
                 key={friend._id}
               type="button"
-              className="social-contact-item"
+              className="social-contact-item social-contact-hover w-full text-left"
               onClick={() => void openDirectChat(friend)}
             >
-              <div className="relative">
+              <div className="relative flex-shrink-0">
                 <UserAvatar
                   type="chat"
                   name={friend.displayName}
@@ -166,7 +166,10 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
                   className={`social-contact-presence ${getPresenceClassName(friend.presence)}`}
                 />
               </div>
-              <span className="social-contact-name">{friend.displayName}</span>
+              <span className="social-contact-name flex-1 truncate">{friend.displayName}</span>
+              {friend.presence === "online" && (
+                <span className="ml-auto text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0">●</span>
+              )}
             </button>
             ))
           ) : (
@@ -223,16 +226,16 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
           </span>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {trendingTags.map((item) => (
             <button
               key={item.tag}
               type="button"
-              className="social-trending-chip"
+              className="trending-chip-upgrade"
               onClick={() => navigate(`/explore?tag=${encodeURIComponent(item.tag)}`)}
             >
-              #{item.tag}
-              <span className="social-trending-count">{item.count}</span>
+              <span className="text-primary/70">#</span>{item.tag}
+              <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full">{item.count}</span>
             </button>
           ))}
 

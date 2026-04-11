@@ -109,6 +109,15 @@ export interface ChatState {
     memberIds: string[],
   ) => Promise<boolean>;
   deleteConversation: (conversationId: string) => Promise<boolean>;
+  forwardMessage: (
+    messageId: string,
+    recipientIds: string[],
+    groupIds: string[],
+  ) => Promise<{ ok: boolean; message?: string }>;
+  toggleMessageForwardable: (
+    messageId: string,
+    isForwardable: boolean,
+  ) => Promise<{ ok: boolean }>;
 }
 
 export interface SocketState {

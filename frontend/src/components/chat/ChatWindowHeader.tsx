@@ -146,9 +146,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="chat-header-shell chat-header-shell--elevated sticky top-0 z-10 flex items-center px-3 py-2">
+      <header className="gradient-border-bottom chat-window-header bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 flex items-center px-4 py-3 shadow-sm">
         <div className="flex items-center gap-2 w-full justify-between">
-          <div className="flex items-center gap-1.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Sidebar toggle — only on mobile */}
             <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
 
@@ -196,8 +196,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
               </div>
 
               {/* name + presence */}
-              <div key={chat._id} className="header-info-enter min-w-0">
-                <h2 className="truncate font-semibold tracking-tight text-[15px] text-foreground leading-tight">
+              <div key={chat._id} className="min-w-0 flex flex-col justify-center">
+                <h2 className="truncate font-semibold tracking-tight text-[15px] text-foreground transition-colors">
                   {chat.type === "direct"
                     ? otherUser?.displayName
                     : chat.group?.name}
@@ -207,31 +207,34 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     const pres = getUserPresence(otherUser?._id);
                     const lastActiveAt = getLastActiveAt(otherUser?._id);
                     if (pres === "online") {
-                      return (
-                        <span className="flex items-center gap-1">
-                          <span className="inline-block h-[7px] w-[7px] rounded-full bg-[hsl(var(--se-success))] shadow-[0_0_0_1.5px_hsl(var(--background))]" />
-                          <span className="text-[12px] font-bold text-[hsl(var(--se-success))] leading-none">
-                            Active now
+                        return (
+                          <span className="flex items-center gap-1.5">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                            </span>
+                            <span className="presence-pill-online">
+                              Active now
+                            </span>
                           </span>
-                        </span>
-                      );
+                        );
                     }
                     if (pres === "recently-active" && lastActiveAt) {
                       const timeStr = formatOnlineTime(new Date(lastActiveAt));
                       return (
-                        <span className="text-[12px] text-muted-foreground/70 leading-none">
+                        <span className="text-[12px] text-muted-foreground font-medium leading-none">
                           Active {timeStr} ago
                         </span>
                       );
                     }
                     return (
-                      <span className="text-[12px] text-muted-foreground/50 leading-none">
+                      <span className="text-[12px] text-muted-foreground/60 font-medium leading-none">
                         Offline
                       </span>
                     );
                   })()}
                   {chat.type === "group" && (
-                    <span className="text-[12px] text-muted-foreground/70 leading-none">
+                    <span className="text-[12px] text-muted-foreground font-medium leading-none">
                       {groupPresenceText}
                     </span>
                   )}
@@ -244,7 +247,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           <div className="flex items-center gap-1 flex-shrink-0">
             <GlobalSearchDialog />
 
-            {/* Phone call quick action */}
+              {/* Phone call quick action */}
             {chat.type === "direct" && (
               <>
                 <Button
@@ -253,9 +256,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   title="Voice call"
                   aria-label="Start voice call"
                   onClick={() => {}}
-                  className="chat-header-action-btn hidden md:flex"
+                  className="hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
                 >
-                  <Phone className="h-4 w-4" />
+                  <Phone className="h-[18px] w-[18px]" />
                 </Button>
 
                 {/* Video call quick action */}
@@ -265,9 +268,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   title="Video call"
                   aria-label="Start video call"
                   onClick={() => {}}
-                  className="chat-header-action-btn hidden md:flex"
+                  className="hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
                 >
-                  <Video className="h-4 w-4" />
+                  <Video className="h-[20px] w-[20px]" />
                 </Button>
               </>
             )}
@@ -280,27 +283,27 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   size="icon"
                   disabled={isDeleting}
                   aria-label="Open conversation actions"
-                  className="chat-header-action-btn"
+                  className="rounded-full text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-1"
                 >
-                  <MoreVertical className="h-4 w-4" />
+                  <MoreVertical className="h-[18px] w-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="chat-header-dropdown chat-header-dropdown-panel w-52">
+              <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg border-border/60 overflow-hidden p-1">
                 {chat.type === "direct" && otherUser?._id && (
                   <DropdownMenuItem
                     onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
-                    className="chat-header-dropdown-item"
+                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                   >
-                    <UserCircle className="h-4 w-4 mr-2" />
+                    <UserCircle className="h-[18px] w-[18px] text-muted-foreground" />
                     View profile
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="bg-border/60 mx-1" />
                 <DropdownMenuItem
                   onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
-                  className="chat-header-dropdown-item chat-header-dropdown-item--danger"
+                  className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-500/10 dark:focus:text-red-300"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <Trash2 className="h-[18px] w-[18px]" />
                   Delete conversation
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -312,36 +315,39 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent
-          className="chat-modal-shell chat-modal-shell--danger max-w-sm"
+          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-all"
           aria-busy={isDeleting}
         >
-          <AlertDialogHeader className="items-center text-center modal-stagger-item">
-            <div className="dialog-danger-icon">
-              <Trash2 className="size-6" />
+          <AlertDialogHeader className="items-center text-center space-y-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 ring-8 ring-red-50 dark:ring-red-500/10">
+              <Trash2 className="size-6 text-red-600 dark:text-red-400" />
             </div>
-            <AlertDialogTitle className="text-base font-semibold">
-              Delete this conversation?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">
-              This will permanently remove all messages for{" "}
-              <span className="font-medium text-foreground">
-                {chat.type === "direct"
-                  ? otherUser?.displayName ?? "this contact"
-                  : chat.group?.name ?? "this group"}
-              </span>.
-              This action cannot be undone.
-            </AlertDialogDescription>
+            <div className="space-y-1.5">
+              <AlertDialogTitle className="text-xl font-bold tracking-tight">
+                Delete this conversation?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-[15px] font-medium leading-relaxed text-muted-foreground/80 px-2">
+                This will permanently remove all messages for{" "}
+                <strong className="font-semibold text-foreground">
+                  {chat.type === "direct"
+                    ? otherUser?.displayName ?? "this contact"
+                    : chat.group?.name ?? "this group"}
+                </strong>. 
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter className="sm:flex-col-reverse gap-2 modal-stagger-item">
-            <AlertDialogCancel disabled={isDeleting} className="chat-modal-btn chat-modal-btn--secondary w-full">
+          <AlertDialogFooter className="sm:flex-row gap-3 sm:space-x-0 pt-2 w-full">
+            <AlertDialogCancel disabled={isDeleting} className="flex-1 rounded-full h-11 font-semibold border-border/60 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
               className={cn(
-                "chat-modal-btn chat-modal-btn--danger w-full",
-                isDeleting && "chat-modal-btn--busy",
+                "flex-1 rounded-full h-11 font-semibold text-white transition-all shadow-sm",
+                "bg-red-600 hover:bg-red-700 hover:shadow-md active:scale-[0.98]",
+                isDeleting && "opacity-70 pointer-events-none"
               )}
             >
               {isDeleting ? "Deleting..." : "Yes, delete"}

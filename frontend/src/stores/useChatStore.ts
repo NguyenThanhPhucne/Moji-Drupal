@@ -929,6 +929,33 @@ export const useChatStore = create<ChatState>()(
           set({ loading: false });
         }
       },
+      forwardMessage: async (messageId, recipientIds, groupIds) => {
+        try {
+          const result = await chatService.forwardMessage(
+            messageId,
+            recipientIds,
+            groupIds,
+          );
+          return { ok: true, message: result.message };
+        } catch (error: any) {
+          return {
+            ok: false,
+            message: error.response?.data?.message || "Failed to forward message",
+          };
+        }
+      },
+      toggleMessageForwardable: async (messageId, isForwardable) => {
+        try {
+          await chatService.toggleMessageForwardable(messageId, isForwardable);
+          // Optional: Update local store for the message to reflect the new state instantly.
+          // Since we don't know the conversationId here easily, we could just rely on socket
+          // or user refresh. For a better UX, we could try to find and update it.
+          return { ok: true };
+        } catch (error) {
+          console.error("Failed to toggle forwardable state:", error);
+          return { ok: false };
+        }
+      },
     }),
     {
       name: "chat-storage",

@@ -251,23 +251,23 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
           </div>
           <button
             type="button"
-            className="social-composer-prompt social-composer-trigger h-11 flex-1 rounded-full px-4 text-left text-sm transition-colors"
+            className="social-composer-prompt social-composer-trigger h-11 flex-1 rounded-full px-4 text-left text-sm transition-all hover:bg-muted/70 hover:shadow-sm hover:-translate-y-px active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             onClick={() => setIsOpen(true)}
           >
             What's on your mind?
           </button>
         </div>
 
-        <div className="social-divider social-composer-action-row mt-3 grid grid-cols-3 gap-2 border-t pt-2">
-          <button type="button" className="social-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium">
+        <div className="social-divider social-composer-action-row mt-3 grid grid-cols-3 gap-2 border-t border-border/30 pt-2.5">
+          <button type="button" className="post-action-btn-hover social-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium">
             <Video className="social-icon-live h-4 w-4" />
             Live Video
           </button>
-          <button type="button" className="social-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
+          <button type="button" className="post-action-btn-hover social-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
             <ImagePlus className="social-icon-media h-4 w-4" />
             Photo/Video
           </button>
-          <button type="button" className="social-action-btn flex items-center justify-center gap-2 rounded-md py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
+          <button type="button" className="post-action-btn-hover social-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
             <Smile className="social-icon-feeling h-4 w-4" />
             Feeling/Activity
           </button>
@@ -424,7 +424,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
           <div className="social-composer-modal__footer social-divider border-t px-5 py-3">
             <Button
               type="button"
-              className="social-primary-btn h-10 w-full text-sm font-semibold"
+              className="profile-action-gradient social-primary-btn h-10 w-full text-sm font-semibold"
               onClick={submit}
               disabled={submitting}
             >

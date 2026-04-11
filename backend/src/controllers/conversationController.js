@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
+import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
@@ -131,19 +132,25 @@ export const createConversation = async (req, res) => {
 
     // Emit to participants using MongoDB user IDs (NOT Drupal IDs)
     if (type === "group") {
-      conversation.participants.forEach((p) => {
+      await Promise.all(conversation.participants.map(async (p) => {
         const participantId = p.userId._id || p.userId;
-        if (participantId.toString() !== userId.toString()) {
-          io.to(participantId.toString()).emit("new-group", formatted);
+        const participantIdStr = participantId.toString();
+        await invalidateCache(`conversations:${participantIdStr}`);
+        
+        if (participantIdStr !== userId.toString()) {
+          io.to(participantIdStr).emit("new-group", formatted);
         }
-      });
+      }));
     } else if (type === "direct") {
-      conversation.participants.forEach((p) => {
+      await Promise.all(conversation.participants.map(async (p) => {
         const participantId = p.userId._id || p.userId;
-        if (participantId.toString() !== userId.toString()) {
-          io.to(participantId.toString()).emit("new-conversation", formatted);
+        const participantIdStr = participantId.toString();
+        await invalidateCache(`conversations:${participantIdStr}`);
+
+        if (participantIdStr !== userId.toString()) {
+          io.to(participantIdStr).emit("new-conversation", formatted);
         }
-      });
+      }));
     }
 
     return res.status(201).json({ conversation: formatted });
@@ -156,6 +163,13 @@ export const createConversation = async (req, res) => {
 export const getConversations = async (req, res) => {
   try {
     const userId = req.user._id;
+    const cacheKey = `conversations:${userId}`;
+    const cached = await getCachedData(cacheKey);
+
+    if (cached) {
+      return res.status(200).json({ conversations: cached });
+    }
+
     const conversations = await Conversation.find({
       "participants.userId": userId,
     })
@@ -200,6 +214,8 @@ export const getConversations = async (req, res) => {
         participants,
       };
     });
+
+    await setCachedData(cacheKey, formatted, 600); // 10 minutes cache
 
     return res.status(200).json({ conversations: formatted });
   } catch (error) {
@@ -362,6 +378,8 @@ export const markAsSeen = async (req, res) => {
       },
     });
 
+    await invalidateCache(`conversations:${userId}`);
+
     return res.status(200).json({
       message: "Marked as seen",
       seenBy: updated?.seenBy || [],
@@ -508,11 +526,13 @@ export const deleteConversation = async (req, res) => {
     }
 
     // 4. Emit to all participants that conversation was deleted
-    conversation.participants.forEach((p) => {
-      io.to(p.userId.toString()).emit("conversation-deleted", {
+    await Promise.all(conversation.participants.map(async (p) => {
+      const participantIdStr = p.userId.toString();
+      await invalidateCache(`conversations:${participantIdStr}`);
+      io.to(participantIdStr).emit("conversation-deleted", {
         conversationId,
       });
-    });
+    }));
 
     // 5. Enterprise Fire-and-Forget: Dọn rác Cloudinary chạy nền
     if (imageUrlsToDestroy.length > 0) {

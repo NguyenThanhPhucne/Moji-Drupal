@@ -1,3 +1,5 @@
+import { invalidateCache } from "../libs/redis.js";
+
 export const updateConversationAfterCreateMessage = (
   conversation,
   message,
@@ -41,4 +43,18 @@ export const emitNewMessage = (io, conversation, message) => {
     },
     unreadCounts: normalizedUnreadCounts,
   });
+  
+  // Fire and forget cache invalidation
+  invalidateConversationParticipantsCache(conversation).catch(console.error);
+};
+
+export const invalidateConversationParticipantsCache = async (conversation) => {
+  if (!conversation || !Array.isArray(conversation.participants)) return;
+  await Promise.all(
+    conversation.participants.map(async (p) => {
+      if (p && p.userId) {
+        await invalidateCache(`conversations:${p.userId.toString()}`);
+      }
+    })
+  );
 };
