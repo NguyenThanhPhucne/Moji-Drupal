@@ -580,21 +580,26 @@ const PostMediaBlock = ({
     );
   }
 
+  const countStr = mediaUrls.length >= 4 ? "4+" : String(mediaUrls.length);
   const remaining = mediaUrls.length - 4;
+
   return (
-    <div className="social-post-media-block mt-3 grid grid-cols-2 gap-1">
+    <div
+      className="social-post-media-block social-mosaic-layout"
+      data-count={countStr}
+    >
       {mediaUrls.slice(0, 4).map((media, index) => {
         const isLast = index === 3 && remaining > 0;
         return (
           <button
             key={`${media}-${index}`}
             type="button"
-            className="social-media-tile image-hover-shimmer relative aspect-[4/3] overflow-hidden rounded-md border"
+            className="social-mosaic-tile image-hover-shimmer"
             onClick={() => onOpenLightbox(index)}
           >
-            <img src={media} alt={`post media ${index + 1}`} className="h-full w-full object-cover" />
+            <img src={media} alt={`post media ${index + 1}`} loading="lazy" />
             {isLast && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-2xl font-semibold text-white">
+              <div className="social-mosaic-overlay">
                 +{remaining}
               </div>
             )}

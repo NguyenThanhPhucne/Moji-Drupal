@@ -689,7 +689,7 @@ const ChatWindowBody = () => {
       >
         <ArrowDown className="size-4" />
         {newMsgCount > 0 && (
-          <span className="scroll-fab-badge">
+          <span className="scroll-fab-badge animate-bounce shadow-md">
             {newMsgCount > 99 ? "99+" : newMsgCount}
           </span>
         )}

@@ -1120,14 +1120,15 @@ html[data-motion="reduced"] * {
   .drop-zone-active::after {
     content: "";
     @apply absolute inset-0 rounded-2xl pointer-events-none;
-    border: 2px dashed hsl(var(--primary) / 0.6);
-    background: hsl(var(--primary) / 0.05);
-    animation: dropZonePulse 1s ease infinite;
+    border: 2.5px dashed hsl(var(--primary) / 0.7);
+    background: linear-gradient(180deg, hsl(var(--primary) / 0.05), hsl(var(--primary) / 0.02));
+    box-shadow: 0 0 0 4px hsl(var(--primary) / 0.1), inset 0 0 20px hsl(var(--primary) / 0.1);
+    animation: dropZoneGlowPulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
-  @keyframes dropZonePulse {
-    0%, 100% { border-color: hsl(var(--primary) / 0.6); background: hsl(var(--primary) / 0.05); }
-    50%       { border-color: hsl(var(--primary) / 0.9); background: hsl(var(--primary) / 0.09); }
+  @keyframes dropZoneGlowPulse {
+    0%, 100% { border-color: hsl(var(--primary) / 0.6); box-shadow: 0 0 0 4px hsl(var(--primary) / 0.05), inset 0 0 20px hsl(var(--primary) / 0.05); }
+    50%       { border-color: hsl(var(--primary)); box-shadow: 0 0 0 6px hsl(var(--primary) / 0.15), inset 0 0 35px hsl(var(--primary) / 0.15); }
   }
 
   /* ─── Circular char progress ring ───────────────────────────────── */
