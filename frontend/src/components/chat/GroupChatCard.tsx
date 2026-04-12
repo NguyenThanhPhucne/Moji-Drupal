@@ -5,6 +5,7 @@ import ChatCard from "./ChatCard";
 import GroupChatAvatar from "./GroupChatAvatar";
 import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useSocketStore } from "@/stores/useSocketStore";
 
 const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
@@ -14,6 +15,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
     messages,
     fetchMessages,
   } = useChatStore();
+  const { onlineUsers } = useSocketStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -59,6 +61,10 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
 
   const name = convo.group?.name ?? "";
 
+  // Online member count
+  const onlineSet = new Set(onlineUsers);
+  const onlineMemberCount = convo.participants.filter(p => onlineSet.has(String(p._id))).length;
+
   const handleSelectConversation = async (id: string) => {
     setActiveConversation(id);
     if (location.pathname !== "/") {
@@ -102,6 +108,13 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           <p className="text-[11px] text-muted-foreground/55 truncate leading-tight flex items-center gap-1">
             <span className="inline-block">{convo.participants.length}</span>
             <span>members</span>
+            {onlineMemberCount > 0 && (
+              <>
+                <span className="text-muted-foreground/30">·</span>
+                <span className="size-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">{onlineMemberCount} online</span>
+              </>
+            )}
           </p>
         </div>
       }

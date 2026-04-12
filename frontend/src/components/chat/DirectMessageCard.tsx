@@ -45,6 +45,10 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     }
   }
 
+  // Show forwarded indicator in preview
+  const lastMsgExtra = convo.lastMessage as { isForwarded?: boolean } | null | undefined;
+  const isForwardedPreview = lastMsgExtra?.isForwarded;
+
   const normalizedLastMessage = lastMessage.toLowerCase();
   const directMentionPatterns = [
     user.username ? `@${user.username.toLowerCase()}` : "",
@@ -109,13 +113,18 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
         <div className="mt-[1px]">
           <p
             className={cn(
-              "text-[13px] truncate leading-snug",
+              "text-[13px] truncate leading-snug flex items-center gap-1",
               unreadCount > 0
                 ? "font-semibold text-foreground"
                 : "font-normal text-muted-foreground/80",
             )}
           >
-            {lastMessage || "\u00A0"}
+            {isForwardedPreview && (
+              <span className="inline-flex items-center text-[10px] text-muted-foreground/50 font-medium shrink-0">
+                ↪️
+              </span>
+            )}
+            <span className="truncate">{lastMessage || "\u00A0"}</span>
           </p>
           {userPresence !== "offline" && (
             <p className={cn(

@@ -19,13 +19,25 @@ import SelectedUsersList from "../newGroupChat/SelectedUsersList";
 import { toast } from "sonner";
 import { useChatStore } from "@/stores/useChatStore";
 
-const NewGroupChatModal = () => {
+const NewGroupChatModal = ({
+  isOpen: controlledIsOpen,
+  onClose: controlledOnClose,
+}: {
+  isOpen?: boolean;
+  onClose?: () => void;
+} = {}) => {
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const { friends, getFriends } = useFriendStore();
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
   const { loading, createConversation } = useChatStore();
+
+  const isControlled = controlledIsOpen !== undefined;
+  const open = isControlled ? controlledIsOpen : internalOpen;
+  const setOpen = isControlled
+    ? (val: boolean) => { if (!val) controlledOnClose?.(); }
+    : setInternalOpen;
 
   const handleGetFriends = async () => {
     await getFriends();
@@ -84,17 +96,19 @@ const NewGroupChatModal = () => {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="completeGhost"
-          size="icon-sm"
-          onClick={handleGetFriends}
-          className="rounded-full text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground transition-colors duration-150"
-        >
-          <Users className="size-4" />
-          <span className="sr-only">Create group</span>
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button
+            variant="completeGhost"
+            size="icon-sm"
+            onClick={handleGetFriends}
+            className="rounded-full text-sidebar-foreground/90 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground transition-colors duration-150"
+          >
+            <Users className="size-4" />
+            <span className="sr-only">Create group</span>
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent
         className="sm:max-w-[425px]"

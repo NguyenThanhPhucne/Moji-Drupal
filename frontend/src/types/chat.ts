@@ -55,6 +55,7 @@ export interface Message {
   _id: string;
   conversationId: string;
   senderId: string;
+  senderDisplayName?: string;
   content: string | null;
   imgUrl?: string | null;
   updatedAt?: string | null;
@@ -64,6 +65,7 @@ export interface Message {
     _id: string;
     content: string;
     senderId: string;
+    senderDisplayName?: string;
   } | null;
   reactions?: Reaction[];
   isDeleted?: boolean;

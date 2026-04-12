@@ -1,7 +1,7 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import type { Conversation } from "@/types/chat";
 import { Button } from "../ui/button";
-import { ImagePlus, Send, X } from "lucide-react";
+import { ImagePlus, Send, X, Reply } from "lucide-react";
 import EmojiPicker from "./EmojiPicker";
 import { cn } from "@/lib/utils";
 import { useMessageInput, MAX_MESSAGE_LENGTH } from "@/hooks/useMessageInput";
@@ -89,6 +89,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
 
   // Drag & drop state
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isSendBursting, setIsSendBursting] = useState(false);
   const dragCounter = useRef(0);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
@@ -150,44 +151,51 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         </div>
       )}
 
-      {/* Reply preview */}
+      {/* Reply preview — now shows sender name */}
       {replyingTo && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border/25 animate-in fade-in slide-in-from-bottom-1 duration-150">
-          <div className="flex-1 border-l-2 border-primary/70 pl-2.5 py-0.5">
-            <p className="text-[10px] font-semibold text-primary uppercase tracking-[0.04em] leading-none mb-0.5">
-              Reply
-            </p>
-            <p className="text-[12px] text-muted-foreground/75 truncate max-w-[260px] leading-snug">
-              {replyingTo.content || "(image)"}
-            </p>
+        <div className="flex items-center gap-2 px-3.5 py-2 border-b border-border/20 bg-muted/10 animate-in fade-in slide-in-from-bottom-1 duration-150">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-[2.5px] self-stretch rounded-full bg-primary/80 flex-shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <span className="flex items-center gap-1 text-[10px] font-bold text-primary uppercase tracking-[0.05em] leading-none mb-0.5">
+                <Reply className="size-2.5" />
+                {replyingTo.senderDisplayName ?? "Reply"}
+              </span>
+              <p className="text-[12px] text-muted-foreground/70 truncate leading-snug">
+                {replyingTo.content || "📷 Photo"}
+              </p>
+            </div>
           </div>
           <button
             type="button"
             aria-label="Cancel reply"
             onClick={() => setReplyingTo(null)}
-            className="flex-shrink-0 p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
+            className="flex-shrink-0 p-1 rounded-full text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
           >
             <X className="size-3.5" />
           </button>
         </div>
       )}
 
-      {/* Image preview */}
+      {/* Image preview — polished */}
       {imagePreview && (
-        <div className="relative w-fit mx-4 mt-3 animate-in fade-in duration-200">
+        <div className="relative w-fit mx-4 mt-3 animate-in fade-in zoom-in-95 duration-200">
           <img
             src={imagePreview}
             alt="preview"
-            className="h-28 w-28 object-cover rounded-xl border border-border shadow-sm"
+            className="h-24 w-24 object-cover rounded-xl border border-border/60 shadow-sm"
           />
           <button
             type="button"
             onClick={() => setImagePreview(null)}
-            className="absolute -top-2 -right-2 bg-background border border-border rounded-full p-0.5 shadow hover:bg-muted/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+            className="absolute -top-1.5 -right-1.5 size-5 flex items-center justify-center bg-foreground/80 hover:bg-foreground rounded-full shadow-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
             aria-label="Remove selected image"
           >
-            <X className="size-3.5 text-muted-foreground" />
+            <X className="size-3 text-background" />
           </button>
+          <div className="absolute bottom-1 left-1 bg-background/80 backdrop-blur-sm rounded px-1 py-0.5 text-[9px] font-medium text-muted-foreground">
+            Image
+          </div>
         </div>
       )}
 
@@ -264,12 +272,17 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         )}
 
         <Button
-          onClick={() => void sendMessage()}
+          onClick={() => {
+            setIsSendBursting(true);
+            setTimeout(() => setIsSendBursting(false), 500);
+            void sendMessage();
+          }}
           size="icon"
           disabled={!hasSendable}
           aria-label={hasSendable ? "Send message" : "Like"}
           className={cn(
             "flex-shrink-0 mb-0.5 size-9 rounded-full transition-all duration-200",
+            isSendBursting && hasSendable && "send-burst",
             hasSendable
               ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95 animate-in zoom-in-75 duration-200"
               : "bg-transparent text-primary hover:bg-primary/10 opacity-80 hover:opacity-100",
