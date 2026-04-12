@@ -6,6 +6,7 @@ import GroupChatAvatar from "./GroupChatAvatar";
 import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSocketStore } from "@/stores/useSocketStore";
+import { Crown, Shield } from "lucide-react";
 
 const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
@@ -60,6 +61,15 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
       : 0;
 
   const name = convo.group?.name ?? "";
+  const myUserId = String(user._id || "");
+  const ownerId = String(convo.group?.createdBy || "");
+  const adminIds = new Set((convo.group?.adminIds || []).map(String));
+  let myRole: "owner" | "admin" | "member" = "member";
+  if (ownerId === myUserId) {
+    myRole = "owner";
+  } else if (adminIds.has(myUserId)) {
+    myRole = "admin";
+  }
 
   // Online member count
   const onlineSet = new Set(onlineUsers);
@@ -114,6 +124,18 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
                 <span className="size-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
                 <span className="text-emerald-600 dark:text-emerald-400 font-medium">{onlineMemberCount} online</span>
               </>
+            )}
+            {myRole === "owner" && (
+              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-amber-400/45 bg-amber-400/15 px-1 py-[1px] text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                <Crown className="size-2.5" />
+                Owner
+              </span>
+            )}
+            {myRole === "admin" && (
+              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-primary/40 bg-primary/12 px-1 py-[1px] text-[10px] font-semibold text-primary">
+                <Shield className="size-2.5" />
+                Admin
+              </span>
             )}
           </p>
         </div>

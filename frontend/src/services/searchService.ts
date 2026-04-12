@@ -8,7 +8,7 @@ export const searchService = {
   ): Promise<GlobalSearchResponse> {
     const trimmed = query.trim();
     if (trimmed.length < 2) {
-      return { people: [], groups: [], messages: [] };
+      return { people: [], groups: [], messages: [], posts: [] };
     }
 
     const res = await api.get(
@@ -21,6 +21,7 @@ export const searchService = {
       people: res.data?.people || [],
       groups: res.data?.groups || [],
       messages: res.data?.messages || [],
+      posts: res.data?.posts || [],
     };
   },
 };

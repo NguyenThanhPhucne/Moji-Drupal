@@ -94,6 +94,33 @@ const ProfilePage = () => { // NOSONAR
   );
 
   const photoPreview = useMemo(() => profilePhotos.slice(0, 9), [profilePhotos]);
+  const hasPhotoDialogContent = profilePhotos.length > 0;
+  const canBrowsePhotos = profilePhotos.length > 1;
+  const activePhotoUrl = hasPhotoDialogContent
+    ? profilePhotos[activePhotoIndex]
+    : null;
+  const photoProgress = hasPhotoDialogContent
+    ? ((activePhotoIndex + 1) / profilePhotos.length) * 100
+    : 0;
+
+  const dialogPhotoStrip = useMemo(() => {
+    if (!profilePhotos.length) {
+      return [] as Array<{ url: string; index: number }>;
+    }
+
+    const maxThumbs = 9;
+    if (profilePhotos.length <= maxThumbs) {
+      return profilePhotos.map((url, index) => ({ url, index }));
+    }
+
+    const halfWindow = Math.floor(maxThumbs / 2);
+    let start = Math.max(0, activePhotoIndex - halfWindow);
+    start = Math.min(start, profilePhotos.length - maxThumbs);
+
+    return profilePhotos
+      .slice(start, start + maxThumbs)
+      .map((url, offset) => ({ url, index: start + offset }));
+  }, [activePhotoIndex, profilePhotos]);
 
   const openPhotoViewer = (photoUrl: string) => {
     const index = profilePhotos.indexOf(photoUrl);
@@ -131,9 +158,14 @@ const ProfilePage = () => { // NOSONAR
             {loadingProfile && !profile ? (
               <ProfileHeaderSkeleton />
             ) : (
-              <div className="social-surface-card social-profile-hero overflow-hidden">
+              <div className={`social-surface-card social-profile-hero overflow-hidden ${getStaggerEnterClass(0)}`}>
                 <div className="social-profile-cover-gradient social-profile-cover relative h-[350px] w-full">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.7),transparent_55%)]" />
+                  <div className="social-profile-hero-atmosphere" aria-hidden="true">
+                    <span className="social-profile-hero-orb social-profile-hero-orb--a" />
+                    <span className="social-profile-hero-orb social-profile-hero-orb--b" />
+                    <span className="social-profile-hero-orb social-profile-hero-orb--c" />
+                  </div>
                 </div>
 
                 <div className="social-profile-body relative px-6 pb-5 pt-24">
@@ -149,6 +181,15 @@ const ProfilePage = () => { // NOSONAR
 
                   <div className="social-profile-heading flex flex-wrap items-end justify-between gap-4">
                     <div className="social-profile-identity space-y-1.5">
+                      <div className="social-profile-meta-row">
+                        <span className="social-profile-meta-pill">
+                          {profile?._id === user?._id ? "Your profile" : "Community profile"}
+                        </span>
+                        <span className="social-profile-meta-pill social-profile-meta-pill--soft">
+                          {profilePhotos.length} photos
+                        </span>
+                      </div>
+
                       <h1 className="social-text-main social-profile-name text-3xl font-bold tracking-tight">
                         {profile?.displayName || "Profile"}
                       </h1>
@@ -156,7 +197,7 @@ const ProfilePage = () => { // NOSONAR
                       {profile?.bio && <p className="social-text-main social-profile-bio text-sm leading-relaxed">{profile.bio}</p>}
 
                       {/* Premium stat chips */}
-                      <div className="flex flex-wrap gap-2 pt-1">
+                      <div className="social-profile-stat-grid pt-1">
                         {[
                           { value: profile?.postCount ?? 0, label: "Posts" },
                           { value: profile?.friendCount ?? 0, label: "Friends" },
@@ -199,7 +240,7 @@ const ProfilePage = () => { // NOSONAR
             )}
 
             {profileAccessDenied ? (
-              <div className="access-denied-card">
+              <div className={`access-denied-card ${getStaggerEnterClass(1)}`}>
                 <div className="mx-auto mb-5 flex size-16 items-center justify-center rounded-full bg-primary/8 text-primary ring-8 ring-primary/5">
                   <Lock className="size-7" />
                 </div>
@@ -211,13 +252,13 @@ const ProfilePage = () => { // NOSONAR
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-[4fr_6fr]">
-                <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-                  <div className="social-card p-4">
+              <div className={`social-profile-columns grid gap-4 lg:grid-cols-[4fr_6fr] ${getStaggerEnterClass(1)}`}>
+                <aside className="social-profile-sidebar lg:sticky lg:top-20 lg:self-start">
+                  <div className="social-card social-profile-panel p-4">
                     <h3 className="social-text-main text-base font-semibold">About</h3>
                     <p className="social-text-muted mt-2 text-sm">{profile?.bio || "No bio yet"}</p>
                   </div>
-                  <div className="social-card p-4">
+                  <div className="social-card social-profile-panel p-4">
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="social-text-main text-base font-semibold">Photos</h3>
                       {profilePhotos.length > 0 ? (
@@ -261,7 +302,7 @@ const ProfilePage = () => { // NOSONAR
                       <p className="social-text-muted mt-2 text-sm">No photos yet.</p>
                     )}
                   </div>
-                  <div className="social-card p-4">
+                  <div className="social-card social-profile-panel p-4">
                     <h3 className="social-text-main text-base font-semibold">Friends</h3>
                     <p className="social-text-muted mt-1 text-sm">{profile?.friendCount || 0} friends</p>
 
@@ -290,7 +331,7 @@ const ProfilePage = () => { // NOSONAR
                   </div>
                 </aside>
 
-                <div className="space-y-4">
+                <div className="social-profile-main">
                   {profile?._id === user?._id && (
                     <PostComposer onCreate={createPost} />
                   )}
@@ -345,33 +386,49 @@ const ProfilePage = () => { // NOSONAR
           <Dialog open={photosDialogOpen} onOpenChange={setPhotosDialogOpen}>
             <DialogContent
               contentClassMode="bare"
-              className="social-lightbox-dialog max-w-[min(96vw,1200px)] sm:max-w-5xl p-3 sm:p-4"
+              className="social-lightbox-dialog social-profile-photo-dialog max-w-[min(96vw,1200px)] sm:max-w-5xl p-3 sm:p-4"
             >
-              <DialogHeader>
-                <DialogTitle>Photos</DialogTitle>
-                <DialogDescription>
+              <DialogHeader className="social-profile-photo-dialog-head">
+                <div className="social-profile-photo-dialog-title-row">
+                  <DialogTitle className="social-profile-photo-dialog-title">Photos</DialogTitle>
+                  {hasPhotoDialogContent ? (
+                    <span className="social-profile-photo-counter">
+                      {activePhotoIndex + 1}/{profilePhotos.length}
+                    </span>
+                  ) : null}
+                </div>
+
+                <DialogDescription className="social-profile-photo-dialog-description">
                   {profilePhotos.length
-                    ? `${activePhotoIndex + 1}/${profilePhotos.length} · Browse photos from this profile's posts.`
+                    ? `${activePhotoIndex + 1}/${profilePhotos.length} | Browse photos from this profile's posts.`
                     : "No photos available."}
                 </DialogDescription>
+
+                {hasPhotoDialogContent ? (
+                  <div className="social-profile-photo-progress" aria-hidden="true">
+                    <span style={{ width: `${photoProgress}%` }} />
+                  </div>
+                ) : null}
               </DialogHeader>
 
-              <div className="social-lightbox-stage relative mt-2 flex h-[75vh] items-center justify-center overflow-hidden rounded-xl">
-                {profilePhotos.length ? (
+              <div className="social-lightbox-stage social-profile-photo-stage relative mt-2 flex h-[75vh] items-center justify-center overflow-hidden rounded-xl">
+                <div className="social-profile-photo-stage-glow" aria-hidden="true" />
+
+                {activePhotoUrl ? (
                   <img
-                    src={profilePhotos[activePhotoIndex]}
+                    src={activePhotoUrl}
                     alt={`Profile ${activePhotoIndex + 1}`}
-                    className="max-h-full max-w-full object-contain"
+                    className="social-profile-photo-active max-h-full max-w-full object-contain"
                   />
                 ) : null}
 
-                {profilePhotos.length > 1 ? (
+                {canBrowsePhotos ? (
                   <>
                     <Button
                       type="button"
                       size="icon"
                       variant="secondary"
-                      className="absolute left-3 top-1/2 -translate-y-1/2"
+                      className="social-profile-photo-nav social-profile-photo-nav--prev absolute left-3 top-1/2 -translate-y-1/2"
                       onClick={goPrevPhoto}
                     >
                       <ChevronLeft className="h-5 w-5" />
@@ -380,7 +437,7 @@ const ProfilePage = () => { // NOSONAR
                       type="button"
                       size="icon"
                       variant="secondary"
-                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                      className="social-profile-photo-nav social-profile-photo-nav--next absolute right-3 top-1/2 -translate-y-1/2"
                       onClick={goNextPhoto}
                     >
                       <ChevronRight className="h-5 w-5" />
@@ -388,6 +445,21 @@ const ProfilePage = () => { // NOSONAR
                   </>
                 ) : null}
               </div>
+
+              {dialogPhotoStrip.length > 1 ? (
+                <div className="social-profile-photo-strip beautiful-scrollbar" aria-label="Photo thumbnails">
+                  {dialogPhotoStrip.map(({ url, index }) => (
+                    <button
+                      key={`${url}-${index}`}
+                      type="button"
+                      className={`social-profile-photo-thumb ${index === activePhotoIndex ? "is-active" : ""}`}
+                      onClick={() => setActivePhotoIndex(index)}
+                    >
+                      <img src={url} alt={`Gallery item ${index + 1}`} loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </DialogContent>
           </Dialog>
         </div>

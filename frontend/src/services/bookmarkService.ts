@@ -12,6 +12,7 @@ export const bookmarkService = {
 
   async getBookmarks(filters?: {
     conversationId?: string;
+    collection?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -21,6 +22,10 @@ export const bookmarkService = {
 
     if (filters?.conversationId) {
       params.set("conversationId", filters.conversationId);
+    }
+
+    if (filters?.collection) {
+      params.set("collection", filters.collection);
     }
 
     if (filters?.from) {
@@ -57,7 +62,7 @@ export const bookmarkService = {
 
   async updateBookmarkMeta(
     bookmarkId: string,
-    payload: { note?: string; tags?: string[] },
+    payload: { note?: string; tags?: string[]; collections?: string[] },
   ) {
     const res = await api.patch(`/bookmarks/${bookmarkId}/meta`, payload);
     return res.data?.bookmark as SavedBookmark;
@@ -68,6 +73,19 @@ export const bookmarkService = {
       bookmarkIds,
       action: "remove-tag",
       tag,
+    });
+
+    return {
+      matchedCount: Number(res.data?.matchedCount || 0),
+      modifiedCount: Number(res.data?.modifiedCount || 0),
+    };
+  },
+
+  async bulkRemoveCollection(bookmarkIds: string[], collection: string) {
+    const res = await api.post("/bookmarks/bulk", {
+      bookmarkIds,
+      action: "remove-collection",
+      collection,
     });
 
     return {

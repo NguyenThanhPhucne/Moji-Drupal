@@ -30,6 +30,10 @@ const bookmarkSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    collections: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -38,6 +42,7 @@ const bookmarkSchema = new mongoose.Schema(
 
 bookmarkSchema.index({ userId: 1, messageId: 1 }, { unique: true });
 bookmarkSchema.index({ userId: 1, conversationId: 1, createdAt: -1 });
+bookmarkSchema.index({ userId: 1, collections: 1, createdAt: -1 });
 
 const Bookmark = mongoose.model("Bookmark", bookmarkSchema);
 

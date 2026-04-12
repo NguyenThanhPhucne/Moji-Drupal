@@ -3,6 +3,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
 import bcrypt from "bcrypt";
+import mongoose from "mongoose";
 import crypto from "node:crypto";
 import { v2 as cloudinary } from "cloudinary";
 import { broadcastOnlineUsers } from "../socket/index.js";
@@ -31,6 +32,106 @@ const verifyPasswordWithFallback = async (plainPassword, storedHash) => {
   }
 
   return false;
+};
+
+const SOCIAL_BOOLEAN_KEYS = new Set([
+  "muted",
+  "follow",
+  "like",
+  "comment",
+  "friendAccepted",
+  "system",
+  "digestEnabled",
+]);
+
+const SOCIAL_ARRAY_KEYS = new Set(["mutedUserIds", "mutedConversationIds"]);
+const SOCIAL_NUMBER_KEYS = new Set(["digestWindowHours"]);
+
+const parseSocialPreferenceEntry = (key, value) => {
+  if (SOCIAL_BOOLEAN_KEYS.has(key)) {
+    if (typeof value !== "boolean") {
+      return {
+        error: `social.${key} phải là kiểu boolean`,
+      };
+    }
+
+    return {
+      path: `notificationPreferences.social.${key}`,
+      value,
+    };
+  }
+
+  if (SOCIAL_ARRAY_KEYS.has(key)) {
+    if (!Array.isArray(value)) {
+      return {
+        error: `social.${key} phải là array`,
+      };
+    }
+
+    const normalizedIds = [
+      ...new Set(
+        value
+          .map((item) => String(item || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    const invalidId = normalizedIds.find(
+      (id) => !mongoose.Types.ObjectId.isValid(id),
+    );
+
+    if (invalidId) {
+      return {
+        error: `social.${key} chứa id không hợp lệ`,
+      };
+    }
+
+    return {
+      path: `notificationPreferences.social.${key}`,
+      value: normalizedIds,
+    };
+  }
+
+  if (SOCIAL_NUMBER_KEYS.has(key)) {
+    const numericValue = Number(value);
+    if (!Number.isInteger(numericValue) || numericValue < 1 || numericValue > 24) {
+      return {
+        error: `social.${key} phải là số nguyên từ 1 đến 24`,
+      };
+    }
+
+    return {
+      path: `notificationPreferences.social.${key}`,
+      value: numericValue,
+    };
+  }
+
+  return {
+    error: `social.${key} không được hỗ trợ`,
+  };
+};
+
+const buildSocialPreferenceUpdates = (social) => {
+  if (!social || typeof social !== "object" || Array.isArray(social)) {
+    return {
+      error: "social phải là object",
+    };
+  }
+
+  const updates = {};
+
+  for (const key of Object.keys(social)) {
+    const parsed = parseSocialPreferenceEntry(key, social[key]);
+    if (parsed.error) {
+      return {
+        error: parsed.error,
+      };
+    }
+
+    updates[parsed.path] = parsed.value;
+  }
+
+  return { updates };
 };
 
 export const authMe = async (req, res) => {
@@ -255,27 +356,53 @@ export const updateOnlineStatusVisibility = async (req, res) => {
 export const updateNotificationPreferences = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const { message, sound, desktop } = req.body || {};
+    const { message, sound, desktop, social } = req.body || {};
 
-    if (
-      typeof message !== "boolean" ||
-      typeof sound !== "boolean" ||
-      typeof desktop !== "boolean"
-    ) {
-      return res.status(400).json({
-        message: "message, sound, desktop phải là kiểu boolean",
-      });
+    const updates = {};
+
+    if (message !== undefined) {
+      if (typeof message !== "boolean") {
+        return res
+          .status(400)
+          .json({ message: "message phải là kiểu boolean" });
+      }
+      updates["notificationPreferences.message"] = message;
+    }
+
+    if (sound !== undefined) {
+      if (typeof sound !== "boolean") {
+        return res.status(400).json({ message: "sound phải là kiểu boolean" });
+      }
+      updates["notificationPreferences.sound"] = sound;
+    }
+
+    if (desktop !== undefined) {
+      if (typeof desktop !== "boolean") {
+        return res
+          .status(400)
+          .json({ message: "desktop phải là kiểu boolean" });
+      }
+      updates["notificationPreferences.desktop"] = desktop;
+    }
+
+    if (social !== undefined) {
+      const socialUpdateResult = buildSocialPreferenceUpdates(social);
+      if (socialUpdateResult.error) {
+        return res.status(400).json({ message: socialUpdateResult.error });
+      }
+
+      Object.assign(updates, socialUpdateResult.updates || {});
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Không có thay đổi notificationPreferences" });
     }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
-      {
-        notificationPreferences: {
-          message,
-          sound,
-          desktop,
-        },
-      },
+      { $set: updates },
       { new: true },
     ).select("-hashedPassword");
 

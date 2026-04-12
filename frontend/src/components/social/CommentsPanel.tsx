@@ -18,6 +18,7 @@ interface VirtualizedCommentThreadItemProps {
   currentUserId: string;
   onOpenProfile?: (userId: string) => void;
   onDeleteComment: (commentId: string) => void;
+  onReportComment?: (commentId: string) => void;
   collapsed: boolean;
   onToggleCollapsed: (rootId: string) => void;
   replying: boolean;
@@ -33,6 +34,7 @@ const VirtualizedCommentThreadItem = ({
   currentUserId,
   onOpenProfile,
   onDeleteComment,
+  onReportComment,
   collapsed,
   onToggleCollapsed,
   replying,
@@ -53,6 +55,8 @@ const VirtualizedCommentThreadItem = ({
           String(currentUserId || "") === String(postAuthorId || "")
         }
         onDelete={() => onDeleteComment(item.root._id)}
+        canReport={String(currentUserId || "") !== String(item.root.authorId._id || "")}
+        onReport={() => onReportComment?.(item.root._id)}
       />
 
       {item.replies.length > 0 && (
@@ -79,6 +83,8 @@ const VirtualizedCommentThreadItem = ({
               String(currentUserId || "") === String(postAuthorId || "")
             }
             onDelete={() => onDeleteComment(reply._id)}
+            canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
+            onReport={() => onReportComment?.(reply._id)}
           />
         ))}
 
@@ -136,6 +142,7 @@ interface CommentsPanelProps {
   onStartReply: (rootId: string) => void;
   onReplyDraftChange: (rootId: string, value: string) => void;
   onDeleteComment: (commentId: string) => void;
+  onReportComment?: (commentId: string) => void;
 }
 
 const CommentsPanel = ({
@@ -163,6 +170,7 @@ const CommentsPanel = ({
   onStartReply,
   onReplyDraftChange,
   onDeleteComment,
+  onReportComment,
 }: CommentsPanelProps) => {
   const renderVirtuosoItem = useCallback(
     (_: number, item: RootCommentThread) => (
@@ -172,6 +180,7 @@ const CommentsPanel = ({
         currentUserId={currentUserId}
         onOpenProfile={onOpenProfile}
         onDeleteComment={onDeleteComment}
+        onReportComment={onReportComment}
         collapsed={Boolean(collapsedRepliesByRoot[item.root._id])}
         onToggleCollapsed={onToggleRootReplies}
         replying={replyingToCommentId === item.root._id}
@@ -187,6 +196,7 @@ const CommentsPanel = ({
       onDeleteComment,
       onOpenProfile,
       onReplyDraftChange,
+      onReportComment,
       onStartReply,
       onSubmitComment,
       onToggleRootReplies,
@@ -285,6 +295,8 @@ const CommentsPanel = ({
                   String(currentUserId || "") === String(postAuthorId || "")
                 }
                 onDelete={() => onDeleteComment(item.root._id)}
+                canReport={String(currentUserId || "") !== String(item.root.authorId._id || "")}
+                onReport={() => onReportComment?.(item.root._id)}
               />
 
               {item.replies.length > 0 && (
@@ -313,6 +325,8 @@ const CommentsPanel = ({
                       String(currentUserId || "") === String(postAuthorId || "")
                     }
                     onDelete={() => onDeleteComment(reply._id)}
+                    canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
+                    onReport={() => onReportComment?.(reply._id)}
                   />
                 ))}
 

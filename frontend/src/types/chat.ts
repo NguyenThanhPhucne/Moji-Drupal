@@ -13,9 +13,29 @@ export interface SeenUser {
   avatarUrl?: string | null;
 }
 
+export interface GroupJoinLinkMeta {
+  expiresAt: string;
+  createdAt?: string | null;
+  createdBy?: string | null;
+  isActive: boolean;
+}
+
 export interface Group {
   name: string;
   createdBy: string;
+  adminIds?: string[];
+  announcementOnly?: boolean;
+  joinLink?: GroupJoinLinkMeta | null;
+}
+
+export interface PinnedMessageMeta {
+  _id: string;
+  content?: string | null;
+  imgUrl?: string | null;
+  senderId: string;
+  createdAt: string;
+  pinnedAt?: string | null;
+  pinnedBy?: string | null;
 }
 
 export interface LastMessage {
@@ -33,6 +53,7 @@ export interface Conversation {
   _id: string;
   type: "direct" | "group";
   group: Group;
+  pinnedMessage?: PinnedMessageMeta | null;
   participants: Participant[];
   lastMessageAt: string;
   seenBy: SeenUser[];
@@ -98,6 +119,7 @@ export interface SavedBookmark {
   createdAt: string;
   note?: string;
   tags?: string[];
+  collections?: string[];
   messageId: {
     _id: string;
     conversationId: string;
@@ -147,8 +169,20 @@ export interface GlobalSearchMessage {
   score: number;
 }
 
+export interface GlobalSearchPost {
+  postId: string;
+  caption: string;
+  preview: string;
+  authorId: string;
+  authorName: string;
+  mediaCount: number;
+  createdAt: string;
+  score: number;
+}
+
 export interface GlobalSearchResponse {
   people: GlobalSearchPerson[];
   groups: GlobalSearchGroup[];
   messages: GlobalSearchMessage[];
+  posts: GlobalSearchPost[];
 }

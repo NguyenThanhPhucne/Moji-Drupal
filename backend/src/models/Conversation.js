@@ -31,6 +31,35 @@ const groupSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    adminIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    announcementOnly: {
+      type: Boolean,
+      default: false,
+    },
+    joinLink: {
+      tokenHash: {
+        type: String,
+        default: null,
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+      createdAt: {
+        type: Date,
+        default: null,
+      },
+      createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+    },
   },
   {
     _id: false,
@@ -50,6 +79,43 @@ const lastMessageSchema = new mongoose.Schema(
     },
     createdAt: {
       type: Date,
+      default: null,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+const pinnedMessageSchema = new mongoose.Schema(
+  {
+    _id: {
+      type: String,
+    },
+    content: {
+      type: String,
+      default: null,
+    },
+    imgUrl: {
+      type: String,
+      default: null,
+    },
+    senderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    createdAt: {
+      type: Date,
+      default: null,
+    },
+    pinnedAt: {
+      type: Date,
+      default: null,
+    },
+    pinnedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       default: null,
     },
   },
@@ -83,6 +149,10 @@ const conversationSchema = new mongoose.Schema(
     ],
     lastMessage: {
       type: lastMessageSchema,
+      default: null,
+    },
+    pinnedMessage: {
+      type: pinnedMessageSchema,
       default: null,
     },
     unreadCounts: {

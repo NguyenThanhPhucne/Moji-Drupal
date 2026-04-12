@@ -7,6 +7,7 @@ import Friend from "../models/Friend.js";
 import Notification from "../models/Notification.js";
 import { v2 as cloudinary } from "cloudinary";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
+import { registerRateLimitHit } from "../utils/antiSpam.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 
 const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"];
@@ -376,15 +377,133 @@ const uploadPostMedia = async (rawMediaUrls) => {
   return Promise.all(normalizedMedia.map((mediaValue) => uploadSingle(mediaValue)));
 };
 
+const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES = Object.freeze({
+  muted: false,
+  follow: true,
+  like: true,
+  comment: true,
+  friendAccepted: true,
+  system: true,
+  mutedUserIds: [],
+  mutedConversationIds: [],
+  digestEnabled: false,
+  digestWindowHours: 6,
+});
+
+const SOCIAL_NOTIFICATION_PREF_KEY_BY_TYPE = Object.freeze({
+  follow: "follow",
+  like: "like",
+  comment: "comment",
+  friend_accepted: "friendAccepted",
+  system: "system",
+});
+
+const normalizeObjectIdList = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      value
+        .map((item) => String(item || "").trim())
+        .filter((item) => mongoose.Types.ObjectId.isValid(item)),
+    ),
+  ];
+};
+
+const resolveSocialNotificationPreferences = (rawPreferences) => {
+  if (!rawPreferences || typeof rawPreferences !== "object") {
+    return { ...DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES };
+  }
+
+  const next = { ...DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES };
+  ["muted", "follow", "like", "comment", "friendAccepted", "system", "digestEnabled"].forEach((key) => {
+    if (typeof rawPreferences[key] === "boolean") {
+      next[key] = rawPreferences[key];
+    }
+  });
+
+  next.mutedUserIds = normalizeObjectIdList(rawPreferences.mutedUserIds);
+  next.mutedConversationIds = normalizeObjectIdList(
+    rawPreferences.mutedConversationIds,
+  );
+
+  const digestWindowHours = Number(rawPreferences.digestWindowHours);
+  if (Number.isInteger(digestWindowHours) && digestWindowHours >= 1 && digestWindowHours <= 24) {
+    next.digestWindowHours = digestWindowHours;
+  }
+
+  return next;
+};
+
+const resolveAllowedSocialNotificationTypes = (preferences) => {
+  if (preferences.muted) {
+    return [];
+  }
+
+  return Object.entries(SOCIAL_NOTIFICATION_PREF_KEY_BY_TYPE)
+    .filter(([, preferenceKey]) => Boolean(preferences[preferenceKey]))
+    .map(([notificationType]) => notificationType);
+};
+
+const getSocialNotificationPreferencesForUser = async (userId) => {
+  if (!userId) {
+    return { ...DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES };
+  }
+
+  const recipient = await User.findById(userId)
+    .select("notificationPreferences.social")
+    .lean();
+
+  return resolveSocialNotificationPreferences(
+    recipient?.notificationPreferences?.social,
+  );
+};
+
+const isNotificationMutedBySource = (
+  { actorId, conversationId },
+  preferences,
+) => {
+  const normalizedActorId = String(actorId || "").trim();
+  if (
+    normalizedActorId &&
+    preferences.mutedUserIds.includes(normalizedActorId)
+  ) {
+    return true;
+  }
+
+  const normalizedConversationId = String(conversationId || "").trim();
+  if (
+    normalizedConversationId &&
+    preferences.mutedConversationIds.includes(normalizedConversationId)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 const createAndEmitNotification = async ({
   recipientId,
   actorId,
   type,
   postId = null,
+  conversationId = null,
   commentId = null,
   message = "",
 }) => {
   if (!recipientId || !actorId || String(recipientId) === String(actorId)) {
+    return null;
+  }
+
+  const preferences = await getSocialNotificationPreferencesForUser(recipientId);
+  const allowedTypes = resolveAllowedSocialNotificationTypes(preferences);
+  if (!allowedTypes.includes(type)) {
+    return null;
+  }
+
+  if (isNotificationMutedBySource({ actorId, conversationId }, preferences)) {
     return null;
   }
 
@@ -393,6 +512,7 @@ const createAndEmitNotification = async ({
     actorId,
     type,
     postId,
+    conversationId,
     commentId,
     message,
   });
@@ -501,13 +621,28 @@ export const createPost = async (req, res) => {
       privacy = "public",
     } = req.body;
 
-    const uploadedMediaUrls = await uploadPostMedia(mediaUrls);
+    const normalizedCaption = String(caption || "").trim();
+    const hasMediaPayload = (Array.isArray(mediaUrls) ? mediaUrls : [mediaUrls])
+      .some((item) => Boolean(String(item || "").trim()));
 
-    if (!caption.trim() && uploadedMediaUrls.length === 0) {
+    if (!normalizedCaption && !hasMediaPayload) {
       return res
         .status(400)
         .json({ message: "Post must have text or media content" });
     }
+
+    const antiSpamResult = registerRateLimitHit({
+      userId,
+      scope: "social:post",
+    });
+
+    if (!antiSpamResult.allowed) {
+      return res.status(429).json({
+        message: `You're posting too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      });
+    }
+
+    const uploadedMediaUrls = await uploadPostMedia(mediaUrls);
 
     const sanitizedTags = Array.isArray(tags)
       ? tags
@@ -521,7 +656,7 @@ export const createPost = async (req, res) => {
 
     const post = await Post.create({
       authorId: userId,
-      caption: caption.trim(),
+      caption: normalizedCaption,
       mediaUrls: uploadedMediaUrls,
       tags: [...new Set(sanitizedTags)],
       privacy,
@@ -1114,6 +1249,18 @@ export const addComment = async (req, res) => {
       return res.status(400).json({ message: "Invalid post id" });
     }
 
+    const antiSpamResult = registerRateLimitHit({
+      userId,
+      scope: "social:comment",
+      postId,
+    });
+
+    if (!antiSpamResult.allowed) {
+      return res.status(429).json({
+        message: `You're commenting too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      });
+    }
+
     const post = await Post.findById(postId);
     if (!post || post.isDeleted) {
       return res.status(404).json({ message: "Post not found" });
@@ -1486,14 +1633,43 @@ export const getNotifications = async (req, res) => {
       req.query.limit,
     );
 
+    const preferences = await getSocialNotificationPreferencesForUser(userId);
+    const allowedTypes = resolveAllowedSocialNotificationTypes(preferences);
+    if (allowedTypes.length === 0) {
+      return res.status(200).json({
+        notifications: [],
+        unreadCount: 0,
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 1,
+          hasNextPage: false,
+        },
+      });
+    }
+
+    const query = {
+      recipientId: userId,
+      type: { $in: allowedTypes },
+    };
+
+    if (preferences.mutedUserIds.length > 0) {
+      query.actorId = { $nin: preferences.mutedUserIds };
+    }
+
+    if (preferences.mutedConversationIds.length > 0) {
+      query.conversationId = { $nin: preferences.mutedConversationIds };
+    }
+
     const [notifications, total, unreadCount] = await Promise.all([
-      Notification.find({ recipientId: userId })
+      Notification.find(query)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .populate("actorId", "displayName username avatarUrl"),
-      Notification.countDocuments({ recipientId: userId }),
-      Notification.countDocuments({ recipientId: userId, isRead: false }),
+      Notification.countDocuments(query),
+      Notification.countDocuments({ ...query, isRead: false }),
     ]);
 
     return res.status(200).json({

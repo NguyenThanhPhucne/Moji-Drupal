@@ -19,6 +19,16 @@ interface MessageSyncResponse {
   conversation?: Partial<Conversation> | null;
 }
 
+interface GroupJoinLinkResponse {
+  conversation: Partial<Conversation>;
+  joinLink: {
+    token: string;
+    url: string;
+    expiresAt: string;
+    expiresInHours: number;
+  };
+}
+
 const pageLimit = 50;
 
 export const chatService = {
@@ -83,6 +93,52 @@ export const chatService = {
   ) {
     const res = await api.post("/conversations", { type, name, memberIds });
     return res.data.conversation;
+  },
+
+  async updateGroupAnnouncementMode(conversationId: string, enabled: boolean) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/announcement-mode`,
+      { enabled },
+    );
+    return res.data.conversation as Partial<Conversation>;
+  },
+
+  async updateGroupAdminRole(
+    conversationId: string,
+    memberId: string,
+    makeAdmin: boolean,
+  ) {
+    const res = await api.patch(`/conversations/${conversationId}/admin-role`, {
+      memberId,
+      makeAdmin,
+    });
+    return res.data.conversation as Partial<Conversation>;
+  },
+
+  async createGroupJoinLink(conversationId: string, expiresInHours = 24) {
+    const res = await api.post(`/conversations/${conversationId}/join-link`, {
+      expiresInHours,
+    });
+    return res.data as GroupJoinLinkResponse;
+  },
+
+  async revokeGroupJoinLink(conversationId: string) {
+    const res = await api.delete(`/conversations/${conversationId}/join-link`);
+    return res.data.conversation as Partial<Conversation>;
+  },
+
+  async joinGroupByLink(conversationId: string, token: string) {
+    const res = await api.post(`/conversations/${conversationId}/join-by-link`, {
+      token,
+    });
+    return res.data as { conversation: Conversation; alreadyJoined: boolean };
+  },
+
+  async pinGroupMessage(conversationId: string, messageId?: string | null) {
+    const res = await api.patch(`/conversations/${conversationId}/pin-message`, {
+      messageId: messageId || null,
+    });
+    return res.data.conversation as Partial<Conversation>;
   },
 
   async deleteConversation(conversationId: string) {

@@ -23,6 +23,27 @@ const removeTagFromSelectedBookmarks = (
   });
 };
 
+const removeCollectionFromSelectedBookmarks = (
+  bookmarks: SavedBookmark[],
+  bookmarkIds: string[],
+  normalizedCollection: string,
+) => {
+  const selectedIds = new Set(bookmarkIds);
+
+  return bookmarks.map((bookmark) => {
+    if (!selectedIds.has(bookmark._id)) {
+      return bookmark;
+    }
+
+    return {
+      ...bookmark,
+      collections: (bookmark.collections || []).filter(
+        (existingCollection) => existingCollection !== normalizedCollection,
+      ),
+    };
+  });
+};
+
 interface BookmarkState {
   bookmarks: SavedBookmark[];
   bookmarkedMessageIds: string[];
@@ -30,6 +51,7 @@ interface BookmarkState {
   loading: boolean;
   fetchBookmarks: (filters?: {
     conversationId?: string;
+    collection?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -41,9 +63,13 @@ interface BookmarkState {
   ) => Promise<{ ok: boolean; bookmarked: boolean }>;
   updateBookmarkMeta: (
     bookmarkId: string,
-    payload: { note?: string; tags?: string[] },
+    payload: { note?: string; tags?: string[]; collections?: string[] },
   ) => Promise<boolean>;
   bulkRemoveTag: (bookmarkIds: string[], tag: string) => Promise<boolean>;
+  bulkRemoveCollection: (
+    bookmarkIds: string[],
+    collection: string,
+  ) => Promise<boolean>;
   isBookmarked: (messageId: string) => boolean;
 }
 
@@ -128,6 +154,7 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
                 ...bookmark,
                 note: updatedBookmark.note || "",
                 tags: updatedBookmark.tags || [],
+                collections: updatedBookmark.collections || [],
               }
             : bookmark,
         ),
@@ -160,6 +187,33 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       return true;
     } catch (error) {
       console.error("Error bulk removing tag", error);
+      return false;
+    }
+  },
+
+  bulkRemoveCollection: async (bookmarkIds, collection) => {
+    try {
+      const normalizedCollection = collection.trim().toLowerCase();
+      if (!normalizedCollection || bookmarkIds.length === 0) {
+        return false;
+      }
+
+      await bookmarkService.bulkRemoveCollection(
+        bookmarkIds,
+        normalizedCollection,
+      );
+
+      set((state) => ({
+        bookmarks: removeCollectionFromSelectedBookmarks(
+          state.bookmarks,
+          bookmarkIds,
+          normalizedCollection,
+        ),
+      }));
+
+      return true;
+    } catch (error) {
+      console.error("Error bulk removing collection", error);
       return false;
     }
   },

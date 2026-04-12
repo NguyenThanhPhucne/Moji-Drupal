@@ -17,6 +17,7 @@ import PostDialogs from "@/components/social/PostDialogs";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { safetyService } from "@/services/safetyService";
 import type {
   PaginationPayload,
   SocialComment,
@@ -835,7 +836,7 @@ const SocialPostCard = ({
     [displayVisibleReactors],
   );
   const reactionSummaryLabel = visibleReactorLabel
-    ? `${visibleReactorLabel} · ${reactionsCount}`
+    ? `${visibleReactorLabel} | ${reactionsCount}`
     : String(reactionsCount);
 
   const isPortrait = (url: string) => {
@@ -1007,8 +1008,38 @@ const SocialPostCard = ({
     maybeRequestDeletePost({ isOwnPost, onDeletePost, setDeleteIntent });
   };
 
+  const requestReportPost = async () => {
+    if (isOwnPost) {
+      return;
+    }
+
+    try {
+      await safetyService.createReport({
+        targetType: "post",
+        targetId: post._id,
+        reason: "other",
+      });
+      toast.success("Report submitted");
+    } catch {
+      toast.error("Could not submit report");
+    }
+  };
+
   const requestDeleteComment = (commentId: string) => {
     maybeRequestDeleteComment({ commentId, onDeleteComment, setDeleteIntent });
+  };
+
+  const requestReportComment = async (commentId: string) => {
+    try {
+      await safetyService.createReport({
+        targetType: "comment",
+        targetId: commentId,
+        reason: "harassment",
+      });
+      toast.success("Report submitted");
+    } catch {
+      toast.error("Could not submit report");
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -1047,8 +1078,12 @@ const SocialPostCard = ({
         postedAgo={postedAgo}
         isOwnPost={isOwnPost}
         canDeletePost={Boolean(onDeletePost)}
+        canReportPost={!isOwnPost}
         onOpenProfile={onOpenProfile}
         onRequestDeletePost={requestDeletePost}
+        onRequestReportPost={() => {
+          void requestReportPost();
+        }}
       />
 
       {post.caption && (
@@ -1136,6 +1171,9 @@ const SocialPostCard = ({
         onStartReply={setReplyingToCommentId}
         onReplyDraftChange={updateReplyDraft}
         onDeleteComment={requestDeleteComment}
+        onReportComment={(commentId) => {
+          void requestReportComment(commentId);
+        }}
       />
 
       <PostDialogs

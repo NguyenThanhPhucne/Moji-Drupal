@@ -6,8 +6,10 @@ interface PostCardHeaderProps {
   postedAgo: string;
   isOwnPost: boolean;
   canDeletePost: boolean;
+  canReportPost?: boolean;
   onOpenProfile?: (userId: string) => void;
   onRequestDeletePost: () => void;
+  onRequestReportPost?: () => void;
 }
 
 const PostCardHeader = ({
@@ -15,8 +17,10 @@ const PostCardHeader = ({
   postedAgo,
   isOwnPost,
   canDeletePost,
+  canReportPost,
   onOpenProfile,
   onRequestDeletePost,
+  onRequestReportPost,
 }: PostCardHeaderProps) => {
   return (
     <header className="social-post-header flex items-start justify-between gap-3" data-testid="post-card-header">
@@ -43,7 +47,7 @@ const PostCardHeader = ({
           </p>
           <p className="social-text-muted social-post-meta social-post-meta-row text-xs flex items-center gap-1.5">
             <span>{postedAgo}</span>
-            <span aria-hidden="true" className="text-muted-foreground/40">·</span>
+            <span aria-hidden="true" className="text-muted-foreground/40">|</span>
             <span className="inline-flex items-center gap-1">
               <Globe2 className="h-3 w-3" />
               Public
@@ -67,7 +71,10 @@ const PostCardHeader = ({
         <button
           type="button"
           className="social-post-option-btn rounded-full p-2 hover:bg-muted/60 transition-all duration-150 hover:rotate-90 active:scale-90"
+          onClick={onRequestReportPost}
+          disabled={!canReportPost}
           aria-label="Post options"
+          title={canReportPost ? "Report post" : "Post options"}
           data-testid="post-options-button"
         >
           <Ellipsis className="h-4 w-4" />

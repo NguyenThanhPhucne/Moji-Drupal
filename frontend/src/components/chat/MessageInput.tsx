@@ -130,6 +130,20 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
 
   if (!user) return null;
 
+  const myUserId = String(user._id || "");
+  const isGroupConversation = selectedConvo.type === "group";
+  const isGroupCreator =
+    isGroupConversation &&
+    String(selectedConvo.group?.createdBy || "") === myUserId;
+  const isGroupAdmin =
+    isGroupConversation &&
+    ((selectedConvo.group?.adminIds || []).map(String).includes(myUserId) ||
+      isGroupCreator);
+  const announcementOnly =
+    isGroupConversation && Boolean(selectedConvo.group?.announcementOnly);
+  const canSendInCurrentMode = !announcementOnly || isGroupAdmin;
+  const sendDisabled = !hasSendable || !canSendInCurrentMode;
+
   const charsUsed = value.length;
   const showRing = charsLeft < 120;
 
@@ -204,10 +218,12 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         <Button
           variant="ghost"
           size="icon"
+          disabled={!canSendInCurrentMode}
           className={cn(
             "mb-0.5 flex-shrink-0 size-9 rounded-full transition-colors duration-150",
             "text-muted-foreground/70 hover:bg-primary/10 hover:text-primary",
-            imagePreview && "text-primary bg-primary/10"
+            imagePreview && "text-primary bg-primary/10",
+            !canSendInCurrentMode && "opacity-45 hover:bg-transparent hover:text-muted-foreground/70",
           )}
           onClick={() => fileInputRef.current?.click()}
           title="Send image"
@@ -220,6 +236,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           type="file"
           accept="image/*"
           className="hidden"
+          disabled={!canSendInCurrentMode}
           onChange={handleFileChange}
         />
 
@@ -240,14 +257,20 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder="Aa"
+            placeholder={
+              canSendInCurrentMode
+                ? "Aa"
+                : "Only admins can send messages in announcement mode"
+            }
             aria-label="Message input"
+            disabled={!canSendInCurrentMode}
             className={cn(
               "w-full resize-none overflow-hidden bg-transparent",
               "px-3.5 py-2.5 pr-10 text-[14px] leading-relaxed text-foreground",
               "focus:outline-none focus:ring-0",
               "transition-all duration-200 max-h-[140px]",
               "placeholder:text-muted-foreground/45 placeholder:font-normal",
+              !canSendInCurrentMode && "cursor-not-allowed opacity-70",
             )}
           />
           <div className="absolute right-1.5 bottom-1.5 flex items-center">
@@ -255,7 +278,11 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
               asChild
               variant="ghost"
               size="icon"
-              className="size-7 rounded-lg hover:bg-muted/70 text-muted-foreground hover:text-foreground"
+              disabled={!canSendInCurrentMode}
+              className={cn(
+                "size-7 rounded-lg hover:bg-muted/70 text-muted-foreground hover:text-foreground",
+                !canSendInCurrentMode && "opacity-45 hover:bg-transparent",
+              )}
             >
               <div>
                 <EmojiPicker onChange={appendEmoji} />
@@ -273,17 +300,22 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
 
         <Button
           onClick={() => {
+            if (!canSendInCurrentMode) {
+              return;
+            }
             setIsSendBursting(true);
             setTimeout(() => setIsSendBursting(false), 500);
             void sendMessage();
           }}
           size="icon"
-          disabled={!hasSendable}
+          disabled={sendDisabled}
           aria-label={hasSendable ? "Send message" : "Like"}
           className={cn(
             "flex-shrink-0 mb-0.5 size-9 rounded-full transition-all duration-200",
             isSendBursting && hasSendable && "send-burst",
-            hasSendable
+            !canSendInCurrentMode
+              ? "bg-muted text-muted-foreground"
+              : hasSendable
               ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95 animate-in zoom-in-75 duration-200"
               : "bg-transparent text-primary hover:bg-primary/10 opacity-80 hover:opacity-100",
           )}
@@ -296,6 +328,12 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           )}
         </Button>
       </div>
+
+      {announcementOnly && !isGroupAdmin && (
+        <p className="px-3.5 pb-2 text-[11px] font-medium text-muted-foreground">
+          Announcement mode is enabled. Only group admins can post new messages.
+        </p>
+      )}
     </div>
   );
 };

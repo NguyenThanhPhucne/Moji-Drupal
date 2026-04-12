@@ -1,22 +1,33 @@
 import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
-import { MessageSquareDashed, Plus, Users } from "lucide-react";
+import {
+  Heart,
+  Lock,
+  MessageCircle,
+  MessageSquareDashed,
+  PartyPopper,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Users,
+  Zap,
+} from "lucide-react";
 import { useChatStore } from "@/stores/useChatStore";
 import { useState } from "react";
 import NewGroupChatModal from "./NewGroupChatModal";
 import { cn } from "@/lib/utils";
 
-const EMOJI_PARTICLES = [
-  { emoji: "💬", style: "absolute -top-5 -left-6 text-[18px] animate-float opacity-60" },
-  { emoji: "✨", style: "absolute -top-3 -right-7 text-[14px] animate-float-delayed opacity-50" },
-  { emoji: "🎉", style: "absolute -bottom-4 -left-4 text-[16px] animate-float opacity-55" },
-  { emoji: "💙", style: "absolute -bottom-2 -right-5 text-[13px] animate-float-delayed opacity-45" },
+const ICON_PARTICLES = [
+  { Icon: MessageCircle, style: "absolute -top-5 -left-6 size-4 animate-float opacity-60" },
+  { Icon: Sparkles, style: "absolute -top-3 -right-7 size-3.5 animate-float-delayed opacity-50" },
+  { Icon: PartyPopper, style: "absolute -bottom-4 -left-4 size-4 animate-float opacity-55" },
+  { Icon: Heart, style: "absolute -bottom-2 -right-5 size-3.5 animate-float-delayed opacity-45" },
 ];
 
 const FEATURE_PILLS = [
-  { label: "End-to-end messaging", emoji: "🔒" },
-  { label: "Realtime sync", emoji: "⚡" },
-  { label: "Forward with privacy", emoji: "🛡️" },
+  { label: "End-to-end messaging", Icon: Lock },
+  { label: "Realtime sync", Icon: Zap },
+  { label: "Forward with privacy", Icon: ShieldCheck },
 ];
 
 const ChatWelcomeScreen = () => {
@@ -24,6 +35,7 @@ const ChatWelcomeScreen = () => {
   const [showNewGroup, setShowNewGroup] = useState(false);
 
   const directConvos = conversations.filter((c) => c.type === "direct");
+  const conversationLabel = conversations.length === 1 ? "conversation" : "conversations";
 
   const handleStartNewChat = () => {
     // Open friend list sidebar or navigate — for now scroll sidebar into view
@@ -43,7 +55,7 @@ const ChatWelcomeScreen = () => {
         <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-primary/[0.04] blur-3xl pointer-events-none" />
         <div className="absolute -bottom-20 -left-20 w-56 h-56 rounded-full bg-accent/[0.04] blur-3xl pointer-events-none" />
 
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out flex flex-col items-center gap-6 relative z-10">
+        <div className="flex flex-col items-center gap-6 relative z-10">
 
           {/* Icon with 3 concentric rings + emoji particles + breath */}
           <div className="animate-icon-breath relative flex size-[82px] items-center justify-center rounded-[24px] bg-primary/[0.08] text-primary shadow-md ring-1 ring-primary/12">
@@ -55,9 +67,9 @@ const ChatWelcomeScreen = () => {
             <span className="welcome-ring welcome-ring-3" />
 
             {/* Floating emoji particles */}
-            {EMOJI_PARTICLES.map(({ emoji, style }, i) => (
-              <span key={i} className={style} aria-hidden="true">
-                {emoji}
+            {ICON_PARTICLES.map(({ Icon, style }) => (
+              <span key={`${Icon.displayName || "icon"}-${style}`} className={style} aria-hidden="true">
+                <Icon className="size-full" />
               </span>
             ))}
           </div>
@@ -74,12 +86,12 @@ const ChatWelcomeScreen = () => {
 
           {/* Feature pills */}
           <div className="animate-in fade-in duration-700 delay-400 flex items-center gap-2 flex-wrap justify-center">
-            {FEATURE_PILLS.map(({ label, emoji }) => (
+            {FEATURE_PILLS.map(({ label, Icon }) => (
               <span
                 key={label}
                 className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-muted/30 px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground/70 backdrop-blur-sm"
               >
-                <span className="text-[11px]" aria-hidden>{emoji}</span>
+                <Icon className="size-3" aria-hidden="true" />
                 {label}
               </span>
             ))}
@@ -123,7 +135,7 @@ const ChatWelcomeScreen = () => {
               <span className="font-semibold text-muted-foreground/60">
                 {conversations.length}
               </span>{" "}
-              conversation{conversations.length !== 1 ? "s" : ""}
+              {conversationLabel}
             </p>
           )}
         </div>

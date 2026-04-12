@@ -10,6 +10,7 @@ import conversationRoute from "./routes/conversationRoute.js";
 import bookmarkRoute from "./routes/bookmarkRoute.js";
 import searchRoute from "./routes/searchRoute.js";
 import socialRoute from "./routes/socialRoute.js";
+import safetyRoute from "./routes/safetyRoute.js";
 import {
   getAdminConversations,
   deleteConversation,
@@ -101,6 +102,7 @@ app.use("/api/conversations", conversationRoute);
 app.use("/api/bookmarks", bookmarkRoute);
 app.use("/api/search", searchRoute);
 app.use("/api/social", socialRoute);
+app.use("/api/safety", safetyRoute);
 
 try {
   await connectDB();

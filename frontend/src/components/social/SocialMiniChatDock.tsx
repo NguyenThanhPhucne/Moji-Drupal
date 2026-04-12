@@ -12,13 +12,14 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, type NavigateFunction } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import UserAvatar from "@/components/chat/UserAvatar";
 import { chatService } from "@/services/chatService";
+import type { Message } from "@/types/chat";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
-import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
+import { useMiniChatDockStore, type MiniChatDockWindow } from "@/stores/useMiniChatDockStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import MiniChatSkeleton from "@/components/skeleton/MiniChatSkeleton";
 import { cn } from "@/lib/utils";
@@ -47,47 +48,52 @@ const findDirectConversationId = (
 
 const MAX_FILE_SIZE_MB = 5;
 
-const MiniChatWindow = ({ userId }: { userId: string }) => {
-  const navigate = useNavigate();
-  const windowItem = useMiniChatDockStore((state) =>
-    state.windows.find((candidate) => candidate.userId === userId),
-  );
-  const closeWindow = useMiniChatDockStore((state) => state.closeWindow);
-  const toggleMinimized = useMiniChatDockStore((state) => state.toggleMinimized);
-  const togglePinned = useMiniChatDockStore((state) => state.togglePinned);
-  const togglePoppedOut = useMiniChatDockStore((state) => state.togglePoppedOut);
-  const setConversationId = useMiniChatDockStore((state) => state.setConversationId);
-  const setDraft = useMiniChatDockStore((state) => state.setDraft);
-  const setImagePreview = useMiniChatDockStore((state) => state.setImagePreview);
-  const setUnread = useMiniChatDockStore((state) => state.setUnread);
-  const clearUnread = useMiniChatDockStore((state) => state.clearUnread);
-  const setPoppedHeight = useMiniChatDockStore((state) => state.setPoppedHeight);
+type ChatStoreSnapshot = ReturnType<typeof useChatStore.getState>;
+type MiniChatDockStoreSnapshot = ReturnType<typeof useMiniChatDockStore.getState>;
 
-  const {
-    conversations,
-    messages,
-    fetchMessages,
-    sendDirectMessage,
-    addConvo,
-    updateConversation,
-    setActiveConversation,
-  } = useChatStore();
-  const { socket, getUserPresence } = useSocketStore();
-  const currentUserId = useAuthStore((state) => state.user?._id || "");
+type UseMiniChatConversationSyncParams = {
+  windowItem?: MiniChatDockWindow;
+  conversations: ChatStoreSnapshot["conversations"];
+  messages: ChatStoreSnapshot["messages"];
+  currentUserId: string;
+  addConvo: ChatStoreSnapshot["addConvo"];
+  setConversationId: MiniChatDockStoreSnapshot["setConversationId"];
+  socket: ReturnType<typeof useSocketStore.getState>["socket"];
+  setUnread: MiniChatDockStoreSnapshot["setUnread"];
+  fetchMessages: ChatStoreSnapshot["fetchMessages"];
+  clearUnread: MiniChatDockStoreSnapshot["clearUnread"];
+  updateConversation: ChatStoreSnapshot["updateConversation"];
+};
 
+const getPresenceLabel = (presence?: string) => {
+  if (presence === "online") {
+    return "Active now";
+  }
+
+  if (presence === "recently-active") {
+    return "Recently active";
+  }
+
+  return "Offline";
+};
+
+const useMiniChatConversationSync = ({
+  windowItem,
+  conversations,
+  messages,
+  currentUserId,
+  addConvo,
+  setConversationId,
+  socket,
+  setUnread,
+  fetchMessages,
+  clearUnread,
+  updateConversation,
+}: UseMiniChatConversationSyncParams) => {
   const resolvingRef = useRef(false);
   const loadedConversationRef = useRef<string | null>(null);
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const resizeStartYRef = useRef(0);
-  const resizeStartHeightRef = useRef(0);
 
   const conversationId = windowItem?.conversationId || null;
-  const currentMessages = useMemo(
-    () => (conversationId ? messages[conversationId]?.items || [] : []),
-    [conversationId, messages],
-  );
-
   const currentConversation = useMemo(
     () => conversations.find((conversationItem) => conversationItem._id === conversationId) || null,
     [conversations, conversationId],
@@ -135,13 +141,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
     };
 
     void resolveConversation();
-  }, [
-    addConvo,
-    conversations,
-    setConversationId,
-    socket,
-    windowItem,
-  ]);
+  }, [addConvo, conversations, setConversationId, socket, windowItem]);
 
   useEffect(() => {
     if (!windowItem) {
@@ -196,6 +196,398 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
     windowItem,
   ]);
 
+  return {
+    conversationId,
+    unreadCount,
+  };
+};
+
+const sendMiniChatMessage = async ({
+  userId,
+  conversationId,
+  setDraft,
+  setImagePreview,
+  sendDirectMessage,
+}: {
+  userId: string;
+  conversationId: string | null;
+  setDraft: MiniChatDockStoreSnapshot["setDraft"];
+  setImagePreview: MiniChatDockStoreSnapshot["setImagePreview"];
+  sendDirectMessage: ChatStoreSnapshot["sendDirectMessage"];
+}) => {
+  // Read directly from the store to guarantee we don't accidentally double-send
+  // if React hasn't flushed the closure state yet.
+  const currentWindow = useMiniChatDockStore.getState().windows.find((windowRef) => windowRef.userId === userId);
+  if (!currentWindow) {
+    return;
+  }
+
+  const content = currentWindow.draft.trim();
+  if (!content && !currentWindow.imagePreview) {
+    return;
+  }
+
+  // Immediately clear store state so subsequent sync reads observe latest values.
+  setDraft(userId, "");
+  const imgUrl = currentWindow.imagePreview || undefined;
+  setImagePreview(userId, null);
+
+  await sendDirectMessage(userId, content, imgUrl, conversationId || undefined);
+};
+
+const handleMiniChatImageSelect = (
+  event: React.ChangeEvent<HTMLInputElement>,
+  userId: string,
+  setImagePreview: MiniChatDockStoreSnapshot["setImagePreview"],
+) => {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result !== "string") {
+      return;
+    }
+
+    setImagePreview(userId, reader.result);
+  };
+  reader.readAsDataURL(file);
+};
+
+const handleMiniChatInputKeyDown = (
+  event: React.KeyboardEvent<HTMLTextAreaElement>,
+  onSend: () => Promise<void>,
+) => {
+  if (event.nativeEvent.isComposing) {
+    return;
+  }
+
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    void onSend();
+  }
+};
+
+const openMiniChatInFullView = ({
+  conversationId,
+  setActiveConversation,
+  navigate,
+}: {
+  conversationId: string | null;
+  setActiveConversation: ChatStoreSnapshot["setActiveConversation"];
+  navigate: NavigateFunction;
+}) => {
+  if (conversationId) {
+    setActiveConversation(conversationId);
+  }
+
+  navigate("/");
+};
+
+const startMiniChatResize = ({
+  event,
+  windowItem,
+  setPoppedHeight,
+  resizeStartYRef,
+  resizeStartHeightRef,
+}: {
+  event: React.PointerEvent<HTMLButtonElement>;
+  windowItem: MiniChatDockWindow;
+  setPoppedHeight: MiniChatDockStoreSnapshot["setPoppedHeight"];
+  resizeStartYRef: { current: number };
+  resizeStartHeightRef: { current: number };
+}) => {
+  if (!windowItem.poppedOut) {
+    return;
+  }
+
+  resizeStartYRef.current = event.clientY;
+  resizeStartHeightRef.current = windowItem.poppedHeight || 500;
+
+  const pointerId = event.pointerId;
+  event.currentTarget.setPointerCapture(pointerId);
+
+  const onMove = (moveEvent: PointerEvent) => {
+    const delta = moveEvent.clientY - resizeStartYRef.current;
+    setPoppedHeight(windowItem.userId, resizeStartHeightRef.current + delta);
+  };
+
+  const onUp = () => {
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+  };
+
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+};
+
+type MiniChatMessagesProps = {
+  conversationId: string | null;
+  currentMessages: Message[];
+  currentUserId: string;
+  displayName: string;
+  poppedOut: boolean;
+  poppedHeight: number;
+  listRef: React.RefObject<HTMLDivElement | null>;
+};
+
+const MiniChatMessages = ({
+  conversationId,
+  currentMessages,
+  currentUserId,
+  displayName,
+  poppedOut,
+  poppedHeight,
+  listRef,
+}: MiniChatMessagesProps) => {
+  const containerStyle = poppedOut
+    ? { height: `${Math.max(poppedHeight - 150, 240)}px` }
+    : undefined;
+
+  const messageContent = (() => {
+    if (!conversationId) {
+      return (
+        <div className="flex-1 flex flex-col justify-end w-full overflow-hidden pb-1">
+          <MiniChatSkeleton />
+        </div>
+      );
+    }
+
+    if (currentMessages.length > 0) {
+      return currentMessages.slice(-18).map((messageItem) => {
+        const ownMessage =
+          messageItem.isOwn ?? String(messageItem.senderId) === String(currentUserId);
+        const animateClass = ownMessage
+          ? "animate-in fade-in slide-in-from-bottom-1 duration-200"
+          : "animate-in fade-in slide-in-from-left-1 duration-200";
+
+        return (
+          <article
+            key={messageItem._id}
+            className={`social-mini-chat-msg ${ownMessage ? "social-mini-chat-msg--own" : ""}`}
+          >
+            <div className={`social-mini-chat-bubble ${animateClass}`}>
+              {messageItem.content || (messageItem.imgUrl ? "" : "(Attachment)")}
+              {messageItem.imgUrl ? (
+                <img
+                  src={messageItem.imgUrl}
+                  alt="Message media"
+                  className="social-mini-chat-media"
+                />
+              ) : null}
+            </div>
+            <span className="social-mini-chat-time">{formatMessageTime(messageItem.createdAt)}</span>
+          </article>
+        );
+      });
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center gap-2.5 text-center my-auto py-6 px-3">
+        <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
+          <Sparkles className="h-5 w-5 text-primary" />
+          <span className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-30" />
+        </div>
+        <p className="social-mini-chat-state text-[13px] font-medium">
+          Say hi to {displayName.split(" ")[0]}.
+        </p>
+      </div>
+    );
+  })();
+
+  return (
+    <div
+      ref={listRef}
+      className="social-mini-chat-messages beautiful-scrollbar"
+      style={containerStyle}
+    >
+      {messageContent}
+    </div>
+  );
+};
+
+type MiniChatWindowHeaderProps = {
+  windowItem: MiniChatDockWindow;
+  shouldPulse: boolean;
+  presence: string | undefined;
+  presenceLabel: string;
+  conversationId: string | null;
+  toggleMinimized: MiniChatDockStoreSnapshot["toggleMinimized"];
+  togglePinned: MiniChatDockStoreSnapshot["togglePinned"];
+  togglePoppedOut: MiniChatDockStoreSnapshot["togglePoppedOut"];
+  closeWindow: MiniChatDockStoreSnapshot["closeWindow"];
+  setActiveConversation: ChatStoreSnapshot["setActiveConversation"];
+  navigate: NavigateFunction;
+};
+
+const MiniChatWindowHeader = ({
+  windowItem,
+  shouldPulse,
+  presence,
+  presenceLabel,
+  conversationId,
+  toggleMinimized,
+  togglePinned,
+  togglePoppedOut,
+  closeWindow,
+  setActiveConversation,
+  navigate,
+}: MiniChatWindowHeaderProps) => {
+  return (
+    <header className={`social-mini-chat-head mini-chat-glass-head ${shouldPulse ? "social-mini-chat-head--pulse" : ""}`}>
+      <button
+        type="button"
+        className="social-mini-chat-user"
+        onClick={() => toggleMinimized(windowItem.userId)}
+      >
+        {/* Avatar with online indicator */}
+        <div className="relative flex-shrink-0">
+          <UserAvatar
+            type="chat"
+            name={windowItem.displayName}
+            avatarUrl={windowItem.avatarUrl}
+            className="social-mini-chat-avatar"
+          />
+          <span
+            className="absolute bottom-0 right-0 block size-2.5 rounded-full ring-2 ring-white dark:ring-background"
+            style={{
+              background: presence === "online"
+                ? "hsl(145 53% 50%)"
+                : "hsl(var(--se-muted))",
+            }}
+          />
+        </div>
+        <span className="social-mini-chat-identity">
+          <span className="social-mini-chat-name">
+            {windowItem.displayName}
+            {windowItem.unreadCount > 0 ? (
+              <span className="social-mini-chat-unread-badge">{windowItem.unreadCount}</span>
+            ) : null}
+          </span>
+          <span className="social-mini-chat-presence">{presenceLabel}</span>
+        </span>
+      </button>
+
+      <div className="social-mini-chat-actions">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="social-mini-chat-icon-btn"
+          onClick={() => togglePinned(windowItem.userId)}
+          title={windowItem.pinned ? "Unpin" : "Pin"}
+        >
+          {windowItem.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="social-mini-chat-icon-btn"
+          onClick={() => togglePoppedOut(windowItem.userId)}
+          title={windowItem.poppedOut ? "Dock compact" : "Pop out"}
+        >
+          {windowItem.poppedOut ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="social-mini-chat-icon-btn"
+          onClick={() => openMiniChatInFullView({ conversationId, setActiveConversation, navigate })}
+          title="Open full chat"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="social-mini-chat-icon-btn"
+          onClick={() => toggleMinimized(windowItem.userId)}
+          title={windowItem.minimized ? "Expand" : "Minimize"}
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="social-mini-chat-icon-btn"
+          onClick={() => closeWindow(windowItem.userId)}
+          title="Close"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    </header>
+  );
+};
+
+const MiniChatWindow = ({
+  userId,
+  onReorder,
+}: {
+  userId: string;
+  onReorder: MiniChatDockStoreSnapshot["reorderWindows"];
+}) => {
+  const navigate = useNavigate();
+  const windowItem = useMiniChatDockStore((state) =>
+    state.windows.find((candidate) => candidate.userId === userId),
+  );
+  const closeWindow = useMiniChatDockStore((state) => state.closeWindow);
+  const toggleMinimized = useMiniChatDockStore((state) => state.toggleMinimized);
+  const togglePinned = useMiniChatDockStore((state) => state.togglePinned);
+  const togglePoppedOut = useMiniChatDockStore((state) => state.togglePoppedOut);
+  const setConversationId = useMiniChatDockStore((state) => state.setConversationId);
+  const setDraft = useMiniChatDockStore((state) => state.setDraft);
+  const setImagePreview = useMiniChatDockStore((state) => state.setImagePreview);
+  const setUnread = useMiniChatDockStore((state) => state.setUnread);
+  const clearUnread = useMiniChatDockStore((state) => state.clearUnread);
+  const setPoppedHeight = useMiniChatDockStore((state) => state.setPoppedHeight);
+
+  const {
+    conversations,
+    messages,
+    fetchMessages,
+    sendDirectMessage,
+    addConvo,
+    updateConversation,
+    setActiveConversation,
+  } = useChatStore();
+  const { socket, getUserPresence } = useSocketStore();
+  const currentUserId = useAuthStore((state) => state.user?._id || "");
+
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const resizeStartYRef = useRef(0);
+  const resizeStartHeightRef = useRef(0);
+
+  const { conversationId } = useMiniChatConversationSync({
+    windowItem,
+    conversations,
+    messages,
+    currentUserId,
+    addConvo,
+    setConversationId,
+    socket,
+    setUnread,
+    fetchMessages,
+    clearUnread,
+    updateConversation,
+  });
+
+  const currentMessages = useMemo(
+    () => (conversationId ? messages[conversationId]?.items || [] : []),
+    [conversationId, messages],
+  );
+
   useEffect(() => {
     if (!windowItem || windowItem.minimized) {
       return;
@@ -209,79 +601,19 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
   }
 
   const presence = getUserPresence(windowItem.userId);
-  let presenceLabel = "Offline";
-  if (presence === "online") {
-    presenceLabel = "Active now";
-  } else if (presence === "recently-active") {
-    presenceLabel = "Recently active";
-  }
+  const presenceLabel = getPresenceLabel(presence);
 
-  const handleSend = async () => {
-    // Read directly from the store to guarantee we don't accidentally double-send
-    // if React hasn't flushed the closure state yet.
-    const currentWindow = useMiniChatDockStore.getState().windows.find((w) => w.userId === userId);
-    if (!currentWindow) return;
-
-    const content = currentWindow.draft.trim();
-    if (!content && !currentWindow.imagePreview) {
-      return;
-    }
-
-    // Immediately clear the state in the store so synchronous events reading next will get ""
-    setDraft(userId, "");
-    const imgUrl = currentWindow.imagePreview || undefined;
-    setImagePreview(userId, null);
-
-    await sendDirectMessage(userId, content, imgUrl, conversationId || undefined);
-  };
-
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== "string") {
-        return;
-      }
-
-      setImagePreview(windowItem.userId, reader.result);
-    };
-    reader.readAsDataURL(file);
+  const handleSend = () => {
+    return sendMiniChatMessage({
+      userId,
+      conversationId,
+      setDraft,
+      setImagePreview,
+      sendDirectMessage,
+    });
   };
 
   const shouldPulse = windowItem.pulseUntil > Date.now();
-
-  const startResize = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (!windowItem.poppedOut) {
-      return;
-    }
-
-    resizeStartYRef.current = event.clientY;
-    resizeStartHeightRef.current = windowItem.poppedHeight || 500;
-
-    const pointerId = event.pointerId;
-    event.currentTarget.setPointerCapture(pointerId);
-
-    const onMove = (moveEvent: PointerEvent) => {
-      const delta = moveEvent.clientY - resizeStartYRef.current;
-      setPoppedHeight(windowItem.userId, resizeStartHeightRef.current + delta);
-    };
-
-    const onUp = () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-    };
-
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-  };
 
   return (
     <section
@@ -298,152 +630,35 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
+        const draggedUserId = event.dataTransfer.getData("text/plain");
+        onReorder(draggedUserId, windowItem.userId);
       }}
     >
-      <header className={`social-mini-chat-head mini-chat-glass-head ${shouldPulse ? "social-mini-chat-head--pulse" : ""}`}>
-        <button
-          type="button"
-          className="social-mini-chat-user"
-          onClick={() => toggleMinimized(windowItem.userId)}
-        >
-          {/* Avatar with online indicator */}
-          <div className="relative flex-shrink-0">
-            <UserAvatar
-              type="chat"
-              name={windowItem.displayName}
-              avatarUrl={windowItem.avatarUrl}
-              className="social-mini-chat-avatar"
-            />
-            <span
-              className="absolute bottom-0 right-0 block size-2.5 rounded-full ring-2 ring-white dark:ring-background"
-              style={{
-                background: presenceLabel === "Online"
-                  ? "hsl(145 53% 50%)"
-                  : "hsl(var(--se-muted))",
-              }}
-            />
-          </div>
-          <span className="social-mini-chat-identity">
-            <span className="social-mini-chat-name">
-              {windowItem.displayName}
-              {windowItem.unreadCount > 0 ? (
-                <span className="social-mini-chat-unread-badge">{windowItem.unreadCount}</span>
-              ) : null}
-            </span>
-            <span className="social-mini-chat-presence">{presenceLabel}</span>
-          </span>
-        </button>
+      <MiniChatWindowHeader
+        windowItem={windowItem}
+        shouldPulse={shouldPulse}
+        presence={presence}
+        presenceLabel={presenceLabel}
+        conversationId={conversationId}
+        toggleMinimized={toggleMinimized}
+        togglePinned={togglePinned}
+        togglePoppedOut={togglePoppedOut}
+        closeWindow={closeWindow}
+        setActiveConversation={setActiveConversation}
+        navigate={navigate}
+      />
 
-        <div className="social-mini-chat-actions">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="social-mini-chat-icon-btn"
-            onClick={() => togglePinned(windowItem.userId)}
-            title={windowItem.pinned ? "Unpin" : "Pin"}
-          >
-            {windowItem.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="social-mini-chat-icon-btn"
-            onClick={() => togglePoppedOut(windowItem.userId)}
-            title={windowItem.poppedOut ? "Dock compact" : "Pop out"}
-          >
-            {windowItem.poppedOut ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="social-mini-chat-icon-btn"
-            onClick={() => {
-              if (conversationId) {
-                setActiveConversation(conversationId);
-              }
-              navigate("/");
-            }}
-            title="Open full chat"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="social-mini-chat-icon-btn"
-            onClick={() => toggleMinimized(windowItem.userId)}
-            title={windowItem.minimized ? "Expand" : "Minimize"}
-          >
-            <Minus className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="social-mini-chat-icon-btn"
-            onClick={() => closeWindow(windowItem.userId)}
-            title="Close"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </header>
-
-      {!windowItem.minimized ? (
+      {windowItem.minimized ? null : (
         <>
-          <div
-            ref={listRef}
-            className="social-mini-chat-messages beautiful-scrollbar"
-            style={
-              windowItem.poppedOut
-                ? { height: `${Math.max((windowItem.poppedHeight || 500) - 150, 240)}px` }
-                : undefined
-            }
-          >
-            {!conversationId ? (
-              <div className="flex-1 flex flex-col justify-end w-full overflow-hidden pb-1">
-                <MiniChatSkeleton />
-              </div>
-            ) : currentMessages.length ? (
-              currentMessages.slice(-18).map((messageItem) => {
-                const ownMessage =
-                  messageItem.isOwn ?? String(messageItem.senderId) === String(currentUserId);
-
-                return (
-                  <article
-                    key={messageItem._id}
-                    className={`social-mini-chat-msg ${ownMessage ? "social-mini-chat-msg--own" : ""}`}
-                  >
-                    <div className={`social-mini-chat-bubble ${ownMessage ? "animate-in fade-in slide-in-from-bottom-1 duration-200" : "animate-in fade-in slide-in-from-left-1 duration-200"}`}>
-                      {messageItem.content || (messageItem.imgUrl ? "" : "(Attachment)")}
-                      {messageItem.imgUrl ? (
-                        <img
-                          src={messageItem.imgUrl}
-                          alt="Message media"
-                          className="social-mini-chat-media"
-                        />
-                      ) : null}
-                    </div>
-                    <span className="social-mini-chat-time">{formatMessageTime(messageItem.createdAt)}</span>
-                  </article>
-                );
-              })
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-2.5 text-center my-auto py-6 px-3">
-                <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  <span className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-30" />
-                </div>
-                <p className="social-mini-chat-state text-[13px] font-medium">
-                  Say hi to {windowItem.displayName.split(" ")[0]}! 👋
-                </p>
-              </div>
-            )}
-          </div>
+          <MiniChatMessages
+            conversationId={conversationId}
+            currentMessages={currentMessages}
+            currentUserId={currentUserId}
+            displayName={windowItem.displayName}
+            poppedOut={windowItem.poppedOut}
+            poppedHeight={windowItem.poppedHeight || 500}
+            listRef={listRef}
+          />
 
           <div className="social-mini-chat-input-row">
             {/* Pill: Attach + (image preview if any) + Textarea */}
@@ -463,7 +678,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={handleImageSelect}
+                onChange={(event) => handleMiniChatImageSelect(event, windowItem.userId, setImagePreview)}
               />
               <div className="flex flex-col flex-1 min-w-0">
                 {windowItem.imagePreview ? (
@@ -482,13 +697,7 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
                   value={windowItem.draft}
                   placeholder="Write a message..."
                   onChange={(event) => setDraft(windowItem.userId, event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.nativeEvent.isComposing) return;
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      void handleSend();
-                    }
-                  }}
+                  onKeyDown={(event) => handleMiniChatInputKeyDown(event, handleSend)}
                   className="social-mini-chat-input"
                   rows={1}
                 />
@@ -513,11 +722,19 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
               type="button"
               className="social-mini-chat-resize-handle"
               aria-label="Resize pop-out chat window"
-              onPointerDown={startResize}
+              onPointerDown={(event) =>
+                startMiniChatResize({
+                  event,
+                  windowItem,
+                  setPoppedHeight,
+                  resizeStartYRef,
+                  resizeStartHeightRef,
+                })
+              }
             />
           ) : null}
         </>
-      ) : null}
+      )}
     </section>
   );
 };
@@ -555,17 +772,11 @@ const SocialMiniChatDock = () => {
 
       <div className="social-mini-chat-dock">
         {windows.map((windowItem) => (
-          <div
+          <MiniChatWindow
             key={windowItem.userId}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              const draggedUserId = event.dataTransfer.getData("text/plain");
-              reorderWindows(draggedUserId, windowItem.userId);
-            }}
-          >
-            <MiniChatWindow userId={windowItem.userId} />
-          </div>
+            userId={windowItem.userId}
+            onReorder={reorderWindows}
+          />
         ))}
       </div>
     </div>

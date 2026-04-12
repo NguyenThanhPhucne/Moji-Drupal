@@ -8,6 +8,7 @@ import { useFriendStore } from "./stores/useFriendStore";
 import { useBookmarkStore } from "./stores/useBookmarkStore";
 import { useSocialStore } from "./stores/useSocialStore";
 import { useChatStore } from "./stores/useChatStore";
+import { useSocialMotionStore } from "./stores/useSocialMotionStore";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import WorkspaceLoadingSkeleton from "./components/skeleton/WorkspaceLoadingSkeleton";
 
@@ -19,6 +20,7 @@ const HomeFeedPage = lazy(() => import("./pages/HomeFeedPage"));
 const ExplorePage = lazy(() => import("./pages/ExplorePage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const PostDetailPage = lazy(() => import("./pages/PostDetailPage"));
+const JoinGroupLinkPage = lazy(() => import("./pages/JoinGroupLinkPage"));
 const ChatContrastQaPage = lazy(() => import("./pages/ChatContrastQaPage"));
 const ProtectedRoute = lazy(() => import("./components/auth/ProtectedRoute"));
 
@@ -42,6 +44,7 @@ const scheduleAfterFirstPaint = (callback: () => void) => {
 
 function AppContent() {
   const { applyTheme, bindProfileUser } = useThemeStore();
+  const { applyMotionPreset } = useSocialMotionStore();
   const { accessToken, user } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
   const { getAllFriendRequests, getFriends } = useFriendStore();
@@ -51,6 +54,10 @@ function AppContent() {
   useEffect(() => {
     applyTheme();
   }, [applyTheme]);
+
+  useEffect(() => {
+    applyMotionPreset();
+  }, [applyMotionPreset]);
 
   useEffect(() => {
     bindProfileUser(user?._id ? String(user._id) : null);
@@ -111,6 +118,7 @@ function AppContent() {
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/profile/:userId" element={<ProfilePage />} />
               <Route path="/saved" element={<SavedMessagesPage />} />
+              <Route path="/join/group/:conversationId" element={<JoinGroupLinkPage />} />
             </Route>
           </Routes>
         </Suspense>

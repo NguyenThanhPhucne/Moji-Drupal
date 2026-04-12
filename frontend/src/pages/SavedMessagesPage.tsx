@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   Bookmark,
+  Clock3,
   PencilLine,
   Tags,
+  Pin,
+  PinOff,
   Download,
   X,
   CheckSquare,
@@ -12,11 +15,14 @@ import {
   ExternalLink,
   Image as ImageIcon,
   MessageSquare,
+  Users,
   Trash2,
   Tag,
   Search,
   SlidersHorizontal,
   ChevronDown,
+  NotebookText,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,11 +38,74 @@ import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 
+type SavedPreset = "all" | "recent" | "tagged" | "notes" | "images" | "text";
+
+type SavedPinnedQuery = {
+  searchQuery: string;
+  preset: SavedPreset;
+  conversationFilter: string;
+  fromDate: string;
+  toDate: string;
+  collectionFilter: string;
+  updatedAt: string;
+};
+
+const RECENT_WINDOW_DAYS = 7;
+const RECENT_WINDOW_MS = RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+const SAVED_PINNED_QUERY_KEY = "moji-saved-pinned-query-v2";
+
+const isValidSavedPreset = (value: unknown): value is SavedPreset => {
+  const normalized = typeof value === "string" ? value : "";
+  return ["all", "recent", "tagged", "notes", "images", "text"].includes(
+    normalized,
+  );
+};
+
+const toSafeString = (value: unknown) => {
+  return typeof value === "string" ? value : "";
+};
+
+const parsePinnedQuery = (rawValue: string | null): SavedPinnedQuery | null => {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<SavedPinnedQuery>;
+    const preset = isValidSavedPreset(parsed?.preset) ? parsed.preset : "all";
+
+    return {
+      searchQuery: toSafeString(parsed?.searchQuery),
+      preset,
+      conversationFilter: toSafeString(parsed?.conversationFilter),
+      fromDate: toSafeString(parsed?.fromDate),
+      toDate: toSafeString(parsed?.toDate),
+      collectionFilter: toSafeString(parsed?.collectionFilter),
+      updatedAt: toSafeString(parsed?.updatedAt),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const SAVED_PRESETS: Array<{
+  key: SavedPreset;
+  label: string;
+  Icon: LucideIcon;
+}> = [
+  { key: "all", label: "All", Icon: Bookmark },
+  { key: "recent", label: "Recent", Icon: Clock3 },
+  { key: "tagged", label: "Tagged", Icon: Tags },
+  { key: "notes", label: "With notes", Icon: NotebookText },
+  { key: "images", label: "Images", Icon: ImageIcon },
+  { key: "text", label: "Text", Icon: MessageSquare },
+];
+
 const SavedMessagesPage = () => {
   const navigate = useNavigate();
   const { bookmarks, pagination, fetchBookmarks, updateBookmarkMeta, loading } =
     useBookmarkStore();
-  const { bulkRemoveTag } = useBookmarkStore();
+  const { bulkRemoveTag, bulkRemoveCollection } = useBookmarkStore();
   const {
     conversations,
     fetchConversations,
@@ -46,16 +115,22 @@ const SavedMessagesPage = () => {
   const { user } = useAuthStore();
 
   const [conversationFilter, setConversationFilter] = useState("");
+  const [collectionFilter, setCollectionFilter] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [savedPreset, setSavedPreset] = useState<SavedPreset>("all");
+  const [pinnedQuery, setPinnedQuery] = useState<SavedPinnedQuery | null>(null);
+  const [pinnedQueryHydrated, setPinnedQueryHydrated] = useState(false);
 
   const [editingBookmarkId, setEditingBookmarkId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
+  const [collectionDraft, setCollectionDraft] = useState("");
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<string[]>([]);
   const [bulkTagToRemove, setBulkTagToRemove] = useState("");
+  const [bulkCollectionToRemove, setBulkCollectionToRemove] = useState("");
   const [showBulkPanel, setShowBulkPanel] = useState(false);
 
   useEffect(() => {
@@ -63,15 +138,47 @@ const SavedMessagesPage = () => {
   }, [fetchConversations]);
 
   useEffect(() => {
+    const parsedPinnedQuery = parsePinnedQuery(
+      globalThis.localStorage.getItem(SAVED_PINNED_QUERY_KEY),
+    );
+
+    if (!parsedPinnedQuery) {
+      setPinnedQueryHydrated(true);
+      return;
+    }
+
+    setPinnedQuery(parsedPinnedQuery);
+    setSearchQuery(parsedPinnedQuery.searchQuery);
+    setSavedPreset(parsedPinnedQuery.preset);
+    setConversationFilter(parsedPinnedQuery.conversationFilter);
+    setFromDate(parsedPinnedQuery.fromDate);
+    setToDate(parsedPinnedQuery.toDate);
+    setCollectionFilter(parsedPinnedQuery.collectionFilter);
+    setPinnedQueryHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!pinnedQueryHydrated) {
+      return;
+    }
+
     fetchBookmarks({
       conversationId: conversationFilter || undefined,
+      collection: collectionFilter || undefined,
       from: fromDate || undefined,
       to: toDate || undefined,
       page: 1,
       limit: 30,
       append: false,
     });
-  }, [fetchBookmarks, conversationFilter, fromDate, toDate]);
+  }, [
+    fetchBookmarks,
+    conversationFilter,
+    collectionFilter,
+    fromDate,
+    toDate,
+    pinnedQueryHydrated,
+  ]);
 
   const conversationOptions = useMemo(() => {
     return conversations.map((conversation) => ({
@@ -85,16 +192,190 @@ const SavedMessagesPage = () => {
     }));
   }, [conversations, user?._id]);
 
-  const filteredBookmarks = useMemo(() => {
-    if (!searchQuery.trim()) return bookmarks;
-    const q = searchQuery.toLowerCase();
-    return bookmarks.filter((b) => {
-      const content = (b.messageId.content || "").toLowerCase();
-      const note = (b.note || "").toLowerCase();
-      const tags = (b.tags || []).join(" ").toLowerCase();
-      return content.includes(q) || note.includes(q) || tags.includes(q);
+  const presetCounts = useMemo<Record<SavedPreset, number>>(() => {
+    const now = Date.now();
+    return bookmarks.reduce<Record<SavedPreset, number>>(
+      (acc, bookmark) => {
+        const hasImage = Boolean(bookmark.messageId.imgUrl);
+        const hasText = Boolean(String(bookmark.messageId.content || "").trim());
+        const hasTags = (bookmark.tags?.length || 0) > 0;
+        const hasNote = Boolean(String(bookmark.note || "").trim());
+        const isRecent = now - new Date(bookmark.createdAt).getTime() <= RECENT_WINDOW_MS;
+
+        acc.all += 1;
+        if (isRecent) acc.recent += 1;
+        if (hasTags) acc.tagged += 1;
+        if (hasNote) acc.notes += 1;
+        if (hasImage) acc.images += 1;
+        if (!hasImage && hasText) acc.text += 1;
+
+        return acc;
+      },
+      {
+        all: 0,
+        recent: 0,
+        tagged: 0,
+        notes: 0,
+        images: 0,
+        text: 0,
+      },
+    );
+  }, [bookmarks]);
+
+  const collectionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    bookmarks.forEach((bookmark) => {
+      (bookmark.collections || []).forEach((collectionName) => {
+        const normalized = String(collectionName || "")
+          .trim()
+          .toLowerCase();
+        if (!normalized) {
+          return;
+        }
+
+        counts.set(normalized, (counts.get(normalized) || 0) + 1);
+      });
     });
-  }, [bookmarks, searchQuery]);
+
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => {
+        const countDiff = b.count - a.count;
+        if (countDiff !== 0) {
+          return countDiff;
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+  }, [bookmarks]);
+
+  const currentQuery = useMemo<SavedPinnedQuery>(
+    () => ({
+      searchQuery,
+      preset: savedPreset,
+      conversationFilter,
+      fromDate,
+      toDate,
+      collectionFilter,
+      updatedAt: new Date().toISOString(),
+    }),
+    [
+      searchQuery,
+      savedPreset,
+      conversationFilter,
+      fromDate,
+      toDate,
+      collectionFilter,
+    ],
+  );
+
+  const isPinnedQueryActive = useMemo(() => {
+    if (!pinnedQuery) {
+      return false;
+    }
+
+    return (
+      pinnedQuery.searchQuery === searchQuery &&
+      pinnedQuery.preset === savedPreset &&
+      pinnedQuery.conversationFilter === conversationFilter &&
+      pinnedQuery.fromDate === fromDate &&
+      pinnedQuery.toDate === toDate &&
+      pinnedQuery.collectionFilter === collectionFilter
+    );
+  }, [
+    pinnedQuery,
+    searchQuery,
+    savedPreset,
+    conversationFilter,
+    fromDate,
+    toDate,
+    collectionFilter,
+  ]);
+
+  const pinCurrentQuery = useCallback(() => {
+    const nextPinnedQuery = {
+      ...currentQuery,
+      updatedAt: new Date().toISOString(),
+    };
+
+    globalThis.localStorage.setItem(
+      SAVED_PINNED_QUERY_KEY,
+      JSON.stringify(nextPinnedQuery),
+    );
+
+    setPinnedQuery(nextPinnedQuery);
+    toast.success("Pinned current query");
+  }, [currentQuery]);
+
+  const clearPinnedQuery = useCallback(() => {
+    globalThis.localStorage.removeItem(SAVED_PINNED_QUERY_KEY);
+    setPinnedQuery(null);
+    toast.success("Pinned query removed");
+  }, []);
+
+  const applyPinnedQuery = useCallback(() => {
+    if (!pinnedQuery) {
+      toast.error("No pinned query available");
+      return;
+    }
+
+    setSearchQuery(pinnedQuery.searchQuery);
+    setSavedPreset(pinnedQuery.preset);
+    setConversationFilter(pinnedQuery.conversationFilter);
+    setFromDate(pinnedQuery.fromDate);
+    setToDate(pinnedQuery.toDate);
+    setCollectionFilter(pinnedQuery.collectionFilter);
+    toast.success("Pinned query applied");
+  }, [pinnedQuery]);
+
+  const filteredBookmarks = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const now = Date.now();
+    const normalizedCollectionFilter = collectionFilter.trim().toLowerCase();
+
+    return bookmarks.filter((bookmark) => {
+      const content = String(bookmark.messageId.content || "").toLowerCase();
+      const note = String(bookmark.note || "").toLowerCase();
+      const tags = (bookmark.tags || []).join(" ").toLowerCase();
+      const collections = (bookmark.collections || [])
+        .map((item) => String(item || "").toLowerCase())
+        .join(" ");
+
+      if (
+        normalizedQuery &&
+        !content.includes(normalizedQuery) &&
+        !note.includes(normalizedQuery) &&
+        !tags.includes(normalizedQuery) &&
+        !collections.includes(normalizedQuery)
+      ) {
+        return false;
+      }
+
+      if (
+        normalizedCollectionFilter &&
+        !(bookmark.collections || [])
+          .map((item) => String(item || "").toLowerCase())
+          .includes(normalizedCollectionFilter)
+      ) {
+        return false;
+      }
+
+      const hasImage = Boolean(bookmark.messageId.imgUrl);
+      const hasText = Boolean(String(bookmark.messageId.content || "").trim());
+      const hasTags = (bookmark.tags?.length || 0) > 0;
+      const hasNote = Boolean(String(bookmark.note || "").trim());
+      const isRecent = now - new Date(bookmark.createdAt).getTime() <= RECENT_WINDOW_MS;
+
+      if (savedPreset === "recent") return isRecent;
+      if (savedPreset === "tagged") return hasTags;
+      if (savedPreset === "notes") return hasNote;
+      if (savedPreset === "images") return hasImage;
+      if (savedPreset === "text") return !hasImage && hasText;
+
+      return true;
+    });
+  }, [bookmarks, savedPreset, searchQuery, collectionFilter]);
 
   const openConversation = useCallback(async (conversationId: string) => {
     setActiveConversation(conversationId);
@@ -106,6 +387,7 @@ const SavedMessagesPage = () => {
     if (!pagination.hasNextPage || loading) return;
     await fetchBookmarks({
       conversationId: conversationFilter || undefined,
+      collection: collectionFilter || undefined,
       from: fromDate || undefined,
       to: toDate || undefined,
       page: pagination.page + 1,
@@ -140,7 +422,15 @@ const SavedMessagesPage = () => {
     const selected = bookmarks.filter((b) => selectedBookmarkIds.includes(b._id));
     const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
     const rows = [
-      ["bookmarkId", "conversationId", "savedAt", "content", "note", "tags"],
+      [
+        "bookmarkId",
+        "conversationId",
+        "savedAt",
+        "content",
+        "note",
+        "tags",
+        "collections",
+      ],
       ...selected.map((b) => [
         b._id,
         b.messageId.conversationId,
@@ -148,6 +438,7 @@ const SavedMessagesPage = () => {
         b.messageId.content || "",
         b.note || "",
         (b.tags || []).join("|"),
+        (b.collections || []).join("|"),
       ]),
     ];
     const csv = rows
@@ -182,16 +473,57 @@ const SavedMessagesPage = () => {
     setBulkTagToRemove("");
   };
 
-  const startEditing = (bookmarkId: string, note?: string, tags?: string[]) => {
+  const handleBulkRemoveCollection = async () => {
+    if (selectedBookmarkIds.length === 0) {
+      toast.error("Select bookmarks first");
+      return;
+    }
+
+    const normalizedCollection = bulkCollectionToRemove.trim().toLowerCase();
+    if (!normalizedCollection) {
+      toast.error("Enter a collection to remove");
+      return;
+    }
+
+    const ok = await bulkRemoveCollection(
+      selectedBookmarkIds,
+      normalizedCollection,
+    );
+    if (!ok) {
+      toast.error("Could not remove collection in bulk");
+      return;
+    }
+
+    toast.success(
+      `Removed collection "${normalizedCollection}" from ${selectedBookmarkIds.length} bookmarks`,
+    );
+    setBulkCollectionToRemove("");
+  };
+
+  const startEditing = (
+    bookmarkId: string,
+    note?: string,
+    tags?: string[],
+    collections?: string[],
+  ) => {
     setEditingBookmarkId(bookmarkId);
     setNoteDraft(note || "");
     setTagDraft((tags || []).join(", "));
+    setCollectionDraft((collections || []).join(", "));
   };
 
   const saveBookmarkMeta = async () => {
     if (!editingBookmarkId) return;
     const tags = tagDraft.split(",").map((item) => item.trim()).filter(Boolean);
-    const ok = await updateBookmarkMeta(editingBookmarkId, { note: noteDraft, tags });
+    const collections = collectionDraft
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const ok = await updateBookmarkMeta(editingBookmarkId, {
+      note: noteDraft,
+      tags,
+      collections,
+    });
     if (!ok) {
       toast.error("Could not save bookmark metadata");
       return;
@@ -201,6 +533,11 @@ const SavedMessagesPage = () => {
   };
 
   const unreadCount = selectedBookmarkIds.length;
+  const savedItemsWord = bookmarks.length === 1 ? "item" : "items";
+  const savedItemsSubtitle =
+    bookmarks.length === 0
+      ? "Your personal message archive"
+      : `${bookmarks.length} saved ${savedItemsWord}`;
 
   return (
     <SidebarProvider>
@@ -222,9 +559,7 @@ const SavedMessagesPage = () => {
                     <p className="saved-hero-eyebrow">Bookmarks</p>
                     <h1 className="saved-hero-title">Saved Messages</h1>
                     <p className="saved-hero-subtitle">
-                      {bookmarks.length > 0
-                        ? `${bookmarks.length} saved item${bookmarks.length !== 1 ? "s" : ""}`
-                        : "Your personal message archive"}
+                      {savedItemsSubtitle}
                     </p>
                   </div>
                 </div>
@@ -248,34 +583,149 @@ const SavedMessagesPage = () => {
               </div>
             </div>
 
-            {/* ── Search bar ──────────────────────────────────────────── */}
-            <div className="relative saved-search-focus-ring rounded-xl">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60 pointer-events-none" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search saved messages, notes, tags…"
-                className="saved-search-input pl-10 h-10 rounded-xl"
-              />
-              {searchQuery && (
+            {/* ── Search bar + pinned query ───────────────────────────── */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative saved-search-focus-ring rounded-xl flex-1 min-w-[220px]">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60 pointer-events-none" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search saved messages, notes, tags, collections..."
+                  className="saved-search-input pl-10 h-10 rounded-xl"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                variant={isPinnedQueryActive ? "default" : "outline"}
+                size="sm"
+                onClick={pinCurrentQuery}
+                className="gap-1.5"
+                title="Pin current query"
+              >
+                <Pin className="size-3.5" />
+                Pin query
+              </Button>
+
+              {pinnedQuery && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={isPinnedQueryActive ? clearPinnedQuery : applyPinnedQuery}
+                  className="gap-1.5"
+                  title={isPinnedQueryActive ? "Clear pinned query" : "Apply pinned query"}
+                >
+                  {isPinnedQueryActive ? (
+                    <>
+                      <PinOff className="size-3.5" />
+                      Unpin
+                    </>
+                  ) : (
+                    <>
+                      <Pin className="size-3.5" />
+                      Use pinned
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {pinnedQuery && (
+              <p className="text-xs text-muted-foreground/75">
+                Pinned query updated {
+                  formatDistanceToNow(
+                    Number.isFinite(new Date(pinnedQuery.updatedAt).getTime())
+                      ? new Date(pinnedQuery.updatedAt)
+                      : new Date(),
+                    { addSuffix: true },
+                  )
+                }
+              </p>
+            )}
+
+            {/* ── Smart Views ───────────────────────────────────────── */}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+                Smart views
+              </p>
+              {(savedPreset !== "all" || collectionFilter) && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
-                  aria-label="Clear search"
+                  onClick={() => {
+                    setSavedPreset("all");
+                    setCollectionFilter("");
+                  }}
+                  className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
                 >
-                  <X className="size-3.5" />
+                  Reset views
                 </button>
               )}
             </div>
 
+            <div className="saved-preset-strip">
+              {SAVED_PRESETS.map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSavedPreset(key)}
+                  data-active={savedPreset === key}
+                  className="saved-preset-chip"
+                >
+                  <Icon className="size-3.5" />
+                  <span>{label}</span>
+                  <span className="saved-preset-count">{presetCounts[key]}</span>
+                </button>
+              ))}
+            </div>
+
+            {collectionCounts.length > 0 && (
+              <div className="saved-preset-strip">
+                <button
+                  type="button"
+                  onClick={() => setCollectionFilter("")}
+                  data-active={collectionFilter === ""}
+                  className="saved-preset-chip"
+                >
+                  <Tags className="size-3.5" />
+                  <span>All collections</span>
+                  <span className="saved-preset-count">{collectionCounts.reduce((sum, item) => sum + item.count, 0)}</span>
+                </button>
+
+                {collectionCounts.map((item) => (
+                  <button
+                    key={item.name}
+                    type="button"
+                    onClick={() => setCollectionFilter(item.name)}
+                    data-active={collectionFilter === item.name}
+                    className="saved-preset-chip"
+                  >
+                    <Tags className="size-3.5" />
+                    <span>{item.name}</span>
+                    <span className="saved-preset-count">{item.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* ── Collapsible Filter Panel ─────────────────────────────── */}
             {showFilters && (
               <div className="saved-filter-panel animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="saved-filter-label">Conversation</label>
+                    <label htmlFor="saved-filter-conversation" className="saved-filter-label">Conversation</label>
                     <select
+                      id="saved-filter-conversation"
                       value={conversationFilter}
                       onChange={(e) => setConversationFilter(e.target.value)}
                       className="saved-filter-select"
@@ -289,8 +739,25 @@ const SavedMessagesPage = () => {
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="saved-filter-label">From date</label>
+                    <label htmlFor="saved-filter-collection" className="saved-filter-label">Collection</label>
+                    <select
+                      id="saved-filter-collection"
+                      value={collectionFilter}
+                      onChange={(e) => setCollectionFilter(e.target.value)}
+                      className="saved-filter-select"
+                    >
+                      <option value="">All collections</option>
+                      {collectionCounts.map((item) => (
+                        <option key={item.name} value={item.name}>
+                          {item.name} ({item.count})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="saved-filter-from" className="saved-filter-label">From date</label>
                     <Input
+                      id="saved-filter-from"
                       type="date"
                       value={fromDate}
                       onChange={(e) => setFromDate(e.target.value)}
@@ -298,8 +765,9 @@ const SavedMessagesPage = () => {
                     />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="saved-filter-label">To date</label>
+                    <label htmlFor="saved-filter-to" className="saved-filter-label">To date</label>
                     <Input
+                      id="saved-filter-to"
                       type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
@@ -307,10 +775,15 @@ const SavedMessagesPage = () => {
                     />
                   </div>
                 </div>
-                {(conversationFilter || fromDate || toDate) && (
+                {(conversationFilter || collectionFilter || fromDate || toDate) && (
                   <button
                     type="button"
-                    onClick={() => { setConversationFilter(""); setFromDate(""); setToDate(""); }}
+                    onClick={() => {
+                      setConversationFilter("");
+                      setCollectionFilter("");
+                      setFromDate("");
+                      setToDate("");
+                    }}
                     className="mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                   >
                     Clear all filters
@@ -347,7 +820,7 @@ const SavedMessagesPage = () => {
                         className="saved-select-all-btn gap-1.5"
                       >
                         <Tags className="size-3.5" />
-                        <span className="text-xs">Bulk tag</span>
+                        <span className="text-xs">Bulk metadata</span>
                       </button>
                       <button
                         type="button"
@@ -371,23 +844,54 @@ const SavedMessagesPage = () => {
 
                 {/* Bulk tag sub-panel */}
                 {showBulkPanel && unreadCount > 0 && (
-                  <div className="saved-bulk-panel animate-in fade-in slide-in-from-top-1 duration-150">
-                    <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
-                      <Tag className="size-3.5" />
-                      Remove tag from {unreadCount} selected
+                  <div className="saved-bulk-panel animate-in fade-in slide-in-from-top-1 duration-150 space-y-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                        <Tag className="size-3.5" />
+                        Remove tag from {unreadCount} selected
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={bulkTagToRemove}
+                          onChange={(e) => setBulkTagToRemove(e.target.value)}
+                          placeholder="tag-name"
+                          className="h-8 text-sm"
+                          onKeyDown={(e) => { if (e.key === "Enter") void handleBulkRemoveTag(); }}
+                        />
+                        <Button type="button" size="sm" variant="destructive" onClick={handleBulkRemoveTag}>
+                          <Trash2 className="size-3.5 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={bulkTagToRemove}
-                        onChange={(e) => setBulkTagToRemove(e.target.value)}
-                        placeholder="tag-name"
-                        className="h-8 text-sm"
-                        onKeyDown={(e) => { if (e.key === "Enter") void handleBulkRemoveTag(); }}
-                      />
-                      <Button type="button" size="sm" variant="destructive" onClick={handleBulkRemoveTag}>
-                        <Trash2 className="size-3.5 mr-1" />
-                        Remove
-                      </Button>
+
+                    <div>
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
+                        <Tags className="size-3.5" />
+                        Remove collection from {unreadCount} selected
+                      </div>
+                      <div className="flex gap-2">
+                        <Input
+                          value={bulkCollectionToRemove}
+                          onChange={(e) => setBulkCollectionToRemove(e.target.value)}
+                          placeholder="collection-name"
+                          className="h-8 text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              void handleBulkRemoveCollection();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleBulkRemoveCollection}
+                        >
+                          <Trash2 className="size-3.5 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -460,7 +964,11 @@ const SavedMessagesPage = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="saved-convo-badge">
-                              {bookmark.conversationId?.type === "group" ? "👥" : "💬"}
+                              {bookmark.conversationId?.type === "group" ? (
+                                <Users className="size-3.5" />
+                              ) : (
+                                <MessageSquare className="size-3.5" />
+                              )}
                               {conversationName}
                             </span>
                             {isImage && (
@@ -478,7 +986,7 @@ const SavedMessagesPage = () => {
                           </div>
                           <p className="text-[11px] text-muted-foreground/60 mt-1">
                             Saved {formatDistanceToNow(new Date(bookmark.createdAt), { addSuffix: true })}
-                            {" · "}
+                            {" | "}
                             {format(new Date(bookmark.createdAt), "MMM d, yyyy")}
                           </p>
                         </div>
@@ -503,7 +1011,12 @@ const SavedMessagesPage = () => {
                       bookmark.messageId.isDeleted && "opacity-50 italic",
                     )}>
                       {bookmark.messageId.isDeleted
-                        ? "✕ This message was removed"
+                        ? (
+                          <span className="flex items-center gap-1.5 text-muted-foreground/70">
+                            <X className="size-3.5" />
+                            Message was removed
+                          </span>
+                        )
                         : bookmark.messageId.content || (
                           <span className="flex items-center gap-1.5 text-muted-foreground/70">
                             <ImageIcon className="size-3.5" />
@@ -512,9 +1025,15 @@ const SavedMessagesPage = () => {
                         )}
                     </div>
 
-                    {/* Tags & Note */}
-                    {(bookmark.tags?.length || bookmark.note) && !isEditing && (
+                    {/* Collections, Tags & Note */}
+                    {(bookmark.collections?.length || bookmark.tags?.length || bookmark.note) && !isEditing && (
                       <div className="mt-3 flex flex-wrap gap-2 items-start">
+                        {(bookmark.collections || []).map((collectionName) => (
+                          <span key={`collection-${collectionName}`} className="saved-type-badge">
+                            <Tags className="size-2.5" />
+                            {collectionName}
+                          </span>
+                        ))}
                         {(bookmark.tags || []).map((tag) => (
                           <span key={tag} className="saved-tag-chip">
                             #{tag}
@@ -536,6 +1055,12 @@ const SavedMessagesPage = () => {
                           value={tagDraft}
                           onChange={(e) => setTagDraft(e.target.value)}
                           placeholder="tags, separated, by comma"
+                          className="h-8 text-sm"
+                        />
+                        <Input
+                          value={collectionDraft}
+                          onChange={(e) => setCollectionDraft(e.target.value)}
+                          placeholder="collections, separated, by comma"
                           className="h-8 text-sm"
                         />
                         <textarea
@@ -561,19 +1086,26 @@ const SavedMessagesPage = () => {
                       </div>
                     ) : (
                       <div className="mt-3 flex items-center justify-between">
-                        {!(bookmark.tags?.length) && !bookmark.note && (
-                          <span className="text-[11px] text-muted-foreground/40 italic">No tags or notes</span>
+                        {!(bookmark.collections?.length) && !(bookmark.tags?.length) && !bookmark.note && (
+                          <span className="text-[11px] text-muted-foreground/40 italic">No metadata yet</span>
                         )}
-                        <div className={cn("flex items-center gap-1", (bookmark.tags?.length || bookmark.note) && "ml-auto")}>
+                        <div className={cn("flex items-center gap-1", (bookmark.collections?.length || bookmark.tags?.length || bookmark.note) && "ml-auto")}>
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
-                            onClick={() => startEditing(bookmark._id, bookmark.note, bookmark.tags)}
+                            onClick={() =>
+                              startEditing(
+                                bookmark._id,
+                                bookmark.note,
+                                bookmark.tags,
+                                bookmark.collections,
+                              )
+                            }
                             className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground/70 hover:text-foreground rounded-lg"
                           >
                             <PencilLine className="size-3" />
-                            Edit note/tags
+                            Edit metadata
                           </Button>
                         </div>
                       </div>

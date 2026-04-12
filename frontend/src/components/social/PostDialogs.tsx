@@ -211,7 +211,7 @@ const PostDialogs = ({
           <DialogHeader>
             <DialogTitle>Photo viewer</DialogTitle>
             <DialogDescription>
-              {lightboxIndex + 1}/{mediaUrls.length || 0} · Swipe on mobile, use arrow keys, or double-click to quick zoom.
+              {lightboxIndex + 1}/{mediaUrls.length || 0} | Swipe on mobile, use arrow keys, or double-click to quick zoom.
             </DialogDescription>
           </DialogHeader>
 

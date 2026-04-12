@@ -8,7 +8,9 @@ interface CommentBubbleProps {
   isReply?: boolean;
   onReply?: () => void;
   onDelete?: () => void;
+  onReport?: () => void;
   canDelete?: boolean;
+  canReport?: boolean;
   onOpenProfile?: (userId: string) => void;
 }
 
@@ -18,7 +20,9 @@ const CommentBubble = ({
   isReply,
   onReply,
   onDelete,
+  onReport,
   canDelete,
+  canReport,
   onOpenProfile,
 }: CommentBubbleProps) => {
   const authorName = comment.authorId.displayName || "User";
@@ -71,13 +75,13 @@ const CommentBubble = ({
           <button type="button" className="font-semibold hover:underline">
             Like
           </button>
-          <span>·</span>
+          <span>|</span>
           <button type="button" className="font-semibold hover:underline" onClick={onReply}>
             Reply
           </button>
           {canDelete && (
             <>
-              <span>·</span>
+              <span>|</span>
               <button
                 type="button"
                 className="social-comment-delete font-semibold hover:underline"
@@ -88,7 +92,19 @@ const CommentBubble = ({
               </button>
             </>
           )}
-          <span>·</span>
+          {canReport && (
+            <>
+              <span>|</span>
+              <button
+                type="button"
+                className="font-semibold hover:underline"
+                onClick={onReport}
+              >
+                Report
+              </button>
+            </>
+          )}
+          <span>|</span>
           <span>{formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}</span>
         </div>
       </div>

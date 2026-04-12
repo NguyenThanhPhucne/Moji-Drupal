@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { ArrowDown } from "lucide-react";
+import { ArrowDown, Pin, X } from "lucide-react";
 import { ForwardMessageModal } from "./ForwardMessageModal";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -79,6 +79,7 @@ const ChatWindowBody = () => {
     messages: allMessages,
     messageLoading,
     fetchMessages,
+    pinGroupMessage,
   } = useChatStore();
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
@@ -108,6 +109,21 @@ const ChatWindowBody = () => {
     () => (currentUser?._id ? String(currentUser._id) : ""),
     [currentUser?._id],
   );
+
+  const isGroupAdmin = useMemo(() => {
+    if (selectedConvo?.type !== "group" || !myId) {
+      return false;
+    }
+
+    const isCreator = String(selectedConvo.group?.createdBy || "") === myId;
+    if (isCreator) {
+      return true;
+    }
+
+    return (selectedConvo.group?.adminIds || []).map(String).includes(myId);
+  }, [myId, selectedConvo]);
+
+  const pinnedMessage = selectedConvo?.pinnedMessage || null;
 
   // Count unread messages that arrived while user was scrolled up
   const [newMsgCount, setNewMsgCount] = useState(0);
@@ -418,6 +434,18 @@ const ChatWindowBody = () => {
           showDateDivider={showDateDivider}
           isNew={isNew}
           onForward={() => setForwardMessageId(message._id)}
+          canPinMessage={selectedConvo?.type === "group" && isGroupAdmin}
+          isPinned={pinnedMessage?._id === message._id}
+          onTogglePin={(targetMessageId, willPin) => {
+            if (selectedConvo?.type !== "group") {
+              return;
+            }
+
+            void pinGroupMessage(
+              selectedConvo._id,
+              willPin ? targetMessageId : null,
+            );
+          }}
         />
       );
     },
@@ -428,8 +456,30 @@ const ChatWindowBody = () => {
       lastOwnMessage?._id,
       directSeenUser,
       groupSeenUsers,
+      isGroupAdmin,
+      pinGroupMessage,
+      pinnedMessage?._id,
     ],
   );
+
+  const handleJumpToPinned = useCallback(() => {
+    if (!pinnedMessage?._id) {
+      return;
+    }
+
+    const pinnedIndex = messages.findIndex(
+      (messageItem) => messageItem._id === pinnedMessage._id,
+    );
+    if (pinnedIndex < 0) {
+      return;
+    }
+
+    virtuosoRef.current?.scrollToIndex({
+      index: pinnedIndex,
+      align: "center",
+      behavior: "smooth",
+    });
+  }, [messages, pinnedMessage?._id]);
 
   const scrollToBottom = () => {
     virtuosoRef.current?.scrollToIndex({
@@ -526,6 +576,42 @@ const ChatWindowBody = () => {
       key={`chat-conversation-${activeConversationId}`}
       className="conversation-fade p-2 bg-background h-full flex flex-col overflow-hidden relative"
     >
+      {selectedConvo.type === "group" && pinnedMessage && (
+        <div className="mb-2 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2">
+          <Pin className="size-3.5 text-primary flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-primary/90">
+              Pinned message
+            </p>
+            <p className="truncate text-xs text-foreground/85">
+              {String(pinnedMessage.content || "").trim() ||
+                (pinnedMessage.imgUrl ? "Pinned image" : "Pinned message")}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleJumpToPinned}
+            className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors"
+          >
+            Jump
+          </button>
+
+          {isGroupAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                void pinGroupMessage(selectedConvo._id, null);
+              }}
+              className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              aria-label="Unpin message"
+            >
+              <X className="size-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       <Profiler id="chat-thread" onRender={onThreadRender}>
         <div className="flex-1 min-h-0 overflow-hidden">
           <Virtuoso

@@ -24,6 +24,11 @@ const notificationSchema = new mongoose.Schema(
       ref: "Post",
       default: null,
     },
+    conversationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Conversation",
+      default: null,
+    },
     commentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Comment",
@@ -48,6 +53,7 @@ const notificationSchema = new mongoose.Schema(
 
 notificationSchema.index({ recipientId: 1, isRead: 1, createdAt: -1 });
 notificationSchema.index({ recipientId: 1, createdAt: -1 });
+notificationSchema.index({ recipientId: 1, conversationId: 1, createdAt: -1 });
 
 const Notification = mongoose.model("Notification", notificationSchema);
 export default Notification;

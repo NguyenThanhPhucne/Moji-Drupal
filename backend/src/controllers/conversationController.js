@@ -3,11 +3,192 @@ import Message from "../models/Message.js";
 import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
+import { createHash, randomBytes } from "node:crypto";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
+const JOIN_LINK_DEFAULT_EXPIRY_HOURS = 24;
+const JOIN_LINK_MIN_EXPIRY_HOURS = 1;
+const JOIN_LINK_MAX_EXPIRY_HOURS = 168;
+
+const toStringId = (value) => value?.toString?.() || String(value || "");
+
+const normalizeUnreadCounts = (unreadCounts) => {
+  return unreadCounts instanceof Map
+    ? Object.fromEntries(unreadCounts)
+    : unreadCounts || {};
+};
+
+const normalizeSeenBy = (seenBy) => {
+  return (seenBy || []).map((seenUser) => ({
+    _id: seenUser?._id?.toString?.() || seenUser?.toString?.() || "",
+    displayName: seenUser?.displayName,
+    avatarUrl: seenUser?.avatarUrl ?? null,
+  }));
+};
+
+const normalizeParticipants = (participants) => {
+  return (participants || []).map((participant) => ({
+    _id:
+      participant?.userId?._id?.toString?.() ||
+      participant?.userId?.toString?.() ||
+      "",
+    displayName: participant?.userId?.displayName,
+    avatarUrl: participant?.userId?.avatarUrl ?? null,
+    joinedAt: participant?.joinedAt,
+  }));
+};
+
+const isJoinLinkActive = (joinLink) => {
+  const expiresAt = joinLink?.expiresAt ? new Date(joinLink.expiresAt) : null;
+  return Boolean(expiresAt && Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > Date.now());
+};
+
+const toJoinLinkMeta = (joinLink) => {
+  if (!joinLink?.expiresAt) {
+    return null;
+  }
+
+  return {
+    expiresAt: joinLink.expiresAt,
+    createdAt: joinLink.createdAt || null,
+    createdBy: toStringId(joinLink.createdBy),
+    isActive: isJoinLinkActive(joinLink),
+  };
+};
+
+const normalizeGroup = (group) => {
+  if (!group) {
+    return group;
+  }
+
+  return {
+    ...group,
+    createdBy: toStringId(group.createdBy),
+    adminIds: (group.adminIds || []).map((adminId) => toStringId(adminId)),
+    announcementOnly: Boolean(group.announcementOnly),
+    joinLink: toJoinLinkMeta(group.joinLink),
+  };
+};
+
+const normalizePinnedMessage = (pinnedMessage) => {
+  if (!pinnedMessage) {
+    return null;
+  }
+
+  return {
+    ...pinnedMessage,
+    senderId: toStringId(pinnedMessage.senderId),
+    pinnedBy: toStringId(pinnedMessage.pinnedBy),
+  };
+};
+
+const formatConversationForClient = (conversation) => {
+  const conversationObject = conversation?.toObject
+    ? conversation.toObject()
+    : conversation;
+
+  return {
+    ...conversationObject,
+    group: normalizeGroup(conversationObject?.group),
+    pinnedMessage: normalizePinnedMessage(conversationObject?.pinnedMessage),
+    unreadCounts: normalizeUnreadCounts(conversationObject?.unreadCounts),
+    seenBy: normalizeSeenBy(conversationObject?.seenBy),
+    participants: normalizeParticipants(conversationObject?.participants),
+  };
+};
+
+const hashJoinLinkToken = (token) => {
+  return createHash("sha256").update(String(token || "")).digest("hex");
+};
+
+const generateJoinLinkToken = () => {
+  return randomBytes(24).toString("base64url");
+};
+
+const resolveClientBaseUrl = () => {
+  const fromSingle = String(process.env.CLIENT_URL || "").trim();
+  if (fromSingle) {
+    return fromSingle.replace(/\/$/, "");
+  }
+
+  const fromList = String(process.env.CLIENT_URLS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return String(fromList[0] || "").replace(/\/$/, "");
+};
+
+const buildGroupJoinLinkUrl = ({ conversationId, token }) => {
+  const relativePath = `/join/group/${conversationId}?token=${encodeURIComponent(token)}`;
+  const baseUrl = resolveClientBaseUrl();
+
+  if (!baseUrl) {
+    return relativePath;
+  }
+
+  return `${baseUrl}${relativePath}`;
+};
+
+const isGroupParticipant = (conversation, userId) => {
+  const normalizedUserId = toStringId(userId);
+  return (conversation?.participants || []).some(
+    (participant) => toStringId(participant?.userId) === normalizedUserId,
+  );
+};
+
+const isGroupCreator = (conversation, userId) => {
+  return toStringId(conversation?.group?.createdBy) === toStringId(userId);
+};
+
+const isGroupAdmin = (conversation, userId) => {
+  if (isGroupCreator(conversation, userId)) {
+    return true;
+  }
+
+  const normalizedUserId = toStringId(userId);
+  return (conversation?.group?.adminIds || []).some(
+    (adminId) => toStringId(adminId) === normalizedUserId,
+  );
+};
+
+const toGroupConversationPayload = (conversation) => {
+  const group = conversation?.group?.toObject
+    ? conversation.group.toObject()
+    : conversation?.group || {};
+  const pinnedMessage = conversation?.pinnedMessage?.toObject
+    ? conversation.pinnedMessage.toObject()
+    : conversation?.pinnedMessage || null;
+
+  return {
+    _id: toStringId(conversation?._id),
+    group: normalizeGroup(group),
+    pinnedMessage: normalizePinnedMessage(pinnedMessage),
+    updatedAt: conversation?.updatedAt || null,
+  };
+};
+
+const broadcastGroupConversationUpdated = async (conversation) => {
+  const payload = toGroupConversationPayload(conversation);
+
+  io.to(toStringId(conversation?._id)).emit("group-conversation-updated", {
+    conversation: payload,
+  });
+
+  await Promise.all(
+    (conversation?.participants || []).map(async (participant) => {
+      const participantId = toStringId(participant?.userId);
+      if (participantId) {
+        await invalidateCache(`conversations:${participantId}`);
+      }
+    }),
+  );
+
+  return payload;
+};
 
 import {
   buildDirectConversationKey,
@@ -99,6 +280,8 @@ export const createConversation = async (req, res) => {
         group: {
           name,
           createdBy: userId,
+          adminIds: [userId],
+          announcementOnly: false,
         },
         lastMessageAt: new Date(),
       });
@@ -188,32 +371,7 @@ export const getConversations = async (req, res) => {
       })
       .lean();
 
-    const formatted = conversations.map((convo) => {
-      const participants = (convo.participants || []).map((p) => ({
-        _id: p.userId?._id?.toString?.() || p.userId?.toString?.() || "",
-        displayName: p.userId?.displayName,
-        avatarUrl: p.userId?.avatarUrl ?? null,
-        joinedAt: p.joinedAt,
-      }));
-
-      const normalizedUnreadCounts =
-        convo.unreadCounts instanceof Map
-          ? Object.fromEntries(convo.unreadCounts)
-          : convo.unreadCounts || {};
-
-      const normalizedSeenBy = (convo.seenBy || []).map((seenUser) => ({
-        _id: seenUser?._id?.toString?.() || seenUser?.toString?.() || "",
-        displayName: seenUser?.displayName,
-        avatarUrl: seenUser?.avatarUrl ?? null,
-      }));
-
-      return {
-        ...convo,
-        unreadCounts: normalizedUnreadCounts,
-        seenBy: normalizedSeenBy,
-        participants,
-      };
-    });
+    const formatted = conversations.map((convo) => formatConversationForClient(convo));
 
     await setCachedData(cacheKey, formatted, 600); // 10 minutes cache
 
@@ -390,6 +548,437 @@ export const markAsSeen = async (req, res) => {
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
+
+export const updateGroupAnnouncementMode = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { enabled } = req.body || {};
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ message: "enabled must be boolean" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Only group conversations support this setting" });
+    }
+
+    if (!isGroupParticipant(conversation, userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!isGroupAdmin(conversation, userId)) {
+      return res.status(403).json({ message: "Only admins can update announcement mode" });
+    }
+
+    if (conversation.group) {
+      conversation.group.announcementOnly = enabled;
+      const creatorId = toStringId(conversation.group.createdBy);
+      const adminIds = new Set(
+        (conversation.group.adminIds || []).map((adminId) => toStringId(adminId)),
+      );
+      if (creatorId) {
+        adminIds.add(creatorId);
+      }
+      conversation.group.adminIds = Array.from(adminIds);
+    } else {
+      conversation.group = {
+        name: "",
+        createdBy: userId,
+        adminIds: [userId],
+        announcementOnly: enabled,
+      };
+    }
+
+    await conversation.save();
+    const payload = await broadcastGroupConversationUpdated(conversation);
+
+    return res.status(200).json({ conversation: payload });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật announcement mode", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const updateGroupAdminRole = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { memberId, makeAdmin } = req.body || {};
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(memberId)) {
+      return res.status(400).json({ message: "Invalid member id" });
+    }
+
+    if (typeof makeAdmin !== "boolean") {
+      return res.status(400).json({ message: "makeAdmin must be boolean" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Only group conversations support admin roles" });
+    }
+
+    if (!isGroupParticipant(conversation, userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!isGroupCreator(conversation, userId)) {
+      return res.status(403).json({ message: "Only group owner can update admin roles" });
+    }
+
+    if (!isGroupParticipant(conversation, memberId)) {
+      return res.status(400).json({ message: "Target member is not in this group" });
+    }
+
+    if (isGroupCreator(conversation, memberId)) {
+      return res.status(400).json({ message: "Cannot change owner role" });
+    }
+
+
+    if (conversation.group) {
+      const creatorId = toStringId(conversation.group.createdBy);
+      const targetMemberId = toStringId(memberId);
+      const adminIds = new Set(
+        (conversation.group.adminIds || []).map((adminId) => toStringId(adminId)),
+      );
+
+      if (creatorId) {
+        adminIds.add(creatorId);
+      }
+
+      if (makeAdmin) {
+        adminIds.add(targetMemberId);
+      } else {
+        adminIds.delete(targetMemberId);
+      }
+
+      conversation.group.adminIds = Array.from(adminIds);
+    } else {
+      return res.status(400).json({ message: "Group metadata is missing" });
+    }
+
+    await conversation.save();
+    const payload = await broadcastGroupConversationUpdated(conversation);
+
+    return res.status(200).json({ conversation: payload });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật vai trò admin", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const updateGroupPinnedMessage = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { messageId } = req.body || {};
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Only group conversations support pinned messages" });
+    }
+
+    if (!isGroupParticipant(conversation, userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!isGroupAdmin(conversation, userId)) {
+      return res.status(403).json({ message: "Only admins can pin or unpin messages" });
+    }
+
+    const normalizedMessageId = String(messageId || "").trim();
+
+    if (!normalizedMessageId) {
+      conversation.pinnedMessage = null;
+      await conversation.save();
+      const payload = await broadcastGroupConversationUpdated(conversation);
+      return res.status(200).json({ conversation: payload });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(normalizedMessageId)) {
+      return res.status(400).json({ message: "Invalid message id" });
+    }
+
+    const targetMessage = await Message.findOne({
+      _id: normalizedMessageId,
+      conversationId,
+      isDeleted: { $ne: true },
+    })
+      .select("_id content imgUrl senderId createdAt")
+      .lean();
+
+    if (!targetMessage) {
+      return res.status(404).json({ message: "Message not found in this conversation" });
+    }
+
+    conversation.pinnedMessage = {
+      _id: toStringId(targetMessage._id),
+      content: targetMessage.content || "",
+      imgUrl: targetMessage.imgUrl || null,
+      senderId: targetMessage.senderId,
+      createdAt: targetMessage.createdAt,
+      pinnedAt: new Date(),
+      pinnedBy: userId,
+    };
+
+    await conversation.save();
+    const payload = await broadcastGroupConversationUpdated(conversation);
+
+    return res.status(200).json({ conversation: payload });
+  } catch (error) {
+    console.error("Lỗi khi pin tin nhắn", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const createGroupJoinLink = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+    const rawExpiryHours = req.body?.expiresInHours;
+    const expiresInHours =
+      rawExpiryHours === undefined
+        ? JOIN_LINK_DEFAULT_EXPIRY_HOURS
+        : Number(rawExpiryHours);
+
+    if (!Number.isInteger(expiresInHours)) {
+      return res.status(400).json({ message: "expiresInHours must be an integer" });
+    }
+
+    if (
+      expiresInHours < JOIN_LINK_MIN_EXPIRY_HOURS ||
+      expiresInHours > JOIN_LINK_MAX_EXPIRY_HOURS
+    ) {
+      return res.status(400).json({
+        message: `expiresInHours must be between ${JOIN_LINK_MIN_EXPIRY_HOURS} and ${JOIN_LINK_MAX_EXPIRY_HOURS}`,
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Join link is available for group conversations only" });
+    }
+
+    if (!isGroupParticipant(conversation, userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!isGroupAdmin(conversation, userId)) {
+      return res.status(403).json({ message: "Only group admins can create join links" });
+    }
+
+    const token = generateJoinLinkToken();
+    const tokenHash = hashJoinLinkToken(token);
+    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+
+    if (!conversation.group) {
+      conversation.group = {
+        name: "",
+        createdBy: userId,
+        adminIds: [userId],
+        announcementOnly: false,
+      };
+    }
+
+    conversation.group.joinLink = {
+      tokenHash,
+      expiresAt,
+      createdAt: new Date(),
+      createdBy: userId,
+    };
+
+    await conversation.save();
+    const payload = await broadcastGroupConversationUpdated(conversation);
+
+    return res.status(200).json({
+      conversation: payload,
+      joinLink: {
+        token,
+        url: buildGroupJoinLinkUrl({ conversationId, token }),
+        expiresAt,
+        expiresInHours,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi tạo join link", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const revokeGroupJoinLink = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Join link is available for group conversations only" });
+    }
+
+    if (!isGroupParticipant(conversation, userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!isGroupAdmin(conversation, userId)) {
+      return res.status(403).json({ message: "Only group admins can revoke join links" });
+    }
+
+    if (!conversation.group) {
+      conversation.group = {
+        name: "",
+        createdBy: userId,
+        adminIds: [userId],
+        announcementOnly: false,
+      };
+    }
+
+    conversation.group.joinLink = {
+      tokenHash: null,
+      expiresAt: null,
+      createdAt: null,
+      createdBy: null,
+    };
+
+    await conversation.save();
+    const payload = await broadcastGroupConversationUpdated(conversation);
+    return res.status(200).json({ conversation: payload });
+  } catch (error) {
+    console.error("Lỗi khi thu hồi join link", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const joinGroupByLink = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user._id;
+    const token = String(req.body?.token || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    if (!token) {
+      return res.status(400).json({ message: "Join token is required" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Join link is available for group conversations only" });
+    }
+
+    const joinLink = conversation.group?.joinLink;
+    if (!joinLink?.tokenHash || !joinLink?.expiresAt) {
+      return res.status(404).json({ message: "Join link is not available" });
+    }
+
+    if (!isJoinLinkActive(joinLink)) {
+      conversation.group.joinLink = {
+        tokenHash: null,
+        expiresAt: null,
+        createdAt: null,
+        createdBy: null,
+      };
+      await conversation.save();
+      await broadcastGroupConversationUpdated(conversation);
+      return res.status(410).json({ message: "Join link has expired" });
+    }
+
+    if (hashJoinLinkToken(token) !== String(joinLink.tokenHash)) {
+      return res.status(400).json({ message: "Invalid join link token" });
+    }
+
+    const alreadyJoined = isGroupParticipant(conversation, userId);
+    if (!alreadyJoined) {
+      conversation.participants.push({ userId, joinedAt: new Date() });
+      await conversation.save();
+    }
+
+    await conversation.populate([
+      { path: "participants.userId", select: "displayName avatarUrl" },
+      { path: "lastMessage.senderId", select: "displayName avatarUrl" },
+      { path: "seenBy", select: "displayName avatarUrl" },
+    ]);
+
+    const formattedConversation = formatConversationForClient(conversation);
+
+    await Promise.all(
+      (formattedConversation.participants || []).map(async (participant) => {
+        const participantId = String(participant?._id || "").trim();
+        if (participantId) {
+          await invalidateCache(`conversations:${participantId}`);
+        }
+      }),
+    );
+
+    if (!alreadyJoined) {
+      io.to(String(userId)).emit("new-group", formattedConversation);
+      io.to(String(conversation._id)).emit("group-conversation-updated", {
+        conversation: {
+          _id: formattedConversation._id,
+          group: formattedConversation.group,
+          participants: formattedConversation.participants,
+          updatedAt: formattedConversation.updatedAt,
+        },
+      });
+    }
+
+    return res.status(200).json({
+      conversation: formattedConversation,
+      alreadyJoined,
+    });
+  } catch (error) {
+    console.error("Lỗi khi tham gia group bằng join link", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export const deleteConversation = async (req, res) => {
   try {

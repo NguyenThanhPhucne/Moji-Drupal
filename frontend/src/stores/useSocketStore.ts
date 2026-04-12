@@ -957,6 +957,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       toast.success("You have a new conversation!");
     });
 
+    socket.on("group-conversation-updated", ({ conversation }) => {
+      if (!conversation?._id) {
+        return;
+      }
+
+      useChatStore.getState().updateConversation(conversation);
+    });
+
     // conversation deleted - from other participants
     socket.on("conversation-deleted", ({ conversationId }) => {
       const currentState = useChatStore.getState();

@@ -45,9 +45,21 @@ export const userService = {
   },
 
   updateNotificationPreferences: async (payload: {
-    message: boolean;
-    sound: boolean;
-    desktop: boolean;
+    message?: boolean;
+    sound?: boolean;
+    desktop?: boolean;
+    social?: {
+      muted?: boolean;
+      follow?: boolean;
+      like?: boolean;
+      comment?: boolean;
+      friendAccepted?: boolean;
+      system?: boolean;
+      mutedUserIds?: string[];
+      mutedConversationIds?: string[];
+      digestEnabled?: boolean;
+      digestWindowHours?: number;
+    };
   }) => {
     const res = await api.patch("/users/notification-preferences", payload);
     return res.data;

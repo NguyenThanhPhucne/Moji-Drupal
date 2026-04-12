@@ -1,5 +1,6 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import Post from "../models/Post.js";
 import User from "../models/User.js";
 
 const normalize = (value) =>
@@ -93,7 +94,12 @@ export const globalSearch = async (req, res) => {
     const q = String(req.query.q || "").trim();
 
     if (q.length < 2) {
-      return res.status(200).json({ people: [], groups: [], messages: [] });
+      return res.status(200).json({
+        people: [],
+        groups: [],
+        messages: [],
+        posts: [],
+      });
     }
 
     const conversations = await Conversation.find({
@@ -113,7 +119,7 @@ export const globalSearch = async (req, res) => {
       )
       .filter(Boolean);
 
-    const [usersFromDb, regexUsersFromDb, messagesFromDb, usersLastMessages] =
+    const [usersFromDb, regexUsersFromDb, messagesFromDb, usersLastMessages, postsFromDb] =
       await Promise.all([
         User.find({ _id: { $in: candidateUserIds } })
           .select("_id displayName username avatarUrl bio updatedAt")
@@ -153,6 +159,28 @@ export const globalSearch = async (req, res) => {
             },
           },
         ]),
+        Post.find({
+          isDeleted: { $ne: true },
+          $or: [
+            { privacy: "public" },
+            { authorId: userId },
+          ],
+          $and: [
+            {
+              $or: [
+                { caption: { $regex: q, $options: "i" } },
+                { tags: { $regex: q, $options: "i" } },
+              ],
+            },
+          ],
+        })
+          .select(
+            "_id authorId caption mediaUrls tags likesCount commentsCount createdAt",
+          )
+          .sort({ createdAt: -1 })
+          .limit(120)
+          .populate("authorId", "_id displayName username avatarUrl")
+          .lean(),
       ]);
 
     const lastActiveMap = new Map(
@@ -256,6 +284,43 @@ export const globalSearch = async (req, res) => {
       .sort((a, b) => b.score - a.score)
       .slice(0, 30);
 
+    const postItems = postsFromDb
+      .map((post) => {
+        const caption = String(post.caption || "");
+        const tagsText = Array.isArray(post.tags) ? post.tags.join(" ") : "";
+        const mediaCount = Array.isArray(post.mediaUrls) ? post.mediaUrls.length : 0;
+
+        const captionScore = scoreText(caption, q) * 1.15;
+        const tagsScore = scoreText(tagsText, q) * 1.05;
+        const authorScore = scoreText(post.authorId?.displayName, q) * 0.45;
+        const typoBoost = typoScore(`${caption} ${tagsText}`, q);
+        const freshness = recencyScore(post.createdAt, 18, 16);
+        const engagement = Math.min(
+          22,
+          Number(post.likesCount || 0) * 0.8 + Number(post.commentsCount || 0) * 1.1,
+        );
+
+        const score = Math.round(
+          captionScore + tagsScore + authorScore + typoBoost + freshness + engagement,
+        );
+
+        const preview = caption || `${mediaCount} media item${mediaCount === 1 ? "" : "s"}`;
+
+        return {
+          postId: String(post._id),
+          caption,
+          preview,
+          authorId: String(post.authorId?._id || ""),
+          authorName: post.authorId?.displayName || "Unknown",
+          mediaCount,
+          createdAt: post.createdAt,
+          score,
+        };
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 20);
+
     const groupItemsWeighted = groupItems
       .map((item) => {
         const base = scoreText(item.name, q) * 1.3;
@@ -280,6 +345,7 @@ export const globalSearch = async (req, res) => {
       people: peopleItems,
       groups: groupItemsWeighted,
       messages: messageItems,
+      posts: postItems,
     });
   } catch (error) {
     console.error("Lỗi khi tìm kiếm toàn cục", error);

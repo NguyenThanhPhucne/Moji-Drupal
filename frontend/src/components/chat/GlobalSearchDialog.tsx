@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pin, Search, Star, Users, MessagesSquare, X } from "lucide-react";
+import {
+  FileText,
+  MessageSquareText,
+  Pin,
+  Search,
+  Star,
+  UserCircle,
+  Users,
+  MessagesSquare,
+  X,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -22,6 +32,7 @@ import { cn } from "@/lib/utils";
 import type {
   GlobalSearchGroup,
   GlobalSearchMessage,
+  GlobalSearchPost,
   GlobalSearchPerson,
   GlobalSearchResponse,
 } from "@/types/chat";
@@ -32,20 +43,65 @@ const PINNED_KEY = "coming-search-pinned";
 type SearchResultItem =
   | ({ type: "people" } & GlobalSearchPerson)
   | ({ type: "groups" } & GlobalSearchGroup)
-  | ({ type: "messages" } & GlobalSearchMessage);
+  | ({ type: "messages" } & GlobalSearchMessage)
+  | ({ type: "posts" } & GlobalSearchPost);
+
+type ResultFilter = "all" | SearchResultItem["type"];
+
+const RESULT_FILTERS: Array<{ value: ResultFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "people", label: "People" },
+  { value: "groups", label: "Groups" },
+  { value: "messages", label: "Messages" },
+  { value: "posts", label: "Posts" },
+];
 
 interface PinnedSearchItem {
   key: string;
   label: string;
-  type: "people" | "groups" | "messages";
+  type: "people" | "groups" | "messages" | "posts";
   conversationId?: string;
   userId?: string;
+  postId?: string;
 }
 
 const toResultKey = (item: SearchResultItem) => {
   if (item.type === "people") return `people:${item._id}`;
   if (item.type === "groups") return `groups:${item.conversationId}`;
+  if (item.type === "posts") return `posts:${item.postId}`;
   return `messages:${item.messageId}`;
+};
+
+const getResultTitle = (item: SearchResultItem) => {
+  if (item.type === "people") {
+    return item.displayName;
+  }
+
+  if (item.type === "groups") {
+    return item.name;
+  }
+
+  if (item.type === "posts") {
+    return item.preview;
+  }
+
+  return item.content;
+};
+
+const getResultSubtitle = (item: SearchResultItem) => {
+  if (item.type === "people") {
+    return `@${item.username} | ${item.mutualGroupsCount} mutual groups`;
+  }
+
+  if (item.type === "groups") {
+    return `${item.membersCount} members`;
+  }
+
+  if (item.type === "posts") {
+    return `Post by ${item.authorName} · ${item.mediaCount} media`;
+  }
+
+  return `from ${item.senderName || "Unknown"}`;
 };
 
 const mergeResults = (
@@ -67,10 +123,12 @@ const mergeResults = (
   addAll(local.people.map((item) => ({ ...item, type: "people" })));
   addAll(local.groups.map((item) => ({ ...item, type: "groups" })));
   addAll(local.messages.map((item) => ({ ...item, type: "messages" })));
+  addAll(local.posts.map((item) => ({ ...item, type: "posts" })));
 
   addAll(remote.people.map((item) => ({ ...item, type: "people" })));
   addAll(remote.groups.map((item) => ({ ...item, type: "groups" })));
   addAll(remote.messages.map((item) => ({ ...item, type: "messages" })));
+  addAll(remote.posts.map((item) => ({ ...item, type: "posts" })));
 
   return Array.from(bucket.values()).sort(
     (a, b) => (b.score || 0) - (a.score || 0),
@@ -94,13 +152,17 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   const [pinned, setPinned] = useState<PinnedSearchItem[]>([]);
   const [isMetaLoading, setIsMetaLoading] = useState(false);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
+  const [resultFilter, setResultFilter] = useState<ResultFilter>("all");
+  const [activeResultIndex, setActiveResultIndex] = useState(0);
   const [remoteResult, setRemoteResult] = useState<GlobalSearchResponse>({
     people: [],
     groups: [],
     messages: [],
+    posts: [],
   });
 
   const hasLoadedMetaRef = useRef(false);
+  const resultRowRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
     if (!open || hasLoadedMetaRef.current) {
@@ -130,6 +192,10 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   }, [open]);
 
   useEffect(() => {
+    if (!globalOnly) {
+      return;
+    }
+
     const handleGlobalShortcut = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
@@ -139,13 +205,13 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
 
     document.addEventListener("keydown", handleGlobalShortcut);
     return () => document.removeEventListener("keydown", handleGlobalShortcut);
-  }, []);
+  }, [globalOnly]);
 
   const localResult = useMemo<GlobalSearchResponse>(() => {
     const normalized = query.trim().toLowerCase();
 
     if (normalized.length < 2) {
-      return { people: [], groups: [], messages: [] };
+      return { people: [], groups: [], messages: [], posts: [] };
     }
 
     const people: GlobalSearchPerson[] = conversations
@@ -218,13 +284,14 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
       people,
       groups,
       messages: localMessages,
+      posts: [],
     };
   }, [query, conversations, messages, user?._id]);
 
   useEffect(() => {
     const normalized = query.trim();
     if (normalized.length < 2) {
-      setRemoteResult({ people: [], groups: [], messages: [] });
+      setRemoteResult({ people: [], groups: [], messages: [], posts: [] });
       setIsSearchingRemote(false);
       return;
     }
@@ -269,6 +336,44 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
     [localResult, remoteResult],
   );
 
+  const filteredResults = useMemo(() => {
+    if (resultFilter === "all") {
+      return mergedResults;
+    }
+
+    return mergedResults.filter((item) => item.type === resultFilter);
+  }, [mergedResults, resultFilter]);
+
+  const filterCounts = useMemo(() => {
+    return {
+      all: mergedResults.length,
+      people: mergedResults.filter((item) => item.type === "people").length,
+      groups: mergedResults.filter((item) => item.type === "groups").length,
+      messages: mergedResults.filter((item) => item.type === "messages").length,
+      posts: mergedResults.filter((item) => item.type === "posts").length,
+    };
+  }, [mergedResults]);
+
+  useEffect(() => {
+    if (filteredResults.length === 0) {
+      setActiveResultIndex(0);
+      return;
+    }
+
+    setActiveResultIndex((current) =>
+      Math.min(current, filteredResults.length - 1),
+    );
+  }, [filteredResults.length]);
+
+  useEffect(() => {
+    if (!open || filteredResults.length === 0) {
+      return;
+    }
+
+    const node = resultRowRefs.current[activeResultIndex];
+    node?.scrollIntoView({ block: "nearest" });
+  }, [activeResultIndex, filteredResults.length, open]);
+
   const saveRecentQuery = (value: string) => {
     const normalized = value.trim();
     if (normalized.length < 2) {
@@ -290,11 +395,14 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
       label = item.displayName;
     } else if (item.type === "groups") {
       label = item.name;
+    } else if (item.type === "posts") {
+      label = item.preview || item.caption || "Post";
     } else {
       label = item.content;
     }
 
-    const normalizedConversationId = item.conversationId ?? undefined;
+    const normalizedConversationId =
+      "conversationId" in item ? item.conversationId ?? undefined : undefined;
 
     const exists = pinned.some((entry) => entry.key === key);
     const next: PinnedSearchItem[] = exists
@@ -306,6 +414,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
             type: item.type,
             conversationId: normalizedConversationId,
             userId: item.type === "people" ? item._id : undefined,
+            postId: item.type === "posts" ? item.postId : undefined,
           },
           ...pinned,
         ].slice(0, 20);
@@ -314,8 +423,23 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
     localStorage.setItem(PINNED_KEY, JSON.stringify(next));
   };
 
-  const onSelectResult = async (item: SearchResultItem) => {
+  const onSelectResult = async (
+    item: SearchResultItem,
+    mode: "default" | "profile" = "default",
+  ) => {
     saveRecentQuery(query);
+
+    if (mode === "profile" && item.type === "people") {
+      navigate(`/profile/${item._id}`);
+      setOpen(false);
+      return;
+    }
+
+    if (item.type === "posts") {
+      navigate(`/post/${item.postId}`);
+      setOpen(false);
+      return;
+    }
 
     if (item.type === "people") {
       if (item.conversationId) {
@@ -344,7 +468,46 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   };
 
   const hasPinned = pinned.length > 0;
-  const hasSearchResults = mergedResults.length > 0;
+  const hasSearchResults = filteredResults.length > 0;
+
+  const handleSearchInputKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (query.trim().length < 2 || filteredResults.length === 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveResultIndex((current) =>
+        current >= filteredResults.length - 1 ? 0 : current + 1,
+      );
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveResultIndex((current) =>
+        current <= 0 ? filteredResults.length - 1 : current - 1,
+      );
+      return;
+    }
+
+    if (event.key === "Enter") {
+      const selected = filteredResults[activeResultIndex];
+      if (!selected) {
+        return;
+      }
+
+      event.preventDefault();
+      if ((event.metaKey || event.ctrlKey) && selected.type === "people") {
+        void onSelectResult(selected, "profile");
+        return;
+      }
+
+      void onSelectResult(selected);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -373,7 +536,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
         <DialogHeader className="modal-stagger-item">
           <DialogTitle>Global search</DialogTitle>
           <DialogDescription className="sr-only">
-            Search for people, groups, or messages across the platform
+            Search for people, groups, messages, or posts across the platform
           </DialogDescription>
         </DialogHeader>
 
@@ -384,7 +547,8 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search people, groups, messages..."
+            onKeyDown={handleSearchInputKeyDown}
+            placeholder="Search people, groups, messages, posts..."
             aria-label="Global search"
             className="search-input-pill h-11 text-base pl-10 pr-10"
           />
@@ -423,7 +587,10 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                       <button
                         key={item}
                         type="button"
-                        onClick={() => setQuery(item)}
+                        onClick={() => {
+                          setQuery(item);
+                          setResultFilter("all");
+                        }}
                         className="rounded-full border border-border/70 px-2.5 py-1 text-xs hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                       >
                         {item}
@@ -448,6 +615,18 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                               setActiveConversation(item.conversationId);
                               navigate("/");
                               setOpen(false);
+                              return;
+                            }
+
+                            if (item.userId) {
+                              navigate(`/profile/${item.userId}`);
+                              setOpen(false);
+                              return;
+                            }
+
+                            if (item.postId) {
+                              navigate(`/post/${item.postId}`);
+                              setOpen(false);
                             }
                           }}
                         >
@@ -465,6 +644,32 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
 
         {query.trim().length >= 2 && (
           <div className="max-h-[420px] min-h-[320px] overflow-y-auto space-y-2 pr-1 modal-stagger-item">
+            <div className="sticky top-0 z-[1] rounded-md border border-border/50 bg-background/95 px-2 py-2 backdrop-blur">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {RESULT_FILTERS.map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    className={cn(
+                      "rounded-full border px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1",
+                      resultFilter === item.value
+                        ? "border-primary/45 bg-primary/10 text-primary"
+                        : "border-border/70 bg-background text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                    )}
+                    onClick={() => {
+                      setResultFilter(item.value);
+                      setActiveResultIndex(0);
+                    }}
+                  >
+                    {item.label} ({filterCounts[item.value]})
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Enter to run primary action | Cmd/Ctrl+Enter opens profile for people.
+              </p>
+            </div>
+
             {isSearchingRemote && mergedResults.length === 0 ? (
               <GlobalSearchResultsSkeleton />
             ) : (
@@ -486,50 +691,46 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                     hasSearchResults ? "opacity-100" : "opacity-0",
                   )}
                 >
-                  {mergedResults.map((item) => {
+                  {filteredResults.map((item, index) => {
                     const pinnedState = pinned.some(
                       (entry) => entry.key === toResultKey(item),
                     );
-
-                    let resultTitle = "";
-                    if (item.type === "people") {
-                      resultTitle = item.displayName;
-                    } else if (item.type === "groups") {
-                      resultTitle = item.name;
-                    } else {
-                      resultTitle = item.content;
-                    }
-
-                    let resultSubtitle = "";
-                    if (item.type === "people") {
-                      resultSubtitle = `@${item.username} • ${item.mutualGroupsCount} mutual groups`;
-                    } else if (item.type === "groups") {
-                      resultSubtitle = `${item.membersCount} members`;
-                    } else {
-                      resultSubtitle = `in conversation ${item.conversationId}`;
-                    }
+                    const isActive = index === activeResultIndex;
+                    const resultTitle = getResultTitle(item);
+                    const resultSubtitle = getResultSubtitle(item);
 
                     return (
                       <div
                         key={toResultKey(item)}
-                        className="flex items-center gap-3 rounded-lg border border-border/70 p-2.5 hover:bg-muted/40 focus-within:ring-2 focus-within:ring-primary/25"
+                        ref={(node) => {
+                          resultRowRefs.current[index] = node;
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg border border-border/70 p-2.5 transition-colors focus-within:ring-2 focus-within:ring-primary/25",
+                          isActive
+                            ? "bg-muted/50 ring-2 ring-primary/25"
+                            : "hover:bg-muted/40",
+                        )}
                       >
                         <div
                           className={cn(
                             "size-8 rounded-full flex items-center justify-center border",
                             item.type === "people" && "bg-blue-500/10 text-blue-600 border-blue-500/20",
                             item.type === "groups" && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-                            item.type === "messages" && "bg-purple-500/10 text-purple-600 border-purple-500/20"
+                            item.type === "messages" && "bg-purple-500/10 text-purple-600 border-purple-500/20",
+                            item.type === "posts" && "bg-amber-500/10 text-amber-600 border-amber-500/20",
                           )}
                         >
                           {item.type === "people" && <Users className="size-[18px]" />}
                           {item.type === "groups" && <MessagesSquare className="size-[18px]" />}
                           {item.type === "messages" && <Search className="size-[18px]" />}
+                          {item.type === "posts" && <FileText className="size-[18px]" />}
                         </div>
 
                         <button
                           type="button"
                           onClick={() => onSelectResult(item)}
+                          onMouseEnter={() => setActiveResultIndex(index)}
                           className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                         >
                           <p className="truncate text-sm font-medium">
@@ -539,6 +740,42 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                             {resultSubtitle}
                           </p>
                         </button>
+
+                        {item.type === "people" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onSelectResult(item, "profile")}
+                            title="Open profile"
+                          >
+                            <UserCircle className="size-4 text-muted-foreground" />
+                          </Button>
+                        )}
+
+                        {item.type === "messages" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onSelectResult(item)}
+                            title="Open message in chat"
+                          >
+                            <MessageSquareText className="size-4 text-muted-foreground" />
+                          </Button>
+                        )}
+
+                        {item.type === "posts" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onSelectResult(item)}
+                            title="Open post"
+                          >
+                            <FileText className="size-4 text-muted-foreground" />
+                          </Button>
+                        )}
 
                         <Button
                           type="button"

@@ -66,6 +66,60 @@ const userSchema = new mongoose.Schema(
         type: Boolean,
         default: false,
       },
+      social: {
+        muted: {
+          type: Boolean,
+          default: false,
+        },
+        follow: {
+          type: Boolean,
+          default: true,
+        },
+        like: {
+          type: Boolean,
+          default: true,
+        },
+        comment: {
+          type: Boolean,
+          default: true,
+        },
+        friendAccepted: {
+          type: Boolean,
+          default: true,
+        },
+        system: {
+          type: Boolean,
+          default: true,
+        },
+        mutedUserIds: {
+          type: [
+            {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: "User",
+            },
+          ],
+          default: [],
+        },
+        mutedConversationIds: {
+          type: [
+            {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: "Conversation",
+            },
+          ],
+          default: [],
+        },
+        digestEnabled: {
+          type: Boolean,
+          default: false,
+        },
+        digestWindowHours: {
+          type: Number,
+          default: 6,
+          min: 1,
+          max: 24,
+        },
+      },
     },
     lastActiveAt: {
       type: Date,

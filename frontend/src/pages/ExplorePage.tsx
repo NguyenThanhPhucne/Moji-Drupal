@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { Hash, Search, SearchX, SlidersHorizontal } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialMiniChatDock from "@/components/social/SocialMiniChatDock";
@@ -123,36 +124,42 @@ const ExplorePage = () => {
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
-              <SocialTopHeader
-                title="Explore"
-                subtitle="Discover trending posts, people, and topics"
-                searchPlaceholder="Search on explore"
-                searchValue={searchQuery}
-                onSearchValueChange={setSearchQuery}
-              />
+              <div className={getStaggerEnterClass(0)}>
+                <SocialTopHeader
+                  title="Explore"
+                  subtitle="Discover trending posts, people, and topics"
+                  searchPlaceholder="Search on explore"
+                  searchValue={searchQuery}
+                  onSearchValueChange={setSearchQuery}
+                />
+              </div>
 
-              <div className="flex justify-end">
+              <div className={`social-feed-back-chat-row ${getStaggerEnterClass(1)}`}>
                 <BackToChatCard onClick={() => navigate("/")} />
               </div>
 
-              <SocialStoriesRow
-                currentUser={user}
-                posts={exploreFeed}
-                onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
-              />
+              <div className={`social-feed-stories-slot ${getStaggerEnterClass(2)}`}>
+                <SocialStoriesRow
+                  currentUser={user}
+                  posts={exploreFeed}
+                  onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+                />
+              </div>
 
-              <div className="space-stack-md">
-                <div className="social-card p-3">
-                  <div className="flex items-center gap-2">
+              <div className="social-feed-post-stack space-stack-md">
+                <div className={`social-card social-explore-filter-panel p-3 ${getStaggerEnterClass(3)}`}>
+                  <div className="social-explore-filter-row">
                     {activeTag ? (
                       <>
-                        <span className="rounded-full border border-primary/30 bg-primary/5 px-2.5 py-1 text-xs font-medium text-primary">
-                          #{activeTag}
+                        <span className="social-explore-tag-chip">
+                          <Hash className="h-3.5 w-3.5" />
+                          <span>{activeTag}</span>
                         </span>
                         <Button
                           type="button"
                           size="sm"
                           variant="ghost"
+                          className="social-explore-clear-btn"
                           onClick={() => {
                             setActiveTag("");
                             setSearchParams((params) => {
@@ -162,62 +169,68 @@ const ExplorePage = () => {
                             });
                           }}
                         >
-                          Clear tag
+                          <SlidersHorizontal className="h-3.5 w-3.5" />
+                          Clear filter
                         </Button>
                       </>
                     ) : (
-                      <span className="social-text-muted text-sm">
+                      <span className="social-explore-filter-hint">
+                        <Search className="h-3.5 w-3.5" />
                         Use the top search bar to filter posts by caption.
                       </span>
                     )}
                   </div>
                 </div>
 
-              {isInitialExploreLoading && <SocialPostSkeleton count={3} />}
-              {filteredExploreFeed.map((post, index) => (
-                <div
-                  key={post._id}
-                  className={getStaggerEnterClass(index)}
-                >
-                  <SocialPostCard
-                    post={post}
-                    comments={postComments[post._id]}
-                    commentsPagination={postCommentsPagination[post._id]}
-                    commentsLoading={loadingCommentsByPost[post._id]}
-                    commentsSortBy={postCommentsSortBy[post._id]}
-                    engagement={postEngagement[post._id]}
-                    onLike={toggleLike}
-                    onFetchComments={fetchComments}
-                    onLoadMoreComments={loadMoreComments}
-                    onSetCommentsSortBy={setCommentsSortBy}
-                    onFetchEngagement={fetchPostEngagement}
-                    onComment={addComment}
-                    onDeletePost={deletePost}
-                    onDeleteComment={deleteComment}
-                    onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
-                    onSelectTag={(tag) => {
-                      setActiveTag(tag);
-                      setSearchParams((params) => {
-                        const next = new URLSearchParams(params);
-                        next.set("tag", tag);
-                        return next;
-                      });
-                    }}
+                {isInitialExploreLoading && <SocialPostSkeleton count={3} />}
+                {filteredExploreFeed.map((post, index) => (
+                  <div
+                    key={post._id}
+                    className={getStaggerEnterClass(index)}
+                  >
+                    <SocialPostCard
+                      post={post}
+                      comments={postComments[post._id]}
+                      commentsPagination={postCommentsPagination[post._id]}
+                      commentsLoading={loadingCommentsByPost[post._id]}
+                      commentsSortBy={postCommentsSortBy[post._id]}
+                      engagement={postEngagement[post._id]}
+                      onLike={toggleLike}
+                      onFetchComments={fetchComments}
+                      onLoadMoreComments={loadMoreComments}
+                      onSetCommentsSortBy={setCommentsSortBy}
+                      onFetchEngagement={fetchPostEngagement}
+                      onComment={addComment}
+                      onDeletePost={deletePost}
+                      onDeleteComment={deleteComment}
+                      onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+                      onSelectTag={(tag) => {
+                        setActiveTag(tag);
+                        setSearchParams((params) => {
+                          const next = new URLSearchParams(params);
+                          next.set("tag", tag);
+                          return next;
+                        });
+                      }}
+                    />
+                  </div>
+                ))}
+                {isLoadingMoreExplore && (
+                  <SocialPostSkeleton
+                    count={2}
+                    staggerFrom={exploreFeed.length}
                   />
-                </div>
-              ))}
-              {isLoadingMoreExplore && (
-                <SocialPostSkeleton
-                  count={2}
-                  staggerFrom={exploreFeed.length}
-                />
-              )}
-              {!loadingExplore && filteredExploreFeed.length === 0 && (
-                <div className="social-card-empty p-8 text-center">
-                  No posts match your current filters.
-                </div>
-              )}
-            </div>
+                )}
+                {!loadingExplore && filteredExploreFeed.length === 0 && (
+                  <div className="social-card-empty social-explore-empty-state p-8 text-center">
+                    <div className="social-explore-empty-icon" aria-hidden="true">
+                      <SearchX className="h-5 w-5" />
+                    </div>
+                    <p className="social-text-main text-sm font-semibold">No posts match your current filters.</p>
+                    <p className="social-text-muted mt-1 text-xs">Try another keyword or clear the current filter.</p>
+                  </div>
+                )}
+              </div>
 
               {explorePagination.hasNextPage && (
                 <div className="flex justify-center">
@@ -236,12 +249,14 @@ const ExplorePage = () => {
               )}
             </section>
 
-            <div className="order-last xl:hidden">
-              <SocialRightRail compact explorePosts={exploreFeed} />
-            </div>
+            <div className="social-feed-right-column order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5">
+              <div className="xl:hidden">
+                <SocialRightRail compact explorePosts={exploreFeed} />
+              </div>
 
-            <div className="hidden xl:block">
-              <SocialRightRail explorePosts={exploreFeed} />
+              <div className="hidden xl:block">
+                <SocialRightRail embedded explorePosts={exploreFeed} />
+              </div>
             </div>
           </div>
         </div>

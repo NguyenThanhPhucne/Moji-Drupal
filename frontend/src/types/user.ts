@@ -11,6 +11,18 @@ export interface User {
     message: boolean;
     sound: boolean;
     desktop: boolean;
+    social?: {
+      muted: boolean;
+      follow: boolean;
+      like: boolean;
+      comment: boolean;
+      friendAccepted: boolean;
+      system: boolean;
+      mutedUserIds?: string[];
+      mutedConversationIds?: string[];
+      digestEnabled?: boolean;
+      digestWindowHours?: number;
+    };
   };
   createdAt?: string;
   updatedAt?: string;

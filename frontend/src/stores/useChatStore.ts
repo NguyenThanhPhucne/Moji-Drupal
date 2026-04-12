@@ -897,6 +897,267 @@ export const useChatStore = create<ChatState>()(
           set({ loading: false });
         }
       },
+      setGroupAnnouncementMode: async (conversationId, enabled) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return false;
+        }
+
+        get().updateConversation({
+          _id: conversationId,
+          group: {
+            ...previousConversation.group,
+            announcementOnly: enabled,
+          },
+        });
+
+        try {
+          const updatedConversation = await chatService.updateGroupAnnouncementMode(
+            conversationId,
+            enabled,
+          );
+
+          if (updatedConversation?._id) {
+            get().updateConversation(
+              updatedConversation as Partial<Conversation> & { _id: string },
+            );
+          }
+
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+          console.error("Failed to update announcement mode", error);
+          return false;
+        }
+      },
+      setGroupAdminRole: async (conversationId, memberId, makeAdmin) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return false;
+        }
+
+        const adminIds = new Set(
+          (previousConversation.group.adminIds || []).map(String),
+        );
+
+        if (makeAdmin) {
+          adminIds.add(String(memberId));
+        } else {
+          adminIds.delete(String(memberId));
+        }
+
+        get().updateConversation({
+          _id: conversationId,
+          group: {
+            ...previousConversation.group,
+            adminIds: Array.from(adminIds),
+          },
+        });
+
+        try {
+          const updatedConversation = await chatService.updateGroupAdminRole(
+            conversationId,
+            memberId,
+            makeAdmin,
+          );
+
+          if (updatedConversation?._id) {
+            get().updateConversation(
+              updatedConversation as Partial<Conversation> & { _id: string },
+            );
+          }
+
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+          console.error("Failed to update group admin role", error);
+          return false;
+        }
+      },
+      createGroupJoinLink: async (conversationId, expiresInHours = 24) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return {
+            ok: false,
+            message: "Join link is available for group conversations only",
+          };
+        }
+
+        try {
+          const result = await chatService.createGroupJoinLink(
+            conversationId,
+            expiresInHours,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation(
+              result.conversation as Partial<Conversation> & { _id: string },
+            );
+          }
+
+          return {
+            ok: true,
+            joinLinkUrl: result.joinLink?.url,
+            expiresAt: result.joinLink?.expiresAt,
+          };
+        } catch (error: unknown) {
+          console.error("Failed to create group join link", error);
+          const apiMessage =
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
+              "string"
+              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+              : null;
+
+          return {
+            ok: false,
+            message: apiMessage || "Failed to create join link",
+          };
+        }
+      },
+      revokeGroupJoinLink: async (conversationId) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return false;
+        }
+
+        get().updateConversation({
+          _id: conversationId,
+          group: {
+            ...previousConversation.group,
+            joinLink: null,
+          },
+        });
+
+        try {
+          const updatedConversation = await chatService.revokeGroupJoinLink(
+            conversationId,
+          );
+
+          if (updatedConversation?._id) {
+            get().updateConversation(
+              updatedConversation as Partial<Conversation> & { _id: string },
+            );
+          }
+
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+          console.error("Failed to revoke group join link", error);
+          return false;
+        }
+      },
+      joinGroupByLink: async (conversationId, token) => {
+        try {
+          const result = await chatService.joinGroupByLink(conversationId, token);
+          const joinedConversation = result?.conversation;
+
+          if (joinedConversation?._id) {
+            const conversationExists = get().conversations.some(
+              (conversationItem) =>
+                conversationItem._id === joinedConversation._id,
+            );
+
+            if (conversationExists) {
+              get().updateConversation(joinedConversation);
+            } else {
+              get().addConvo(joinedConversation, { setActive: false });
+            }
+
+            get().setActiveConversation(joinedConversation._id);
+
+            const socket = useSocketStore.getState().socket;
+            if (socket?.connected) {
+              socket.emit("join-conversation", joinedConversation._id);
+            }
+          }
+
+          return {
+            ok: true,
+            alreadyJoined: Boolean(result?.alreadyJoined),
+          };
+        } catch (error: unknown) {
+          console.error("Failed to join group by link", error);
+          const apiMessage =
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
+              "string"
+              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+              : null;
+
+          return {
+            ok: false,
+            message: apiMessage || "Failed to join group",
+          };
+        }
+      },
+      pinGroupMessage: async (conversationId, messageId) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return false;
+        }
+
+        const targetMessage = messageId
+          ? get().messages[conversationId]?.items.find(
+              (messageItem) => messageItem._id === messageId,
+            )
+          : null;
+
+        const currentUserId = String(useAuthStore.getState().user?._id || "");
+
+        get().updateConversation({
+          _id: conversationId,
+          pinnedMessage: targetMessage
+            ? {
+                _id: targetMessage._id,
+                content: targetMessage.content || null,
+                imgUrl: targetMessage.imgUrl || null,
+                senderId: String(targetMessage.senderId),
+                createdAt: targetMessage.createdAt,
+                pinnedAt: new Date().toISOString(),
+                pinnedBy: currentUserId || null,
+              }
+            : null,
+        });
+
+        try {
+          const updatedConversation = await chatService.pinGroupMessage(
+            conversationId,
+            messageId,
+          );
+
+          if (updatedConversation?._id) {
+            get().updateConversation(
+              updatedConversation as Partial<Conversation> & { _id: string },
+            );
+          }
+
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+          console.error("Failed to update pinned message", error);
+          return false;
+        }
+      },
       deleteConversation: async (conversationId) => {
         // Optimistic: remove from UI immediately
         const previousConversations = get().conversations;
@@ -937,10 +1198,18 @@ export const useChatStore = create<ChatState>()(
             groupIds,
           );
           return { ok: true, message: result.message };
-        } catch (error: any) {
+        } catch (error: unknown) {
+          const apiMessage =
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
+              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+              : null;
+
           return {
             ok: false,
-            message: error.response?.data?.message || "Failed to forward message",
+            message: apiMessage || "Failed to forward message",
           };
         }
       },

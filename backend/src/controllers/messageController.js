@@ -9,6 +9,7 @@ import {
 } from "../utils/messageHelper.js";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
+import { registerRateLimitHit } from "../utils/antiSpam.js";
 
 import { buildDirectConversationKey } from "../services/conversationService.js";
 
@@ -122,6 +123,66 @@ const ensureConversationMembership = async (conversationId, userId) => {
   });
 
   return Boolean(membership);
+};
+
+const toStringId = (value) => value?.toString?.() || String(value || "");
+
+const isJoinLinkActive = (joinLink) => {
+  const expiresAt = joinLink?.expiresAt ? new Date(joinLink.expiresAt) : null;
+  return Boolean(expiresAt && Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > Date.now());
+};
+
+const toJoinLinkMeta = (joinLink) => {
+  if (!joinLink?.expiresAt) {
+    return null;
+  }
+
+  return {
+    expiresAt: joinLink.expiresAt,
+    createdAt: joinLink.createdAt || null,
+    createdBy: toStringId(joinLink.createdBy),
+    isActive: isJoinLinkActive(joinLink),
+  };
+};
+
+const isGroupConversationAdmin = (conversation, userId) => {
+  const normalizedUserId = toStringId(userId);
+  const creatorId = toStringId(conversation?.group?.createdBy);
+  if (creatorId && creatorId === normalizedUserId) {
+    return true;
+  }
+
+  return (conversation?.group?.adminIds || []).some(
+    (adminId) => toStringId(adminId) === normalizedUserId,
+  );
+};
+
+const toGroupConversationUpdatePayload = (conversation) => {
+  const group = conversation?.group?.toObject
+    ? conversation.group.toObject()
+    : conversation?.group || {};
+  const pinnedMessage = conversation?.pinnedMessage?.toObject
+    ? conversation.pinnedMessage.toObject()
+    : conversation?.pinnedMessage || null;
+
+  return {
+    _id: toStringId(conversation?._id),
+    group: {
+      ...group,
+      createdBy: toStringId(group.createdBy),
+      adminIds: (group.adminIds || []).map((adminId) => toStringId(adminId)),
+      announcementOnly: Boolean(group.announcementOnly),
+      joinLink: toJoinLinkMeta(group.joinLink),
+    },
+    pinnedMessage: pinnedMessage
+      ? {
+          ...pinnedMessage,
+          senderId: toStringId(pinnedMessage.senderId),
+          pinnedBy: toStringId(pinnedMessage.pinnedBy),
+        }
+      : null,
+    updatedAt: conversation?.updatedAt || null,
+  };
 };
 
 const formatConversationSyncPayload = (conversation) => {
@@ -319,7 +380,7 @@ export const sendDirectMessage = async (req, res) => {
     const { recipientId, content, imgUrl, conversationId, replyTo } = req.body;
     const senderId = req.user._id;
     const normalizedContent = String(content || "").trim();
-    const uploadedImgUrl = await uploadMessageImage(imgUrl);
+    const hasImagePayload = Boolean(String(imgUrl || "").trim());
 
     if (!conversationId && !recipientId) {
       return res
@@ -327,7 +388,7 @@ export const sendDirectMessage = async (req, res) => {
         .json({ message: "Thiếu recipientId cho cuộc trò chuyện trực tiếp mới" });
     }
 
-    if (!normalizedContent && !uploadedImgUrl) {
+    if (!normalizedContent && !hasImagePayload) {
       return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
     }
 
@@ -341,6 +402,20 @@ export const sendDirectMessage = async (req, res) => {
         senderId,
         recipientId,
       });
+
+    const antiSpamResult = registerRateLimitHit({
+      userId: senderId,
+      scope: "message:direct",
+      conversationId: conversation._id,
+    });
+
+    if (!antiSpamResult.allowed) {
+      return res.status(429).json({
+        message: `You're sending messages too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      });
+    }
+
+    const uploadedImgUrl = await uploadMessageImage(imgUrl);
 
     const validatedReplyTo = await resolveValidatedReplyTo({
       replyTo,
@@ -388,15 +463,36 @@ export const sendGroupMessage = async (req, res) => {
     const senderId = req.user._id;
     const conversation = req.conversation;
     const normalizedContent = String(content || "").trim();
+    const hasImagePayload = Boolean(String(imgUrl || "").trim());
+
+    const isAnnouncementOnly = Boolean(conversation?.group?.announcementOnly);
+    if (isAnnouncementOnly && !isGroupConversationAdmin(conversation, senderId)) {
+      return res.status(403).json({
+        message: "Only admins can send messages while announcement mode is enabled",
+      });
+    }
+
+    if (!normalizedContent && !hasImagePayload) {
+      return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
+    }
+
+    const antiSpamResult = registerRateLimitHit({
+      userId: senderId,
+      scope: "message:group",
+      conversationId,
+    });
+
+    if (!antiSpamResult.allowed) {
+      return res.status(429).json({
+        message: `You're sending messages too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      });
+    }
+
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
     const validatedReplyTo = await resolveValidatedReplyTo({
       replyTo,
       conversationId,
     });
-
-    if (!normalizedContent && !uploadedImgUrl) {
-      return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
-    }
 
     let message = await Message.create({
       conversationId,
@@ -580,6 +676,25 @@ export const unsendMessage = async (req, res) => {
         },
         { new: true },
       );
+
+      const clearedPinnedConversation = await Conversation.findOneAndUpdate(
+        {
+          _id: message.conversationId,
+          "pinnedMessage._id": message._id.toString(),
+        },
+        {
+          $set: {
+            pinnedMessage: null,
+          },
+        },
+        { new: true },
+      );
+
+      if (clearedPinnedConversation) {
+        io.to(message.conversationId.toString()).emit("group-conversation-updated", {
+          conversation: toGroupConversationUpdatePayload(clearedPinnedConversation),
+        });
+      }
     } catch (convUpdateError) {
       console.error(
         "[unsendMessage] Conversation preview update failed after message deletion. " +

@@ -16,6 +16,8 @@ import {
   SendHorizontal,
   Lock,
   Unlock,
+  Pin,
+  Flag,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -24,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { chatService, type LinkPreviewPayload } from "@/services/chatService";
 import { useLinkPreviewStore } from "@/stores/useLinkPreviewStore";
+import { safetyService } from "@/services/safetyService";
 import UserAvatar from "./UserAvatar";
 import {
   Dialog,
@@ -123,12 +126,17 @@ const ContextMenu = memo(function ContextMenu({
   isOwn,
   isDeleted,
   canEdit,
+  canPinMessage,
+  isPinned,
   isForwardable,
   onForward,
   onToggleForwardable,
+  onTogglePin,
   onReply,
   onCopy,
   onEdit,
+  canReport,
+  onReport,
   onOpenDeleteDialog,
   onClose,
 }: {
@@ -137,12 +145,17 @@ const ContextMenu = memo(function ContextMenu({
   isOwn: boolean;
   isDeleted: boolean;
   canEdit: boolean;
+  canPinMessage?: boolean;
+  isPinned?: boolean;
   isForwardable: boolean;
   onForward: () => void;
   onToggleForwardable?: () => void;
+  onTogglePin?: () => void;
   onReply: () => void;
   onCopy: () => void;
   onEdit: () => void;
+  canReport?: boolean;
+  onReport?: () => void;
   onOpenDeleteDialog: () => void;
   onClose: () => void;
 }) {
@@ -155,6 +168,12 @@ const ContextMenu = memo(function ContextMenu({
       : []),
     ...(isOwn && onToggleForwardable && !isDeleted
       ? [{ icon: isForwardable ? Lock : Unlock, label: isForwardable ? "Disable forwarding" : "Allow forwarding", onClick: onToggleForwardable }]
+      : []),
+    ...(canPinMessage && onTogglePin && !isDeleted
+      ? [{ icon: Pin, label: isPinned ? "Unpin message" : "Pin message", onClick: onTogglePin }]
+      : []),
+    ...(canReport && onReport && !isDeleted
+      ? [{ icon: Flag, label: "Report", onClick: onReport }]
       : []),
     ...(isDeleted
       ? []
@@ -801,6 +820,9 @@ interface MessageItemProps {
   showDateDivider?: boolean;
   isNew?: boolean; // only animate truly new messages
   onForward?: () => void;
+  canPinMessage?: boolean;
+  isPinned?: boolean;
+  onTogglePin?: (messageId: string, willPin: boolean) => void;
 }
 
 const MessageItem = memo(function MessageItem({
@@ -816,6 +838,9 @@ const MessageItem = memo(function MessageItem({
   showDateDivider,
   isNew = false,
   onForward,
+  canPinMessage = false,
+  isPinned = false,
+  onTogglePin,
 }: MessageItemProps) {
   const { user } = useAuthStore();
   const {
@@ -1013,11 +1038,20 @@ const MessageItem = memo(function MessageItem({
     try {
       await toggleMessageForwardable(message._id, !message.isForwardable);
       toast.success(message.isForwardable ? "Disabled forwarding for this message" : "Enabled forwarding for this message");
-    } catch (e) {
+    } catch {
       toast.error("Failed to update message privacy");
     }
     setContextMenu(null);
   }, [message._id, message.isForwardable, toggleMessageForwardable]);
+
+  const handleTogglePin = useCallback(() => {
+    if (!onTogglePin || !message._id || message.isDeleted) {
+      return;
+    }
+
+    onTogglePin(message._id, !isPinned);
+    setContextMenu(null);
+  }, [isPinned, message._id, message.isDeleted, onTogglePin]);
 
   const handleToggleBookmark = useCallback(async () => {
     const result = await toggleBookmark(message._id);
@@ -1028,6 +1062,25 @@ const MessageItem = memo(function MessageItem({
 
     toast.success(result.bookmarked ? "Message saved" : "Bookmark removed");
   }, [message._id, toggleBookmark]);
+
+  const handleReportMessage = useCallback(async () => {
+    if (isOwn || message.isDeleted) {
+      return;
+    }
+
+    try {
+      await safetyService.createReport({
+        targetType: "message",
+        targetId: message._id,
+        reason: "harassment",
+      });
+      toast.success("Report submitted");
+    } catch {
+      toast.error("Could not submit report");
+    }
+
+    setContextMenu(null);
+  }, [isOwn, message._id, message.isDeleted]);
 
   const isSeenAnchorMessage =
     isOwn && !!lastOwnMessageId && message._id === lastOwnMessageId;
@@ -1167,6 +1220,18 @@ const MessageItem = memo(function MessageItem({
         <span className="text-sm">This message was removed</span>
       ) : (
         <>
+          {isPinned && (
+            <div
+              className={cn(
+                "mb-1 inline-flex items-center gap-1 text-[10px] font-semibold",
+                isOwn ? "text-white/80" : "text-primary/85",
+              )}
+            >
+              <Pin className="size-2.5" />
+              Pinned
+            </div>
+          )}
+
           {message.forwardedFrom && (
             <div className="flex items-center gap-1.5 mb-1.5 text-[11.5px] opacity-80 border-b border-foreground/10 pb-1 font-medium">
               <SendHorizontal className="size-3" />
@@ -1343,12 +1408,17 @@ const MessageItem = memo(function MessageItem({
           isOwn={isOwn}
           isDeleted={!!message.isDeleted}
           canEdit={canEdit}
+          canPinMessage={canPinMessage}
+          isPinned={isPinned}
           isForwardable={message.isForwardable ?? true}
           onForward={handleForward}
           onToggleForwardable={handleToggleForwardable}
+          onTogglePin={handleTogglePin}
           onReply={handleReply}
           onCopy={handleCopy}
           onEdit={handleEnterEditMode}
+          canReport={!isOwn}
+          onReport={handleReportMessage}
           onOpenDeleteDialog={handleOpenDeleteDialog}
           onClose={handleCloseContext}
         />

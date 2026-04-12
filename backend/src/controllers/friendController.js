@@ -4,6 +4,24 @@ import FriendRequest from "../models/FriendRequest.js";
 import Notification from "../models/Notification.js";
 import { io } from "../socket/index.js";
 
+const shouldSendFriendAcceptedNotification = (rawSocialPreferences, actorId) => {
+  const preferences = rawSocialPreferences || {};
+
+  if (preferences.muted === true) {
+    return false;
+  }
+
+  if (preferences.friendAccepted === false) {
+    return false;
+  }
+
+  const mutedUserIds = Array.isArray(preferences.mutedUserIds)
+    ? preferences.mutedUserIds.map(String)
+    : [];
+
+  return !mutedUserIds.includes(String(actorId));
+};
+
 export const sendFriendRequest = async (req, res) => {
   try {
     const { to, message } = req.body;
@@ -110,19 +128,31 @@ export const acceptFriendRequest = async (req, res) => {
       .select("_id displayName avatarUrl")
       .lean();
 
+    const notificationRecipient = await User.findById(request.from)
+      .select("notificationPreferences.social")
+      .lean();
+
     const message = `${receiver?.displayName} đã chấp nhận lời mời kết bạn của bạn`;
 
-    // Persist notification to DB so it survives page refresh
-    const notification = await Notification.create({
-      recipientId: request.from,
-      actorId: request.to,
-      type: "friend_accepted",
-      message,
-    });
+    const canNotify = shouldSendFriendAcceptedNotification(
+      notificationRecipient?.notificationPreferences?.social,
+      request.to,
+    );
 
-    const populatedNotification = await Notification.findById(notification._id)
-      .populate("actorId", "_id displayName username avatarUrl")
-      .lean();
+    let populatedNotification = null;
+
+    if (canNotify) {
+      const notification = await Notification.create({
+        recipientId: request.from,
+        actorId: request.to,
+        type: "friend_accepted",
+        message,
+      });
+
+      populatedNotification = await Notification.findById(notification._id)
+        .populate("actorId", "_id displayName username avatarUrl")
+        .lean();
+    }
 
     // Emit realtime event to the original requester
     io.to(request.from.toString()).emit("friend-request-accepted", {

@@ -70,6 +70,7 @@ export interface SocialNotification {
   actorId: SocialUserLite;
   type: "follow" | "like" | "comment" | "system" | "friend_accepted";
   postId?: string | null;
+  conversationId?: string | null;
   commentId?: string | null;
   message: string;
   isRead: boolean;

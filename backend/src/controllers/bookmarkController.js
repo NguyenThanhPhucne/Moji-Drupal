@@ -2,6 +2,31 @@ import Bookmark from "../models/Bookmark.js";
 import Message from "../models/Message.js";
 import Conversation from "../models/Conversation.js";
 
+const normalizeStringList = ({
+  value,
+  maxItems,
+  maxLength,
+  toLowerCase = false,
+}) => {
+  const list = Array.isArray(value) ? value : [];
+
+  return [
+    ...new Set(
+      list
+        .map((item) => {
+          const normalized = String(item || "").trim();
+          if (!normalized) {
+            return "";
+          }
+
+          const trimmed = normalized.slice(0, maxLength);
+          return toLowerCase ? trimmed.toLowerCase() : trimmed;
+        })
+        .filter(Boolean),
+    ),
+  ].slice(0, maxItems);
+};
+
 const ensureConversationMembership = async (conversationId, userId) => {
   const membership = await Conversation.exists({
     _id: conversationId,
@@ -16,18 +41,18 @@ export const toggleBookmark = async (req, res) => {
     const { messageId } = req.params;
     const userId = req.user._id;
     const note = String(req.body?.note || "").trim();
-    const incomingTags = Array.isArray(req.body?.tags) ? req.body.tags : [];
-    const tags = [
-      ...new Set(
-        incomingTags
-          .map((tag) =>
-            String(tag || "")
-              .trim()
-              .toLowerCase(),
-          )
-          .filter(Boolean),
-      ),
-    ].slice(0, 10);
+    const tags = normalizeStringList({
+      value: req.body?.tags,
+      maxItems: 10,
+      maxLength: 30,
+      toLowerCase: true,
+    });
+    const collections = normalizeStringList({
+      value: req.body?.collections,
+      maxItems: 10,
+      maxLength: 40,
+      toLowerCase: true,
+    });
 
     const message = await Message.findById(messageId).select(
       "_id conversationId senderId content imgUrl createdAt",
@@ -65,6 +90,7 @@ export const toggleBookmark = async (req, res) => {
       conversationId: message.conversationId,
       note,
       tags,
+      collections,
     });
 
     return res.status(201).json({
@@ -83,6 +109,7 @@ export const getBookmarks = async (req, res) => {
     const userId = req.user._id;
     const {
       conversationId,
+      collection,
       from,
       to,
       page: pageRaw,
@@ -98,6 +125,13 @@ export const getBookmarks = async (req, res) => {
 
     if (conversationId) {
       query.conversationId = conversationId;
+    }
+
+    const normalizedCollection = String(collection || "")
+      .trim()
+      .toLowerCase();
+    if (normalizedCollection) {
+      query.collections = normalizedCollection;
     }
 
     if (from || to) {
@@ -181,21 +215,35 @@ export const updateBookmarkMeta = async (req, res) => {
     const userId = req.user._id;
     const { bookmarkId } = req.params;
 
-    const note = String(req.body?.note || "")
-      .trim()
-      .slice(0, 500);
-    const incomingTags = Array.isArray(req.body?.tags) ? req.body.tags : [];
-    const tags = [
-      ...new Set(
-        incomingTags
-          .map((tag) =>
-            String(tag || "")
-              .trim()
-              .toLowerCase(),
-          )
-          .filter(Boolean),
-      ),
-    ].slice(0, 10);
+    const updates = {};
+
+    if (req.body?.note !== undefined) {
+      updates.note = String(req.body?.note || "")
+        .trim()
+        .slice(0, 500);
+    }
+
+    if (req.body?.tags !== undefined) {
+      updates.tags = normalizeStringList({
+        value: req.body?.tags,
+        maxItems: 10,
+        maxLength: 30,
+        toLowerCase: true,
+      });
+    }
+
+    if (req.body?.collections !== undefined) {
+      updates.collections = normalizeStringList({
+        value: req.body?.collections,
+        maxItems: 10,
+        maxLength: 40,
+        toLowerCase: true,
+      });
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "Không có metadata để cập nhật" });
+    }
 
     const bookmark = await Bookmark.findOneAndUpdate(
       {
@@ -203,10 +251,7 @@ export const updateBookmarkMeta = async (req, res) => {
         userId,
       },
       {
-        $set: {
-          note,
-          tags,
-        },
+        $set: updates,
       },
       { new: true },
     ).lean();
@@ -225,32 +270,51 @@ export const updateBookmarkMeta = async (req, res) => {
 export const bulkBookmarkAction = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { bookmarkIds, action, tag } = req.body || {};
+    const { bookmarkIds, action, tag, collection } = req.body || {};
 
     if (!Array.isArray(bookmarkIds) || bookmarkIds.length === 0) {
       return res.status(400).json({ message: "Thiếu danh sách bookmark" });
     }
 
-    if (action !== "remove-tag") {
+    let result = null;
+
+    if (action === "remove-tag") {
+      const normalizedTag = String(tag || "")
+        .trim()
+        .toLowerCase();
+      if (!normalizedTag) {
+        return res.status(400).json({ message: "Thiếu tag để xoá" });
+      }
+
+      result = await Bookmark.updateMany(
+        {
+          _id: { $in: bookmarkIds },
+          userId,
+        },
+        {
+          $pull: { tags: normalizedTag },
+        },
+      );
+    } else if (action === "remove-collection") {
+      const normalizedCollection = String(collection || "")
+        .trim()
+        .toLowerCase();
+      if (!normalizedCollection) {
+        return res.status(400).json({ message: "Thiếu collection để xoá" });
+      }
+
+      result = await Bookmark.updateMany(
+        {
+          _id: { $in: bookmarkIds },
+          userId,
+        },
+        {
+          $pull: { collections: normalizedCollection },
+        },
+      );
+    } else {
       return res.status(400).json({ message: "Hành động không hợp lệ" });
     }
-
-    const normalizedTag = String(tag || "")
-      .trim()
-      .toLowerCase();
-    if (!normalizedTag) {
-      return res.status(400).json({ message: "Thiếu tag để xoá" });
-    }
-
-    const result = await Bookmark.updateMany(
-      {
-        _id: { $in: bookmarkIds },
-        userId,
-      },
-      {
-        $pull: { tags: normalizedTag },
-      },
-    );
 
     return res.status(200).json({
       matchedCount: result.matchedCount || 0,

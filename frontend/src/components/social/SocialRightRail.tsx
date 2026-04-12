@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useRef } from "react";
 import {
+  CircleDot,
   Compass,
   Flag,
+  Hash,
   MessageCircle,
+  Sparkles,
   Users,
+  Zap,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
+import { useSocialMotionStore } from "@/stores/useSocialMotionStore";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserAvatar from "@/components/chat/UserAvatar";
@@ -21,6 +26,34 @@ interface SocialRightRailProps {
   /** When true, the rail is inside an already-scrollable container — skip sticky/h-screen */
   embedded?: boolean;
 }
+
+const CONTACT_SKELETON_KEYS = [
+  "contact-skel-1",
+  "contact-skel-2",
+  "contact-skel-3",
+  "contact-skel-4",
+  "contact-skel-5",
+  "contact-skel-6",
+  "contact-skel-7",
+  "contact-skel-8",
+];
+
+const SUGGESTION_SKELETON_KEYS = [
+  "sugg-skel-1",
+  "sugg-skel-2",
+  "sugg-skel-3",
+];
+
+const MOTION_COPY = {
+  "premium-strict": {
+    title: "Premium strict",
+    subtitle: "Calm, refined micro-motion",
+  },
+  "responsive-strict": {
+    title: "Responsive strict",
+    subtitle: "Faster hover and focus response",
+  },
+} as const;
 
 
 const getPresenceClassName = (
@@ -43,6 +76,8 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
   const { getUserPresence } = useSocketStore();
   const { createConversation } = useChatStore();
   const { openWindow } = useMiniChatDockStore();
+  const { preset: motionPreset, setPreset: setMotionPreset } =
+    useSocialMotionStore();
   const hasFetchedRef = useRef(false);
 
   useEffect(() => {
@@ -118,14 +153,67 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
     }
   };
 
+  let railClassName = "social-right-rail sticky top-0 h-screen overflow-y-auto beautiful-scrollbar space-y-4 pr-1 pl-0.5";
+  if (compact) {
+    railClassName = "social-right-rail space-y-3";
+  } else if (embedded) {
+    railClassName = "social-right-rail space-y-4";
+  }
+
+  const showContactsLoading = !hasFetchedRef.current || loading;
+  const showSuggestionsLoading = !hasFetchedRef.current || loading;
+
   return (
-    <aside className={
-      compact
-        ? "space-y-3"
-        : embedded
-        ? "space-y-4"  // no sticky/h-screen — parent container handles scroll
-        : "social-right-rail sticky top-0 h-screen overflow-y-auto beautiful-scrollbar space-y-4 pr-1 pl-0.5"
-    }>
+    <aside className={railClassName}>
+      <section className="social-rail-card social-motion-card">
+        <div className="social-rail-head">
+          <span className="social-rail-title">
+            <Sparkles className="h-4 w-4" />
+            Motion presets
+          </span>
+        </div>
+
+        <p className="social-motion-note">
+          Switch instantly between two strict animation styles.
+        </p>
+
+        <div className="social-motion-grid" role="radiogroup" aria-label="Motion presets">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={motionPreset === "premium-strict"}
+            data-active={motionPreset === "premium-strict"}
+            className="social-motion-option"
+            onClick={() => setMotionPreset("premium-strict")}
+          >
+            <span className="social-motion-option-icon" aria-hidden="true">
+              <Sparkles className="h-3.5 w-3.5" />
+            </span>
+            <span className="social-motion-option-copy">
+              <span className="social-motion-option-title">{MOTION_COPY["premium-strict"].title}</span>
+              <span className="social-motion-option-subtitle">{MOTION_COPY["premium-strict"].subtitle}</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="radio"
+            aria-checked={motionPreset === "responsive-strict"}
+            data-active={motionPreset === "responsive-strict"}
+            className="social-motion-option"
+            onClick={() => setMotionPreset("responsive-strict")}
+          >
+            <span className="social-motion-option-icon" aria-hidden="true">
+              <Zap className="h-3.5 w-3.5" />
+            </span>
+            <span className="social-motion-option-copy">
+              <span className="social-motion-option-title">{MOTION_COPY["responsive-strict"].title}</span>
+              <span className="social-motion-option-subtitle">{MOTION_COPY["responsive-strict"].subtitle}</span>
+            </span>
+          </button>
+        </div>
+      </section>
+
       <section className="social-rail-card">
         <div className="social-rail-head">
           <span className="social-rail-title">
@@ -136,10 +224,10 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
         </div>
 
         <div className="social-rail-list relative">
-          {(!hasFetchedRef.current || loading) ? (
+          {showContactsLoading ? (
             <div className="space-y-1 py-1" aria-hidden="true">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={`contact-skel-${i}`} className="social-contact-item">
+              {CONTACT_SKELETON_KEYS.map((key) => (
+                <div key={key} className="social-contact-item">
                   <div className="relative">
                     <Skeleton className="h-8 w-8 rounded-full" />
                   </div>
@@ -147,7 +235,9 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
                 </div>
               ))}
             </div>
-          ) : contacts.length > 0 ? (
+          ) : null}
+
+          {!showContactsLoading && contacts.length > 0 ? (
             contacts.slice(0, 24).map((friend) => (
               <button
                 key={friend._id}
@@ -168,12 +258,14 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               </div>
               <span className="social-contact-name flex-1 truncate">{friend.displayName}</span>
               {friend.presence === "online" && (
-                <span className="ml-auto text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex-shrink-0">●</span>
+                <span className="social-contact-live-icon ml-auto flex-shrink-0" aria-hidden="true">
+                  <CircleDot className="h-3 w-3" />
+                </span>
               )}
             </button>
             ))
           ) : (
-            <p className="social-rail-empty">No contacts yet.</p>
+            !showContactsLoading && <p className="social-rail-empty">No contacts yet.</p>
           )}
         </div>
       </section>
@@ -188,10 +280,10 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
         </div>
 
         <div className="space-y-2 relative">
-          {(!hasFetchedRef.current || loading) ? (
+          {showSuggestionsLoading ? (
              <div className="space-y-3 py-1" aria-hidden="true">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={`sugg-skel-${i}`} className="social-suggestion-item">
+                {SUGGESTION_SKELETON_KEYS.map((key) => (
+                  <div key={key} className="social-suggestion-item">
                     <div className="flex items-center gap-2 min-w-0">
                       <Skeleton className="h-9 w-9 rounded-full" />
                       <Skeleton className="h-4 w-28 rounded-md bg-muted/60" />
@@ -200,7 +292,9 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
                   </div>
                 ))}
             </div>
-          ) : suggestions.length > 0 ? (
+          ) : null}
+
+          {!showSuggestionsLoading && suggestions.length > 0 ? (
             suggestions.map((person) => (
               <div key={person._id} className="social-suggestion-item social-scale-bounce-hover transition-all duration-300">
                 <div className="flex items-center gap-2 min-w-0">
@@ -213,7 +307,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               </div>
             ))
           ) : (
-             <p className="social-rail-empty">Suggestions will appear soon.</p>
+             !showSuggestionsLoading && <p className="social-rail-empty">Suggestions will appear soon.</p>
           )}
         </div>
       </section>
@@ -234,7 +328,8 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               className="trending-chip-upgrade social-scale-bounce-hover"
               onClick={() => navigate(`/explore?tag=${encodeURIComponent(item.tag)}`)}
             >
-              <span className="text-primary/70">#</span>{item.tag}
+              <Hash className="social-trending-tag-icon" />
+              <span>{item.tag}</span>
               <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full">{item.count}</span>
             </button>
           ))}

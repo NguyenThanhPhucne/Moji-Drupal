@@ -108,6 +108,33 @@ export interface ChatState {
     name: string,
     memberIds: string[],
   ) => Promise<boolean>;
+  setGroupAnnouncementMode: (
+    conversationId: string,
+    enabled: boolean,
+  ) => Promise<boolean>;
+  setGroupAdminRole: (
+    conversationId: string,
+    memberId: string,
+    makeAdmin: boolean,
+  ) => Promise<boolean>;
+  createGroupJoinLink: (
+    conversationId: string,
+    expiresInHours?: number,
+  ) => Promise<{
+    ok: boolean;
+    joinLinkUrl?: string;
+    expiresAt?: string;
+    message?: string;
+  }>;
+  revokeGroupJoinLink: (conversationId: string) => Promise<boolean>;
+  joinGroupByLink: (
+    conversationId: string,
+    token: string,
+  ) => Promise<{ ok: boolean; alreadyJoined?: boolean; message?: string }>;
+  pinGroupMessage: (
+    conversationId: string,
+    messageId?: string | null,
+  ) => Promise<boolean>;
   deleteConversation: (conversationId: string) => Promise<boolean>;
   forwardMessage: (
     messageId: string,
