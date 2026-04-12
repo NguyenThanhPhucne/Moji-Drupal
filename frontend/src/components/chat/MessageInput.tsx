@@ -15,6 +15,12 @@ const CharRing = ({ value, max }: { value: number; max: number }) => {
   const offset = CIRCUMFERENCE * (1 - progress);
   const isWarning = value > max * 0.85;
   const isDanger = value > max * 0.95;
+  let progressStrokeClass = "stroke-primary";
+  if (isDanger) {
+    progressStrokeClass = "stroke-destructive";
+  } else if (isWarning) {
+    progressStrokeClass = "stroke-warning";
+  }
 
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" className="shrink-0">
@@ -40,11 +46,7 @@ const CharRing = ({ value, max }: { value: number; max: number }) => {
         strokeDashoffset={offset}
         className={cn(
           "char-progress-ring transition-all duration-200",
-          isDanger
-            ? "stroke-destructive"
-            : isWarning
-            ? "stroke-warning"
-            : "stroke-primary"
+          progressStrokeClass,
         )}
       />
       {/* Inner number only in danger zone */}
@@ -114,7 +116,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
       dragCounter.current = 0;
       setIsDragOver(false);
       const file = e.dataTransfer.files?.[0];
-      if (file && file.type.startsWith("image/")) {
+      if (file?.type.startsWith("image/")) {
         const mockEvent = {
           target: { files: e.dataTransfer.files },
         } as unknown as React.ChangeEvent<HTMLInputElement>;
@@ -143,16 +145,28 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     isGroupConversation && Boolean(selectedConvo.group?.announcementOnly);
   const canSendInCurrentMode = !announcementOnly || isGroupAdmin;
   const sendDisabled = !hasSendable || !canSendInCurrentMode;
+  const sendButtonToneClass = (() => {
+    if (canSendInCurrentMode && hasSendable) {
+      return "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95 animate-in zoom-in-75 duration-200";
+    }
+
+    if (canSendInCurrentMode) {
+      return "bg-transparent text-primary hover:bg-primary/10 opacity-80 hover:opacity-100";
+    }
+
+    return "bg-muted text-muted-foreground";
+  })();
 
   const charsUsed = value.length;
   const showRing = charsLeft < 120;
 
   return (
-    <div
+    <section
       className={cn(
         "flex flex-col bg-background relative z-10 w-full shrink-0 border-t border-border/30 transition-all duration-200",
         isDragOver && "drop-zone-active",
       )}
+      aria-label="Message input area"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -313,11 +327,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           className={cn(
             "flex-shrink-0 mb-0.5 size-9 rounded-full transition-all duration-200",
             isSendBursting && hasSendable && "send-burst",
-            !canSendInCurrentMode
-              ? "bg-muted text-muted-foreground"
-              : hasSendable
-              ? "bg-primary text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md hover:scale-110 active:scale-95 animate-in zoom-in-75 duration-200"
-              : "bg-transparent text-primary hover:bg-primary/10 opacity-80 hover:opacity-100",
+            sendButtonToneClass,
           )}
           title={hasSendable ? "Send (Enter)" : "Like"}
         >
@@ -334,7 +344,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
           Announcement mode is enabled. Only group admins can post new messages.
         </p>
       )}
-    </div>
+    </section>
   );
 };
 

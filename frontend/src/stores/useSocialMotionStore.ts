@@ -11,33 +11,33 @@ interface SocialMotionState {
 
 const DEFAULT_PRESET: SocialMotionPreset = "premium-strict";
 
-let presetSwitchTimer: number | null = null;
+let presetSwitchTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
 
 const triggerPresetCrossFade = () => {
-  if (typeof window === "undefined") {
+  if (!globalThis.window) {
     return;
   }
 
   const root = document.documentElement;
-  root.removeAttribute("data-social-motion-switch");
+  delete root.dataset.socialMotionSwitch;
 
   // Force reflow so animation restarts when switching presets repeatedly.
-  void root.offsetWidth;
+  root.getBoundingClientRect();
 
-  root.setAttribute("data-social-motion-switch", "in");
+  root.dataset.socialMotionSwitch = "in";
 
   if (presetSwitchTimer !== null) {
-    window.clearTimeout(presetSwitchTimer);
+    globalThis.clearTimeout(presetSwitchTimer);
   }
 
-  presetSwitchTimer = window.setTimeout(() => {
-    document.documentElement.removeAttribute("data-social-motion-switch");
+  presetSwitchTimer = globalThis.setTimeout(() => {
+    delete document.documentElement.dataset.socialMotionSwitch;
     presetSwitchTimer = null;
   }, 120);
 };
 
 const applyPresetToDOM = (preset: SocialMotionPreset, withCrossFade = false) => {
-  if (typeof window === "undefined") {
+  if (!globalThis.window) {
     return;
   }
 
@@ -45,7 +45,7 @@ const applyPresetToDOM = (preset: SocialMotionPreset, withCrossFade = false) => 
     triggerPresetCrossFade();
   }
 
-  document.documentElement.setAttribute("data-social-motion", preset);
+  document.documentElement.dataset.socialMotion = preset;
 };
 
 export const useSocialMotionStore = create<SocialMotionState>()(

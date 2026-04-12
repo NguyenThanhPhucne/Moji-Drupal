@@ -1,24 +1,25 @@
 const base = "http://127.0.0.1:5001/api";
 const now = Date.now();
+const smokePassword = `Smoke_${now}_Aa!`;
 
 const users = {
   a: {
     username: `s1a_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `s1a_${now}@local.dev`,
     firstName: "S1",
     lastName: "A",
   },
   b: {
     username: `s1b_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `s1b_${now}@local.dev`,
     firstName: "S1",
     lastName: "B",
   },
   c: {
     username: `s1c_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `s1c_${now}@local.dev`,
     firstName: "S1",
     lastName: "C",
@@ -105,7 +106,7 @@ const getMessageInConversation = async (token, conversationId, messageId) => {
   );
 };
 
-(async () => {
+const run = async () => {
   const results = [];
   const log = (id, pass, detail) => {
     results.push({ id, pass, detail });
@@ -255,4 +256,6 @@ const getMessageInConversation = async (token, conversationId, messageId) => {
     console.error("SMOKE ERROR", e?.message || e);
     process.exitCode = 1;
   }
-})();
+};
+
+await run();

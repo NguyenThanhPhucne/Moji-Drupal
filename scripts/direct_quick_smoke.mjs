@@ -1,17 +1,18 @@
 const base = "http://127.0.0.1:5001/api";
 const now = Date.now();
+const smokePassword = `Smoke_${now}_Aa!`;
 
 const users = {
   a: {
     username: `dqsa_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `dqsa_${now}@local.dev`,
     firstName: "Direct",
     lastName: "A",
   },
   b: {
     username: `dqsb_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `dqsb_${now}@local.dev`,
     firstName: "Direct",
     lastName: "B",
@@ -100,7 +101,7 @@ const createDirectConversation = async (from, toUserId) => {
   return create.json.conversation._id;
 };
 
-(async () => {
+const run = async () => {
   const results = [];
   const log = (id, pass, detail) => {
     results.push({ id, pass, detail });
@@ -150,4 +151,6 @@ const createDirectConversation = async (from, toUserId) => {
     console.error("FAIL | DIRECT-QUICK-SMOKE |", error?.message || error);
     process.exitCode = 1;
   }
-})();
+};
+
+await run();

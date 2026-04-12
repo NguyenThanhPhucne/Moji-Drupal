@@ -899,10 +899,106 @@ export const getLinkPreview = async (req, res) => {
   }
 };
 
+const normalizeForwardTargets = ({ recipientIds, groupIds } = {}) => {
+  return {
+    recipientIds: Array.isArray(recipientIds) ? recipientIds : [],
+    groupIds: Array.isArray(groupIds) ? groupIds : [],
+  };
+};
+
+const buildForwardDeniedResponse = ({ originalMessage, senderId }) => {
+  if (originalMessage.isDeleted) {
+    return {
+      status: 400,
+      message: "Không thể forward tin nhắn đã thu hồi",
+    };
+  }
+
+  if (
+    originalMessage.isForwardable === false &&
+    String(originalMessage.senderId) !== String(senderId)
+  ) {
+    return {
+      status: 403,
+      message: "Chủ sở hữu tin nhắn không cho phép forward",
+    };
+  }
+
+  return null;
+};
+
+const forwardToDirectRecipient = async ({ recipientId, senderId, originalMessage }) => {
+  try {
+    const { conversation, isNewConversation } = await ensureDirectConversationForSend({
+      conversationId: null,
+      senderId,
+      recipientId,
+    });
+
+    let message = await Message.create({
+      conversationId: conversation._id,
+      senderId,
+      content: originalMessage.content,
+      imgUrl: originalMessage.imgUrl,
+      forwardedFrom: originalMessage.senderId,
+    });
+
+    message = await message.populate("forwardedFrom", "displayName avatarUrl");
+
+    updateConversationAfterCreateMessage(conversation, message, senderId);
+    await conversation.save();
+
+    if (isNewConversation) {
+      await emitDirectConversationCreated({ conversation, senderId });
+    }
+
+    emitNewMessage(io, conversation, message);
+    return message;
+  } catch (error) {
+    console.error(`Error forwarding to user ${recipientId}:`, error);
+    return null;
+  }
+};
+
+const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }) => {
+  try {
+    const conversation = await Conversation.findById(groupId);
+    if (!conversation) {
+      return null;
+    }
+
+    const isMember = conversation.participants.some(
+      (participant) => String(participant.userId) === String(senderId),
+    );
+    if (!isMember) {
+      return null;
+    }
+
+    let message = await Message.create({
+      conversationId: conversation._id,
+      senderId,
+      content: originalMessage.content,
+      imgUrl: originalMessage.imgUrl,
+      forwardedFrom: originalMessage.senderId,
+    });
+
+    message = await message.populate("forwardedFrom", "displayName avatarUrl");
+
+    updateConversationAfterCreateMessage(conversation, message, senderId);
+    await conversation.save();
+
+    emitNewMessage(io, conversation, message);
+    return message;
+  } catch (error) {
+    console.error(`Error forwarding to group ${groupId}:`, error);
+    return null;
+  }
+};
+
 export const forwardMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { recipientIds = [], groupIds = [] } = req.body;
+    const { recipientIds, groupIds } = normalizeForwardTargets(req.body || {});
     const senderId = req.user._id;
 
     if (!recipientIds.length && !groupIds.length) {
@@ -914,80 +1010,30 @@ export const forwardMessage = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn gốc" });
     }
 
-    if (originalMessage.isDeleted) {
-      return res.status(400).json({ message: "Không thể forward tin nhắn đã thu hồi" });
+    const deniedResponse = buildForwardDeniedResponse({
+      originalMessage,
+      senderId,
+    });
+    if (deniedResponse) {
+      return res.status(deniedResponse.status).json({ message: deniedResponse.message });
     }
 
-    // Privacy check
-    if (originalMessage.isForwardable === false && String(originalMessage.senderId) !== String(senderId)) {
-      return res.status(403).json({ message: "Chủ sở hữu tin nhắn không cho phép forward" });
-    }
+    const [directMessages, groupMessages] = await Promise.all([
+      Promise.all(
+        recipientIds.map((recipientId) =>
+          forwardToDirectRecipient({ recipientId, senderId, originalMessage }),
+        ),
+      ),
+      Promise.all(
+        groupIds.map((groupId) =>
+          forwardToGroupConversation({ groupId, senderId, originalMessage }),
+        ),
+      ),
+    ]);
 
-    const forwardedMessages = [];
+    const forwardedCount = [...directMessages, ...groupMessages].filter(Boolean).length;
 
-    // Forward to Direct Conversations
-    for (const recipientId of recipientIds) {
-      try {
-        const { conversation, isNewConversation } = await ensureDirectConversationForSend({
-          conversationId: null,
-          senderId,
-          recipientId
-        });
-
-        let message = await Message.create({
-          conversationId: conversation._id,
-          senderId,
-          content: originalMessage.content,
-          imgUrl: originalMessage.imgUrl,
-          forwardedFrom: originalMessage.senderId,
-        });
-
-        message = await message.populate("forwardedFrom", "displayName avatarUrl");
-
-        updateConversationAfterCreateMessage(conversation, message, senderId);
-        await conversation.save();
-
-        if (isNewConversation) {
-          await emitDirectConversationCreated({ conversation, senderId });
-        }
-
-        emitNewMessage(io, conversation, message);
-        forwardedMessages.push(message);
-      } catch (err) {
-        console.error(`Error forwarding to user ${recipientId}:`, err);
-      }
-    }
-
-    // Forward to Group Conversations
-    for (const groupId of groupIds) {
-      try {
-        const conversation = await Conversation.findById(groupId);
-        if (!conversation) continue;
-
-        const isMember = conversation.participants.some(p => String(p.userId) === String(senderId));
-        if (!isMember) continue;
-
-        let message = await Message.create({
-          conversationId: conversation._id,
-          senderId,
-          content: originalMessage.content,
-          imgUrl: originalMessage.imgUrl,
-          forwardedFrom: originalMessage.senderId,
-        });
-
-        message = await message.populate("forwardedFrom", "displayName avatarUrl");
-
-        updateConversationAfterCreateMessage(conversation, message, senderId);
-        await conversation.save();
-
-        emitNewMessage(io, conversation, message);
-        forwardedMessages.push(message);
-      } catch (err) {
-        console.error(`Error forwarding to group ${groupId}:`, err);
-      }
-    }
-
-    return res.status(201).json({ message: "Chuyển tiếp thành công", count: forwardedMessages.length });
+    return res.status(201).json({ message: "Chuyển tiếp thành công", count: forwardedCount });
   } catch (error) {
     console.error("Lỗi khi forward tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống khi forward" });

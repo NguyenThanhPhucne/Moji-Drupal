@@ -114,10 +114,15 @@ const resolveClientBaseUrl = () => {
     return fromSingle.replace(/\/$/, "");
   }
 
-  const fromList = String(process.env.CLIENT_URLS || "")
+  const fromList = [];
+  String(process.env.CLIENT_URLS || "")
     .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+    .forEach((item) => {
+      const normalizedItem = item.trim();
+      if (normalizedItem) {
+        fromList.push(normalizedItem);
+      }
+    });
 
   return String(fromList[0] || "").replace(/\/$/, "");
 };
@@ -153,6 +158,83 @@ const isGroupAdmin = (conversation, userId) => {
   return (conversation?.group?.adminIds || []).some(
     (adminId) => toStringId(adminId) === normalizedUserId,
   );
+};
+
+const validateGroupAdminRoleRequest = ({
+  conversationId,
+  memberId,
+  makeAdmin,
+}) => {
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return { status: 400, message: "Invalid conversation id" };
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(memberId)) {
+    return { status: 400, message: "Invalid member id" };
+  }
+
+  if (typeof makeAdmin !== "boolean") {
+    return { status: 400, message: "makeAdmin must be boolean" };
+  }
+
+  return null;
+};
+
+const getGroupAdminRoleContextError = ({ conversation, userId, memberId }) => {
+  if (conversation.type !== "group") {
+    return {
+      status: 400,
+      message: "Only group conversations support admin roles",
+    };
+  }
+
+  if (!isGroupParticipant(conversation, userId)) {
+    return { status: 403, message: "Access denied" };
+  }
+
+  if (!isGroupCreator(conversation, userId)) {
+    return {
+      status: 403,
+      message: "Only group owner can update admin roles",
+    };
+  }
+
+  if (!isGroupParticipant(conversation, memberId)) {
+    return {
+      status: 400,
+      message: "Target member is not in this group",
+    };
+  }
+
+  if (isGroupCreator(conversation, memberId)) {
+    return { status: 400, message: "Cannot change owner role" };
+  }
+
+  if (!conversation.group) {
+    return { status: 400, message: "Group metadata is missing" };
+  }
+
+  return null;
+};
+
+const applyGroupAdminRoleUpdate = ({ conversation, memberId, makeAdmin }) => {
+  const creatorId = toStringId(conversation.group.createdBy);
+  const targetMemberId = toStringId(memberId);
+  const adminIds = new Set(
+    (conversation.group.adminIds || []).map((adminId) => toStringId(adminId)),
+  );
+
+  if (creatorId) {
+    adminIds.add(creatorId);
+  }
+
+  if (makeAdmin) {
+    adminIds.add(targetMemberId);
+  } else {
+    adminIds.delete(targetMemberId);
+  }
+
+  conversation.group.adminIds = Array.from(adminIds);
 };
 
 const toGroupConversationPayload = (conversation) => {
@@ -615,16 +697,13 @@ export const updateGroupAdminRole = async (req, res) => {
     const { memberId, makeAdmin } = req.body || {};
     const userId = req.user._id;
 
-    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
-      return res.status(400).json({ message: "Invalid conversation id" });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(memberId)) {
-      return res.status(400).json({ message: "Invalid member id" });
-    }
-
-    if (typeof makeAdmin !== "boolean") {
-      return res.status(400).json({ message: "makeAdmin must be boolean" });
+    const payloadError = validateGroupAdminRoleRequest({
+      conversationId,
+      memberId,
+      makeAdmin,
+    });
+    if (payloadError) {
+      return res.status(payloadError.status).json({ message: payloadError.message });
     }
 
     const conversation = await Conversation.findById(conversationId);
@@ -632,48 +711,16 @@ export const updateGroupAdminRole = async (req, res) => {
       return res.status(404).json({ message: "Conversation not found" });
     }
 
-    if (conversation.type !== "group") {
-      return res.status(400).json({ message: "Only group conversations support admin roles" });
+    const contextError = getGroupAdminRoleContextError({
+      conversation,
+      userId,
+      memberId,
+    });
+    if (contextError) {
+      return res.status(contextError.status).json({ message: contextError.message });
     }
 
-    if (!isGroupParticipant(conversation, userId)) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    if (!isGroupCreator(conversation, userId)) {
-      return res.status(403).json({ message: "Only group owner can update admin roles" });
-    }
-
-    if (!isGroupParticipant(conversation, memberId)) {
-      return res.status(400).json({ message: "Target member is not in this group" });
-    }
-
-    if (isGroupCreator(conversation, memberId)) {
-      return res.status(400).json({ message: "Cannot change owner role" });
-    }
-
-
-    if (conversation.group) {
-      const creatorId = toStringId(conversation.group.createdBy);
-      const targetMemberId = toStringId(memberId);
-      const adminIds = new Set(
-        (conversation.group.adminIds || []).map((adminId) => toStringId(adminId)),
-      );
-
-      if (creatorId) {
-        adminIds.add(creatorId);
-      }
-
-      if (makeAdmin) {
-        adminIds.add(targetMemberId);
-      } else {
-        adminIds.delete(targetMemberId);
-      }
-
-      conversation.group.adminIds = Array.from(adminIds);
-    } else {
-      return res.status(400).json({ message: "Group metadata is missing" });
-    }
+    applyGroupAdminRoleUpdate({ conversation, memberId, makeAdmin });
 
     await conversation.save();
     const payload = await broadcastGroupConversationUpdated(conversation);
@@ -1080,9 +1127,20 @@ export const deleteConversation = async (req, res) => {
           .json({ message: "Bạn không có quyền xoá conversation này" });
       }
 
-      const conversationSnapshot = conversation.toObject({
-        depopulate: true,
-      });
+      try {
+        const messagesWithImages = await Message.find({
+          conversationId,
+          imgUrl: { $ne: null },
+        }).select("imgUrl");
+        imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
+
+        // ✅ CRITICAL FIX: Delete Messages BEFORE Conversation to prevent orphan Messages.
+        // If Message.deleteMany fails, we simply abort — no data is lost.
+        await Message.deleteMany({ conversationId });
+      } catch (messageDeleteError) {
+        console.error("[deleteConversation] Message cleanup failed — aborting to prevent orphan data", messageDeleteError);
+        throw messageDeleteError;
+      }
 
       const deletedConversation = await Conversation.findOneAndDelete({
         _id: conversation._id,
@@ -1091,28 +1149,7 @@ export const deleteConversation = async (req, res) => {
       if (!deletedConversation) {
         return res.status(404).json({ message: "Conversation không tồn tại" });
       }
-
-      try {
-        const messagesWithImages = await Message.find({
-          conversationId,
-          imgUrl: { $ne: null },
-        }).select("imgUrl");
-        imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
-
-        await Message.deleteMany({ conversationId });
-      } catch (messageDeleteError) {
-        try {
-          await Conversation.create(conversationSnapshot);
-        } catch (restoreError) {
-          console.error(
-            "Failed to restore conversation after message deletion error",
-            restoreError,
-          );
-        }
-
-        throw messageDeleteError;
-      }
-    }
+    } // end if (!deletedWithTransaction)
 
     // 4. Emit to all participants that conversation was deleted
     await Promise.all(conversation.participants.map(async (p) => {

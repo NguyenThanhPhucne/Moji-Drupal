@@ -1,20 +1,26 @@
-import { chromium } from "../frontend/node_modules/playwright/index.mjs";
+import { createRequire } from "node:module";
+
+const requireFromFrontend = createRequire(
+  new URL("../frontend/package.json", import.meta.url),
+);
+const { chromium } = requireFromFrontend("playwright");
 
 const APP_BASE_URL = "http://localhost:5173";
 const API_BASE_URL = "http://127.0.0.1:5001/api";
 const now = Date.now();
+const smokePassword = `Smoke_${now}_Aa!`;
 
 const users = {
   sender: {
     username: `s1ui_sender_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `s1ui_sender_${now}@local.dev`,
     firstName: "UI",
     lastName: "Sender",
   },
   recipient: {
     username: `s1ui_recipient_${now}`,
-    password: "P@ssw0rd123",
+    password: smokePassword,
     email: `s1ui_recipient_${now}@local.dev`,
     firstName: "UI",
     lastName: "Recipient",
@@ -88,7 +94,7 @@ const befriend = async (from, to) => {
   }
 };
 
-(async () => {
+const run = async () => {
   let browser;
 
   try {
@@ -103,7 +109,7 @@ const befriend = async (from, to) => {
     await page.goto(`${APP_BASE_URL}/signin`, { waitUntil: "networkidle" });
 
     const uiSignInOk = await page.evaluate(async ({ username, password }) => {
-      const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+      const { useAuthStore } = await import("../src/stores/useAuthStore.ts");
       return useAuthStore.getState().signIn(username, password);
     }, {
       username: users.sender.username,
@@ -151,7 +157,7 @@ const befriend = async (from, to) => {
     await page.goto(`${APP_BASE_URL}/`, { waitUntil: "networkidle" });
 
     const result = await page.evaluate(async ({ recipientId }) => {
-      const { useChatStore } = await import("/src/stores/useChatStore.ts");
+      const { useChatStore } = await import("../src/stores/useChatStore.ts");
 
       useChatStore.setState({ activeConversationId: null });
 
@@ -205,4 +211,6 @@ const befriend = async (from, to) => {
       await browser.close();
     }
   }
-})();
+};
+
+await run();

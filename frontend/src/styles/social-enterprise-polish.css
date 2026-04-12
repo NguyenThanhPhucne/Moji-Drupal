@@ -2473,7 +2473,7 @@
     position: fixed;
     right: 1rem;
     bottom: 0.75rem;
-    z-index: 55;
+    z-index: 50; /* --z-dock: above headers, below dropdowns */
     display: flex;
     flex-direction: column;
     align-items: flex-end;

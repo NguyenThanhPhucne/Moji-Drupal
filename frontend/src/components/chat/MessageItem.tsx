@@ -719,20 +719,9 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
       )}
 
       {message.replyTo && !message.isDeleted && (
-        <div
-          className={cn(
-            "mb-1 max-w-full rounded-r-[12px] px-2.5 py-1.5 border-l-[3px]",
-            isOwn
-              ? "border-l-blue-500 bg-blue-50 text-blue-900/80 dark:bg-blue-950/40 dark:text-blue-100"
-              : "border-l-gray-300 bg-gray-50 text-gray-700 dark:border-l-zinc-600 dark:bg-zinc-800/40 dark:text-zinc-300",
-          )}
-        >
-          <p className="text-[10px] font-bold mb-[1px] uppercase tracking-wider opacity-80">
-            Replied to
-          </p>
-          <p className="text-[12.5px] truncate max-w-[200px] leading-snug">
-            {message.replyTo.content}
-          </p>
+        <div className={cn("chat-reply-preview", isOwn ? "chat-reply-preview--own" : "chat-reply-preview--peer")}>
+          <p className="chat-reply-preview__label">Replied to</p>
+          <p className="chat-reply-preview__text">{message.replyTo.content}</p>
         </div>
       )}
 
@@ -986,7 +975,7 @@ const MessageItem = memo(function MessageItem({
       const viewportPadding = 8;
       // Account for iOS safe-area-inset-bottom (adds ~34px on notched devices)
       const safeAreaBottom =
-        typeof globalThis.CSS !== "undefined" &&
+        globalThis.CSS !== undefined &&
         typeof globalThis.CSS.supports === "function" &&
         globalThis.CSS.supports("padding-bottom: env(safe-area-inset-bottom)")
           ? 44
@@ -1034,7 +1023,7 @@ const MessageItem = memo(function MessageItem({
   }, [onForward]);
 
   const handleToggleForwardable = useCallback(async () => {
-    if (!message._id || typeof message.isForwardable === "undefined") return;
+    if (!message._id || message.isForwardable === undefined) return;
     try {
       await toggleMessageForwardable(message._id, !message.isForwardable);
       toast.success(message.isForwardable ? "Disabled forwarding for this message" : "Enabled forwarding for this message");
@@ -1188,6 +1177,32 @@ const MessageItem = memo(function MessageItem({
 
 
   const imageCornerClass = isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]";
+  const ownUserId = String(user?._id);
+  const ownBubbleToneClass = "bg-blue-600 text-white border-blue-500/10";
+  const peerBubbleToneClass =
+    "bg-gray-100/90 text-gray-900 border-black/5 dark:bg-zinc-800/80 dark:text-zinc-100 dark:border-white/5";
+  const bubbleToneClass = isOwn ? ownBubbleToneClass : peerBubbleToneClass;
+
+  const ownTopRightClass =
+    prevSenderId === ownUserId ? "rounded-tr-[4px]" : "rounded-tr-[18px]";
+  const ownBottomRightClass =
+    nextSenderId === ownUserId ? "rounded-br-[4px]" : "rounded-br-[18px]";
+  const peerTopLeftClass =
+    prevSenderId === message.senderId ? "rounded-tl-[4px]" : "rounded-tl-[18px]";
+  const peerBottomLeftClass =
+    nextSenderId === message.senderId ? "rounded-bl-[4px]" : "rounded-bl-[18px]";
+
+  const ownRoundedClass = cn(
+    ownTopRightClass,
+    ownBottomRightClass,
+    "rounded-tl-[18px] rounded-bl-[18px]",
+  );
+  const peerRoundedClass = cn(
+    peerTopLeftClass,
+    peerBottomLeftClass,
+    "rounded-tr-[18px] rounded-br-[18px]",
+  );
+  const bubbleRoundedClass = isOwn ? ownRoundedClass : peerRoundedClass;
 
   const renderReadOnlyBubble = () => (
     <div
@@ -1197,21 +1212,9 @@ const MessageItem = memo(function MessageItem({
           ? "bg-transparent p-0 border-transparent shadow-none"
           : cn(
               "px-3.5 py-2.5",
-              isOwn
-                ? "bg-blue-600 text-white border-blue-500/10"
-                : "bg-gray-100/90 text-gray-900 border-black/5 dark:bg-zinc-800/80 dark:text-zinc-100 dark:border-white/5",
+              bubbleToneClass,
             ),
-        isOwn
-          ? cn(
-              prevSenderId === String(user?._id) ? "rounded-tr-[4px]" : "rounded-tr-[18px]",
-              nextSenderId === String(user?._id) ? "rounded-br-[4px]" : "rounded-br-[18px]",
-              "rounded-tl-[18px] rounded-bl-[18px]"
-            )
-          : cn(
-              prevSenderId === message.senderId ? "rounded-tl-[4px]" : "rounded-tl-[18px]",
-              nextSenderId === message.senderId ? "rounded-bl-[4px]" : "rounded-bl-[18px]",
-              "rounded-tr-[18px] rounded-br-[18px]"
-            ),
+        bubbleRoundedClass,
         message.isDeleted && "opacity-50 italic",
         "select-text",
       )}
@@ -1245,7 +1248,7 @@ const MessageItem = memo(function MessageItem({
             >
               <img 
                 src={message.imgUrl} 
-                alt={`Image sent by ${senderParticipant?.displayName ?? "user"} at ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                alt={`Sent by ${senderParticipant?.displayName ?? "user"} at ${new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
                 className={cn(
                   "max-w-[240px] max-h-[320px] w-full object-cover shadow-sm",
                   hasOnlyImage 
@@ -1305,7 +1308,7 @@ const MessageItem = memo(function MessageItem({
             setEditValue(message.content ?? "");
           }
         }}
-        className="flex-1 rounded-xl px-3 py-2 text-sm border border-primary/55 outline-none bg-background/95 focus:ring-2 focus:ring-primary/30"
+        className="chat-edit-input"
       />
       <button
         type="button"
