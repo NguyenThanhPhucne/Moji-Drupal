@@ -84,7 +84,7 @@ const SocialNotificationsPanel = ({
   return (
     <aside
       className={cn(
-        "social-card flex flex-col gap-0 overflow-hidden",
+        "social-card social-notification-glass flex flex-col gap-0 overflow-hidden",
         "p-0",
       )}
     >
@@ -164,8 +164,8 @@ const SocialNotificationsPanel = ({
             >
               <div className="flex items-start gap-3">
                 {/* ── Avatar + type badge ── */}
-                <div className="relative flex-shrink-0 mt-0.5">
-                  <Avatar className={cn("ring-2 ring-background", compact ? "h-9 w-9" : "h-10 w-10")}>
+                <div className={cn("relative flex-shrink-0 mt-0.5 rounded-full", !notification.isRead && "social-pulse-glow-unread")}>
+                  <Avatar className={cn("ring-2 ring-background relative z-10", compact ? "h-9 w-9" : "h-10 w-10")}>
                     <AvatarImage
                       src={notification.actorId.avatarUrl ?? undefined}
                       alt={notification.actorId.displayName}

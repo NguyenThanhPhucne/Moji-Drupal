@@ -2838,3 +2838,69 @@
     0 0 0 2px hsl(var(--se-primary) / 0.3);
   background: hsl(var(--se-surface));
 }
+
+/* ───────────────────────────────────────────────────────── */
+/* 🧩 UI/UX Round 6: Advanced Layouts & Mini Chat           */
+/* ───────────────────────────────────────────────────────── */
+
+/* Scale Bounce for Right Rail */
+.social-scale-bounce-hover {
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.social-scale-bounce-hover:hover {
+  transform: scale(1.03);
+  box-shadow: 0 8px 24px -10px hsl(var(--se-primary) / 0.15);
+  border-color: hsl(var(--se-primary) / 0.3);
+  z-index: 10;
+}
+
+/* Glassmorphism Notification Panel */
+.social-notification-glass {
+  background: hsl(var(--se-surface) / 0.88) !important;
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border: 1px solid hsl(var(--se-border) / 0.45) !important;
+  box-shadow: 0 10px 40px -15px hsl(220 30% 8% / 0.15) !important;
+}
+
+/* Pulse glow for unread notifications */
+.social-pulse-glow-unread {
+  position: relative;
+}
+.social-pulse-glow-unread::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: 0 0 0 1px hsl(var(--se-primary) / 0.4), 0 0 12px 1px hsl(var(--se-primary) / 0.12);
+  pointer-events: none;
+  animation: notificationPulseGlow 2.5s infinite;
+}
+
+@keyframes notificationPulseGlow {
+  0% { box-shadow: 0 0 0 1px hsl(var(--se-primary) / 0.4), 0 0 12px 1px hsl(var(--se-primary) / 0.15); }
+  50% { box-shadow: 0 0 0 1px hsl(var(--se-primary) / 0.7), 0 0 20px 2px hsl(var(--se-primary) / 0.25); }
+  100% { box-shadow: 0 0 0 1px hsl(var(--se-primary) / 0.4), 0 0 12px 1px hsl(var(--se-primary) / 0.15); }
+}
+
+/* Mini Chat Bounce In */
+.mini-chat-bounce-in {
+  animation: miniChatBounceIn 0.45s cubic-bezier(0.25, 1.25, 0.4, 1.05) both;
+  transform-origin: bottom center;
+}
+
+@keyframes miniChatBounceIn {
+  0% { transform: translateY(60px) scale(0.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Mini Chat Flash Border (Unread state) */
+.mini-chat-flash-unread {
+  animation: miniChatFlashBorder 2s ease-in-out infinite alternate;
+}
+
+@keyframes miniChatFlashBorder {
+  0% { box-shadow: 0 -4px 12px hsl(220 40% 12% / 0.1), 0 0 0 1px hsl(var(--se-border)); border-color: hsl(var(--se-border)); }
+  100% { box-shadow: 0 -8px 24px hsl(var(--se-primary) / 0.25), 0 0 0 2px hsl(var(--se-primary)); border-color: hsl(var(--se-primary)); }
+}

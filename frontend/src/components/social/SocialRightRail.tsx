@@ -152,7 +152,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               <button
                 key={friend._id}
               type="button"
-              className="social-contact-item social-contact-hover w-full text-left"
+              className="social-contact-item social-contact-hover social-scale-bounce-hover w-full text-left"
               onClick={() => void openDirectChat(friend)}
             >
               <div className="relative flex-shrink-0">
@@ -202,7 +202,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             </div>
           ) : suggestions.length > 0 ? (
             suggestions.map((person) => (
-              <div key={person._id} className="social-suggestion-item">
+              <div key={person._id} className="social-suggestion-item social-scale-bounce-hover transition-all duration-300">
                 <div className="flex items-center gap-2 min-w-0">
                   <UserAvatar type="chat" name={person.displayName} avatarUrl={person.avatarUrl || undefined} />
                   <span className="truncate text-sm font-medium">{person.displayName}</span>
@@ -231,7 +231,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             <button
               key={item.tag}
               type="button"
-              className="trending-chip-upgrade"
+              className="trending-chip-upgrade social-scale-bounce-hover"
               onClick={() => navigate(`/explore?tag=${encodeURIComponent(item.tag)}`)}
             >
               <span className="text-primary/70">#</span>{item.tag}

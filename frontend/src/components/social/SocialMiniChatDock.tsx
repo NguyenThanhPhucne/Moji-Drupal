@@ -21,6 +21,7 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import MiniChatSkeleton from "@/components/skeleton/MiniChatSkeleton";
+import { cn } from "@/lib/utils";
 
 const formatMessageTime = (value: string) => {
   const date = new Date(value);
@@ -284,7 +285,11 @@ const MiniChatWindow = ({ userId }: { userId: string }) => {
 
   return (
     <section
-      className={`social-mini-chat-window ${windowItem.poppedOut ? "social-mini-chat-window--popped" : ""}`}
+      className={cn(
+        "social-mini-chat-window mini-chat-bounce-in",
+        windowItem.poppedOut ? "social-mini-chat-window--popped" : "",
+        windowItem.minimized && windowItem.unreadCount > 0 ? "mini-chat-flash-unread" : ""
+      )}
       aria-label={`Chat with ${windowItem.displayName}`}
       draggable
       onDragStart={(event) => {
