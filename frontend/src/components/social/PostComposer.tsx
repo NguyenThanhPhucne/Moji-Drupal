@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { cn } from "@/lib/utils";
 
 interface PostComposerProps {
   onCreate: (payload: {
@@ -251,7 +252,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
           </div>
           <button
             type="button"
-            className="social-composer-prompt social-composer-trigger h-11 flex-1 rounded-full px-4 text-left text-sm transition-all hover:bg-muted/70 hover:shadow-sm hover:-translate-y-px active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="social-composer-prompt social-composer-trigger social-composer-trigger-glow h-11 flex-1 rounded-full px-4 text-left text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             onClick={() => setIsOpen(true)}
           >
             What's on your mind?
@@ -277,7 +278,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent
           contentClassMode="bare"
-          className="social-modal-shell social-composer-modal max-w-2xl rounded-xl p-0"
+          className="social-modal-shell social-composer-modal social-modal-spring max-w-2xl rounded-xl p-0 shadow-2xl"
         >
           <DialogHeader className="social-composer-modal__header social-divider border-b px-5 py-4">
             <DialogTitle className="social-text-main text-center text-lg font-bold">
@@ -373,7 +374,12 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
                       return (
                         <div
                           key={`${index}-${media.slice(0, 24)}`}
-                          className={`social-media-tile social-composer-thumb group relative overflow-hidden rounded-lg border ${dragStateClass} ${isActive ? "social-composer-thumb--active" : ""}`}
+                          className={cn(
+                            "social-media-tile social-composer-thumb group relative overflow-hidden rounded-lg border",
+                            dragStateClass,
+                            isActive ? "social-composer-thumb--active" : "",
+                            draggingIndex === index ? "drag-tilt-active" : ""
+                          )}
                         >
                           <button
                             type="button"

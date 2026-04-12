@@ -2662,3 +2662,179 @@
 .enterprise-empty-icon:hover {
   @apply scale-105;
 }
+
+/* ───────────────────────────────────────────────────────── */
+/* 🚀 UI/UX Round 5: Social Feed Interactive Enhancements  */
+/* ───────────────────────────────────────────────────────── */
+
+/* 1. iOS Sliding Pill for Tabs */
+.social-filter-tabs-container {
+  position: relative;
+  display: inline-flex;
+  background: hsl(var(--se-surface-soft));
+  padding: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--se-border) / 0.6);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.social-filter-tab {
+  position: relative;
+  z-index: 2;
+  height: 2.25rem;
+  padding: 0 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: hsl(var(--se-muted));
+  border-radius: 999px;
+  background: transparent;
+  border: none;
+  transition: color 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-filter-tab[data-active="true"] {
+  color: hsl(var(--se-primary));
+}
+
+.social-filter-pill-bg {
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0;
+  z-index: 1;
+  background: hsl(var(--se-primary) / 0.12);
+  border-radius: 999px;
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+    width 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid hsl(var(--se-primary) / 0.2);
+}
+
+.social-badge-pop {
+  animation: badgePopRound5 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes badgePopRound5 {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 2. Glassmorphism & Composer Enhancements */
+.social-composer-trigger-glow {
+  transition: all 0.25s ease;
+}
+.social-composer-trigger-glow:hover {
+  background: hsl(var(--se-surface));
+  border-color: hsl(var(--se-primary) / 0.4);
+  box-shadow: 0 0 0 3px hsl(var(--se-primary) / 0.08),
+    0 4px 12px hsl(var(--se-primary) / 0.06);
+}
+
+.social-modal-spring {
+  animation: springZoomIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.1) both;
+}
+
+@keyframes springZoomIn {
+  0% { opacity: 0; transform: scale(0.95) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.drag-tilt-active {
+  transform: rotate(-3deg) scale(1.05);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+  z-index: 10;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* 3. SocialPostCard Interactions */
+.like-bounce-burst {
+  animation: likeBounceBurst 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes likeBounceBurst {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.8); }
+  60% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+
+.image-hover-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.image-hover-shimmer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 100%
+  );
+  transform: skewX(-25deg);
+  transition: none;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.image-hover-shimmer:hover::after {
+  left: 200%;
+  transition: left 0.8s ease-in-out;
+}
+
+/* Counter slide up */
+.counter-slide-wrapper {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: middle;
+  height: 1.2em;
+}
+
+.counter-slide-inner {
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.counter-slide-item {
+  height: 1.2em;
+  display: flex;
+  align-items: center;
+}
+
+/* 4. CommentsPanel tree & Focus */
+.social-comment-tree-line {
+  position: relative;
+}
+
+.social-comment-tree-line::before {
+  content: "";
+  position: absolute;
+  top: 2rem;
+  bottom: -0.5rem;
+  left: 1rem;
+  width: 2px;
+  background: hsl(var(--se-border) / 0.5);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.social-post-comment-input-floating {
+  transition: box-shadow 0.25s ease, transform 0.2s ease, background 0.25s ease;
+}
+
+.social-post-comment-input-floating:focus-within {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px -4px hsl(220 40% 12% / 0.15),
+    0 0 0 2px hsl(var(--se-primary) / 0.3);
+  background: hsl(var(--se-surface));
+}

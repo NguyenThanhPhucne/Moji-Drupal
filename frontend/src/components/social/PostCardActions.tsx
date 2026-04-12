@@ -75,7 +75,11 @@ const PostCardActions = ({
                 </span>
               )}
             </span>
-            <span>{reactionSummaryLabel}</span>
+            <span className="counter-slide-wrapper">
+              <span key={reactionSummaryLabel} className="counter-slide-inner animate-in slide-in-from-bottom-2 fade-in duration-300">
+                {reactionSummaryLabel}
+              </span>
+            </span>
           </button>
         ) : (
           <span />
@@ -136,9 +140,9 @@ const PostCardActions = ({
             disabled={likePending}
           >
             {activeReaction ? (
-              <ReactionGlyph reaction={displayedReaction} className="h-5 w-5" />
+              <ReactionGlyph reaction={displayedReaction} className="h-5 w-5 like-bounce-burst group-active:scale-95" />
             ) : (
-              <ThumbsUp className="h-4.5 w-4.5" />
+              <ThumbsUp className="h-4.5 w-4.5 group-active:scale-95 transition-transform" />
             )}
             {displayedReactionLabel}
           </button>

@@ -183,32 +183,46 @@ const HomeFeedPage = () => {
               )}
 
               {/* ── Filter bar with live count badges ────────────────────── */}
-              <div className="social-card social-home-filter-bar p-2">
-                {(["all", "photos", "text"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className="social-home-filter-chip"
-                    data-active={feedTab === tab}
-                    onClick={() => setFeedTab(tab)}
-                  >
-                    <span>
-                      {tab === "all" ? "All posts" : tab === "photos" ? "Photos" : "Text"}
-                    </span>
-                    {homeFeed.length > 0 && (
-                      <span
-                        className={cn(
-                          "ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums transition-colors",
-                          feedTab === tab
-                            ? "bg-primary/20 text-primary"
-                            : "bg-muted text-muted-foreground",
+              <div className="flex items-center gap-0 overflow-x-auto beautiful-scrollbar">
+                <div className="social-filter-tabs-container">
+                  {(["all", "photos", "text"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      className="social-filter-tab"
+                      data-active={feedTab === tab}
+                      onClick={() => setFeedTab(tab)}
+                    >
+                      <span className="relative z-10 flex items-center">
+                        {tab === "all" ? "All posts" : tab === "photos" ? "Photos" : "Text"}
+                        {homeFeed.length > 0 && (
+                          <span
+                            key={`${tab}-${tabCounts[tab]}`}
+                            className={cn(
+                              "ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors social-badge-pop",
+                              feedTab === tab
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {tabCounts[tab]}
+                          </span>
                         )}
-                      >
-                        {tabCounts[tab]}
                       </span>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                  
+                  {/* Sliding Pill Indicator */}
+                  <div 
+                    className="social-filter-pill-bg"
+                    style={{
+                      width: `${100 / 3}%`,
+                      transform: `translateX(${
+                        feedTab === "all" ? 0 : feedTab === "photos" ? 100 : 200
+                      }%)`,
+                    }}
+                  />
+                </div>
               </div>
 
               {/* ── Post list ─────────────────────────────────────────────── */}

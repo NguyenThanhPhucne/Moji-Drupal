@@ -42,7 +42,7 @@ const VirtualizedCommentThreadItem = ({
   onSubmitReply,
 }: VirtualizedCommentThreadItemProps) => {
   return (
-    <div className="space-y-2 pb-2">
+    <div className="space-y-2 pb-2 social-comment-tree-line">
       <CommentBubble
         comment={item.root}
         postAuthorId={postAuthorId}
@@ -88,7 +88,7 @@ const VirtualizedCommentThreadItem = ({
             value={replyDraft}
             onChange={(event) => onReplyDraftChange(item.root._id, event.target.value)}
             placeholder={`Reply to ${item.root.authorId.displayName}...`}
-            className="social-post-comment-input h-9 rounded-full shadow-none"
+            className="social-post-comment-input social-post-comment-input-floating h-9 rounded-full shadow-none"
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -235,7 +235,7 @@ const CommentsPanel = ({
             value={commentDraft}
             onChange={(event) => onCommentDraftChange(event.target.value)}
             placeholder="Write a comment..."
-            className="social-post-comment-input h-10 rounded-full pr-28 text-sm shadow-none"
+            className="social-post-comment-input social-post-comment-input-floating h-10 rounded-full pr-28 text-sm shadow-none"
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -274,7 +274,7 @@ const CommentsPanel = ({
       ) : (
         <div className="space-y-2">
           {rootsWithReplies.map((item) => (
-            <div key={item.root._id} className="space-y-2">
+            <div key={item.root._id} className="space-y-2 social-comment-tree-line pb-2">
               <CommentBubble
                 comment={item.root}
                 postAuthorId={postAuthorId}
@@ -322,7 +322,7 @@ const CommentsPanel = ({
                     value={replyDraftByCommentId[item.root._id] || ""}
                     onChange={(event) => onReplyDraftChange(item.root._id, event.target.value)}
                     placeholder={`Reply to ${item.root.authorId.displayName}...`}
-                    className="social-post-comment-input h-9 rounded-full shadow-none"
+                    className="social-post-comment-input social-post-comment-input-floating h-9 rounded-full shadow-none"
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();

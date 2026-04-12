@@ -564,7 +564,7 @@ const PostMediaBlock = ({
       <button
         type="button"
         className={cn(
-          "social-post-media-block social-media-tile mt-3 flex w-full items-center justify-center overflow-hidden rounded-lg border",
+          "social-post-media-block social-media-tile image-hover-shimmer mt-3 flex w-full items-center justify-center overflow-hidden rounded-lg border",
           portrait ? "max-h-[620px]" : "max-h-[500px]",
         )}
         onClick={() => onOpenLightbox(0)}
@@ -588,7 +588,7 @@ const PostMediaBlock = ({
           <button
             key={`${media}-${index}`}
             type="button"
-            className="social-media-tile relative aspect-[4/3] overflow-hidden rounded-md border"
+            className="social-media-tile image-hover-shimmer relative aspect-[4/3] overflow-hidden rounded-md border"
             onClick={() => onOpenLightbox(index)}
           >
             <img src={media} alt={`post media ${index + 1}`} className="h-full w-full object-cover" />
