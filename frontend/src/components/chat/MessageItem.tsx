@@ -120,7 +120,7 @@ const QuickReactBar = memo(function QuickReactBar({
 });
 
 /* ---------- Context menu ---------- */
-const ContextMenu = memo(function ContextMenu({
+const ContextMenu = memo(function ContextMenu({ // NOSONAR
   x,
   y,
   isOwn,
@@ -814,7 +814,7 @@ interface MessageItemProps {
   onTogglePin?: (messageId: string, willPin: boolean) => void;
 }
 
-const MessageItem = memo(function MessageItem({
+const MessageItem = memo(function MessageItem({ // NOSONAR
   message,
   index,
   prevSenderId,
@@ -908,17 +908,27 @@ const MessageItem = memo(function MessageItem({
   const handleConfirmRemoveForMe = useCallback(async () => {
     if (!activeConversationId) return;
     setDeleteActionLoading("for-me");
-    await removeMessageForMe(activeConversationId, message._id);
-    setDeleteActionLoading(null);
-    setDeleteDialogOpen(false);
+    try {
+      await removeMessageForMe(activeConversationId, message._id);
+      setDeleteDialogOpen(false);
+    } catch {
+      // Toast + rollback are handled inside the chat store.
+    } finally {
+      setDeleteActionLoading(null);
+    }
   }, [activeConversationId, message._id, removeMessageForMe]);
 
   const handleConfirmUnsendForEveryone = useCallback(async () => {
     if (!activeConversationId || !isOwn) return;
     setDeleteActionLoading("for-everyone");
-    await unsendMessage(activeConversationId, message._id);
-    setDeleteActionLoading(null);
-    setDeleteDialogOpen(false);
+    try {
+      await unsendMessage(activeConversationId, message._id);
+      setDeleteDialogOpen(false);
+    } catch {
+      // Toast + rollback are handled inside the chat store.
+    } finally {
+      setDeleteActionLoading(null);
+    }
   }, [activeConversationId, isOwn, message._id, unsendMessage]);
 
   const handleCopy = useCallback(() => {

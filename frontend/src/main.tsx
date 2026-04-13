@@ -7,6 +7,24 @@ import axios from "axios";
 // Always send cookies with every API request.
 axios.defaults.withCredentials = true;
 
+const MOTION_LEVEL_STORAGE_KEY = "app-motion-level";
+
+const resolveMotionLevel = () => {
+  const urlParams = new URLSearchParams(globalThis.location.search);
+  const queryMotionLevel = urlParams.get("motion");
+
+  if (queryMotionLevel === "calm" || queryMotionLevel === "punchy") {
+    localStorage.setItem(MOTION_LEVEL_STORAGE_KEY, queryMotionLevel);
+    return queryMotionLevel;
+  }
+
+  const storedMotionLevel = localStorage.getItem(MOTION_LEVEL_STORAGE_KEY);
+  return storedMotionLevel === "punchy" ? "punchy" : "calm";
+};
+
+const motionLevel = resolveMotionLevel();
+document.documentElement.dataset.motionLevel = motionLevel;
+
 // Restore saved theme before initial render to avoid flash on page load.
 const savedTheme = localStorage.getItem("theme-storage");
 if (savedTheme) {

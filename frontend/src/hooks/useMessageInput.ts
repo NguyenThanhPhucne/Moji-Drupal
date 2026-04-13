@@ -154,7 +154,9 @@ export function useMessageInput(selectedConvo: Conversation) {
     if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      void sendMessage();
+      sendMessage().catch((error) => {
+        console.error("Failed to send message", error);
+      });
     }
   };
 

@@ -186,7 +186,8 @@ const ExplorePage = () => {
                 {filteredExploreFeed.map((post, index) => (
                   <div
                     key={post._id}
-                    className={getStaggerEnterClass(index)}
+                    className="feed-card-stagger"
+                    style={{ animationDelay: `${Math.min(index, 10) * 48}ms` }}
                   >
                     <SocialPostCard
                       post={post}

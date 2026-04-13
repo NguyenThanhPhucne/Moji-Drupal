@@ -4,6 +4,7 @@ import express from "express";
 import { socketAuthMiddleware } from "../middlewares/socketMiddleware.js";
 import { getUserConversationsForSocketIO } from "../controllers/conversationController.js";
 import User from "../models/User.js";
+import Conversation from "../models/Conversation.js";
 
 const app = express();
 
@@ -44,6 +45,37 @@ const onlineUsers = new Map(); // {userId: Set<socketId>}
 const ONLINE_USERS_RESYNC_MS = 15000;
 const TYPING_EMIT_THROTTLE_MS = 300;
 const typingEmitTimelineBySocket = new Map(); // {socketId: Map<conversationId, ts>}
+const MONGO_OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+
+const normalizeConversationId = (value) => String(value || "").trim();
+
+const ensureSocketConversationAccess = async ({
+  socket,
+  userId,
+  conversationId,
+  authorizedConversationIds,
+}) => {
+  const normalizedConversationId = normalizeConversationId(conversationId);
+  if (!MONGO_OBJECT_ID_PATTERN.test(normalizedConversationId)) {
+    return null;
+  }
+
+  if (!authorizedConversationIds.has(normalizedConversationId)) {
+    const membership = await Conversation.exists({
+      _id: normalizedConversationId,
+      "participants.userId": userId,
+    });
+
+    if (!membership) {
+      return null;
+    }
+
+    authorizedConversationIds.add(normalizedConversationId);
+  }
+
+  socket.join(normalizedConversationId);
+  return normalizedConversationId;
+};
 
 const removeSocketFromOnlineUsers = (userId, socketId) => {
   const userSockets = onlineUsers.get(userId);
@@ -106,21 +138,40 @@ io.on("connection", async (socket) => {
   await broadcastOnlineUsers();
 
   const conversationIds = await getUserConversationsForSocketIO(user._id);
-  conversationIds.forEach((id) => {
-    socket.join(id);
-  });
+  const authorizedConversationIds = new Set(
+    conversationIds
+      .map((conversationId) => normalizeConversationId(conversationId))
+      .filter(Boolean),
+  );
 
-  socket.on("join-conversation", (conversationId) => {
-    if (!conversationId) {
-      return;
-    }
-
+  authorizedConversationIds.forEach((conversationId) => {
     socket.join(conversationId);
   });
 
-  socket.on("typing", (conversationId) => {
-    const normalizedConversationId = String(conversationId || "").trim();
-    if (!normalizedConversationId) {
+  socket.on("join-conversation", async (conversationId) => {
+    const joinedConversationId = await ensureSocketConversationAccess({
+      socket,
+      userId,
+      conversationId,
+      authorizedConversationIds,
+    });
+
+    if (!joinedConversationId) {
+      console.warn(
+        `[Socket] blocked unauthorized join attempt for user ${userId} to conversation ${normalizeConversationId(conversationId)}`,
+      );
+    }
+  });
+
+  socket.on("typing", async (conversationId) => {
+    const authorizedConversationId = await ensureSocketConversationAccess({
+      socket,
+      userId,
+      conversationId,
+      authorizedConversationIds,
+    });
+
+    if (!authorizedConversationId) {
       return;
     }
 
@@ -131,36 +182,42 @@ io.on("connection", async (socket) => {
       typingEmitTimelineBySocket.set(socket.id, socketTypingTimeline);
     }
 
-    const lastEmitAt = socketTypingTimeline.get(normalizedConversationId) || 0;
+    const lastEmitAt = socketTypingTimeline.get(authorizedConversationId) || 0;
     if (now - lastEmitAt < TYPING_EMIT_THROTTLE_MS) {
       return;
     }
 
-    socketTypingTimeline.set(normalizedConversationId, now);
+    socketTypingTimeline.set(authorizedConversationId, now);
 
-    socket.to(normalizedConversationId).emit("user-typing", {
-      conversationId: normalizedConversationId,
+    socket.to(authorizedConversationId).emit("user-typing", {
+      conversationId: authorizedConversationId,
       userId,
       displayName: user.displayName,
     });
   });
 
-  socket.on("stop_typing", (conversationId) => {
-    const normalizedConversationId = String(conversationId || "").trim();
-    if (!normalizedConversationId) {
+  socket.on("stop_typing", async (conversationId) => {
+    const authorizedConversationId = await ensureSocketConversationAccess({
+      socket,
+      userId,
+      conversationId,
+      authorizedConversationIds,
+    });
+
+    if (!authorizedConversationId) {
       return;
     }
 
     const socketTypingTimeline = typingEmitTimelineBySocket.get(socket.id);
     if (socketTypingTimeline) {
-      socketTypingTimeline.delete(normalizedConversationId);
+      socketTypingTimeline.delete(authorizedConversationId);
       if (socketTypingTimeline.size === 0) {
         typingEmitTimelineBySocket.delete(socket.id);
       }
     }
 
-    socket.to(normalizedConversationId).emit("user-stop_typing", {
-      conversationId: normalizedConversationId,
+    socket.to(authorizedConversationId).emit("user-stop_typing", {
+      conversationId: authorizedConversationId,
       userId,
     });
   });

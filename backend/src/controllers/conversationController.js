@@ -1,5 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import Bookmark from "../models/Bookmark.js";
+import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
@@ -136,6 +138,36 @@ const buildGroupJoinLinkUrl = ({ conversationId, token }) => {
   }
 
   return `${baseUrl}${relativePath}`;
+};
+
+const resolveAtomicJoinLinkFailure = ({
+  joinedConversation,
+  conversation,
+  userId,
+  token,
+}) => {
+  if (joinedConversation) {
+    return null;
+  }
+
+  if (isGroupParticipant(conversation, userId)) {
+    return null;
+  }
+
+  const latestJoinLink = conversation.group?.joinLink;
+  if (!latestJoinLink?.tokenHash || !latestJoinLink?.expiresAt) {
+    return { status: 404, message: "Join link is not available" };
+  }
+
+  if (!isJoinLinkActive(latestJoinLink)) {
+    return { status: 410, message: "Join link has expired" };
+  }
+
+  if (hashJoinLinkToken(token) !== String(latestJoinLink.tokenHash)) {
+    return { status: 400, message: "Invalid join link token" };
+  }
+
+  return { status: 409, message: "Unable to join group right now" };
 };
 
 const isGroupParticipant = (conversation, userId) => {
@@ -981,19 +1013,49 @@ export const joinGroupByLink = async (req, res) => {
       return res.status(400).json({ message: "Invalid join link token" });
     }
 
-    const alreadyJoined = isGroupParticipant(conversation, userId);
-    if (!alreadyJoined) {
-      conversation.participants.push({ userId, joinedAt: new Date() });
-      await conversation.save();
+    // Atomic join guard: only add participant when the user is not in this group yet.
+    const joinedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: conversationId,
+        "participants.userId": { $ne: userId },
+        "group.joinLink.tokenHash": String(joinLink.tokenHash),
+        "group.joinLink.expiresAt": { $gt: new Date() },
+      },
+      {
+        $push: { participants: { userId, joinedAt: new Date() } },
+        $set: { [`unreadCounts.${toStringId(userId)}`]: 0 },
+      },
+      { new: true },
+    );
+
+    const conversationForResponse =
+      joinedConversation || (await Conversation.findById(conversationId));
+
+    if (!conversationForResponse) {
+      return res.status(404).json({ message: "Conversation not found" });
     }
 
-    await conversation.populate([
+    const joinFailure = resolveAtomicJoinLinkFailure({
+      joinedConversation,
+      conversation: conversationForResponse,
+      userId,
+      token,
+    });
+
+    if (joinFailure) {
+      return res.status(joinFailure.status).json({ message: joinFailure.message });
+    }
+
+    const joinedInThisRequest = Boolean(joinedConversation);
+    const alreadyJoined = !joinedInThisRequest;
+
+    await conversationForResponse.populate([
       { path: "participants.userId", select: "displayName avatarUrl" },
       { path: "lastMessage.senderId", select: "displayName avatarUrl" },
       { path: "seenBy", select: "displayName avatarUrl" },
     ]);
 
-    const formattedConversation = formatConversationForClient(conversation);
+    const formattedConversation = formatConversationForClient(conversationForResponse);
 
     await Promise.all(
       (formattedConversation.participants || []).map(async (participant) => {
@@ -1004,9 +1066,9 @@ export const joinGroupByLink = async (req, res) => {
       }),
     );
 
-    if (!alreadyJoined) {
+    if (joinedInThisRequest) {
       io.to(String(userId)).emit("new-group", formattedConversation);
-      io.to(String(conversation._id)).emit("group-conversation-updated", {
+      io.to(String(conversationForResponse._id)).emit("group-conversation-updated", {
         conversation: {
           _id: formattedConversation._id,
           group: formattedConversation.group,
@@ -1080,7 +1142,11 @@ export const deleteConversation = async (req, res) => {
 
           imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
 
-          await Message.deleteMany({ conversationId }).session(session);
+          await Promise.all([
+            Message.deleteMany({ conversationId }).session(session),
+            Bookmark.deleteMany({ conversationId }).session(session),
+            Notification.deleteMany({ conversationId }).session(session),
+          ]);
           await Conversation.findOneAndDelete(
             { _id: scopedConversation._id },
           ).session(session);
@@ -1134,11 +1200,14 @@ export const deleteConversation = async (req, res) => {
         }).select("imgUrl");
         imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
 
-        // ✅ CRITICAL FIX: Delete Messages BEFORE Conversation to prevent orphan Messages.
-        // If Message.deleteMany fails, we simply abort — no data is lost.
-        await Message.deleteMany({ conversationId });
+        // Cleanup dependent collections before deleting the conversation document.
+        await Promise.all([
+          Message.deleteMany({ conversationId }),
+          Bookmark.deleteMany({ conversationId }),
+          Notification.deleteMany({ conversationId }),
+        ]);
       } catch (messageDeleteError) {
-        console.error("[deleteConversation] Message cleanup failed — aborting to prevent orphan data", messageDeleteError);
+        console.error("[deleteConversation] Related cleanup failed — aborting to prevent orphan data", messageDeleteError);
         throw messageDeleteError;
       }
 

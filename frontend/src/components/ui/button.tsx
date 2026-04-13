@@ -6,25 +6,28 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold tracking-[-0.01em] leading-none transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-semibold tracking-[-0.01em] leading-none transition-all disabled:pointer-events-none disabled:opacity-50 disabled:hover:translate-y-0 disabled:active:scale-100 motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 motion-safe:active:scale-[0.985] motion-safe:duration-200 motion-safe:ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default:
+          "bg-primary text-primary-foreground hover:bg-primary/90 motion-safe:hover:shadow-[0_12px_24px_-16px_hsl(var(--primary)/0.8)]",
         destructive:
-          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
+          "bg-destructive text-white hover:bg-destructive/90 motion-safe:hover:shadow-[0_12px_24px_-16px_hsl(var(--destructive)/0.8)] focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60",
         outline:
-          "border bg-background text-foreground shadow-xs hover:bg-accent/80 hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/60",
+          "border bg-background text-foreground shadow-xs hover:bg-accent/80 hover:text-foreground motion-safe:hover:shadow-[0_10px_20px_-14px_hsl(var(--foreground)/0.4)] dark:bg-input/30 dark:border-input dark:hover:bg-input/60",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/90 hover:text-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/90 hover:text-foreground motion-safe:hover:shadow-[0_10px_20px_-14px_hsl(var(--foreground)/0.35)]",
         ghost:
           "hover:bg-accent/80 hover:text-foreground dark:hover:bg-accent/60",
-        link: "text-primary underline-offset-4 hover:underline",
-        completeGhost: "hover:bg-transparent",
+        link:
+          "text-primary underline-offset-4 hover:underline motion-safe:hover:translate-y-0 motion-safe:active:scale-100",
+        completeGhost:
+          "hover:bg-transparent motion-safe:hover:translate-y-0 motion-safe:active:scale-100",
         primary:
-          "border border-primary text-primary hover:bg-primary dark:hover:text-white hover:text-primary-foreground",
+          "border border-primary text-primary hover:bg-primary dark:hover:text-white hover:text-primary-foreground motion-safe:hover:shadow-[0_12px_24px_-16px_hsl(var(--primary)/0.8)]",
         destructiveOutline:
-          "bg-background underline hover:no-underline shadow-xs hover:bg-destructive hover:text-destructive-foreground ",
+          "bg-background underline hover:no-underline shadow-xs hover:bg-destructive hover:text-destructive-foreground motion-safe:hover:shadow-[0_12px_24px_-16px_hsl(var(--destructive)/0.72)]",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

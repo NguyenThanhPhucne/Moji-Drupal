@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check:accent": "node ./scripts/accent-regression-check.mjs"
+    "check:accent": "node ./scripts/accent-regression-check.mjs",
+    "check:routes": "node ./scripts/check-route-coverage.mjs"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",

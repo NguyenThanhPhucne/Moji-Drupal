@@ -16,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import {
+  Bell,
+  LoaderCircle,
   MoreVertical,
   Trash2,
   Phone,
@@ -51,6 +53,7 @@ import GlobalSearchDialog from "./GlobalSearchDialog";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { Switch } from "../ui/switch";
+import NotificationPreferencesDialog from "./NotificationPreferencesDialog";
 
 function resolveDirectPeer(chat: Conversation, userId?: string) {
   if (chat.type !== "direct") {
@@ -101,6 +104,18 @@ const getGroupMemberRole = (
   return "member";
 };
 
+const getGroupRoleLabel = (role: GroupMemberRole) => {
+  if (role === "owner") {
+    return "Owner";
+  }
+
+  if (role === "admin") {
+    return "Admin";
+  }
+
+  return "Member";
+};
+
 const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
   if (role === "owner") {
     return (
@@ -127,7 +142,7 @@ const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
   );
 };
 
-const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
+const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { getUserPresence, getLastActiveAt, onlineUsers } = useSocketStore();
@@ -189,6 +204,21 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     chat?.type === "group"
       ? getGroupMemberRole(myUserId, ownerId, groupAdminIds)
       : "member";
+  const currentGroupRoleLabel = getGroupRoleLabel(currentUserGroupRole);
+  const groupAdminCount = useMemo(() => {
+    if (chat?.type !== "group") {
+      return 0;
+    }
+
+    const effectiveAdmins = new Set<string>([ownerId]);
+    groupAdminIds.forEach((memberId) => {
+      if (memberId) {
+        effectiveAdmins.add(memberId);
+      }
+    });
+
+    return effectiveAdmins.size;
+  }, [chat?.type, groupAdminIds, ownerId]);
   const groupMembersWithRole = useMemo(() => {
     if (chat?.type !== "group") {
       return [];
@@ -493,6 +523,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                       <span className="text-[12px] text-muted-foreground font-medium leading-none">
                         {groupPresenceText}
                       </span>
+                      <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        {groupAdminCount} admins
+                      </span>
+                      <span className="inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                        You: {currentGroupRoleLabel}
+                      </span>
                       {(currentUserGroupRole === "owner" ||
                         currentUserGroupRole === "admin") && (
                         <GroupRoleBadge role={currentUserGroupRole} />
@@ -512,6 +548,70 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           {/* Right actions */}
           <div className="flex items-center gap-1 flex-shrink-0">
             <GlobalSearchDialog />
+            <NotificationPreferencesDialog />
+
+            {chat.type === "group" && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowMembersDialog(true)}
+                  className="hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  title="View members"
+                >
+                  <Users className="size-3.5 mr-1.5" />
+                  Members
+                </Button>
+
+                {isGroupAdmin && (
+                  <Button
+                    variant={announcementOnly ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      handleToggleAnnouncementMode().catch((error) => {
+                        console.error("Failed to toggle announcement mode", error);
+                      });
+                    }}
+                    disabled={isAnnouncementUpdating}
+                    className="hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
+                    title={announcementOnly ? "Disable announcement mode" : "Enable announcement mode"}
+                  >
+                    {isAnnouncementUpdating ? (
+                      <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Megaphone className="size-3.5 mr-1.5" />
+                    )}
+                    {announcementOnly ? "Announcement on" : "Announcement off"}
+                  </Button>
+                )}
+
+                {isGroupCreator && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowManageAdminsDialog(true)}
+                    className="hidden xl:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
+                    title="Manage admins"
+                  >
+                    <ShieldCheck className="size-3.5 mr-1.5" />
+                    Admins
+                  </Button>
+                )}
+
+                {isGroupAdmin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowJoinLinkDialog(true)}
+                    className="hidden xl:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                    title="Manage join link"
+                    aria-label="Manage join link"
+                  >
+                    <Link2 className="size-4" />
+                  </Button>
+                )}
+              </>
+            )}
 
               {/* Phone call quick action */}
             {chat.type === "direct" && (
@@ -621,6 +721,14 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     Revoke active join link
                   </DropdownMenuItem>
                 )}
+
+                <DropdownMenuItem
+                  onSelect={() => navigate("/settings/notifications")}
+                  className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                >
+                  <Bell className="h-[18px] w-[18px] text-muted-foreground" />
+                  Notification settings
+                </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="bg-border/60 mx-1" />
                 <DropdownMenuItem

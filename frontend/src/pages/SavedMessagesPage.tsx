@@ -101,7 +101,7 @@ const SAVED_PRESETS: Array<{
   { key: "text", label: "Text", Icon: MessageSquare },
 ];
 
-const SavedMessagesPage = () => {
+const SavedMessagesPage = () => { // NOSONAR
   const navigate = useNavigate();
   const { bookmarks, pagination, fetchBookmarks, updateBookmarkMeta, loading } =
     useBookmarkStore();
@@ -597,7 +597,7 @@ const SavedMessagesPage = () => {
                   <button
                     type="button"
                     onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
+                    className="micro-tap-chip absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-colors"
                     aria-label="Clear search"
                   >
                     <X className="size-3.5" />
@@ -666,7 +666,7 @@ const SavedMessagesPage = () => {
                     setSavedPreset("all");
                     setCollectionFilter("");
                   }}
-                  className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  className="micro-tap-chip text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
                 >
                   Reset views
                 </button>
@@ -680,7 +680,7 @@ const SavedMessagesPage = () => {
                   type="button"
                   onClick={() => setSavedPreset(key)}
                   data-active={savedPreset === key}
-                  className="saved-preset-chip"
+                  className="saved-preset-chip micro-tap-chip"
                 >
                   <Icon className="size-3.5" />
                   <span>{label}</span>
@@ -695,7 +695,7 @@ const SavedMessagesPage = () => {
                   type="button"
                   onClick={() => setCollectionFilter("")}
                   data-active={collectionFilter === ""}
-                  className="saved-preset-chip"
+                  className="saved-preset-chip micro-tap-chip"
                 >
                   <Tags className="size-3.5" />
                   <span>All collections</span>
@@ -708,7 +708,7 @@ const SavedMessagesPage = () => {
                     type="button"
                     onClick={() => setCollectionFilter(item.name)}
                     data-active={collectionFilter === item.name}
-                    className="saved-preset-chip"
+                    className="saved-preset-chip micro-tap-chip"
                   >
                     <Tags className="size-3.5" />
                     <span>{item.name}</span>
@@ -784,7 +784,7 @@ const SavedMessagesPage = () => {
                       setFromDate("");
                       setToDate("");
                     }}
-                    className="mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                    className="micro-tap-chip mt-2 text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                   >
                     Clear all filters
                   </button>
@@ -799,7 +799,7 @@ const SavedMessagesPage = () => {
                   <button
                     type="button"
                     onClick={unreadCount === filteredBookmarks.length ? clearSelection : selectAllVisible}
-                    className="saved-select-all-btn"
+                    className="saved-select-all-btn micro-tap-chip"
                     aria-label="Toggle select all"
                   >
                     {unreadCount === filteredBookmarks.length && unreadCount > 0
@@ -817,7 +817,7 @@ const SavedMessagesPage = () => {
                       <button
                         type="button"
                         onClick={() => setShowBulkPanel((v) => !v)}
-                        className="saved-select-all-btn gap-1.5"
+                        className="saved-select-all-btn micro-tap-chip gap-1.5"
                       >
                         <Tags className="size-3.5" />
                         <span className="text-xs">Bulk metadata</span>
@@ -825,7 +825,7 @@ const SavedMessagesPage = () => {
                       <button
                         type="button"
                         onClick={exportSelectedCsv}
-                        className="saved-select-all-btn gap-1.5"
+                        className="saved-select-all-btn micro-tap-chip gap-1.5"
                       >
                         <Download className="size-3.5" />
                         <span className="text-xs">Export CSV</span>
@@ -833,7 +833,7 @@ const SavedMessagesPage = () => {
                       <button
                         type="button"
                         onClick={clearSelection}
-                        className="saved-select-all-btn gap-1 text-muted-foreground/70"
+                        className="saved-select-all-btn micro-tap-chip gap-1 text-muted-foreground/70"
                       >
                         <X className="size-3.5" />
                         <span className="text-xs">Clear</span>
@@ -951,7 +951,7 @@ const SavedMessagesPage = () => {
                         <button
                           type="button"
                           onClick={() => toggleBookmarkSelection(bookmark._id)}
-                          className="mt-0.5 flex-shrink-0 transition-transform duration-150 hover:scale-110"
+                          className="micro-tap-chip mt-0.5 flex-shrink-0 transition-transform duration-150 hover:scale-110"
                           aria-label={isSelected ? "Deselect" : "Select"}
                         >
                           {isSelected

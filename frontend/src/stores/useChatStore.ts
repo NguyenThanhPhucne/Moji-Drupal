@@ -406,7 +406,9 @@ export const useChatStore = create<ChatState>()(
           }));
 
           if (createdTempConversation) {
-            void get().fetchConversations();
+            get().fetchConversations().catch((error) => {
+              console.error("Error refreshing conversations", error);
+            });
           }
         } catch (error) {
           // Rollback: remove the optimistic message
@@ -654,7 +656,10 @@ export const useChatStore = create<ChatState>()(
 
           if (result?.conversation?._id) {
             get().updateConversation(
-              result.conversation as Partial<Conversation> & { _id: string },
+              {
+                ...result.conversation,
+                _id: result.conversation._id,
+              },
             );
           }
         } catch (error) {
@@ -756,7 +761,10 @@ export const useChatStore = create<ChatState>()(
 
           if (result?.conversation?._id) {
             get().updateConversation(
-              result.conversation as Partial<Conversation> & { _id: string },
+              {
+                ...result.conversation,
+                _id: result.conversation._id,
+              },
             );
           }
         } catch (error) {
@@ -922,7 +930,10 @@ export const useChatStore = create<ChatState>()(
 
           if (updatedConversation?._id) {
             get().updateConversation(
-              updatedConversation as Partial<Conversation> & { _id: string },
+              {
+                ...updatedConversation,
+                _id: updatedConversation._id,
+              },
             );
           }
 
@@ -969,7 +980,10 @@ export const useChatStore = create<ChatState>()(
 
           if (updatedConversation?._id) {
             get().updateConversation(
-              updatedConversation as Partial<Conversation> & { _id: string },
+              {
+                ...updatedConversation,
+                _id: updatedConversation._id,
+              },
             );
           }
 
@@ -1000,7 +1014,10 @@ export const useChatStore = create<ChatState>()(
 
           if (result?.conversation?._id) {
             get().updateConversation(
-              result.conversation as Partial<Conversation> & { _id: string },
+              {
+                ...result.conversation,
+                _id: result.conversation._id,
+              },
             );
           }
 
@@ -1050,7 +1067,10 @@ export const useChatStore = create<ChatState>()(
 
           if (updatedConversation?._id) {
             get().updateConversation(
-              updatedConversation as Partial<Conversation> & { _id: string },
+              {
+                ...updatedConversation,
+                _id: updatedConversation._id,
+              },
             );
           }
 
@@ -1147,7 +1167,10 @@ export const useChatStore = create<ChatState>()(
 
           if (updatedConversation?._id) {
             get().updateConversation(
-              updatedConversation as Partial<Conversation> & { _id: string },
+              {
+                ...updatedConversation,
+                _id: updatedConversation._id,
+              },
             );
           }
 

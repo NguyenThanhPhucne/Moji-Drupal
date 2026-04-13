@@ -36,6 +36,73 @@ const ensureConversationMembership = async (conversationId, userId) => {
   return Boolean(membership);
 };
 
+const ORPHAN_BOOKMARK_CLEANUP_BATCH_SIZE = 1000;
+
+const resolveBookmarkMatchQuery = (query) => {
+  try {
+    if (typeof Bookmark.castObject === "function") {
+      return Bookmark.castObject(query);
+    }
+  } catch {
+    // Fallback to the original query when casting fails.
+  }
+
+  return query;
+};
+
+const findOrphanBookmarkIdsForQuery = async (query) => {
+  const rows = await Bookmark.aggregate([
+    { $match: query },
+    {
+      $lookup: {
+        from: "messages",
+        localField: "messageId",
+        foreignField: "_id",
+        as: "_messageRef",
+      },
+    },
+    {
+      $lookup: {
+        from: "conversations",
+        localField: "conversationId",
+        foreignField: "_id",
+        as: "_conversationRef",
+      },
+    },
+    {
+      $match: {
+        $expr: {
+          $or: [
+            { $eq: [{ $size: "$_messageRef" }, 0] },
+            { $eq: [{ $size: "$_conversationRef" }, 0] },
+          ],
+        },
+      },
+    },
+    { $project: { _id: 1 } },
+  ]);
+
+  return rows.map((row) => row?._id).filter(Boolean);
+};
+
+const cleanupOrphanBookmarks = async ({ userId, bookmarkIds }) => {
+  if (!Array.isArray(bookmarkIds) || bookmarkIds.length === 0) {
+    return;
+  }
+
+  for (let index = 0; index < bookmarkIds.length; index += ORPHAN_BOOKMARK_CLEANUP_BATCH_SIZE) {
+    const chunk = bookmarkIds.slice(
+      index,
+      index + ORPHAN_BOOKMARK_CLEANUP_BATCH_SIZE,
+    );
+
+    await Bookmark.deleteMany({
+      _id: { $in: chunk },
+      userId,
+    });
+  }
+};
+
 export const toggleBookmark = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -144,8 +211,24 @@ export const getBookmarks = async (req, res) => {
       }
     }
 
+    const matchQuery = resolveBookmarkMatchQuery(query);
+    const orphanBookmarkIds = await findOrphanBookmarkIdsForQuery(matchQuery);
+
+    if (orphanBookmarkIds.length > 0) {
+      // Deep auto-heal on the full filtered dataset, not only the current page.
+      await cleanupOrphanBookmarks({ userId, bookmarkIds: orphanBookmarkIds });
+    }
+
+    const sanitizedQuery =
+      orphanBookmarkIds.length > 0
+        ? {
+            ...matchQuery,
+            _id: { $nin: orphanBookmarkIds },
+          }
+        : matchQuery;
+
     const [bookmarks, total] = await Promise.all([
-      Bookmark.find(query)
+      Bookmark.find(sanitizedQuery)
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
@@ -163,7 +246,7 @@ export const getBookmarks = async (req, res) => {
           },
         })
         .lean(),
-      Bookmark.countDocuments(query),
+      Bookmark.countDocuments(sanitizedQuery),
     ]);
 
     const filtered = bookmarks.filter(

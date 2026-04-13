@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   CircleDot,
   Compass,
   Flag,
   Hash,
+  LoaderCircle,
   MessageCircle,
+  RefreshCw,
+  Search,
   Sparkles,
   Users,
   Zap,
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserAvatar from "@/components/chat/UserAvatar";
 import type { SocialPost } from "@/types/social";
+import { toast } from "sonner";
 
 interface SocialRightRailProps {
   explorePosts?: SocialPost[];
@@ -55,6 +59,14 @@ const MOTION_COPY = {
   },
 } as const;
 
+type ContactPresenceFilter = "all" | "online" | "recently-active";
+
+const CONTACT_FILTERS: Array<{ value: ContactPresenceFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "online", label: "Online" },
+  { value: "recently-active", label: "Recent" },
+];
+
 
 const getPresenceClassName = (
   presence: "online" | "recently-active" | "offline",
@@ -79,13 +91,32 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
   const { preset: motionPreset, setPreset: setMotionPreset } =
     useSocialMotionStore();
   const hasFetchedRef = useRef(false);
+  const [contactQuery, setContactQuery] = useState("");
+  const [presenceFilter, setPresenceFilter] = useState<ContactPresenceFilter>("all");
+  const [isRefreshingContacts, setIsRefreshingContacts] = useState(false);
+  const [openingContactId, setOpeningContactId] = useState<string | null>(null);
+  const deferredContactQuery = useDeferredValue(contactQuery);
 
   useEffect(() => {
     if (!hasFetchedRef.current && !loading) {
       hasFetchedRef.current = true;
-      void getFriends();
+      getFriends().catch((error) => {
+        console.error("Failed to load friends in social rail", error);
+      });
     }
   }, [loading, getFriends]);
+
+  const refreshContacts = useCallback(async () => {
+    setIsRefreshingContacts(true);
+    try {
+      await getFriends();
+    } catch (error) {
+      console.error("Failed to refresh contacts", error);
+      toast.error("Could not refresh contacts right now.");
+    } finally {
+      setIsRefreshingContacts(false);
+    }
+  }, [getFriends]);
 
   const contacts = useMemo(() => {
     const rank = (presence: "online" | "recently-active" | "offline") => {
@@ -101,6 +132,27 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
       }))
       .sort((a, b) => rank(b.presence) - rank(a.presence) || a.displayName.localeCompare(b.displayName));
   }, [friends, getUserPresence]);
+
+  const filteredContacts = useMemo(() => {
+    const normalizedQuery = deferredContactQuery.trim().toLowerCase();
+
+    return contacts.filter((contact) => {
+      const matchesPresence =
+        presenceFilter === "all" ? true : contact.presence === presenceFilter;
+
+      if (!matchesPresence) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const displayName = String(contact.displayName || "").toLowerCase();
+      const username = String(contact.username || "").toLowerCase();
+      return displayName.includes(normalizedQuery) || username.includes(normalizedQuery);
+    });
+  }, [contacts, deferredContactQuery, presenceFilter]);
 
   const trendingTags = useMemo(() => {
     const counter = new Map<string, number>();
@@ -137,6 +189,13 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
   const openDirectChat = async (
     friend: (typeof contacts)[number],
   ) => {
+    const friendId = String(friend._id);
+    if (openingContactId) {
+      return;
+    }
+
+    setOpeningContactId(friendId);
+
     if (globalThis.innerWidth >= 1024) {
       openWindow({
         _id: friend._id,
@@ -144,13 +203,29 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
         displayName: friend.displayName,
         avatarUrl: friend.avatarUrl,
       });
+      setOpeningContactId(null);
       return;
     }
 
-    const ok = await createConversation("direct", "", [friend._id]);
-    if (ok) {
-      navigate("/");
+    try {
+      const ok = await createConversation("direct", "", [friend._id]);
+      if (ok) {
+        navigate("/");
+        return;
+      }
+
+      toast.error("Could not open conversation right now.");
+    } finally {
+      setOpeningContactId(null);
     }
+  };
+
+  const handleContactClick = (friend: (typeof contacts)[number]) => {
+    openDirectChat(friend).catch((error) => {
+      console.error("Failed to open direct chat", error);
+      setOpeningContactId(null);
+      toast.error("Could not open conversation right now.");
+    });
   };
 
   let railClassName = "social-right-rail sticky top-0 h-screen overflow-y-auto beautiful-scrollbar space-y-4 pr-1 pl-0.5";
@@ -160,8 +235,9 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
     railClassName = "social-right-rail space-y-4";
   }
 
-  const showContactsLoading = !hasFetchedRef.current || loading;
+  const showContactsLoading = !hasFetchedRef.current && loading;
   const showSuggestionsLoading = !hasFetchedRef.current || loading;
+  const hasContactsFilter = presenceFilter !== "all" || deferredContactQuery.trim().length > 0;
 
   return (
     <aside className={railClassName}>
@@ -183,7 +259,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             role="radio"
             aria-checked={motionPreset === "premium-strict"}
             data-active={motionPreset === "premium-strict"}
-            className="social-motion-option"
+            className="social-motion-option micro-tap-chip"
             onClick={() => setMotionPreset("premium-strict")}
           >
             <span className="social-motion-option-icon" aria-hidden="true">
@@ -200,7 +276,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             role="radio"
             aria-checked={motionPreset === "responsive-strict"}
             data-active={motionPreset === "responsive-strict"}
-            className="social-motion-option"
+            className="social-motion-option micro-tap-chip"
             onClick={() => setMotionPreset("responsive-strict")}
           >
             <span className="social-motion-option-icon" aria-hidden="true">
@@ -220,7 +296,58 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             <Users className="h-4 w-4" />
             Contacts
           </span>
-          <span className="social-rail-counter">{contacts.length}</span>
+          <span className="social-rail-counter">{filteredContacts.length}/{contacts.length}</span>
+        </div>
+
+        <div className="mt-2 space-y-2">
+          <div className="flex items-center gap-1.5">
+            {CONTACT_FILTERS.map((filter) => {
+              const active = presenceFilter === filter.value;
+
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setPresenceFilter(filter.value)}
+                  className={[
+                    "micro-tap-chip rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    active
+                      ? "border-primary/40 bg-primary/12 text-primary"
+                      : "border-border/60 bg-background/65 text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  {filter.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1.5">
+            <Search className="h-3.5 w-3.5 text-muted-foreground/75" />
+            <input
+              value={contactQuery}
+              onChange={(event) => setContactQuery(event.target.value)}
+              placeholder="Find contact"
+              aria-label="Search contacts"
+              className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground/65"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                refreshContacts().catch((error) => {
+                  console.error("Failed to refresh contacts", error);
+                });
+              }}
+              aria-label="Refresh contacts"
+              className="micro-tap-chip rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+              disabled={isRefreshingContacts}
+            >
+              <RefreshCw className={[
+                "h-3.5 w-3.5",
+                isRefreshingContacts ? "animate-spin" : "",
+              ].join(" ")} />
+            </button>
+          </div>
         </div>
 
         <div className="social-rail-list relative">
@@ -237,35 +364,51 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             </div>
           ) : null}
 
-          {!showContactsLoading && contacts.length > 0 ? (
-            contacts.slice(0, 24).map((friend) => (
+          {!showContactsLoading && filteredContacts.length > 0 ? (
+            filteredContacts.slice(0, 24).map((friend) => {
+              const friendId = String(friend._id);
+              const isOpening = openingContactId === friendId;
+
+              return (
               <button
                 key={friend._id}
-              type="button"
-              className="social-contact-item social-contact-hover social-scale-bounce-hover w-full text-left"
-              onClick={() => void openDirectChat(friend)}
-            >
-              <div className="relative flex-shrink-0">
-                <UserAvatar
-                  type="chat"
-                  name={friend.displayName}
-                  avatarUrl={friend.avatarUrl}
-                  className="social-contact-avatar"
-                />
-                <span
-                  className={`social-contact-presence ${getPresenceClassName(friend.presence)}`}
-                />
-              </div>
-              <span className="social-contact-name flex-1 truncate">{friend.displayName}</span>
-              {friend.presence === "online" && (
-                <span className="social-contact-live-icon ml-auto flex-shrink-0" aria-hidden="true">
-                  <CircleDot className="h-3 w-3" />
-                </span>
-              )}
-            </button>
-            ))
+                type="button"
+                disabled={Boolean(openingContactId)}
+                aria-busy={isOpening}
+                className="social-contact-item social-contact-hover social-scale-bounce-hover w-full text-left disabled:cursor-wait disabled:opacity-70"
+                onClick={() => handleContactClick(friend)}
+              >
+                <div className="relative flex-shrink-0">
+                  <UserAvatar
+                    type="chat"
+                    name={friend.displayName}
+                    avatarUrl={friend.avatarUrl}
+                    className="social-contact-avatar"
+                  />
+                  <span
+                    className={`social-contact-presence ${getPresenceClassName(friend.presence)}`}
+                  />
+                </div>
+                <span className="social-contact-name flex-1 truncate">{friend.displayName}</span>
+                {isOpening ? (
+                  <span className="ml-auto flex-shrink-0 text-muted-foreground" aria-hidden="true">
+                    <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                  </span>
+                ) : null}
+                {!isOpening && friend.presence === "online" ? (
+                  <span className="social-contact-live-icon ml-auto flex-shrink-0" aria-hidden="true">
+                    <CircleDot className="h-3 w-3" />
+                  </span>
+                ) : null}
+              </button>
+              );
+            })
           ) : (
-            !showContactsLoading && <p className="social-rail-empty">No contacts yet.</p>
+            !showContactsLoading && (
+              <p className="social-rail-empty">
+                {hasContactsFilter ? "No contacts match this filter." : "No contacts yet."}
+              </p>
+            )
           )}
         </div>
       </section>
@@ -325,7 +468,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             <button
               key={item.tag}
               type="button"
-              className="trending-chip-upgrade social-scale-bounce-hover"
+              className="trending-chip-upgrade social-scale-bounce-hover micro-tap-chip"
               onClick={() => navigate(`/explore?tag=${encodeURIComponent(item.tag)}`)}
             >
               <Hash className="social-trending-tag-icon" />

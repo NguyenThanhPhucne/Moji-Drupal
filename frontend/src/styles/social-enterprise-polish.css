@@ -20,8 +20,8 @@
     --se-motion-topbar-glow-opacity-min: 0.2;
     --se-motion-topbar-glow-opacity-max: 0.52;
     --se-motion-topbar-glow-blur-max: 0.28px;
-    --se-motion-topbar-action-duration: 115ms;
-    --se-motion-topbar-action-scale: 1.024;
+    --se-motion-topbar-action-duration: 128ms;
+    --se-motion-topbar-action-scale: 1.021;
     --se-motion-card-shadow-duration: 145ms;
     --se-motion-card-border-duration: 145ms;
     --se-motion-card-transform-duration: 135ms;
@@ -43,11 +43,11 @@
     --se-motion-rail-enter-scale-from: 0.996;
     --se-motion-rail-enter-delay-2: 45ms;
     --se-motion-rail-enter-delay-3: 90ms;
-    --se-motion-rail-btn-duration: 115ms;
-    --se-motion-rail-btn-scale: 1.024;
-    --se-motion-contact-duration: 115ms;
-    --se-motion-contact-hover-scale: 1.01;
-    --se-motion-contact-active-scale: 0.99;
+    --se-motion-rail-btn-duration: 128ms;
+    --se-motion-rail-btn-scale: 1.021;
+    --se-motion-contact-duration: 128ms;
+    --se-motion-contact-hover-scale: 1.009;
+    --se-motion-contact-active-scale: 0.991;
   }
 
   :root[data-social-motion="premium-strict"] {
@@ -57,8 +57,8 @@
     --se-motion-topbar-glow-opacity-min: 0.18;
     --se-motion-topbar-glow-opacity-max: 0.48;
     --se-motion-topbar-glow-blur-max: 0.24px;
-    --se-motion-topbar-action-duration: 120ms;
-    --se-motion-topbar-action-scale: 1.02;
+    --se-motion-topbar-action-duration: 134ms;
+    --se-motion-topbar-action-scale: 1.018;
     --se-motion-card-shadow-duration: 150ms;
     --se-motion-card-border-duration: 150ms;
     --se-motion-card-transform-duration: 140ms;
@@ -80,11 +80,11 @@
     --se-motion-rail-enter-scale-from: 0.997;
     --se-motion-rail-enter-delay-2: 50ms;
     --se-motion-rail-enter-delay-3: 100ms;
-    --se-motion-rail-btn-duration: 120ms;
-    --se-motion-rail-btn-scale: 1.02;
-    --se-motion-contact-duration: 120ms;
-    --se-motion-contact-hover-scale: 1.008;
-    --se-motion-contact-active-scale: 0.992;
+    --se-motion-rail-btn-duration: 134ms;
+    --se-motion-rail-btn-scale: 1.018;
+    --se-motion-contact-duration: 134ms;
+    --se-motion-contact-hover-scale: 1.007;
+    --se-motion-contact-active-scale: 0.993;
   }
 
   :root[data-social-motion="responsive-strict"] {
@@ -94,8 +94,8 @@
     --se-motion-topbar-glow-opacity-min: 0.3;
     --se-motion-topbar-glow-opacity-max: 0.72;
     --se-motion-topbar-glow-blur-max: 0.5px;
-    --se-motion-topbar-action-duration: 88ms;
-    --se-motion-topbar-action-scale: 1.042;
+    --se-motion-topbar-action-duration: 98ms;
+    --se-motion-topbar-action-scale: 1.037;
     --se-motion-card-shadow-duration: 105ms;
     --se-motion-card-border-duration: 105ms;
     --se-motion-card-transform-duration: 95ms;
@@ -117,11 +117,31 @@
     --se-motion-rail-enter-scale-from: 0.992;
     --se-motion-rail-enter-delay-2: 30ms;
     --se-motion-rail-enter-delay-3: 60ms;
-    --se-motion-rail-btn-duration: 88ms;
-    --se-motion-rail-btn-scale: 1.042;
-    --se-motion-contact-duration: 96ms;
-    --se-motion-contact-hover-scale: 1.018;
-    --se-motion-contact-active-scale: 0.984;
+    --se-motion-rail-btn-duration: 98ms;
+    --se-motion-rail-btn-scale: 1.037;
+    --se-motion-contact-duration: 108ms;
+    --se-motion-contact-hover-scale: 1.016;
+    --se-motion-contact-active-scale: 0.986;
+  }
+
+  :root[data-motion-level="calm"] {
+    --se-motion-topbar-action-duration: 134ms;
+    --se-motion-topbar-action-scale: 1.018;
+    --se-motion-rail-btn-duration: 134ms;
+    --se-motion-rail-btn-scale: 1.018;
+    --se-motion-contact-duration: 134ms;
+    --se-motion-contact-hover-scale: 1.007;
+    --se-motion-contact-active-scale: 0.993;
+  }
+
+  :root[data-motion-level="punchy"] {
+    --se-motion-topbar-action-duration: 108ms;
+    --se-motion-topbar-action-scale: 1.028;
+    --se-motion-rail-btn-duration: 108ms;
+    --se-motion-rail-btn-scale: 1.028;
+    --se-motion-contact-duration: 112ms;
+    --se-motion-contact-hover-scale: 1.013;
+    --se-motion-contact-active-scale: 0.989;
   }
 
   .dark {
@@ -267,6 +287,43 @@
 
   .social-feed-post-stack {
     padding-bottom: 0.2rem;
+  }
+
+  .feed-card-stagger {
+    opacity: 0;
+    transform: translateY(12px) scale(0.992);
+    filter: blur(2px);
+    animation: feedCardStaggerIn 520ms cubic-bezier(0.2, 0.82, 0.2, 1) both;
+    will-change: transform, opacity, filter;
+  }
+
+  @keyframes feedCardStaggerIn {
+    0% {
+      opacity: 0;
+      transform: translateY(12px) scale(0.992);
+      filter: blur(2px);
+    }
+
+    65% {
+      opacity: 1;
+      transform: translateY(-1px) scale(1.002);
+      filter: blur(0);
+    }
+
+    100% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .feed-card-stagger {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+      filter: none !important;
+    }
   }
 
   .social-explore-filter-panel {
@@ -1439,12 +1496,25 @@
     border: 1px solid hsl(var(--se-primary) / 0.22);
     transition:
       background-color 160ms ease,
-      border-color 160ms ease;
+      border-color 160ms ease,
+      box-shadow 160ms ease,
+      transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 
   .social-tag-btn:hover {
     background: hsl(var(--se-primary) / 0.16);
     border-color: hsl(var(--se-primary) / 0.35);
+    transform: translateY(-0.75px);
+    box-shadow: 0 8px 16px -16px hsl(var(--se-primary) / 0.7);
+  }
+
+  .social-tag-btn:active {
+    transform: translateY(0) scale(0.988);
+  }
+
+  .social-tag-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px hsl(var(--se-primary) / 0.24);
   }
 
   .social-post-option-btn,
@@ -2444,13 +2514,25 @@
     transition:
       border-color 150ms ease,
       background-color 150ms ease,
-      transform 150ms ease;
+      transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow 150ms ease;
   }
 
   .social-friend-chip:hover {
     border-color: hsl(var(--se-primary) / 0.35);
     background: hsl(var(--se-surface));
-    transform: translateY(-1px);
+    transform: translateY(-0.85px);
+    box-shadow: 0 10px 18px -18px hsl(var(--se-primary) / 0.7);
+  }
+
+  .social-friend-chip:active {
+    transform: translateY(0) scale(0.99);
+  }
+
+  .social-friend-chip:focus-visible {
+    outline: none;
+    border-color: hsl(var(--se-primary) / 0.45);
+    box-shadow: 0 0 0 2px hsl(var(--se-primary) / 0.22);
   }
 
   .social-friend-chip-avatar {
@@ -3577,7 +3659,11 @@
   border-radius: 999px;
   background: transparent;
   border: none;
-  transition: color 0.25s ease;
+  transition:
+    color 0.22s ease,
+    background-color 0.22s ease,
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.2s ease;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3585,6 +3671,20 @@
 
 .social-filter-tab[data-active="true"] {
   color: hsl(var(--se-primary));
+}
+
+.social-filter-tab:hover {
+  color: hsl(var(--se-text));
+  transform: translateY(-0.8px);
+}
+
+.social-filter-tab:active {
+  transform: translateY(0) scale(0.988);
+}
+
+.social-filter-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--se-primary) / 0.22);
 }
 
 .social-filter-pill-bg {
@@ -3736,7 +3836,7 @@
   transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .social-scale-bounce-hover:hover {
-  transform: scale(1.03);
+  transform: scale(1.026);
   box-shadow: 0 8px 24px -10px hsl(var(--se-primary) / 0.15);
   border-color: hsl(var(--se-primary) / 0.3);
   z-index: 10;

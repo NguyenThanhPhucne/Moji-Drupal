@@ -243,6 +243,46 @@ const applyPostMutations = ({
   return nextPosts;
 };
 
+const MONGO_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
+
+const isValidMongoObjectId = (value: unknown) => {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  return MONGO_OBJECT_ID_PATTERN.test(value);
+};
+
+const joinConversationRoomIfValid = (socket: Socket, conversationId: unknown) => {
+  if (!isValidMongoObjectId(conversationId)) {
+    return;
+  }
+
+  socket.emit("join-conversation", conversationId);
+};
+
+const joinConversationRooms = (socket: Socket, conversations: Array<{ _id?: unknown }>) => {
+  conversations.forEach((conversationItem) => {
+    joinConversationRoomIfValid(socket, conversationItem?._id);
+  });
+};
+
+const joinActiveConversationRoom = (socket: Socket) => {
+  const activeConversationId = useChatStore.getState().activeConversationId;
+  joinConversationRoomIfValid(socket, activeConversationId);
+};
+
+const rejoinRoomsAfterReconnect = async (socket: Socket) => {
+  try {
+    await useChatStore.getState().fetchConversations();
+    const freshConversations = useChatStore.getState().conversations || [];
+    joinConversationRooms(socket, freshConversations);
+  } finally {
+    // Fallback behavior is preserved by always attempting active room join.
+    joinActiveConversationRoom(socket);
+  }
+};
+
 const buildNextPostComments = ({
   statePostComments,
   payload,
@@ -761,17 +801,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       // fetching conversations. Filter out temp IDs ("temp-direct-...") that are
       // never persisted on the server — joining them would be a no-op but wastes bandwidth.
       const conversations = useChatStore.getState().conversations || [];
-      conversations.forEach((conversationItem) => {
-        const id = conversationItem?._id;
-        if (id && /^[a-f\d]{24}$/i.test(String(id))) {
-          socket.emit("join-conversation", id);
-        }
-      });
-
-      const activeConversationId = useChatStore.getState().activeConversationId;
-      if (activeConversationId && /^[a-f\d]{24}$/i.test(String(activeConversationId))) {
-        socket.emit("join-conversation", activeConversationId);
-      }
+      joinConversationRooms(socket, conversations);
+      joinActiveConversationRoom(socket);
     });
 
     socket.on("reconnect_attempt", () => {
@@ -829,26 +860,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       // Refetch conversation list from server after reconnect to evict stale data
       // (deleted conversations, groups the user was kicked from, etc.).
       // Once fetched, rejoin rooms for all valid conversations.
-      useChatStore.getState().fetchConversations().then(() => {
-        const freshConversations = useChatStore.getState().conversations || [];
-        freshConversations.forEach((conversationItem) => {
-          const id = conversationItem?._id;
-          if (id && /^[a-f\d]{24}$/i.test(String(id))) {
-            socket.emit("join-conversation", id);
-          }
-        });
-
-        const activeConversationId = useChatStore.getState().activeConversationId;
-        if (activeConversationId && /^[a-f\d]{24}$/i.test(String(activeConversationId))) {
-          socket.emit("join-conversation", activeConversationId);
-        }
-      }).catch(() => {
-        // Fallback: rejoin activeConversationId only if fetch fails
-        const activeConversationId = useChatStore.getState().activeConversationId;
-        if (activeConversationId && /^[a-f\d]{24}$/i.test(String(activeConversationId))) {
-          socket.emit("join-conversation", activeConversationId);
-        }
-      });
+      void rejoinRoomsAfterReconnect(socket);
     });
 
     // online users

@@ -188,6 +188,11 @@
     /* Animations */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --motion-level-chip-duration: 190ms;
+    --motion-level-chip-hover-y: -0.7px;
+    --motion-level-chip-active-scale: 0.99;
+    --motion-level-chip-hover-shadow: 0 8px 16px -16px hsl(var(--primary) / 0.52);
+    --motion-level-chip-focus-ring: 0 0 0 2px hsl(var(--primary) / 0.2);
 
     /* Chat appearance controls */
     --chat-font-size: 14px;
@@ -298,6 +303,22 @@
     --sidebar-accent-foreground: 210 20% 90%;
     --sidebar-border: 210 25% 20%;
     --sidebar-ring: 204 89% 60%;
+  }
+
+  :root[data-motion-level="calm"] {
+    --motion-level-chip-duration: 190ms;
+    --motion-level-chip-hover-y: -0.7px;
+    --motion-level-chip-active-scale: 0.99;
+    --motion-level-chip-hover-shadow: 0 8px 16px -16px hsl(var(--primary) / 0.52);
+    --motion-level-chip-focus-ring: 0 0 0 2px hsl(var(--primary) / 0.2);
+  }
+
+  :root[data-motion-level="punchy"] {
+    --motion-level-chip-duration: 156ms;
+    --motion-level-chip-hover-y: -1.25px;
+    --motion-level-chip-active-scale: 0.983;
+    --motion-level-chip-hover-shadow: 0 12px 24px -16px hsl(var(--primary) / 0.72);
+    --motion-level-chip-focus-ring: 0 0 0 2px hsl(var(--primary) / 0.3);
   }
 } /* end @layer base */
 
@@ -604,6 +625,15 @@ html[data-motion="reduced"] * {
     box-shadow: var(--shadow-soft);
   }
 
+  .route-scene-enter {
+    animation: routeSceneEnter 280ms cubic-bezier(0.2, 0.78, 0.2, 1) both;
+    will-change: opacity, transform;
+  }
+
+  .route-scene-enter .app-shell-panel {
+    animation: routePanelSettle 360ms cubic-bezier(0.2, 0.78, 0.2, 1) both;
+  }
+
   .chat-sidebar-compact {
     --sidebar-width: 56px;
   }
@@ -673,8 +703,66 @@ html[data-motion="reduced"] * {
   .stagger-10 { --stagger-index: 10; }
   .stagger-11 { --stagger-index: 11; }
 
+  .micro-tap-chip {
+    transition:
+      transform var(--motion-level-chip-duration) cubic-bezier(0.2, 0.8, 0.2, 1),
+      box-shadow var(--motion-level-chip-duration) ease,
+      border-color var(--motion-level-chip-duration) ease,
+      background-color var(--motion-level-chip-duration) ease,
+      color var(--motion-level-chip-duration) ease;
+    will-change: transform;
+  }
+
+  .micro-tap-chip:hover:not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(var(--motion-level-chip-hover-y));
+    box-shadow: var(--motion-level-chip-hover-shadow);
+  }
+
+  .micro-tap-chip:active:not(:disabled):not([aria-disabled="true"]) {
+    transform: translateY(0) scale(var(--motion-level-chip-active-scale));
+  }
+
+  .micro-tap-chip:focus-visible {
+    outline: none;
+    box-shadow: var(--motion-level-chip-focus-ring);
+  }
+
   .conversation-fade {
     animation: conversationShift 0.28s cubic-bezier(0.2, 0.75, 0.2, 1);
+  }
+
+  @keyframes routeSceneEnter {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.996);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes routePanelSettle {
+    from {
+      opacity: 0.94;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .route-scene-enter,
+    .route-scene-enter .app-shell-panel,
+    .micro-tap-chip {
+      animation: none !important;
+      transform: none !important;
+      opacity: 1 !important;
+    }
   }
 
   /* Chat bubble variants */

@@ -83,11 +83,15 @@ const updatePostReactionWithCAS = async ({ postId, userId, nextReactionType }) =
       return null;
     }
 
-    const normalizedReactions = Array.isArray(post.reactions)
-      ? post.reactions
-      : Array.isArray(post.likes)
-        ? post.likes.map((item) => ({ userId: item, type: "like" }))
-        : [];
+    let normalizedReactions = [];
+    if (Array.isArray(post.reactions)) {
+      normalizedReactions = post.reactions;
+    } else if (Array.isArray(post.likes)) {
+      normalizedReactions = post.likes.map((item) => ({
+        userId: item,
+        type: "like",
+      }));
+    }
 
     const { nextReactions, finalReactionType, isNewReactionAdded } =
       buildUpdatedReactionsForUser(normalizedReactions, userId, nextReactionType);
@@ -297,9 +301,12 @@ const buildVisibleReactorsMap = async (
 const toPostPayload = (
   post,
   currentUserId,
-  options = { viewerFriendIdSet: null, visibleReactorsById: null },
+  options,
 ) => {
   const postObject = post.toObject ? post.toObject() : post;
+  const resolvedOptions = options || {};
+  const viewerFriendIdSet = resolvedOptions.viewerFriendIdSet || null;
+  const visibleReactorsById = resolvedOptions.visibleReactorsById || null;
 
   const normalizedReactions = extractNormalizedReactions(postObject);
 
@@ -311,15 +318,15 @@ const toPostPayload = (
     )?.type || null;
 
   const viewerId = String(currentUserId || "");
-  const allowedIds = options.viewerFriendIdSet
-    ? new Set([viewerId, ...options.viewerFriendIdSet])
+  const allowedIds = viewerFriendIdSet
+    ? new Set([viewerId, ...viewerFriendIdSet])
     : null;
 
   const visibleReactors =
-    allowedIds && options.visibleReactorsById
+    allowedIds && visibleReactorsById
       ? normalizedReactions
           .filter((reaction) => allowedIds.has(reaction.userId))
-          .map((reaction) => options.visibleReactorsById.get(reaction.userId))
+          .map((reaction) => visibleReactorsById.get(reaction.userId))
           .filter(Boolean)
           .filter(
             (item, index, list) =>
@@ -342,11 +349,12 @@ const toPostPayload = (
 };
 
 const uploadPostMedia = async (rawMediaUrls) => {
-  const incomingMedia = Array.isArray(rawMediaUrls)
-    ? rawMediaUrls
-    : rawMediaUrls
-      ? [rawMediaUrls]
-      : [];
+  let incomingMedia = [];
+  if (Array.isArray(rawMediaUrls)) {
+    incomingMedia = rawMediaUrls;
+  } else if (rawMediaUrls) {
+    incomingMedia = [rawMediaUrls];
+  }
 
   const normalizedMedia = incomingMedia
     .map((item) => String(item || "").trim())
@@ -605,7 +613,7 @@ const emitSocialCommentDeleted = ({
       ? deletedCommentIds
       : [commentId]
     )
-      .map((id) => String(id))
+      .map(String)
       .filter(Boolean),
     commentsCount,
   });
@@ -1089,11 +1097,15 @@ export const getPostEngagement = async (req, res) => {
       return res.status(403).json({ message: "You cannot view this post" });
     }
 
-    const normalizedReactions = Array.isArray(post.reactions)
-      ? post.reactions
-      : Array.isArray(post.likes)
-        ? post.likes.map((userId) => ({ userId, type: "like" }))
-        : [];
+    let normalizedReactions = [];
+    if (Array.isArray(post.reactions)) {
+      normalizedReactions = post.reactions;
+    } else if (Array.isArray(post.likes)) {
+      normalizedReactions = post.likes.map((reactionUserId) => ({
+        userId: reactionUserId,
+        type: "like",
+      }));
+    }
 
     const reactorIds = [...new Set(normalizedReactions.map((reaction) => String(reaction.userId)))];
     const [reactors, comments] = await Promise.all([
@@ -1206,10 +1218,6 @@ export const toggleLikePost = async (req, res) => {
         message: reactionMessage,
       });
     }
-
-    const actor = await User.findById(userId)
-      .select("_id displayName username avatarUrl")
-      .lean();
 
     const reactionSummary = buildReactionSummary(reactions || []);
 
@@ -1543,11 +1551,14 @@ export const getCommentsByPost = async (req, res) => {
       ]);
     } else {
       const postAuthorObjectId = mongoose.Types.ObjectId.isValid(postAuthorId)
-        ? new mongoose.Types.ObjectId(postAuthorId)
+        ? mongoose.Types.ObjectId.createFromHexString(String(postAuthorId))
         : null;
+      const postObjectId = mongoose.Types.ObjectId.createFromHexString(
+        String(postId),
+      );
 
       const relevantComments = await Comment.aggregate([
-        { $match: { postId: new mongoose.Types.ObjectId(postId), isDeleted: false } },
+        { $match: { postId: postObjectId, isDeleted: false } },
         {
           $addFields: {
             isAuthorComment: postAuthorObjectId

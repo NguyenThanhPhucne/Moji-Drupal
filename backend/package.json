@@ -7,7 +7,8 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "db:health": "node scripts/db-health-check.mjs",
-    "db:health:fix": "node scripts/db-health-check.mjs --fix"
+    "db:health:fix": "node scripts/db-health-check.mjs --fix",
+    "test:join-link-concurrency": "node scripts/e2e-join-group-link-concurrency-test.mjs"
   },
   "type": "module",
   "keywords": [],

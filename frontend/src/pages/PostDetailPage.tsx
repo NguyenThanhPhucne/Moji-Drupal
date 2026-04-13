@@ -129,7 +129,7 @@ const PostDetailPage = () => {
                 onDeletePost={async (id) => {
                   const ok = await deletePost(id);
                   if (ok) {
-                    navigate("/home");
+                    navigate("/feed");
                   }
                   return ok;
                 }}

@@ -18,6 +18,14 @@ import { Switch } from "@/components/ui/switch";
 import { cn, getStaggerEnterClass } from "@/lib/utils";
 import type { SocialNotification } from "@/types/social";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  isNotificationPresetActive,
+  NOTIFICATION_PRESETS,
+  type DeliveryPreferences,
+  type NotificationPresetKey,
+  type SocialPreferences,
+} from "@/lib/notificationPreferences";
 
 // ─── Type icon mapping ────────────────────────────────────────────────────────
 const TYPE_META: Record<
@@ -79,18 +87,8 @@ interface SocialNotificationsPanelProps {
   compact?: boolean;
   onReadOne: (notificationId: string) => Promise<void>;
   onReadAll: () => Promise<void>;
-  socialPreferences: {
-    muted: boolean;
-    follow: boolean;
-    like: boolean;
-    comment: boolean;
-    friendAccepted: boolean;
-    system: boolean;
-    mutedUserIds: string[];
-    mutedConversationIds: string[];
-    digestEnabled: boolean;
-    digestWindowHours: number;
-  };
+  deliveryPreferences: DeliveryPreferences;
+  socialPreferences: SocialPreferences;
   preferencesBusy?: boolean;
   onUpdateSocialPreferences: (updates: {
     muted?: boolean;
@@ -103,6 +101,11 @@ interface SocialNotificationsPanelProps {
     mutedConversationIds?: string[];
     digestEnabled?: boolean;
     digestWindowHours?: number;
+  }) => Promise<void>;
+  onUpdateDeliveryPreferences: (updates: {
+    message?: boolean;
+    sound?: boolean;
+    desktop?: boolean;
   }) => Promise<void>;
 }
 
@@ -119,6 +122,8 @@ const TYPE_PREF_KEY: Record<
 
 const DIGEST_WINDOW_OPTIONS = [1, 3, 6, 12, 24];
 
+type DeliveryPreferenceToggleKey = "message" | "sound" | "desktop";
+
 // ─── Main component ───────────────────────────────────────────────────────────
 const SocialNotificationsPanel = ({
   notifications,
@@ -126,9 +131,11 @@ const SocialNotificationsPanel = ({
   compact = false,
   onReadOne,
   onReadAll,
+  deliveryPreferences,
   socialPreferences,
   preferencesBusy = false,
   onUpdateSocialPreferences,
+  onUpdateDeliveryPreferences,
 }: SocialNotificationsPanelProps) => {
   const [showPreferences, setShowPreferences] = useState(false);
 
@@ -238,8 +245,52 @@ const SocialNotificationsPanel = ({
     await onUpdateSocialPreferences(payload);
   };
 
+  const toggleDeliveryPreference = async (
+    key: DeliveryPreferenceToggleKey,
+    value: boolean,
+  ) => {
+    await onUpdateDeliveryPreferences({ [key]: value });
+  };
+
   const updateDigestWindow = async (nextHours: number) => {
     await onUpdateSocialPreferences({ digestWindowHours: nextHours });
+  };
+
+  const applyNotificationPreset = async (presetKey: NotificationPresetKey) => {
+    const preset = NOTIFICATION_PRESETS[presetKey];
+    const previousDelivery = { ...deliveryPreferences };
+    const previousSocial = { ...socialPreferences };
+
+    await Promise.all([
+      onUpdateDeliveryPreferences({
+        message: preset.delivery.message,
+        sound: preset.delivery.sound,
+        desktop: preset.delivery.desktop,
+      }),
+      onUpdateSocialPreferences({
+        ...preset.social,
+      }),
+    ]);
+
+    toast.success(`${preset.label} preset applied`, {
+      action: {
+        label: "Undo",
+        onClick: () => {
+          Promise.all([
+            onUpdateDeliveryPreferences({
+              message: previousDelivery.message,
+              sound: previousDelivery.sound,
+              desktop: previousDelivery.desktop,
+            }),
+            onUpdateSocialPreferences({
+              ...previousSocial,
+            }),
+          ]).catch((error) => {
+            console.error("Failed to undo notification preset", error);
+          });
+        },
+      },
+    });
   };
 
   const muteActor = async (actorId: string) => {
@@ -393,7 +444,9 @@ const SocialNotificationsPanel = ({
               size="icon-sm"
               disabled={preferencesBusy}
               onClick={() => {
-                void muteActor(String(notification.actorId?._id || ""));
+                muteActor(String(notification.actorId?._id || "")).catch((error) => {
+                  console.error("Failed to mute actor", error);
+                });
               }}
               title="Mute this person"
             >
@@ -407,7 +460,9 @@ const SocialNotificationsPanel = ({
                 size="icon-sm"
                 disabled={preferencesBusy}
                 onClick={() => {
-                  void muteConversation(String(notification.conversationId || ""));
+                  muteConversation(String(notification.conversationId || "")).catch((error) => {
+                    console.error("Failed to mute conversation", error);
+                  });
                 }}
                 title="Mute this group"
               >
@@ -486,6 +541,99 @@ const SocialNotificationsPanel = ({
 
       {showPreferences && (
         <div className="border-b border-border/60 px-3 py-2.5 bg-muted/20 space-y-2">
+          <div className="space-y-2 border-b border-border/60 pb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              Quick presets
+            </p>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              {(Object.keys(NOTIFICATION_PRESETS) as NotificationPresetKey[]).map((presetKey) => {
+                const preset = NOTIFICATION_PRESETS[presetKey];
+                const active = isNotificationPresetActive(
+                  presetKey,
+                  deliveryPreferences,
+                  socialPreferences,
+                );
+
+                return (
+                  <button
+                    key={presetKey}
+                    type="button"
+                    disabled={preferencesBusy}
+                    onClick={() => {
+                      applyNotificationPreset(presetKey).catch((error) => {
+                        console.error("Failed to apply notification preset", error);
+                      });
+                    }}
+                    className={cn(
+                      "micro-tap-chip rounded-lg border px-2 py-1.5 text-left transition-colors",
+                      active
+                        ? "border-primary/45 bg-primary/10"
+                        : "border-border/70 bg-background/80 hover:border-primary/30 hover:bg-muted/30",
+                    )}
+                  >
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-foreground">
+                      <preset.Icon className="size-3" />
+                      {preset.label}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-muted-foreground line-clamp-2">
+                      {preset.subtitle}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2 border-b border-border/60 pb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              Delivery
+            </p>
+
+            <div className="grid grid-cols-1 gap-1.5">
+              {[
+                {
+                  key: "message" as const,
+                  label: "Message notifications",
+                  description: "Show message and activity notifications",
+                },
+                {
+                  key: "sound" as const,
+                  label: "Sound",
+                  description: "Play alert sound for incoming notifications",
+                },
+                {
+                  key: "desktop" as const,
+                  label: "Desktop alerts",
+                  description: "Show browser-level notifications",
+                },
+              ].map(({ key, label, description }) => (
+                <label
+                  key={key}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/70 px-2.5 py-2"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-xs font-semibold text-foreground/90">
+                      {label}
+                    </span>
+                    <span className="block text-[11px] text-muted-foreground truncate">
+                      {description}
+                    </span>
+                  </span>
+                  <Switch
+                    checked={deliveryPreferences[key]}
+                    disabled={preferencesBusy || (!deliveryPreferences.message && key !== "message")}
+                    onCheckedChange={(checked) => {
+                      toggleDeliveryPreference(key, checked).catch((error) => {
+                        console.error("Failed to update delivery preference", error);
+                      });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
               Quiet mode
@@ -494,7 +642,9 @@ const SocialNotificationsPanel = ({
               checked={socialPreferences.muted}
               disabled={preferencesBusy}
               onCheckedChange={(checked) => {
-                void togglePreference("muted", checked);
+                togglePreference("muted", checked).catch((error) => {
+                  console.error("Failed to update social preference", error);
+                });
               }}
             />
           </div>
@@ -513,7 +663,9 @@ const SocialNotificationsPanel = ({
                   checked={socialPreferences[key]}
                   disabled={preferencesBusy || socialPreferences.muted}
                   onCheckedChange={(checked) => {
-                    void togglePreference(key, checked);
+                    togglePreference(key, checked).catch((error) => {
+                      console.error("Failed to update social preference", error);
+                    });
                   }}
                 />
               </label>
@@ -529,7 +681,9 @@ const SocialNotificationsPanel = ({
                 checked={socialPreferences.digestEnabled}
                 disabled={preferencesBusy || socialPreferences.muted}
                 onCheckedChange={(checked) => {
-                  void togglePreference("digestEnabled", checked);
+                  togglePreference("digestEnabled", checked).catch((error) => {
+                    console.error("Failed to update digest preference", error);
+                  });
                 }}
               />
             </div>
@@ -542,10 +696,12 @@ const SocialNotificationsPanel = ({
                     type="button"
                     disabled={preferencesBusy}
                     onClick={() => {
-                      void updateDigestWindow(hours);
+                      updateDigestWindow(hours).catch((error) => {
+                        console.error("Failed to update digest window", error);
+                      });
                     }}
                     className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                      "micro-tap-chip rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
                       digestWindowHours === hours
                         ? "border-primary/45 bg-primary/10 text-primary"
                         : "border-border/70 bg-background text-muted-foreground hover:text-foreground",
@@ -573,9 +729,11 @@ const SocialNotificationsPanel = ({
                     key={actorId}
                     type="button"
                     onClick={() => {
-                      void unmuteActor(actorId);
+                      unmuteActor(actorId).catch((error) => {
+                        console.error("Failed to unmute actor", error);
+                      });
                     }}
-                    className="rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] text-foreground/85 hover:bg-muted/60"
+                    className="micro-tap-chip rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] text-foreground/85 hover:bg-muted/60"
                   >
                     {actorLabelById.get(actorId) || `User ${actorId.slice(-6)}`} · Unmute
                   </button>
@@ -597,9 +755,11 @@ const SocialNotificationsPanel = ({
                     key={conversationId}
                     type="button"
                     onClick={() => {
-                      void unmuteConversation(conversationId);
+                      unmuteConversation(conversationId).catch((error) => {
+                        console.error("Failed to unmute conversation", error);
+                      });
                     }}
-                    className="rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] text-foreground/85 hover:bg-muted/60"
+                    className="micro-tap-chip rounded-full border border-border/70 bg-background px-2 py-1 text-[11px] text-foreground/85 hover:bg-muted/60"
                   >
                     Group {conversationId.slice(-6)} · Unmute
                   </button>
@@ -633,7 +793,7 @@ const SocialNotificationsPanel = ({
             <button
               type="button"
               onClick={() => setShowPreferences(true)}
-              className="text-[11px] text-primary hover:underline"
+              className="micro-tap-chip text-[11px] text-primary hover:underline"
             >
               Review preferences
             </button>

@@ -145,7 +145,7 @@ const SocialTopHeader = ({
           variant="ghost"
           className="social-topbar-action-btn"
           aria-label="Go to home feed"
-          onClick={() => navigate("/home")}
+          onClick={() => navigate("/feed")}
         >
           <Home className="h-4.5 w-4.5" />
         </Button>

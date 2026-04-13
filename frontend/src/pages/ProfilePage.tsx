@@ -338,7 +338,11 @@ const ProfilePage = () => { // NOSONAR
 
                   {isInitialProfileLoading && <SocialPostSkeleton count={2} />}
                   {profilePosts.map((post, index) => (
-                    <div key={post._id} className={getStaggerEnterClass(index)}>
+                    <div
+                      key={post._id}
+                      className="feed-card-stagger"
+                      style={{ animationDelay: `${Math.min(index, 10) * 48}ms` }}
+                    >
                       <SocialPostCard
                         post={post}
                         comments={postComments[post._id]}

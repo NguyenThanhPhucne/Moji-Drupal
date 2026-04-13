@@ -99,7 +99,19 @@ const HomeFeedPage = () => {
   const [composerOpenKey, setComposerOpenKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [feedTab, setFeedTab] = useState<FeedTab>("all");
-  const [savingSocialPrefs, setSavingSocialPrefs] = useState(false);
+  const [savingNotificationPrefs, setSavingNotificationPrefs] = useState(false);
+
+  const deliveryNotificationPreferences = useMemo(() => {
+    return {
+      message: user?.notificationPreferences?.message ?? true,
+      sound: user?.notificationPreferences?.sound ?? true,
+      desktop: user?.notificationPreferences?.desktop ?? false,
+    };
+  }, [
+    user?.notificationPreferences?.desktop,
+    user?.notificationPreferences?.message,
+    user?.notificationPreferences?.sound,
+  ]);
 
   const socialNotificationPreferences = useMemo(() => {
     const socialPrefs = user?.notificationPreferences?.social;
@@ -256,9 +268,9 @@ const HomeFeedPage = () => {
       };
 
       const nextNotificationPreferences = {
-        message: user.notificationPreferences?.message ?? true,
-        sound: user.notificationPreferences?.sound ?? true,
-        desktop: user.notificationPreferences?.desktop ?? false,
+        message: deliveryNotificationPreferences.message,
+        sound: deliveryNotificationPreferences.sound,
+        desktop: deliveryNotificationPreferences.desktop,
         social: nextSocial,
       };
 
@@ -268,7 +280,7 @@ const HomeFeedPage = () => {
       });
 
       try {
-        setSavingSocialPrefs(true);
+        setSavingNotificationPrefs(true);
         const response = await userService.updateNotificationPreferences({
           social: nextSocial,
         });
@@ -283,10 +295,71 @@ const HomeFeedPage = () => {
         setUser(previousUser);
         toast.error("Could not update notification preferences");
       } finally {
-        setSavingSocialPrefs(false);
+        setSavingNotificationPrefs(false);
       }
     },
-    [fetchNotifications, setUser, socialNotificationPreferences, user],
+    [
+      deliveryNotificationPreferences.desktop,
+      deliveryNotificationPreferences.message,
+      deliveryNotificationPreferences.sound,
+      fetchNotifications,
+      setUser,
+      socialNotificationPreferences,
+      user,
+    ],
+  );
+
+  const handleUpdateDeliveryNotificationPreferences = useCallback(
+    async (updates: {
+      message?: boolean;
+      sound?: boolean;
+      desktop?: boolean;
+    }) => {
+      if (!user) {
+        return;
+      }
+
+      const previousUser = user;
+      const nextNotificationPreferences = {
+        message:
+          updates.message ??
+          deliveryNotificationPreferences.message,
+        sound:
+          updates.sound ??
+          deliveryNotificationPreferences.sound,
+        desktop:
+          updates.desktop ??
+          deliveryNotificationPreferences.desktop,
+        social: socialNotificationPreferences,
+      };
+
+      setUser({
+        ...user,
+        notificationPreferences: nextNotificationPreferences,
+      });
+
+      try {
+        setSavingNotificationPrefs(true);
+        const response = await userService.updateNotificationPreferences(updates);
+        if (response?.user) {
+          setUser(response.user);
+        }
+      } catch (error) {
+        console.error("[home-feed] update delivery preferences error", error);
+        setUser(previousUser);
+        toast.error("Could not update notification delivery settings");
+      } finally {
+        setSavingNotificationPrefs(false);
+      }
+    },
+    [
+      deliveryNotificationPreferences.desktop,
+      deliveryNotificationPreferences.message,
+      deliveryNotificationPreferences.sound,
+      setUser,
+      socialNotificationPreferences,
+      user,
+    ],
   );
 
   return (
@@ -342,7 +415,7 @@ const HomeFeedPage = () => {
                     <button
                       key={tab}
                       type="button"
-                      className="social-filter-tab"
+                      className="social-filter-tab micro-tap-chip"
                       data-active={feedTab === tab}
                       onClick={() => setFeedTab(tab)}
                     >
@@ -381,7 +454,11 @@ const HomeFeedPage = () => {
                 {isInitialHomeLoading && <SocialPostSkeleton count={3} />}
 
                 {filteredHomeFeed.map((post, index) => (
-                  <div key={post._id} className={getStaggerEnterClass(index)}>
+                  <div
+                    key={post._id}
+                    className="feed-card-stagger"
+                    style={{ animationDelay: `${Math.min(index, 10) * 48}ms` }}
+                  >
                     <SocialPostCard
                       post={post}
                       comments={postComments[post._id]}
@@ -440,8 +517,10 @@ const HomeFeedPage = () => {
                 compact
                 onReadOne={markNotificationRead}
                 onReadAll={markAllNotificationsRead}
+                deliveryPreferences={deliveryNotificationPreferences}
                 socialPreferences={socialNotificationPreferences}
-                preferencesBusy={savingSocialPrefs}
+                preferencesBusy={savingNotificationPrefs}
+                onUpdateDeliveryPreferences={handleUpdateDeliveryNotificationPreferences}
                 onUpdateSocialPreferences={handleUpdateSocialNotificationPreferences}
               />
 

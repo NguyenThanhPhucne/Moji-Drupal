@@ -1,0 +1,43 @@
+name: Frontend Route Coverage
+
+on:
+  pull_request:
+    paths:
+      - frontend/src/**
+      - frontend/scripts/check-route-coverage.mjs
+      - frontend/package.json
+      - frontend/package-lock.json
+      - .github/workflows/frontend-route-coverage.yml
+  push:
+    branches:
+      - main
+    paths:
+      - frontend/src/**
+      - frontend/scripts/check-route-coverage.mjs
+      - frontend/package.json
+      - frontend/package-lock.json
+      - .github/workflows/frontend-route-coverage.yml
+
+jobs:
+  route-coverage:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check route coverage
+        run: npm run check:routes

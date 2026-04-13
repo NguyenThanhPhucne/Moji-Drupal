@@ -189,7 +189,7 @@ conversationSchema.pre("validate", function (next) {
   const participantIds = (this.participants || [])
     .map((participant) => participant?.userId?.toString?.())
     .filter(Boolean)
-    .sort();
+    .sort((leftId, rightId) => leftId.localeCompare(rightId));
 
   if (participantIds.length === 2 && participantIds[0] !== participantIds[1]) {
     this.directKey = `${participantIds[0]}:${participantIds[1]}`;

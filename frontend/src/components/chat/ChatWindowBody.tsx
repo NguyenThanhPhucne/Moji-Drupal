@@ -614,6 +614,19 @@ const ChatWindowBody = () => {
 
       <Profiler id="chat-thread" onRender={onThreadRender}>
         <div className="flex-1 min-h-0 overflow-hidden">
+          <div
+            className={cn(
+              "flex justify-center transition-all duration-300 overflow-hidden",
+              messageLoading && messages.length > 0
+                ? "h-10 opacity-100 mt-4 mb-2"
+                : "h-0 opacity-0 mt-0 mb-0",
+            )}
+          >
+            <div className="flex flex-col gap-2 w-full max-w-[65%] items-center opacity-70">
+              <Skeleton className="h-[28px] w-[50%] rounded-2xl bg-muted/60" />
+            </div>
+          </div>
+
           <Virtuoso
             ref={virtuosoRef}
             className="h-full beautiful-scrollbar"
@@ -629,15 +642,6 @@ const ChatWindowBody = () => {
               if (hasMore) {
                 void fetchMoreMessages();
               }
-            }}
-            components={{
-              Header: () => (
-                <div className={cn("flex justify-center transition-all duration-300 overflow-hidden", messageLoading && messages.length > 0 ? "h-10 opacity-100 mt-4 mb-2" : "h-0 opacity-0 mt-0 mb-0")}>
-                  <div className="flex flex-col gap-2 w-full max-w-[65%] items-center opacity-70">
-                    <Skeleton className="h-[28px] w-[50%] rounded-2xl bg-muted/60" />
-                  </div>
-                </div>
-              ),
             }}
             itemContent={renderMessageItem}
           />

@@ -319,7 +319,9 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             }
             setIsSendBursting(true);
             setTimeout(() => setIsSendBursting(false), 500);
-            void sendMessage();
+            sendMessage().catch((error) => {
+              console.error("Failed to send message", error);
+            });
           }}
           size="icon"
           disabled={sendDisabled}
