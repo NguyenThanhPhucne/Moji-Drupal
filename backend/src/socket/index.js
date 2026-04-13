@@ -43,6 +43,7 @@ io.use(socketAuthMiddleware);
 
 const onlineUsers = new Map(); // {userId: Set<socketId>}
 const ONLINE_USERS_RESYNC_MS = 15000;
+const CONVERSATION_ACCESS_REVALIDATE_MS = 15000;
 const TYPING_EMIT_THROTTLE_MS = 300;
 const typingEmitTimelineBySocket = new Map(); // {socketId: Map<conversationId, ts>}
 const MONGO_OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
@@ -54,23 +55,35 @@ const ensureSocketConversationAccess = async ({
   userId,
   conversationId,
   authorizedConversationIds,
+  authorizationCheckedAtByConversation,
 }) => {
   const normalizedConversationId = normalizeConversationId(conversationId);
   if (!MONGO_OBJECT_ID_PATTERN.test(normalizedConversationId)) {
     return null;
   }
 
-  if (!authorizedConversationIds.has(normalizedConversationId)) {
+  const now = Date.now();
+  const lastCheckedAt =
+    authorizationCheckedAtByConversation.get(normalizedConversationId) || 0;
+  const shouldRevalidateMembership =
+    !authorizedConversationIds.has(normalizedConversationId) ||
+    now - lastCheckedAt > CONVERSATION_ACCESS_REVALIDATE_MS;
+
+  if (shouldRevalidateMembership) {
     const membership = await Conversation.exists({
       _id: normalizedConversationId,
       "participants.userId": userId,
     });
 
     if (!membership) {
+      authorizedConversationIds.delete(normalizedConversationId);
+      authorizationCheckedAtByConversation.delete(normalizedConversationId);
+      socket.leave(normalizedConversationId);
       return null;
     }
 
     authorizedConversationIds.add(normalizedConversationId);
+    authorizationCheckedAtByConversation.set(normalizedConversationId, now);
   }
 
   socket.join(normalizedConversationId);
@@ -143,6 +156,12 @@ io.on("connection", async (socket) => {
       .map((conversationId) => normalizeConversationId(conversationId))
       .filter(Boolean),
   );
+  const authorizationCheckedAtByConversation = new Map(
+    Array.from(authorizedConversationIds).map((conversationId) => [
+      conversationId,
+      Date.now(),
+    ]),
+  );
 
   authorizedConversationIds.forEach((conversationId) => {
     socket.join(conversationId);
@@ -154,6 +173,7 @@ io.on("connection", async (socket) => {
       userId,
       conversationId,
       authorizedConversationIds,
+      authorizationCheckedAtByConversation,
     });
 
     if (!joinedConversationId) {
@@ -169,6 +189,7 @@ io.on("connection", async (socket) => {
       userId,
       conversationId,
       authorizedConversationIds,
+      authorizationCheckedAtByConversation,
     });
 
     if (!authorizedConversationId) {
@@ -202,6 +223,7 @@ io.on("connection", async (socket) => {
       userId,
       conversationId,
       authorizedConversationIds,
+      authorizationCheckedAtByConversation,
     });
 
     if (!authorizedConversationId) {
@@ -220,6 +242,25 @@ io.on("connection", async (socket) => {
       conversationId: authorizedConversationId,
       userId,
     });
+  });
+
+  socket.on("leave-conversation", (conversationId) => {
+    const normalizedConversationId = normalizeConversationId(conversationId);
+    if (!MONGO_OBJECT_ID_PATTERN.test(normalizedConversationId)) {
+      return;
+    }
+
+    socket.leave(normalizedConversationId);
+    authorizedConversationIds.delete(normalizedConversationId);
+    authorizationCheckedAtByConversation.delete(normalizedConversationId);
+
+    const socketTypingTimeline = typingEmitTimelineBySocket.get(socket.id);
+    if (socketTypingTimeline) {
+      socketTypingTimeline.delete(normalizedConversationId);
+      if (socketTypingTimeline.size === 0) {
+        typingEmitTimelineBySocket.delete(socket.id);
+      }
+    }
   });
 
   socket.on("manual-offline", async () => {

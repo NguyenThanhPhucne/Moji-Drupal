@@ -5,6 +5,7 @@ import Comment from "../models/Comment.js";
 import Follow from "../models/Follow.js";
 import Friend from "../models/Friend.js";
 import Notification from "../models/Notification.js";
+import ContentReport from "../models/ContentReport.js";
 import { v2 as cloudinary } from "cloudinary";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { registerRateLimitHit } from "../utils/antiSpam.js";
@@ -1395,6 +1396,17 @@ export const deleteComment = async (req, res) => {
       // Cascade-delete notifications for all affected comments to eliminate
       // Zombie Notifications that link to now-deleted comment threads.
       Notification.deleteMany({ commentId: { $in: allAffectedCommentIds } }),
+      ContentReport.deleteMany({
+        $or: [
+          {
+            targetType: "comment",
+            targetId: { $in: allAffectedCommentIds },
+          },
+          {
+            "context.postId": post._id,
+          },
+        ],
+      }),
     ]);
 
     const deletedCount = deletionOutcome.modifiedCount || 0;
@@ -1446,7 +1458,7 @@ export const deletePost = async (req, res) => {
     }
 
     const post = await Post.findById(postId).select(
-      "_id authorId isDeleted commentsCount media",
+      "_id authorId isDeleted commentsCount mediaUrls",
     );
 
     if (!post || post.isDeleted) {
@@ -1460,9 +1472,9 @@ export const deletePost = async (req, res) => {
     // Enterprise Fire-and-Forget: Thu thập tất cả Image URLs để dọn rác nền
     const imageUrlsToDestroy = [];
 
-    if (post.media && post.media.length > 0) {
-      post.media.forEach(m => {
-        if (m.url) imageUrlsToDestroy.push(m.url);
+    if (Array.isArray(post.mediaUrls) && post.mediaUrls.length > 0) {
+      post.mediaUrls.forEach((mediaUrl) => {
+        if (mediaUrl) imageUrlsToDestroy.push(mediaUrl);
       });
     }
 
@@ -1491,6 +1503,17 @@ export const deletePost = async (req, res) => {
       // Cascade-delete all notifications tied to this post so stale
       // notifications (Zombie Notifications) don't remain for other users.
       Notification.deleteMany({ postId }),
+      ContentReport.deleteMany({
+        $or: [
+          {
+            targetType: "post",
+            targetId: post._id,
+          },
+          {
+            "context.postId": post._id,
+          },
+        ],
+      }),
     ]);
 
     emitSocialPostDeleted({ postId });

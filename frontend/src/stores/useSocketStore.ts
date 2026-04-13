@@ -979,6 +979,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // conversation deleted - from other participants
     socket.on("conversation-deleted", ({ conversationId }) => {
+      if (conversationId) {
+        socket.emit("leave-conversation", conversationId);
+      }
+
       const currentState = useChatStore.getState();
       const nextConversations = currentState.conversations.filter(
         (conversationItem) => conversationItem._id !== conversationId,
@@ -996,11 +1000,33 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // message modifications
-    socket.on("message-reacted", ({ conversationId, messageId, reactions }) => {
-      useChatStore
-        .getState()
-        .updateMessage(conversationId, messageId, { reactions });
-    });
+    socket.on(
+      "message-reacted",
+      ({ conversationId, messageId, reactions, updatedAt }) => {
+        const chatState = useChatStore.getState();
+        const currentMessage = chatState.messages?.[conversationId]?.items?.find(
+          (messageItem) => messageItem._id === messageId,
+        );
+
+        const incomingUpdatedAtTs = updatedAt ? new Date(updatedAt).getTime() : 0;
+        const currentUpdatedAtTs = currentMessage?.updatedAt
+          ? new Date(currentMessage.updatedAt).getTime()
+          : 0;
+
+        if (
+          incomingUpdatedAtTs &&
+          currentUpdatedAtTs &&
+          incomingUpdatedAtTs < currentUpdatedAtTs
+        ) {
+          return;
+        }
+
+        useChatStore.getState().updateMessage(conversationId, messageId, {
+          reactions,
+          ...(updatedAt ? { updatedAt } : {}),
+        });
+      },
+    );
 
     socket.on(
       "message-deleted",
@@ -1067,9 +1093,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     );
 
     socket.on("message-read", ({ conversationId, messageId, readBy }) => {
-      useChatStore
-        .getState()
-        .updateMessage(conversationId, messageId, { readBy });
+      const chatState = useChatStore.getState();
+      const currentMessage = chatState.messages?.[conversationId]?.items?.find(
+        (messageItem) => messageItem._id === messageId,
+      );
+
+      const currentReadBy = Array.isArray(currentMessage?.readBy)
+        ? currentMessage.readBy.map(String)
+        : [];
+      const incomingReadBy = Array.isArray(readBy) ? readBy.map(String) : [];
+      const mergedReadBy = [...new Set([...currentReadBy, ...incomingReadBy])];
+
+      useChatStore.getState().updateMessage(conversationId, messageId, {
+        readBy: mergedReadBy,
+      });
     });
 
     // Friend request received - real-time notification

@@ -122,11 +122,15 @@ export const toggleBookmark = async (req, res) => {
     });
 
     const message = await Message.findById(messageId).select(
-      "_id conversationId senderId content imgUrl createdAt",
+      "_id conversationId senderId content imgUrl createdAt isDeleted",
     );
 
     if (!message) {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
+
+    if (message.isDeleted) {
+      return res.status(400).json({ message: "Không thể lưu tin nhắn đã bị gỡ" });
     }
 
     const isMember = await ensureConversationMembership(

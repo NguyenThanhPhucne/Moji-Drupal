@@ -2,6 +2,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import Bookmark from "../models/Bookmark.js";
 import Notification from "../models/Notification.js";
+import ContentReport from "../models/ContentReport.js";
 import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
@@ -1135,17 +1136,37 @@ export const deleteConversation = async (req, res) => {
             throw new Error("FORBIDDEN");
           }
 
-          const messagesWithImages = await Message.find({
-            conversationId,
-            imgUrl: { $ne: null },
-          }).select("imgUrl").session(session);
+          const [messagesWithImages, messageIdDocs] = await Promise.all([
+            Message.find({
+              conversationId,
+              imgUrl: { $ne: null },
+            }).select("imgUrl").session(session),
+            Message.find({ conversationId }).select("_id").session(session),
+          ]);
 
           imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
+          const messageIds = messageIdDocs.map((msg) => msg._id).filter(Boolean);
 
           await Promise.all([
-            Message.deleteMany({ conversationId }).session(session),
+            Message.deleteMany({ conversationId })
+              .setOptions({
+                skipDependentCleanup: true,
+                skipCounterSync: true,
+              })
+              .session(session),
             Bookmark.deleteMany({ conversationId }).session(session),
             Notification.deleteMany({ conversationId }).session(session),
+            ContentReport.deleteMany({
+              $or: [
+                {
+                  targetType: "message",
+                  targetId: { $in: messageIds },
+                },
+                {
+                  "context.conversationId": conversationId,
+                },
+              ],
+            }).session(session),
           ]);
           await Conversation.findOneAndDelete(
             { _id: scopedConversation._id },
@@ -1194,17 +1215,35 @@ export const deleteConversation = async (req, res) => {
       }
 
       try {
-        const messagesWithImages = await Message.find({
-          conversationId,
-          imgUrl: { $ne: null },
-        }).select("imgUrl");
+        const [messagesWithImages, messageIdDocs] = await Promise.all([
+          Message.find({
+            conversationId,
+            imgUrl: { $ne: null },
+          }).select("imgUrl"),
+          Message.find({ conversationId }).select("_id"),
+        ]);
         imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
+        const messageIds = messageIdDocs.map((msg) => msg._id).filter(Boolean);
 
         // Cleanup dependent collections before deleting the conversation document.
         await Promise.all([
-          Message.deleteMany({ conversationId }),
+          Message.deleteMany({ conversationId }).setOptions({
+            skipDependentCleanup: true,
+            skipCounterSync: true,
+          }),
           Bookmark.deleteMany({ conversationId }),
           Notification.deleteMany({ conversationId }),
+          ContentReport.deleteMany({
+            $or: [
+              {
+                targetType: "message",
+                targetId: { $in: messageIds },
+              },
+              {
+                "context.conversationId": conversationId,
+              },
+            ],
+          }),
         ]);
       } catch (messageDeleteError) {
         console.error("[deleteConversation] Related cleanup failed — aborting to prevent orphan data", messageDeleteError);
@@ -1224,6 +1263,7 @@ export const deleteConversation = async (req, res) => {
     await Promise.all(conversation.participants.map(async (p) => {
       const participantIdStr = p.userId.toString();
       await invalidateCache(`conversations:${participantIdStr}`);
+      io.in(participantIdStr).socketsLeave(conversationId);
       io.to(participantIdStr).emit("conversation-deleted", {
         conversationId,
       });

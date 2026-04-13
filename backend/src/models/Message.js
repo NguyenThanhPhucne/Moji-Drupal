@@ -1,6 +1,41 @@
 import mongoose from "mongoose";
 import { adjustMessageCountInDrupal } from "../libs/drupalSync.js";
 
+const normalizeObjectIdValue = (value) => value?.toString?.() || String(value || "");
+
+const cleanupMessageDependents = async (messageIds, options = {}) => {
+  if (options?.skipDependentCleanup) {
+    return;
+  }
+
+  const normalizedIds = [...new Set(
+    (Array.isArray(messageIds) ? messageIds : [])
+      .map((messageId) => normalizeObjectIdValue(messageId))
+      .filter(Boolean),
+  )];
+
+  if (normalizedIds.length === 0) {
+    return;
+  }
+
+  try {
+    const [{ default: Bookmark }, { default: ContentReport }] = await Promise.all([
+      import("./Bookmark.js"),
+      import("./ContentReport.js"),
+    ]);
+
+    await Promise.all([
+      Bookmark.deleteMany({ messageId: { $in: normalizedIds } }),
+      ContentReport.deleteMany({
+        targetType: "message",
+        targetId: { $in: normalizedIds },
+      }),
+    ]);
+  } catch (error) {
+    console.error("[Message.cleanup] Failed to cleanup dependent documents:", error);
+  }
+};
+
 const messageSchema = new mongoose.Schema(
   {
     conversationId: {
@@ -116,16 +151,35 @@ messageSchema.post("save", async function (doc) {
 });
 
 // Update message count in Drupal after message deletion
+messageSchema.pre("deleteOne", { document: false, query: true }, async function () {
+  const filter = this.getFilter() || {};
+  const targetMessage = await this.model
+    .findOne(filter)
+    .select("_id conversationId")
+    .lean();
+
+  this._deletedMessageIds = targetMessage?._id ? [targetMessage._id] : [];
+  this._conversationIdForSingleDelete =
+    normalizeObjectIdValue(targetMessage?.conversationId) ||
+    normalizeObjectIdValue(filter?.conversationId) ||
+    null;
+});
+
 messageSchema.post("deleteOne", async function () {
   try {
     const query = this.getQuery();
-    if (query.conversationId) {
-      const conversationId = query.conversationId.toString();
+    const options = this.getOptions?.() || {};
+    const conversationId =
+      this._conversationIdForSingleDelete ||
+      normalizeObjectIdValue(query?.conversationId) ||
+      null;
+
+    if (conversationId && !options.skipCounterSync) {
 
       // Fire-and-forget: Decrement MongoDB Conversation.messageCount
       import("./Conversation.js").then(({ default: Conversation }) => {
         Conversation.updateOne(
-          { _id: query.conversationId },
+          { _id: conversationId },
           { $inc: { messageCount: -1 } },
         ).catch((err) =>
           console.error("[Message.post.deleteOne] Failed to decrement messageCount in MongoDB:", err),
@@ -134,48 +188,107 @@ messageSchema.post("deleteOne", async function () {
 
       await adjustMessageCountInDrupal(conversationId, -1);
     }
+
+    await cleanupMessageDependents(this._deletedMessageIds, options);
   } catch (error) {
     console.error("Failed to update message count in Drupal:", error);
   }
 });
 
+messageSchema.pre("findOneAndDelete", async function () {
+  const filter = this.getFilter() || {};
+  const targetMessage = await this.model
+    .findOne(filter)
+    .select("_id conversationId")
+    .lean();
+
+  this._deletedMessageIds = targetMessage?._id ? [targetMessage._id] : [];
+  this._conversationIdForSingleDelete =
+    normalizeObjectIdValue(targetMessage?.conversationId) ||
+    normalizeObjectIdValue(filter?.conversationId) ||
+    null;
+});
+
+messageSchema.post("findOneAndDelete", async function (doc) {
+  try {
+    const options = this.getOptions?.() || {};
+    const conversationId =
+      normalizeObjectIdValue(doc?.conversationId) ||
+      this._conversationIdForSingleDelete ||
+      null;
+
+    if (conversationId && !options.skipCounterSync) {
+      import("./Conversation.js").then(({ default: Conversation }) => {
+        Conversation.updateOne(
+          { _id: conversationId },
+          { $inc: { messageCount: -1 } },
+        ).catch((err) =>
+          console.error("[Message.post.findOneAndDelete] Failed to decrement messageCount in MongoDB:", err),
+        );
+      }).catch(() => {/* Circular import guard */});
+
+      await adjustMessageCountInDrupal(conversationId, -1);
+    }
+
+    const deletedMessageIds = doc?._id ? [doc._id] : this._deletedMessageIds;
+    await cleanupMessageDependents(deletedMessageIds, options);
+  } catch (error) {
+    console.error("Failed to update message count in Drupal (findOneAndDelete):", error);
+  }
+});
+
 messageSchema.pre("deleteMany", async function () {
   const filter = this.getFilter() || {};
+  const options = this.getOptions?.() || {};
   const conversationId = filter.conversationId;
 
-  if (!conversationId) {
-    return;
+  if (!options.skipDependentCleanup) {
+    const messageIdDocs = await this.model.find(filter).select("_id").lean();
+    this._deletedMessageIdsForBulkDelete = messageIdDocs
+      .map((messageDoc) => messageDoc?._id)
+      .filter(Boolean);
+
+    if (!options.skipCounterSync && conversationId) {
+      this._bulkDeleteMessageCount = this._deletedMessageIdsForBulkDelete.length;
+    }
   }
 
-  this._conversationIdForBulkDelete = conversationId.toString();
-  this._bulkDeleteMessageCount = await this.model.countDocuments(filter);
+  if (conversationId && !options.skipCounterSync) {
+    this._conversationIdForBulkDelete = normalizeObjectIdValue(conversationId);
+
+    if (typeof this._bulkDeleteMessageCount !== "number") {
+      this._bulkDeleteMessageCount = await this.model.countDocuments(filter);
+    }
+  }
 });
 
 messageSchema.post("deleteMany", async function (result) {
   try {
+    const options = this.getOptions?.() || {};
     const conversationId = this._conversationIdForBulkDelete;
-    if (!conversationId) {
-      return;
+
+    if (conversationId && !options.skipCounterSync) {
+      const deletedCount =
+        typeof result?.deletedCount === "number"
+          ? result.deletedCount
+          : this._bulkDeleteMessageCount || 0;
+
+      if (deletedCount > 0) {
+        // Fire-and-forget: Bulk decrement MongoDB Conversation.messageCount
+        import("./Conversation.js").then(({ default: Conversation }) => {
+          Conversation.updateOne(
+            { _id: conversationId },
+            { $inc: { messageCount: -deletedCount } },
+          ).catch((err) =>
+            console.error("[Message.post.deleteMany] Failed to bulk-decrement messageCount in MongoDB:", err),
+          );
+        }).catch(() => {/* Circular import guard */});
+
+        await adjustMessageCountInDrupal(conversationId, -deletedCount);
+      }
     }
 
-    const deletedCount =
-      typeof result?.deletedCount === "number"
-        ? result.deletedCount
-        : this._bulkDeleteMessageCount || 0;
-
-    if (deletedCount > 0) {
-      // Fire-and-forget: Bulk decrement MongoDB Conversation.messageCount
-      import("./Conversation.js").then(({ default: Conversation }) => {
-        Conversation.updateOne(
-          { _id: conversationId },
-          { $inc: { messageCount: -deletedCount } },
-        ).catch((err) =>
-          console.error("[Message.post.deleteMany] Failed to bulk-decrement messageCount in MongoDB:", err),
-        );
-      }).catch(() => {/* Circular import guard */});
-
-      await adjustMessageCountInDrupal(conversationId, -deletedCount);
-    }
+    await cleanupMessageDependents(this._deletedMessageIdsForBulkDelete, options);
   } catch (error) {
     console.error("Failed to update message count in Drupal (deleteMany):", error);
   }

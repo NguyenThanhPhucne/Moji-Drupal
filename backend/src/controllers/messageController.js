@@ -523,6 +523,11 @@ export const reactToMessage = async (req, res) => {
     const { messageId } = req.params;
     const { emoji } = req.body;
     const userId = req.user._id;
+    const normalizedEmoji = String(emoji || "").trim();
+
+    if (!normalizedEmoji || normalizedEmoji.length > 16) {
+      return res.status(400).json({ message: "Biểu cảm không hợp lệ" });
+    }
 
     const message = await Message.findById(messageId).select(
       "_id conversationId isDeleted",
@@ -548,11 +553,11 @@ export const reactToMessage = async (req, res) => {
       {
         _id: messageId,
         isDeleted: { $ne: true },
-        reactions: { $elemMatch: { userId, emoji } },
+        reactions: { $elemMatch: { userId, emoji: normalizedEmoji } },
       },
       {
         $pull: {
-          reactions: { userId, emoji },
+          reactions: { userId, emoji: normalizedEmoji },
         },
       },
     );
@@ -580,7 +585,7 @@ export const reactToMessage = async (req, res) => {
           {
             $set: {
               reactions: {
-                $concatArrays: ["$reactions", [{ userId, emoji }]],
+                $concatArrays: ["$reactions", [{ userId, emoji: normalizedEmoji }]],
               },
             },
           },
@@ -589,16 +594,23 @@ export const reactToMessage = async (req, res) => {
     }
 
     const updatedMessage = await Message.findById(messageId).select(
-      "_id conversationId reactions",
+      "_id conversationId reactions isDeleted updatedAt",
     );
     if (!updatedMessage) {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
+
+    if (updatedMessage.isDeleted) {
+      return res
+        .status(409)
+        .json({ message: "Tin nhắn đã bị gỡ trong lúc cập nhật biểu cảm" });
     }
 
     io.to(updatedMessage.conversationId.toString()).emit("message-reacted", {
       conversationId: updatedMessage.conversationId,
       messageId: updatedMessage._id,
       reactions: updatedMessage.reactions,
+      updatedAt: updatedMessage.updatedAt,
     });
 
     return res.status(200).json(updatedMessage);
@@ -646,18 +658,48 @@ export const unsendMessage = async (req, res) => {
       });
     }
 
-    if (message.imgUrl) {
-      await destroyImageFromUrl(message.imgUrl);
+    const deletedMessage = await Message.findOneAndUpdate(
+      {
+        _id: messageId,
+        senderId: userId,
+        isDeleted: { $ne: true },
+      },
+      {
+        $set: {
+          isDeleted: true,
+          content: REMOVED_MESSAGE_CONTENT,
+          imgUrl: null,
+          replyTo: null,
+          reactions: [],
+          readBy: [],
+          editedAt: new Date(),
+        },
+      },
+      { new: true },
+    );
+
+    // Another request may have already deleted this message concurrently.
+    // In that case, return idempotent success with the canonical latest state.
+    if (!deletedMessage) {
+      const latestMessage = await Message.findById(messageId);
+      if (!latestMessage) {
+        return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+      }
+
+      return res.status(200).json({
+        message: latestMessage,
+        conversation: null,
+      });
     }
 
-    message.isDeleted = true;
-    message.content = REMOVED_MESSAGE_CONTENT;
-    message.imgUrl = null;
-    message.replyTo = null;
-    message.reactions = [];
-    message.readBy = [];
-    message.editedAt = new Date();
-    await message.save();
+    if (message.imgUrl) {
+      destroyImageFromUrl(message.imgUrl).catch((cleanupError) => {
+        console.error(
+          "[unsendMessage] Image cleanup failed after successful message delete",
+          cleanupError,
+        );
+      });
+    }
 
     // Update conversation preview independently — message deletion succeeds even if
     // this step fails, avoiding partial-rollback confusion. Log discrepancy clearly.
@@ -665,13 +707,13 @@ export const unsendMessage = async (req, res) => {
     try {
       updatedConversation = await Conversation.findOneAndUpdate(
         {
-          _id: message.conversationId,
-          "lastMessage._id": message._id.toString(),
+          _id: deletedMessage.conversationId,
+          "lastMessage._id": deletedMessage._id.toString(),
         },
         {
           $set: {
             "lastMessage.content": REMOVED_MESSAGE_CONTENT,
-            "lastMessage.createdAt": message.createdAt,
+            "lastMessage.createdAt": deletedMessage.createdAt,
           },
         },
         { new: true },
@@ -679,8 +721,8 @@ export const unsendMessage = async (req, res) => {
 
       const clearedPinnedConversation = await Conversation.findOneAndUpdate(
         {
-          _id: message.conversationId,
-          "pinnedMessage._id": message._id.toString(),
+          _id: deletedMessage.conversationId,
+          "pinnedMessage._id": deletedMessage._id.toString(),
         },
         {
           $set: {
@@ -691,7 +733,7 @@ export const unsendMessage = async (req, res) => {
       );
 
       if (clearedPinnedConversation) {
-        io.to(message.conversationId.toString()).emit("group-conversation-updated", {
+        io.to(deletedMessage.conversationId.toString()).emit("group-conversation-updated", {
           conversation: toGroupConversationUpdatePayload(clearedPinnedConversation),
         });
       }
@@ -703,22 +745,22 @@ export const unsendMessage = async (req, res) => {
       );
     }
 
-    io.to(message.conversationId.toString()).emit("message-deleted", {
-      conversationId: message.conversationId,
-      messageId: message._id,
-      content: message.content,
-      editedAt: message.editedAt,
-      reactions: message.reactions,
-      readBy: message.readBy,
-      replyTo: message.replyTo,
+    io.to(deletedMessage.conversationId.toString()).emit("message-deleted", {
+      conversationId: deletedMessage.conversationId,
+      messageId: deletedMessage._id,
+      content: deletedMessage.content,
+      editedAt: deletedMessage.editedAt,
+      reactions: deletedMessage.reactions,
+      readBy: deletedMessage.readBy,
+      replyTo: deletedMessage.replyTo,
       conversation: formatConversationSyncPayload(updatedConversation),
     });
 
-    const conversationToInvalidate = await Conversation.findById(message.conversationId).select("participants");
+    const conversationToInvalidate = await Conversation.findById(deletedMessage.conversationId).select("participants");
     invalidateConversationParticipantsCache(conversationToInvalidate).catch(console.error);
 
     return res.status(200).json({
-      message,
+      message: deletedMessage,
       conversation: formatConversationSyncPayload(updatedConversation),
     });
   } catch (error) {
@@ -746,21 +788,28 @@ export const removeMessageForMe = async (req, res) => {
     }
 
     const userIdStr = userId.toString();
-    const alreadyHidden = message.hiddenFor.some(
-      (hiddenUserId) => hiddenUserId.toString() === userIdStr,
+
+    const hideResult = await Message.updateOne(
+      {
+        _id: messageId,
+        hiddenFor: { $ne: userId },
+      },
+      {
+        $addToSet: { hiddenFor: userId },
+      },
     );
 
-    if (!alreadyHidden) {
-      message.hiddenFor.push(userId);
-      await message.save();
+    if (hideResult.modifiedCount) {
+      io.to(userIdStr).emit("message-hidden-for-user", {
+        conversationId: message.conversationId,
+        messageId: message._id,
+      });
     }
 
-    io.to(userIdStr).emit("message-hidden-for-user", {
-      conversationId: message.conversationId,
-      messageId: message._id,
+    return res.status(200).json({
+      success: true,
+      alreadyHidden: !hideResult.modifiedCount,
     });
-
-    return res.status(200).json({ success: true });
   } catch (error) {
     console.error("Lỗi khi gỡ tin nhắn ở phía bạn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -807,34 +856,52 @@ export const editMessage = async (req, res) => {
       return res.status(200).json(message);
     }
 
-    message.content = normalizedContent;
-    message.editedAt = new Date();
-    await message.save();
-
-    const updatedConversation = await Conversation.findOneAndUpdate(
+    const editedAt = new Date();
+    const updatedMessage = await Message.findOneAndUpdate(
       {
-        _id: message.conversationId,
-        "lastMessage._id": message._id.toString(),
+        _id: messageId,
+        senderId: userId,
+        isDeleted: { $ne: true },
       },
       {
         $set: {
-          "lastMessage.content": message.content,
-          "lastMessage.createdAt": message.createdAt,
+          content: normalizedContent,
+          editedAt,
         },
       },
       { new: true },
     );
 
-    io.to(message.conversationId.toString()).emit("message-edited", {
-      conversationId: message.conversationId,
-      messageId: message._id,
-      content: message.content,
-      editedAt: message.editedAt,
+    if (!updatedMessage) {
+      return res.status(409).json({
+        message: "Tin nhắn đã bị gỡ hoặc thay đổi trước khi hoàn tất chỉnh sửa",
+      });
+    }
+
+    const updatedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: updatedMessage.conversationId,
+        "lastMessage._id": updatedMessage._id.toString(),
+      },
+      {
+        $set: {
+          "lastMessage.content": updatedMessage.content,
+          "lastMessage.createdAt": updatedMessage.createdAt,
+        },
+      },
+      { new: true },
+    );
+
+    io.to(updatedMessage.conversationId.toString()).emit("message-edited", {
+      conversationId: updatedMessage.conversationId,
+      messageId: updatedMessage._id,
+      content: updatedMessage.content,
+      editedAt: updatedMessage.editedAt,
       conversation: formatConversationSyncPayload(updatedConversation),
     });
 
     return res.status(200).json({
-      message,
+      message: updatedMessage,
       conversation: formatConversationSyncPayload(updatedConversation),
     });
   } catch (error) {
@@ -850,10 +917,16 @@ export const markMessageRead = async (req, res) => {
     const userId = req.user._id;
 
     const existingMessage =
-      await Message.findById(messageId).select("conversationId");
+      await Message.findById(messageId).select("conversationId isDeleted");
 
     if (!existingMessage)
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+
+    if (existingMessage.isDeleted) {
+      return res
+        .status(400)
+        .json({ message: "Không thể đánh dấu đã đọc cho tin nhắn đã gỡ" });
+    }
 
     const isMember = await ensureConversationMembership(
       existingMessage.conversationId,
@@ -863,14 +936,26 @@ export const markMessageRead = async (req, res) => {
       return res.status(403).json({ message: "Không có quyền thao tác" });
     }
 
-    const message = await Message.findByIdAndUpdate(
-      messageId,
+    const updateResult = await Message.updateOne(
+      {
+        _id: messageId,
+        isDeleted: { $ne: true },
+        readBy: { $ne: userId },
+      },
       { $addToSet: { readBy: userId } },
-      { new: true },
     );
 
-    if (!message)
+    if (!updateResult.modifiedCount) {
+      return res.status(200).json({ ok: true, alreadyRead: true });
+    }
+
+    const message = await Message.findById(messageId).select(
+      "_id conversationId readBy",
+    );
+
+    if (!message) {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
 
     io.to(message.conversationId.toString()).emit("message-read", {
       conversationId: message.conversationId,

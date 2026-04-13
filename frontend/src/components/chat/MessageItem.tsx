@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { chatService, type LinkPreviewPayload } from "@/services/chatService";
@@ -40,6 +39,15 @@ import ImageLightbox from "./ImageLightbox";
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/i;
+const MOBILE_CONTEXT_LONG_PRESS_MS = 420;
+const TOUCH_MOVE_CANCEL_THRESHOLD_PX = 14;
+
+type MessageActionHintKind = "neutral" | "success" | "error";
+
+interface MessageActionHint {
+  text: string;
+  kind: MessageActionHintKind;
+}
 
 /* ---------- Date divider ---------- */
 export function DateDivider({ date }: Readonly<{ date: Date }>) {
@@ -568,6 +576,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
   message,
   isOwn,
   onReact,
+  actionHint,
   selectedConvoType,
   isSeenAnchorMessage,
   lastMessageStatus,
@@ -584,6 +593,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
   message: Message;
   isOwn: boolean;
   onReact: (emoji: string) => void;
+  actionHint: MessageActionHint | null;
   selectedConvoType: Conversation["type"];
   isSeenAnchorMessage: boolean;
   lastMessageStatus: "delivered" | "seen";
@@ -619,7 +629,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
       <div
         className={cn(
           "flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1 px-0.5 sm:px-1",
-          "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+          "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150",
           isOwn ? "flex-row-reverse" : "flex-row",
         )}
       >
@@ -642,6 +652,18 @@ const MessageMetaSection = memo(function MessageMetaSection({
           {format(new Date(message.createdAt), "HH:mm")}
         </span>
       </div>
+
+      {actionHint && (
+        <div
+          className={cn(
+            "chat-message-action-hint",
+            `chat-message-action-hint--${actionHint.kind}`,
+            isOwn ? "self-end text-right" : "self-start text-left",
+          )}
+        >
+          {actionHint.text}
+        </div>
+      )}
 
       <SeenStatus
         isOwn={isOwn}
@@ -856,6 +878,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     null,
   );
   const [isMessageHovered, setIsMessageHovered] = useState(false);
+  const [isBubblePressed, setIsBubblePressed] = useState(false);
+  const [actionHint, setActionHint] = useState<MessageActionHint | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -863,6 +887,11 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   } | null>(null);
 
   const editInputRef = useRef<HTMLInputElement>(null);
+  const actionHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchPeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressContextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const skipBubbleClickRef = useRef(false);
   const isOwn = message.senderId === user?._id;
   const bookmarked = isBookmarked(message._id);
 
@@ -882,6 +911,42 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       editInputRef.current?.select();
     }
   }, [editMode]);
+
+  const showActionHint = useCallback(
+    (text: string, kind: MessageActionHintKind = "neutral") => {
+      setActionHint({ text, kind });
+
+      if (actionHintTimerRef.current) {
+        globalThis.clearTimeout(actionHintTimerRef.current);
+      }
+
+      actionHintTimerRef.current = globalThis.setTimeout(() => {
+        setActionHint(null);
+      }, 1300);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (actionHintTimerRef.current) {
+        globalThis.clearTimeout(actionHintTimerRef.current);
+      }
+      if (touchPeekTimerRef.current) {
+        globalThis.clearTimeout(touchPeekTimerRef.current);
+      }
+      if (longPressContextTimerRef.current) {
+        globalThis.clearTimeout(longPressContextTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearLongPressContextTimer = useCallback(() => {
+    if (longPressContextTimerRef.current) {
+      globalThis.clearTimeout(longPressContextTimerRef.current);
+      longPressContextTimerRef.current = null;
+    }
+  }, []);
 
   const handleReact = useCallback(
     async (emoji: string) => {
@@ -931,12 +996,18 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     }
   }, [activeConversationId, isOwn, message._id, unsendMessage]);
 
-  const handleCopy = useCallback(() => {
-    if (message.content) {
-      navigator.clipboard.writeText(message.content);
-      toast.success("Message copied");
+  const handleCopy = useCallback(async () => {
+    if (!message.content) {
+      return;
     }
-  }, [message.content]);
+
+    try {
+      await navigator.clipboard.writeText(message.content);
+      showActionHint("Copied", "success");
+    } catch {
+      showActionHint("Copy failed", "error");
+    }
+  }, [message.content, showActionHint]);
 
   const handleEditSave = useCallback(() => {
     const normalizedEditValue = editValue.trim();
@@ -948,7 +1019,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     }
 
     if (!activeConversationId) {
-      toast.error("Unable to save edit right now");
+      showActionHint("Unable to save right now", "error");
       return;
     }
 
@@ -960,7 +1031,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       message._id,
       normalizedEditValue,
     ).catch(() => {
-      toast.error("Couldn't save your edit. Restored previous content.");
+      showActionHint("Edit not saved", "error");
     });
   }, [
     editValue,
@@ -968,11 +1039,34 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     message._id,
     activeConversationId,
     editMessage,
+    showActionHint,
   ]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const resolveContextMenuPosition = useCallback((rawX: number, rawY: number) => {
+    const menuWidth = 176;
+    const viewportPadding = 8;
+    const safeAreaBottom =
+      globalThis.CSS !== undefined &&
+      typeof globalThis.CSS.supports === "function" &&
+      globalThis.CSS.supports("padding-bottom: env(safe-area-inset-bottom)")
+        ? 44
+        : 8;
+
+    const x = Math.max(
+      viewportPadding,
+      Math.min(rawX, globalThis.window.innerWidth - menuWidth - viewportPadding),
+    );
+    const y = Math.max(
+      viewportPadding,
+      Math.min(rawY, globalThis.window.innerHeight - 220 - safeAreaBottom),
+    );
+
+    return { x, y };
   }, []);
 
   const handleOpenContextFromButton = useCallback(
@@ -981,33 +1075,12 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       e.stopPropagation();
 
       const rect = e.currentTarget.getBoundingClientRect();
-      const menuWidth = 176;
-      const viewportPadding = 8;
-      // Account for iOS safe-area-inset-bottom (adds ~34px on notched devices)
-      const safeAreaBottom =
-        globalThis.CSS !== undefined &&
-        typeof globalThis.CSS.supports === "function" &&
-        globalThis.CSS.supports("padding-bottom: env(safe-area-inset-bottom)")
-          ? 44
-          : 8;
-      const rawX = isOwn ? rect.left - menuWidth + rect.width : rect.right;
+      const rawX = isOwn ? rect.left - 176 + rect.width : rect.right;
       const rawY = rect.bottom + 6;
 
-      const x = Math.max(
-        viewportPadding,
-        Math.min(
-          rawX,
-          globalThis.window.innerWidth - menuWidth - viewportPadding,
-        ),
-      );
-      const y = Math.max(
-        viewportPadding,
-        Math.min(rawY, globalThis.window.innerHeight - 220 - safeAreaBottom),
-      );
-
-      setContextMenu({ x, y });
+      setContextMenu(resolveContextMenuPosition(rawX, rawY));
     },
-    [isOwn],
+    [isOwn, resolveContextMenuPosition],
   );
 
   const handleCloseContext = useCallback(() => setContextMenu(null), []);
@@ -1036,12 +1109,15 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     if (!message._id || message.isForwardable === undefined) return;
     try {
       await toggleMessageForwardable(message._id, !message.isForwardable);
-      toast.success(message.isForwardable ? "Disabled forwarding for this message" : "Enabled forwarding for this message");
+      showActionHint(
+        message.isForwardable ? "Forwarding disabled" : "Forwarding enabled",
+        "success",
+      );
     } catch {
-      toast.error("Failed to update message privacy");
+      showActionHint("Could not update privacy", "error");
     }
     setContextMenu(null);
-  }, [message._id, message.isForwardable, toggleMessageForwardable]);
+  }, [message._id, message.isForwardable, toggleMessageForwardable, showActionHint]);
 
   const handleTogglePin = useCallback(() => {
     if (!onTogglePin || !message._id || message.isDeleted) {
@@ -1055,12 +1131,15 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const handleToggleBookmark = useCallback(async () => {
     const result = await toggleBookmark(message._id);
     if (!result.ok) {
-      toast.error("Could not update bookmark");
+      showActionHint("Bookmark failed", "error");
       return;
     }
 
-    toast.success(result.bookmarked ? "Message saved" : "Bookmark removed");
-  }, [message._id, toggleBookmark]);
+    showActionHint(
+      result.bookmarked ? "Saved to bookmarks" : "Bookmark removed",
+      "success",
+    );
+  }, [message._id, toggleBookmark, showActionHint]);
 
   const handleReportMessage = useCallback(async () => {
     if (isOwn || message.isDeleted) {
@@ -1073,13 +1152,92 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
         targetId: message._id,
         reason: "harassment",
       });
-      toast.success("Report submitted");
+      showActionHint("Report submitted", "success");
     } catch {
-      toast.error("Could not submit report");
+      showActionHint("Could not submit report", "error");
     }
 
     setContextMenu(null);
-  }, [isOwn, message._id, message.isDeleted]);
+  }, [isOwn, message._id, message.isDeleted, showActionHint]);
+
+  const handleTouchPeekActions = useCallback(() => {
+    setIsMessageHovered(true);
+    if (touchPeekTimerRef.current) {
+      globalThis.clearTimeout(touchPeekTimerRef.current);
+    }
+
+    touchPeekTimerRef.current = globalThis.setTimeout(() => {
+      setIsMessageHovered(false);
+    }, 1200);
+  }, []);
+
+  const handleBubbleTouchStart = useCallback(
+    (event: React.TouchEvent<HTMLButtonElement>) => {
+      handleTouchPeekActions();
+
+      const touchPoint = event.touches?.[0];
+      if (!touchPoint) {
+        return;
+      }
+
+      const touchX = touchPoint.clientX;
+      const touchY = touchPoint.clientY;
+      touchStartPointRef.current = { x: touchX, y: touchY };
+
+      clearLongPressContextTimer();
+      longPressContextTimerRef.current = globalThis.setTimeout(() => {
+        skipBubbleClickRef.current = true;
+        setReactBarVisible(false);
+        setContextMenu(resolveContextMenuPosition(touchX, touchY));
+      }, MOBILE_CONTEXT_LONG_PRESS_MS);
+    },
+    [clearLongPressContextTimer, handleTouchPeekActions, resolveContextMenuPosition],
+  );
+
+  const handleBubbleTouchMove = useCallback(
+    (event: React.TouchEvent<HTMLButtonElement>) => {
+      const startPoint = touchStartPointRef.current;
+      const touchPoint = event.touches?.[0];
+
+      if (!startPoint || !touchPoint) {
+        return;
+      }
+
+      const movedX = Math.abs(touchPoint.clientX - startPoint.x);
+      const movedY = Math.abs(touchPoint.clientY - startPoint.y);
+
+      if (
+        movedX > TOUCH_MOVE_CANCEL_THRESHOLD_PX ||
+        movedY > TOUCH_MOVE_CANCEL_THRESHOLD_PX
+      ) {
+        clearLongPressContextTimer();
+      }
+    },
+    [clearLongPressContextTimer],
+  );
+
+  const handleBubbleTouchEnd = useCallback(() => {
+    clearLongPressContextTimer();
+    touchStartPointRef.current = null;
+    setIsBubblePressed(false);
+  }, [clearLongPressContextTimer]);
+
+  const handleBubbleTouchCancel = useCallback(() => {
+    clearLongPressContextTimer();
+    touchStartPointRef.current = null;
+    setIsBubblePressed(false);
+  }, [clearLongPressContextTimer]);
+
+  const handleBubbleClick = useCallback(() => {
+    if (skipBubbleClickRef.current) {
+      skipBubbleClickRef.current = false;
+      return;
+    }
+
+    if (message.imgUrl && !message.isDeleted) {
+      setLightboxOpen(true);
+    }
+  }, [message.imgUrl, message.isDeleted]);
 
   const isSeenAnchorMessage =
     isOwn && !!lastOwnMessageId && message._id === lastOwnMessageId;
@@ -1188,9 +1346,10 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
   const imageCornerClass = isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]";
   const ownUserId = String(user?._id);
-  const ownBubbleToneClass = "bg-blue-600 text-white border-blue-500/10";
+  const ownBubbleToneClass =
+    "chat-bubble-sent chat-message-bubble-shell chat-message-bubble-shell--own";
   const peerBubbleToneClass =
-    "bg-gray-100/90 text-gray-900 border-black/5 dark:bg-zinc-800/80 dark:text-zinc-100 dark:border-white/5";
+    "chat-bubble-received chat-message-bubble-shell chat-message-bubble-shell--peer";
   const bubbleToneClass = isOwn ? ownBubbleToneClass : peerBubbleToneClass;
 
   const ownTopRightClass =
@@ -1217,7 +1376,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const renderReadOnlyBubble = () => (
     <div
       className={cn(
-        "relative leading-[1.35] transition-colors duration-150 mt-0.5 shadow-sm border",
+        "relative leading-[1.35] transition-colors duration-150 mt-0.5",
         hasOnlyImage
           ? "bg-transparent p-0 border-transparent shadow-none"
           : cn(
@@ -1225,7 +1384,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
               bubbleToneClass,
             ),
         bubbleRoundedClass,
-        message.isDeleted && "opacity-50 italic",
+        message.isDeleted && "chat-message-bubble-shell--deleted opacity-50 italic",
+        isBubblePressed && !message.isDeleted && "chat-message-bubble-shell--pressed",
         "select-text",
       )}
     >
@@ -1285,16 +1445,21 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const readOnlyBubbleNode = (
     <button
       type="button"
-      onClick={() => {
-        if (message.imgUrl && !message.isDeleted) {
-          setLightboxOpen(true);
-        }
-      }}
+      onClick={handleBubbleClick}
       onDoubleClick={handleDoubleClickBubble}
       onContextMenu={handleContextMenu}
+      onTouchStart={handleBubbleTouchStart}
+      onTouchMove={handleBubbleTouchMove}
+      onTouchEnd={handleBubbleTouchEnd}
+      onTouchCancel={handleBubbleTouchCancel}
+      onPointerDown={() => setIsBubblePressed(true)}
+      onPointerUp={() => setIsBubblePressed(false)}
+      onPointerLeave={() => setIsBubblePressed(false)}
+      onPointerCancel={() => setIsBubblePressed(false)}
       aria-label="Message bubble"
       className={cn(
         "chat-message-bubble-hit text-left select-none relative p-0 m-0 border-0 bg-transparent",
+        isBubblePressed && "chat-message-bubble-hit--pressed",
         !canOpenEditMode && "cursor-default",
       )}
     >
@@ -1350,7 +1515,13 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
         onMouseLeave={() => {
           setIsMessageHovered(false);
           setReactBarVisible(false);
+          if (touchPeekTimerRef.current) {
+            globalThis.clearTimeout(touchPeekTimerRef.current);
+            touchPeekTimerRef.current = null;
+          }
         }}
+        onTouchStart={handleTouchPeekActions}
+        onTouchCancel={() => setIsMessageHovered(false)}
       >
         {/* Avatar */}
         {!isOwn && (
@@ -1405,6 +1576,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
               reduceMotion={reduceMotion}
               seenJustUpdated={seenJustUpdated}
               seenUsersStackKey={seenUsersStackKey}
+              actionHint={actionHint}
             />
           )}
         />
@@ -1443,7 +1615,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       >
         <DialogContent
           aria-describedby={undefined}
-          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-all"
+          className="chat-modal-shell max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-all"
           showCloseButton={!deleteActionLoading}
           dismissible={!deleteActionLoading}
         >

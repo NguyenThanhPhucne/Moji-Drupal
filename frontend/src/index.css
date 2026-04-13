@@ -787,6 +787,8 @@ html[data-motion="reduced"] * {
   }
   .chat-bubble-received:hover {
     filter: brightness(0.98);
+    transform: scale(1.015);
+    background: hsl(var(--chat-bubble-received) / 0.9);
   }
 
   .chat-message-row {
@@ -797,6 +799,8 @@ html[data-motion="reduced"] * {
     padding: var(--chat-bubble-padding-y) var(--chat-bubble-padding-x);
     font-size: var(--chat-font-size);
     line-height: var(--chat-line-height);
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .chat-bubble-shape-sent {
@@ -818,11 +822,6 @@ html[data-motion="reduced"] * {
   html[data-bubble-style="classic"] .chat-bubble-received {
     border-color: hsl(var(--border));
   }
-  .chat-bubble-received:hover {
-    transform: scale(1.015);
-    background: hsl(var(--chat-bubble-received)/0.9);
-  }
-
   .error-message {
     @apply text-sm text-destructive;
   }
@@ -975,25 +974,6 @@ html[data-motion="reduced"] * {
     }
   }
 
-  /* ─── Chat bubble base classes (Messenger color system) ─────────── */
-  .chat-bubble-shell {
-    /* Base properties shared by all bubbles */
-    word-break: break-word;
-    overflow-wrap: anywhere;
-    font-size: var(--chat-font-size, 14px);
-    line-height: var(--chat-line-height, 1.46);
-  }
-
-  .chat-bubble-sent {
-    background: hsl(var(--chat-bubble-sent));
-    color: hsl(var(--chat-bubble-sent-foreground));
-  }
-
-  .chat-bubble-received {
-    background: hsl(var(--chat-bubble-received));
-    color: hsl(var(--chat-bubble-received-foreground));
-  }
-
   /* Keep sent bubble shape clean and color-consistent. */
   .chat-bubble-sent::after {
     content: none;
@@ -1078,17 +1058,6 @@ html[data-motion="reduced"] * {
      UI/UX UPGRADE — Animation Tokens & New Utility Classes
      ══════════════════════════════════════════════════════════════════ */
 
-  /* ─── Badge pop animation (for new unread counts) ────────────────── */
-  .badge-pop {
-    animation: badgePop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  }
-
-  @keyframes badgePop {
-    0%   { transform: scale(0.4); opacity: 0; }
-    60%  { transform: scale(1.18); }
-    100% { transform: scale(1); opacity: 1; }
-  }
-
   /* ─── Float gentle (for welcome screen emoji particles) ─────────── */
   @keyframes float {
     0%, 100% { transform: translateY(0px) rotate(0deg); }
@@ -1111,21 +1080,10 @@ html[data-motion="reduced"] * {
     animation-delay: 0.9s;
   }
 
-  /* ─── Shimmer slide (for skeleton loaders) ───────────────────────── */
+  /* ─── Shimmer slide tokens (for skeleton loaders) ────────────────── */
   @keyframes shimmerSlide {
     0%   { background-position: -200% 0; }
     100% { background-position: 200% 0; }
-  }
-
-  .skeleton-shimmer {
-    background: linear-gradient(
-      90deg,
-      hsl(var(--muted)) 25%,
-      hsl(var(--muted-foreground) / 0.15) 50%,
-      hsl(var(--muted)) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmerSlide 1.6s ease-in-out infinite;
   }
 
   /* ─── Active nav pill indicator (sliding underline/pill) ─────────── */

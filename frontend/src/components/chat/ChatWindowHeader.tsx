@@ -17,7 +17,6 @@ import {
 } from "../ui/dropdown-menu";
 import {
   Bell,
-  LoaderCircle,
   MoreVertical,
   Trash2,
   Phone,
@@ -577,7 +576,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     title={announcementOnly ? "Disable announcement mode" : "Enable announcement mode"}
                   >
                     {isAnnouncementUpdating ? (
-                      <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                      <span
+                        className="skeleton-shimmer mr-1.5 inline-flex size-3.5 rounded-full"
+                        aria-hidden="true"
+                      />
                     ) : (
                       <Megaphone className="size-3.5 mr-1.5" />
                     )}
