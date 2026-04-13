@@ -10,6 +10,17 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
 import { GoogleLoginButton } from "./google-login-button";
 import { Link } from "react-router-dom";
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Zap,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 const signInSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -22,15 +33,34 @@ export function SigninForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const { signIn } = useAuthStore();
+  const { signIn, loading } = useAuthStore();
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+
+  const greetingByTime = useMemo(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) {
+      return "Good morning";
+    }
+    if (hour < 18) {
+      return "Good afternoon";
+    }
+    return "Good evening";
+  }, []);
+
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isValid },
   } = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
+    mode: "onChange",
   });
+
+  const isBusy = isSubmitting || loading;
+  const usernameField = register("username");
+  const passwordField = register("password");
 
   const onSubmit = async (data: SignInFormValues) => {
     const { username, password } = data;
@@ -56,14 +86,49 @@ export function SigninForm({
             <div className="space-stack-lg">
               {/* header - logo */}
               <div className="flex flex-col items-center text-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  <Sparkles className="size-3.5 text-primary" />
+                  Secure Sign In
+                </span>
+
                 <Link to="/" className="mx-auto block w-fit text-center">
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
                 <h1 className="text-title-1 md:text-3xl">Welcome back</h1>
                 <p className="text-body-sm text-muted-foreground text-balance">
+                  {greetingByTime}. Sign in to continue your conversations.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/6 to-accent/10 p-3 md:hidden">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary/80">
+                  Faster workspace access
+                </p>
+                <p className="mt-1 text-sm font-medium text-foreground/90">
                   Sign in to continue your conversations
                 </p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-border/70 bg-background/70 px-2.5 py-2 text-center">
+                  <ShieldCheck className="mx-auto mb-1 size-3.5 text-primary" />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Encrypted
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/70 px-2.5 py-2 text-center">
+                  <Zap className="mx-auto mb-1 size-3.5 text-primary" />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Fast Login
+                  </p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/70 px-2.5 py-2 text-center">
+                  <LockKeyhole className="mx-auto mb-1 size-3.5 text-primary" />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Private
+                  </p>
+                </div>
               </div>
 
               {/* username */}
@@ -71,13 +136,17 @@ export function SigninForm({
                 <Label htmlFor="username" className="block text-sm">
                   Username
                 </Label>
-                <Input
-                  type="text"
-                  id="username"
-                  placeholder="Username or email"
-                  autoComplete="username"
-                  {...register("username")}
-                />
+                <div className="relative">
+                  <UserRound className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                  <Input
+                    type="text"
+                    id="username"
+                    placeholder="Username or email"
+                    autoComplete="username"
+                    className="h-11 rounded-xl pl-10"
+                    {...usernameField}
+                  />
+                </div>
                 {errors.username && (
                   <p className="text-destructive text-sm">
                     {errors.username.message}
@@ -90,13 +159,43 @@ export function SigninForm({
                 <Label htmlFor="password" className="block text-sm">
                   Password
                 </Label>
-                <Input
-                  type="password"
-                  id="password"
-                  placeholder="Password"
-                  autoComplete="current-password"
-                  {...register("password")}
-                />
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/80" />
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    placeholder="Password"
+                    autoComplete="current-password"
+                    className="h-11 rounded-xl pl-10 pr-11"
+                    onKeyUp={(event) => {
+                      setCapsLockOn(event.getModifierState("CapsLock"));
+                    }}
+                    onBlur={(event) => {
+                      setCapsLockOn(false);
+                      passwordField.onBlur(event);
+                    }}
+                    name={passwordField.name}
+                    onChange={passwordField.onChange}
+                    ref={passwordField.ref}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="absolute right-2.5 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </button>
+                </div>
+                {capsLockOn && (
+                  <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                    Caps Lock is on
+                  </p>
+                )}
                 {errors.password && (
                   <p className="text-destructive text-sm">
                     {errors.password.message}
@@ -107,10 +206,17 @@ export function SigninForm({
               {/* sign-in button */}
               <Button
                 type="submit"
-                className="w-full rounded-xl bg-gradient-chat text-white shadow-soft hover:opacity-95"
-                disabled={isSubmitting}
+                className="group h-11 w-full rounded-xl bg-gradient-chat text-white shadow-soft transition-all hover:opacity-95"
+                disabled={isBusy || !isValid}
               >
-                {isSubmitting ? "Signing in..." : "Sign in"}
+                {isBusy ? (
+                  "Signing in..."
+                ) : (
+                  <span className="inline-flex items-center gap-2">
+                    Continue to workspace
+                    <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                  </span>
+                )}
               </Button>
 
               {/* divider */}
@@ -126,6 +232,10 @@ export function SigninForm({
               {/* Google Login */}
               <GoogleLoginButton />
 
+              <div className="rounded-xl border border-border/70 bg-muted/35 px-3 py-2.5 text-xs text-muted-foreground">
+                Use your existing CRM account. Session is protected and expires automatically.
+              </div>
+
               <div className="text-center text-sm">
                 Don't have an account?{" "}
                 <Link to="/signup" className="underline underline-offset-4">
@@ -139,15 +249,35 @@ export function SigninForm({
             <img
               src="/placeholder.png"
               alt="Sign-in illustration"
-              className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
+              className="absolute inset-0 h-full w-full object-cover opacity-50 mix-blend-screen"
             />
-            <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
-                Team Workspace
-              </p>
-              <p className="mt-1 text-lg font-semibold leading-tight">
-                Stay connected with faster messaging and smarter search.
-              </p>
+            <div className="absolute inset-6 flex flex-col justify-between">
+              <div className="rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
+                  Team Workspace
+                </p>
+                <p className="mt-1 text-lg font-semibold leading-tight">
+                  Stay connected with faster messaging and smarter search.
+                </p>
+                <p className="mt-2 text-sm text-white/85">
+                  Everything you need to coordinate chat, updates, and shared context in one flow.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-white/30 bg-black/20 p-3 text-white backdrop-blur-sm">
+                  <p className="text-xl font-semibold leading-none">99.9%</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-white/80">
+                    Sync availability
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/30 bg-black/20 p-3 text-white backdrop-blur-sm">
+                  <p className="text-xl font-semibold leading-none">Realtime</p>
+                  <p className="mt-1 text-[11px] uppercase tracking-[0.12em] text-white/80">
+                    Team presence
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>
