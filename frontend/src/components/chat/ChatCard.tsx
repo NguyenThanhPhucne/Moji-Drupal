@@ -28,35 +28,31 @@ const ChatCard = ({
   const hasMention = (mentionCount ?? 0) > 0;
 
   return (
-    <div
+    <button
+      type="button"
       key={convoId}
       data-chat-card="true"
-      role="button"
-      tabIndex={0}
+      data-active={isActive ? "true" : "false"}
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "chat-card-hover-shimmer cursor-pointer rounded-xl border px-3 py-[9px] select-none relative overflow-hidden",
-        "transition-all duration-200 active:scale-[0.97]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1",
+        "chat-sidebar-card chat-card-hover-shimmer cursor-pointer rounded-[14px] border px-3.5 py-2.5 select-none relative overflow-hidden",
+        "transition-[transform,background-color,border-color,box-shadow] duration-200 active:scale-[0.985]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
+        "w-full text-left",
         "group",
-        !isActive && "border-transparent hover:bg-muted/50 hover:translate-x-[1.5px] hover:shadow-sm",
+        !isActive &&
+          "border-transparent hover:bg-muted/50 hover:border-border/70 hover:translate-x-[1.5px]",
         isActive
-          ? "bg-primary/[0.09] border-primary/15 shadow-[0_2px_12px_-4px_hsl(var(--primary)/0.2)]"
+          ? "bg-primary/[0.11] border-primary/20 shadow-[0_14px_24px_-22px_hsl(var(--primary)/0.82)]"
           : "bg-transparent",
       )}
       onClick={() => onSelect(convoId)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSelect(convoId);
-        }
-      }}
     >
       {/* Active left pill indicator — gradient style */}
       <span
         className={cn(
-          "absolute left-0 top-2 bottom-2 rounded-r-full transition-all duration-250 ease-out",
+          "chat-sidebar-card-indicator absolute left-0 top-2 bottom-2 rounded-r-full transition-all duration-250 ease-out",
           isActive
             ? "w-[3.5px] opacity-100 bg-gradient-to-b from-primary via-primary to-primary/70"
             : "w-0 opacity-0"
@@ -72,16 +68,16 @@ const ChatCard = ({
           <div className="flex items-center justify-between mb-[3px]">
             <h3
               className={cn(
-                "text-[13.5px] leading-tight truncate tracking-[−0.005em]",
-                hasUnread ? "font-bold text-foreground" : "font-medium text-foreground/85",
-                isActive && "text-primary font-semibold",
+                "chat-sidebar-card-title leading-tight truncate tracking-[-0.005em]",
+                hasUnread ? "font-semibold text-foreground" : "font-medium text-foreground/85",
+                isActive && "text-primary",
               )}
             >
               {name}
             </h3>
             <span
               className={cn(
-                "text-[10.5px] flex-shrink-0 ml-2 tabular-nums",
+                "chat-sidebar-card-time flex-shrink-0 ml-2 tabular-nums",
                 hasUnread
                   ? "text-primary font-semibold"
                   : "text-muted-foreground/55 font-normal",
@@ -94,7 +90,7 @@ const ChatCard = ({
           <div className="flex items-center justify-between gap-2">
             <div
               className={cn(
-                "flex-1 min-w-0",
+                "chat-sidebar-card-subtitle flex-1 min-w-0",
                 hasUnread
                   ? "font-medium text-foreground text-[12.5px]"
                   : "text-muted-foreground text-xs",
@@ -105,12 +101,12 @@ const ChatCard = ({
 
             <div className="flex flex-shrink-0 items-center gap-1.5">
               {hasMention && (
-                <span className="badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white shadow-sm">
+                <span className="chat-sidebar-card-badge chat-sidebar-card-badge--mention badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white shadow-sm">
                   @{(mentionCount ?? 0) > 9 ? "9+" : mentionCount}
                 </span>
               )}
               {hasUnread && (
-                <span className="badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow-sm">
+                <span className="chat-sidebar-card-badge unread-badge-entry badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow-sm">
                   {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -118,7 +114,7 @@ const ChatCard = ({
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 };
 

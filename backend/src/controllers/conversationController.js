@@ -545,6 +545,7 @@ export const getMessages = async (req, res) => {
       .select(
         "_id conversationId senderId content imgUrl replyTo reactions isDeleted editedAt readBy createdAt updatedAt",
       )
+      .populate("replyTo", "content senderId")
       .sort({ createdAt: -1 })
       .limit(safeLimit + 1)
       .lean();
@@ -1170,7 +1171,9 @@ export const deleteConversation = async (req, res) => {
           ]);
           await Conversation.findOneAndDelete(
             { _id: scopedConversation._id },
-          ).session(session);
+          )
+            .setOptions({ skipCascadeCleanup: true })
+            .session(session);
 
           conversation = scopedConversation;
         });
@@ -1252,7 +1255,7 @@ export const deleteConversation = async (req, res) => {
 
       const deletedConversation = await Conversation.findOneAndDelete({
         _id: conversation._id,
-      });
+      }).setOptions({ skipCascadeCleanup: true });
 
       if (!deletedConversation) {
         return res.status(404).json({ message: "Conversation không tồn tại" });

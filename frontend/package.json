@@ -9,7 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check:accent": "node ./scripts/accent-regression-check.mjs",
-    "check:routes": "node ./scripts/check-route-coverage.mjs"
+    "check:routes": "node ./scripts/check-route-coverage.mjs",
+    "smoke:chat-responsive": "node ./scripts/chat_sidebar_header_responsive_smoke.mjs",
+    "smoke:slow3g-chat": "node ./scripts/slow3g_optimistic_realtime_stress.mjs",
+    "smoke:slow3g-chat:loop": "node ./scripts/slow3g_optimistic_realtime_stress_loop.mjs",
+    "smoke:slow3g-chat:phase-report": "node ./scripts/slow3g_phase_flake_report.mjs"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",

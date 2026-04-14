@@ -10,6 +10,7 @@ import { v2 as cloudinary } from "cloudinary";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { registerRateLimitHit } from "../utils/antiSpam.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
+import { io } from "../socket/index.js";
 
 const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"];
 

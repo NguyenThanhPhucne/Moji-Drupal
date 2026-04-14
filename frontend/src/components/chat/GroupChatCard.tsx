@@ -104,10 +104,10 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
         </div>
       }
       subtitle={
-        <div className="mt-[1px]">
+        <div className="chat-sidebar-card-subtitle-wrap mt-[1px]">
           <p
             className={cn(
-              "text-[13px] truncate leading-snug",
+              "chat-sidebar-card-preview text-[13px] truncate leading-snug",
               unreadCount > 0
                 ? "font-semibold text-foreground"
                 : "font-normal text-muted-foreground/80",
@@ -115,18 +115,18 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           >
             {lastMessagePreview || "\u00A0"}
           </p>
-          <p className="text-[11px] text-muted-foreground/55 truncate leading-tight flex items-center gap-1">
+          <p className="chat-sidebar-card-meta-row text-[11px] text-muted-foreground/55 truncate leading-tight flex items-center gap-1">
             <span className="inline-block">{convo.participants.length}</span>
             <span>members</span>
             {onlineMemberCount > 0 && (
               <>
                 <span className="text-muted-foreground/30">·</span>
-                <span className="size-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">{onlineMemberCount} online</span>
+                <span className="chat-presence-dot-sm size-1.5 rounded-full bg-online inline-block flex-shrink-0" />
+                <span className="text-online font-medium">{onlineMemberCount} online</span>
               </>
             )}
             {myRole === "owner" && (
-              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-amber-400/45 bg-amber-400/15 px-1 py-[1px] text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-warning/45 bg-warning/15 px-1 py-[1px] text-[10px] font-semibold text-warning">
                 <Crown className="size-2.5" />
                 Owner
               </span>

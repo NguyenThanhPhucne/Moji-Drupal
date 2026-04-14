@@ -3,6 +3,98 @@ import {
   syncConversationToDrupal,
   deleteConversationFromDrupal,
 } from "../libs/drupalSync.js";
+import Message from "./Message.js";
+import Bookmark from "./Bookmark.js";
+import Notification from "./Notification.js";
+import ContentReport from "./ContentReport.js";
+
+const normalizeObjectIdValue = (value) => value?.toString?.() || String(value || "");
+
+const withOptionalSession = (query, session) => {
+  if (session) {
+    return query.session(session);
+  }
+
+  return query;
+};
+
+const cleanupConversationDependents = async ({ conversationIds, session, options = {} }) => {
+  if (options?.skipCascadeCleanup) {
+    return;
+  }
+
+  const normalizedConversationIds = [...new Set(
+    (Array.isArray(conversationIds) ? conversationIds : [])
+      .map((conversationId) => normalizeObjectIdValue(conversationId))
+      .filter(Boolean),
+  )];
+
+  if (normalizedConversationIds.length === 0) {
+    return;
+  }
+
+  const messageIdDocs = await withOptionalSession(
+    Message.find({
+      conversationId: { $in: normalizedConversationIds },
+    })
+      .select("_id")
+      .lean(),
+    session,
+  );
+
+  const normalizedMessageIds = [...new Set(
+    messageIdDocs
+      .map((messageDoc) => normalizeObjectIdValue(messageDoc?._id))
+      .filter(Boolean),
+  )];
+
+  const contentReportFilters = [
+    {
+      "context.conversationId": {
+        $in: normalizedConversationIds,
+      },
+    },
+  ];
+
+  if (normalizedMessageIds.length > 0) {
+    contentReportFilters.unshift({
+      targetType: "message",
+      targetId: {
+        $in: normalizedMessageIds,
+      },
+    });
+  }
+
+  await Promise.all([
+    withOptionalSession(
+      Message.deleteMany({
+        conversationId: { $in: normalizedConversationIds },
+      }).setOptions({
+        skipDependentCleanup: true,
+        skipCounterSync: true,
+      }),
+      session,
+    ),
+    withOptionalSession(
+      Bookmark.deleteMany({
+        conversationId: { $in: normalizedConversationIds },
+      }),
+      session,
+    ),
+    withOptionalSession(
+      Notification.deleteMany({
+        conversationId: { $in: normalizedConversationIds },
+      }),
+      session,
+    ),
+    withOptionalSession(
+      ContentReport.deleteMany({
+        $or: contentReportFilters,
+      }),
+      session,
+    ),
+  ]);
+};
 
 const participantSchema = new mongoose.Schema(
   {
@@ -213,6 +305,66 @@ conversationSchema.index(
     },
   },
 );
+
+conversationSchema.pre("findOneAndDelete", async function () {
+  const options = this.getOptions?.() || {};
+  if (options.skipCascadeCleanup) {
+    return;
+  }
+
+  const filter = this.getFilter() || {};
+  const session = options.session;
+  const targetConversation = await withOptionalSession(
+    this.model.findOne(filter).select("_id").lean(),
+    session,
+  );
+
+  await cleanupConversationDependents({
+    conversationIds: targetConversation?._id ? [targetConversation._id] : [],
+    session,
+    options,
+  });
+});
+
+conversationSchema.pre("deleteOne", { document: false, query: true }, async function () {
+  const options = this.getOptions?.() || {};
+  if (options.skipCascadeCleanup) {
+    return;
+  }
+
+  const filter = this.getFilter() || {};
+  const session = options.session;
+  const targetConversation = await withOptionalSession(
+    this.model.findOne(filter).select("_id").lean(),
+    session,
+  );
+
+  await cleanupConversationDependents({
+    conversationIds: targetConversation?._id ? [targetConversation._id] : [],
+    session,
+    options,
+  });
+});
+
+conversationSchema.pre("deleteMany", async function () {
+  const options = this.getOptions?.() || {};
+  if (options.skipCascadeCleanup) {
+    return;
+  }
+
+  const filter = this.getFilter() || {};
+  const session = options.session;
+  const targetConversations = await withOptionalSession(
+    this.model.find(filter).select("_id").lean(),
+    session,
+  );
+
+  await cleanupConversationDependents({
+    conversationIds: targetConversations.map((conversationDoc) => conversationDoc?._id),
+    session,
+    options,
+  });
+});
 
 // Real-time sync to Drupal after save/update
 conversationSchema.post("save", async function (doc) {

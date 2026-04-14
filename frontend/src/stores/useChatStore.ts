@@ -201,6 +201,20 @@ const sortMessagesChronologically = <
 };
 
 const messageMutationVersions = new Map<string, number>();
+const messageMutationLocks = new Set<string>();
+
+const acquireMessageMutationLock = (mutationKey: string) => {
+  if (messageMutationLocks.has(mutationKey)) {
+    return false;
+  }
+
+  messageMutationLocks.add(mutationKey);
+  return true;
+};
+
+const releaseMessageMutationLock = (mutationKey: string) => {
+  messageMutationLocks.delete(mutationKey);
+};
 
 const startMessageMutation = (mutationKey: string) => {
   const nextVersion = (messageMutationVersions.get(mutationKey) || 0) + 1;
@@ -568,12 +582,26 @@ export const useChatStore = create<ChatState>()(
         });
       },
       reactToMessage: async (conversationId, messageId, emoji) => {
+        const mutationKey = `react:${conversationId}:${messageId}`;
+        if (!acquireMessageMutationLock(mutationKey)) {
+          return;
+        }
+
+        const mutationVersion = startMessageMutation(mutationKey);
         const { user } = useAuthStore.getState();
         const currentUserId = user?._id ?? "";
 
         // Optimistic update: toggle the reaction immediately
         const prevItems = get().messages[conversationId]?.items ?? [];
         const prevMessage = prevItems.find((m) => m._id === messageId);
+        if (!prevMessage || prevMessage.isDeleted) {
+          clearMessageMutation(mutationKey, mutationVersion);
+          releaseMessageMutationLock(mutationKey);
+          return;
+        }
+
+        const previousReactions = prevMessage.reactions ?? [];
+
         if (prevMessage) {
           const existingIdx = (prevMessage.reactions ?? []).findIndex(
             (r) => r.userId === currentUserId && r.emoji === emoji,
@@ -605,20 +633,34 @@ export const useChatStore = create<ChatState>()(
             throw new TypeError("Invalid reactToMessage response payload");
           }
 
+          if (!isLatestMessageMutation(mutationKey, mutationVersion)) {
+            return;
+          }
+
           // Reconcile with server canonical state
           get().updateMessage(conversationId, messageId, { reactions });
         } catch (error) {
-          // Rollback to previous reactions on failure
-          if (prevMessage) {
-            get().updateMessage(conversationId, messageId, {
-              reactions: prevMessage.reactions ?? [],
-            });
+          if (!isLatestMessageMutation(mutationKey, mutationVersion)) {
+            return;
           }
+
+          // Rollback to previous reactions on failure
+          get().updateMessage(conversationId, messageId, {
+            reactions: previousReactions,
+          });
+
           console.error("Reaction error:", error);
+        } finally {
+          clearMessageMutation(mutationKey, mutationVersion);
+          releaseMessageMutationLock(mutationKey);
         }
       },
       unsendMessage: async (conversationId, messageId) => {
         const mutationKey = `unsend:${conversationId}:${messageId}`;
+        if (!acquireMessageMutationLock(mutationKey)) {
+          return;
+        }
+
         const mutationVersion = startMessageMutation(mutationKey);
         const previousMessage =
           get().messages[conversationId]?.items.find(
@@ -626,8 +668,12 @@ export const useChatStore = create<ChatState>()(
           ) ?? null;
 
         if (!previousMessage) {
+          clearMessageMutation(mutationKey, mutationVersion);
+          releaseMessageMutationLock(mutationKey);
           return;
         }
+
+        const optimisticDeletedAt = new Date().toISOString();
 
         get().updateMessage(conversationId, messageId, {
           isDeleted: true,
@@ -636,7 +682,7 @@ export const useChatStore = create<ChatState>()(
           replyTo: null,
           reactions: [],
           readBy: [],
-          editedAt: new Date().toISOString(),
+          editedAt: optimisticDeletedAt,
         });
 
         try {
@@ -674,12 +720,16 @@ export const useChatStore = create<ChatState>()(
 
           // If another canonical update already marked this message deleted,
           // do not rollback to stale content.
+          const latestEditedTs = toTimestamp(latestMessage?.editedAt || undefined);
+          const optimisticDeletedTs = toTimestamp(optimisticDeletedAt);
+
           const alreadyCanonicallyDeleted = Boolean(
             latestMessage?.isDeleted &&
               latestMessage?.imgUrl == null &&
               String(latestMessage?.content ?? "")
                 .toLowerCase()
-                .includes("removed"),
+                .includes("removed") &&
+              latestEditedTs > optimisticDeletedTs,
           );
 
           if (alreadyCanonicallyDeleted) {
@@ -700,6 +750,7 @@ export const useChatStore = create<ChatState>()(
           throw error;
         } finally {
           clearMessageMutation(mutationKey, mutationVersion);
+          releaseMessageMutationLock(mutationKey);
         }
       },
       removeMessageForMe: async (conversationId, messageId) => {

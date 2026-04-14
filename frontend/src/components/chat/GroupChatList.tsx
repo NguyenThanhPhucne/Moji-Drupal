@@ -102,11 +102,14 @@ const GroupChatList = () => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto pb-2 space-y-0.5">
-      <div className="mb-1.5 flex items-center justify-between px-3 pt-3 pb-1">
-        <p className="text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
-          Groups
+    <div className="chat-sidebar-section-list flex-1 overflow-y-auto pb-2 space-y-0.5">
+      <div className="chat-sidebar-section-head mb-1.5 flex items-center justify-between px-3 pt-3 pb-1">
+        <p className="chat-sidebar-section-title text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
+          Channels
         </p>
+        <span className="chat-sidebar-section-count inline-flex items-center rounded-full border border-border/65 bg-muted/35 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground/70">
+          {groupchats.length}
+        </span>
       </div>
 
       {channelsByCategory.map(({ category, items }, categoryIndex) => {
@@ -122,13 +125,13 @@ const GroupChatList = () => {
                   [category]: !isCollapsed,
                 }))
               }
-              className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+              className="chat-sidebar-category-toggle mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
             >
-              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/60">
+              <span className="chat-sidebar-category-label text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground/60">
                 {category}
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="text-[10px] text-muted-foreground/50 font-medium">
+                <span className="chat-sidebar-category-count text-[10px] text-muted-foreground/50 font-medium">
                   {items.length}
                 </span>
                 <ChevronDown
@@ -144,7 +147,7 @@ const GroupChatList = () => {
               items.map((convo, itemIndex) => (
                 <div
                   key={convo._id}
-                  className={getStaggerEnterClass(categoryIndex + itemIndex)}
+                  className={`chat-sidebar-card-enter ${getStaggerEnterClass(categoryIndex + itemIndex)}`}
                 >
                   <GroupChatCard convo={convo} />
                 </div>

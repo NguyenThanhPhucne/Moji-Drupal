@@ -27,17 +27,20 @@ const DirectMessageList = () => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto pb-2 space-y-0.5">
-      <div className="mb-1.5 flex items-center justify-between px-3 pt-3 pb-1">
-        <p className="text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
-          Messages
+    <div className="chat-sidebar-section-list flex-1 overflow-y-auto pb-2 space-y-0.5">
+      <div className="chat-sidebar-section-head mb-1.5 flex items-center justify-between px-3 pt-3 pb-1">
+        <p className="chat-sidebar-section-title text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
+          Direct messages
         </p>
+        <span className="chat-sidebar-section-count inline-flex items-center rounded-full border border-border/65 bg-muted/35 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground/70">
+          {directConversations.length}
+        </span>
       </div>
 
       {directConversations.map((convo, index) => (
         <div
           key={convo._id}
-          className={getStaggerEnterClass(index)}
+          className={`chat-sidebar-card-enter ${getStaggerEnterClass(index)}`}
         >
           <DirectMessageCard convo={convo} />
         </div>

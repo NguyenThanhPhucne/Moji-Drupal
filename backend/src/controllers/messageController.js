@@ -10,6 +10,8 @@ import {
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
 import { registerRateLimitHit } from "../utils/antiSpam.js";
+import { lookup as dnsLookup } from "node:dns/promises";
+import net from "node:net";
 
 import { buildDirectConversationKey } from "../services/conversationService.js";
 
@@ -306,6 +308,260 @@ const extractMetaContent = (html, matcher) => {
   return sanitizeMetaValue(match?.[1] || "");
 };
 
+const toPositiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+};
+
+const LINK_PREVIEW_TIMEOUT_MS = toPositiveNumber(
+  process.env.LINK_PREVIEW_TIMEOUT_MS,
+  5000,
+);
+const LINK_PREVIEW_MAX_REDIRECTS = Math.min(
+  toPositiveNumber(process.env.LINK_PREVIEW_MAX_REDIRECTS, 3),
+  5,
+);
+const LINK_PREVIEW_MAX_HTML_BYTES = Math.max(
+  toPositiveNumber(process.env.LINK_PREVIEW_MAX_HTML_BYTES, 512 * 1024),
+  128 * 1024,
+);
+const LINK_PREVIEW_BLOCKED_HOSTNAMES = new Set([
+  "localhost",
+  "metadata.google.internal",
+  "metadata.azure.internal",
+  "169.254.169.254",
+]);
+
+const isPrivateOrReservedIPv4 = (ipAddress) => {
+  const segments = ipAddress.split(".").map(Number);
+  if (segments.length !== 4 || segments.some((segment) => !Number.isInteger(segment))) {
+    return true;
+  }
+
+  const [a, b] = segments;
+
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a >= 224) return true;
+
+  return false;
+};
+
+const isPrivateOrReservedIPv6 = (ipAddress) => {
+  const normalized = ipAddress.toLowerCase();
+
+  if (normalized === "::" || normalized === "::1") return true;
+  if (normalized.startsWith("fc") || normalized.startsWith("fd")) return true;
+  if (
+    normalized.startsWith("fe8") ||
+    normalized.startsWith("fe9") ||
+    normalized.startsWith("fea") ||
+    normalized.startsWith("feb")
+  ) {
+    return true;
+  }
+
+  if (normalized.startsWith("::ffff:")) {
+    const mapped = normalized.replace("::ffff:", "");
+    if (net.isIP(mapped) === 4 && isPrivateOrReservedIPv4(mapped)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const assertPublicAddress = (ipAddress) => {
+  const ipVersion = net.isIP(ipAddress);
+  if (ipVersion === 0) {
+    throw createHttpError(400, "Invalid URL host address");
+  }
+
+  if (
+    (ipVersion === 4 && isPrivateOrReservedIPv4(ipAddress)) ||
+    (ipVersion === 6 && isPrivateOrReservedIPv6(ipAddress))
+  ) {
+    throw createHttpError(400, "Blocked URL host");
+  }
+};
+
+const assertSafePreviewTarget = async (targetUrl) => {
+  if (!["http:", "https:"].includes(targetUrl.protocol)) {
+    throw createHttpError(400, "Only http/https URLs are supported");
+  }
+
+  if (targetUrl.username || targetUrl.password) {
+    throw createHttpError(400, "Credentials in URL are not allowed");
+  }
+
+  const normalizedHostname = String(targetUrl.hostname || "").toLowerCase();
+  if (
+    !normalizedHostname ||
+    normalizedHostname.endsWith(".localhost") ||
+    LINK_PREVIEW_BLOCKED_HOSTNAMES.has(normalizedHostname)
+  ) {
+    throw createHttpError(400, "Blocked URL host");
+  }
+
+  if (targetUrl.port && !["80", "443"].includes(targetUrl.port)) {
+    throw createHttpError(400, "Only ports 80 and 443 are allowed for preview");
+  }
+
+  const hostnameIpVersion = net.isIP(normalizedHostname);
+  if (hostnameIpVersion > 0) {
+    assertPublicAddress(normalizedHostname);
+    return;
+  }
+
+  let resolvedRecords = [];
+  try {
+    resolvedRecords = await dnsLookup(normalizedHostname, {
+      all: true,
+      verbatim: true,
+    });
+  } catch {
+    throw createHttpError(400, "Cannot resolve URL host");
+  }
+
+  if (!resolvedRecords.length) {
+    throw createHttpError(400, "Cannot resolve URL host");
+  }
+
+  for (const record of resolvedRecords) {
+    assertPublicAddress(record.address);
+  }
+};
+
+const isRedirectStatusCode = (statusCode) =>
+  [301, 302, 303, 307, 308].includes(Number(statusCode));
+
+const fetchWithTimeout = async (targetUrl) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    LINK_PREVIEW_TIMEOUT_MS,
+  );
+
+  try {
+    return await fetch(targetUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+      signal: controller.signal,
+      headers: {
+        "user-agent": "OpenCRM-LinkPreview/1.0",
+        accept: "text/html,application/xhtml+xml",
+      },
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw createHttpError(504, "Preview request timed out");
+    }
+
+    throw createHttpError(502, "Failed to fetch target URL");
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const fetchLinkPreviewResponse = async (initialUrl) => {
+  let currentUrl = new URL(initialUrl);
+
+  for (let redirectCount = 0; redirectCount <= LINK_PREVIEW_MAX_REDIRECTS; redirectCount += 1) {
+    await assertSafePreviewTarget(currentUrl);
+
+    const response = await fetchWithTimeout(currentUrl);
+    if (!isRedirectStatusCode(response.status)) {
+      return {
+        response,
+        finalUrl: currentUrl,
+      };
+    }
+
+    const location = String(response.headers.get("location") || "").trim();
+    if (response.body) {
+      try {
+        await response.body.cancel();
+      } catch {
+        // ignore body cancellation issues for redirect responses
+      }
+    }
+
+    if (!location) {
+      throw createHttpError(502, "Invalid redirect response");
+    }
+
+    try {
+      currentUrl = new URL(location, currentUrl);
+    } catch {
+      throw createHttpError(502, "Invalid redirect URL");
+    }
+  }
+
+  throw createHttpError(502, "Too many redirects");
+};
+
+const readResponseTextWithLimit = async (response) => {
+  if (!response.body || typeof response.body.getReader !== "function") {
+    const text = await response.text();
+    if (Buffer.byteLength(text, "utf8") > LINK_PREVIEW_MAX_HTML_BYTES) {
+      throw createHttpError(413, "Preview content is too large");
+    }
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let totalBytes = 0;
+  let text = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    totalBytes += value.byteLength;
+    if (totalBytes > LINK_PREVIEW_MAX_HTML_BYTES) {
+      try {
+        await reader.cancel();
+      } catch {
+        // ignore stream cancel errors
+      }
+      throw createHttpError(413, "Preview content is too large");
+    }
+
+    text += decoder.decode(value, { stream: true });
+  }
+
+  text += decoder.decode();
+  return text;
+};
+
+const toAbsoluteUrl = (rawValue, baseUrl) => {
+  const normalized = String(rawValue || "").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  try {
+    const absolute = new URL(normalized, baseUrl);
+    if (!["http:", "https:"].includes(absolute.protocol)) {
+      return "";
+    }
+
+    return absolute.toString();
+  } catch {
+    return "";
+  }
+};
+
 const resolveLinkMetadata = async (rawUrl) => {
   const normalized = String(rawUrl || "").trim();
   if (!normalized) {
@@ -319,18 +575,7 @@ const resolveLinkMetadata = async (rawUrl) => {
     throw createHttpError(400, "Invalid URL");
   }
 
-  if (!["http:", "https:"].includes(targetUrl.protocol)) {
-    throw createHttpError(400, "Only http/https URLs are supported");
-  }
-
-  const response = await fetch(targetUrl.toString(), {
-    method: "GET",
-    redirect: "follow",
-    headers: {
-      "user-agent": "OpenCRM-LinkPreview/1.0",
-      accept: "text/html,application/xhtml+xml",
-    },
-  });
+  const { response, finalUrl } = await fetchLinkPreviewResponse(targetUrl);
 
   if (!response.ok) {
     throw createHttpError(502, "Failed to fetch target URL");
@@ -339,34 +584,35 @@ const resolveLinkMetadata = async (rawUrl) => {
   const contentType = String(response.headers.get("content-type") || "");
   if (!contentType.includes("text/html")) {
     return {
-      url: targetUrl.toString(),
-      siteName: targetUrl.hostname,
-      title: targetUrl.hostname,
+      url: finalUrl.toString(),
+      siteName: finalUrl.hostname,
+      title: finalUrl.hostname,
       description: "Preview is available for HTML pages only.",
       image: "",
     };
   }
 
-  const html = await response.text();
+  const html = await readResponseTextWithLimit(response);
   const title =
     extractMetaContent(html, /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
     extractMetaContent(html, /<title[^>]*>([^<]+)<\/title>/i) ||
-    targetUrl.hostname;
+    finalUrl.hostname;
 
   const description =
     extractMetaContent(html, /<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i) ||
     extractMetaContent(html, /<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
 
-  const image =
+  const rawImage =
     extractMetaContent(html, /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
     "";
+  const image = toAbsoluteUrl(rawImage, finalUrl);
 
   const siteName =
     extractMetaContent(html, /<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i) ||
-    targetUrl.hostname;
+    finalUrl.hostname;
 
   return {
-    url: targetUrl.toString(),
+    url: finalUrl.toString(),
     siteName,
     title,
     description,

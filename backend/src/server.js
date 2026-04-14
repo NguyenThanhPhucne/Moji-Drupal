@@ -18,6 +18,7 @@ import {
 } from "./controllers/conversationController.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
+import { requestSecurityGuard } from "./middlewares/requestSecurityMiddleware.js";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import fs from "node:fs";
@@ -69,6 +70,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 app.use(cookieParser());
+app.use("/api", requestSecurityGuard);
 
 // CLOUDINARY Configuration
 cloudinary.config({

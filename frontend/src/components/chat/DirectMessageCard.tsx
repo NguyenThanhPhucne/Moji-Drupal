@@ -8,6 +8,84 @@ import StatusBadge from "./StatusBadge";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useLocation, useNavigate } from "react-router-dom";
 
+type DirectUserLite = {
+  _id: string;
+  username?: string | null;
+  displayName?: string | null;
+};
+
+const resolvePhotoPreviewText = (
+  convo: Conversation,
+  currentUser: DirectUserLite,
+  otherUser: { _id: string; displayName?: string },
+) => {
+  const lastMsgContent = convo.lastMessage as
+    | { senderId?: string; sender?: { _id: string } }
+    | undefined
+    | null;
+  const senderId = lastMsgContent?.senderId || lastMsgContent?.sender?._id;
+
+  if (senderId === currentUser._id) {
+    return "You sent a photo";
+  }
+
+  if (senderId === otherUser._id) {
+    return `${otherUser.displayName} sent a photo`;
+  }
+
+  return "Sent a photo";
+};
+
+const resolveLastMessagePreview = (
+  convo: Conversation,
+  currentUser: DirectUserLite,
+  otherUser: { _id: string; displayName?: string },
+) => {
+  const lastMessage = convo.lastMessage?.content ?? "";
+
+  if (lastMessage === "📷 Photo") {
+    return resolvePhotoPreviewText(convo, currentUser, otherUser);
+  }
+
+  return lastMessage;
+};
+
+const resolveMentionCount = (
+  lastMessage: string,
+  unreadCount: number,
+  currentUser: DirectUserLite,
+) => {
+  if (unreadCount <= 0) {
+    return 0;
+  }
+
+  const normalizedLastMessage = lastMessage.toLowerCase();
+  const directMentionPatterns = [
+    currentUser.username ? `@${currentUser.username.toLowerCase()}` : "",
+    currentUser.displayName ? `@${currentUser.displayName.toLowerCase()}` : "",
+  ].filter(Boolean);
+
+  return directMentionPatterns.some((pattern) => normalizedLastMessage.includes(pattern))
+    ? 1
+    : 0;
+};
+
+const resolveActiveStatusText = (
+  userPresence: string,
+  lastActiveAt?: string | number | null,
+) => {
+  if (userPresence === "online") {
+    return "Active now";
+  }
+
+  if (userPresence === "recently-active" && lastActiveAt) {
+    const timeStr = formatOnlineTime(new Date(lastActiveAt));
+    return `Active ${timeStr} ago`;
+  }
+
+  return "Offline";
+};
+
 const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
   const {
@@ -28,37 +106,31 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   if (!otherUser) return null;
 
   const unreadCount = convo.unreadCounts?.[String(user._id)] ?? 0;
-  let lastMessage = convo.lastMessage?.content ?? "";
-  
-  if (lastMessage === "📷 Photo") {
-    const lastMsgContent = convo.lastMessage as { senderId?: string; sender?: { _id: string } } | undefined | null;
-    const senderId =
-      lastMsgContent?.senderId ||
-      lastMsgContent?.sender?._id;
+  const normalizedCurrentUser: DirectUserLite = {
+    _id: String(user._id),
+    username: user.username,
+    displayName: user.displayName,
+  };
+  const normalizedOtherUser = {
+    _id: String(otherUser._id),
+    displayName: otherUser.displayName ?? "",
+  };
 
-    if (senderId === user._id) {
-      lastMessage = "You sent a photo";
-    } else if (senderId === otherUser._id) {
-      lastMessage = `${otherUser.displayName} sent a photo`;
-    } else {
-      lastMessage = "Sent a photo";
-    }
-  }
+  const lastMessage = resolveLastMessagePreview(
+    convo,
+    normalizedCurrentUser,
+    normalizedOtherUser,
+  );
 
   // Show forwarded indicator in preview
   const lastMsgExtra = convo.lastMessage as { isForwarded?: boolean } | null | undefined;
   const isForwardedPreview = lastMsgExtra?.isForwarded;
 
-  const normalizedLastMessage = lastMessage.toLowerCase();
-  const directMentionPatterns = [
-    user.username ? `@${user.username.toLowerCase()}` : "",
-    user.displayName ? `@${user.displayName.toLowerCase()}` : "",
-  ].filter(Boolean);
-  const mentionCount =
-    unreadCount > 0 &&
-    directMentionPatterns.some((pattern) => normalizedLastMessage.includes(pattern))
-      ? 1
-      : 0;
+  const mentionCount = resolveMentionCount(
+    lastMessage,
+    unreadCount,
+    normalizedCurrentUser,
+  );
 
   const handleSelectConversation = async (id: string) => {
     setActiveConversation(id);
@@ -74,14 +146,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
 
   const userPresence = getUserPresence(otherUser?._id);
   const lastActiveAt = getLastActiveAt(otherUser?._id);
-
-  let activeStatusText = "Offline";
-  if (userPresence === "online") {
-    activeStatusText = "Active now";
-  } else if (userPresence === "recently-active" && lastActiveAt) {
-    const timeStr = formatOnlineTime(new Date(lastActiveAt));
-    activeStatusText = `Active ${timeStr} ago`;
-  }
+  const activeStatusText = resolveActiveStatusText(userPresence, lastActiveAt);
 
   return (
     <ChatCard
@@ -110,10 +175,10 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
         </>
       }
       subtitle={
-        <div className="mt-[1px]">
+        <div className="chat-sidebar-card-subtitle-wrap mt-[1px]">
           <p
             className={cn(
-              "text-[13px] truncate leading-snug flex items-center gap-1",
+              "chat-sidebar-card-preview text-[13px] truncate leading-snug flex items-center gap-1",
               unreadCount > 0
                 ? "font-semibold text-foreground"
                 : "font-normal text-muted-foreground/80",
@@ -127,14 +192,16 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             <span className="truncate">{lastMessage || "\u00A0"}</span>
           </p>
           {userPresence !== "offline" && (
-            <p className={cn(
-              "text-[11px] truncate leading-tight flex items-center gap-1",
-              userPresence === "online"
-                ? "text-emerald-600 dark:text-emerald-400 font-medium"
-                : "text-muted-foreground/60",
-            )}>
+            <p
+              className={cn(
+                "chat-sidebar-card-presence text-[11px] truncate leading-tight flex items-center gap-1",
+                userPresence === "online"
+                  ? "text-online font-medium"
+                  : "text-muted-foreground/60",
+              )}
+            >
               {userPresence === "online" && (
-                <span className="size-1.5 rounded-full bg-emerald-500 inline-block flex-shrink-0" />
+                <span className="chat-presence-dot-sm size-1.5 rounded-full bg-online inline-block flex-shrink-0" />
               )}
               {activeStatusText}
             </p>

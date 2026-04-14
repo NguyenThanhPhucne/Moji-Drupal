@@ -8,7 +8,9 @@
     "start": "node src/server.js",
     "db:health": "node scripts/db-health-check.mjs",
     "db:health:fix": "node scripts/db-health-check.mjs --fix",
-    "test:join-link-concurrency": "node scripts/e2e-join-group-link-concurrency-test.mjs"
+    "test:join-link-concurrency": "node scripts/e2e-join-group-link-concurrency-test.mjs",
+    "security:regression": "node scripts/security-regression-check.mjs",
+    "security:regression:ci": "CI=1 node scripts/security-regression-check.mjs"
   },
   "type": "module",
   "keywords": [],

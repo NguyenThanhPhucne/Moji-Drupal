@@ -118,7 +118,7 @@ const getGroupRoleLabel = (role: GroupMemberRole) => {
 const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
   if (role === "owner") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/45 bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+      <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-warning/45 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
         <Crown className="size-2.5" />
         Owner
       </span>
@@ -127,7 +127,7 @@ const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
 
   if (role === "admin") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+      <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
         <Shield className="size-2.5" />
         Admin
       </span>
@@ -135,7 +135,7 @@ const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
   }
 
   return (
-    <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/35 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+    <span className="chat-header-context-pill inline-flex items-center rounded-full border border-border/70 bg-muted/35 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
       Member
     </span>
   );
@@ -265,7 +265,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
   if (!chat) {
     return (
-      <header className="md:hidden sticky top-0 z-10 flex items-center gap-2 px-4 py-2 w-full">
+      <header className="md:hidden chat-header-shell chat-header-shell--elevated sticky top-0 flex items-center gap-2 px-4 py-2 w-full">
         <SidebarTrigger className="-ml-1 text-foreground" />
       </header>
     );
@@ -430,16 +430,16 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
   return (
     <>
-      <header className="gradient-border-bottom chat-window-header bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10 flex items-center px-4 py-3 shadow-sm">
-        <div className="flex items-center gap-2 w-full justify-between">
-          <div className="flex items-center gap-2 min-w-0">
+      <header className="gradient-border-bottom chat-header-shell chat-header-shell--elevated chat-window-header-main sticky top-0 flex items-center px-4 py-3">
+        <div className="chat-header-row flex items-center gap-2 w-full justify-between">
+          <div className="chat-header-left flex items-center gap-2 min-w-0">
             {/* Sidebar toggle — only on mobile */}
             <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
 
             {/* Avatar + name */}
             <div
               className={cn(
-                "chat-header-identity chat-header-identity--enterprise",
+                "chat-header-identity chat-header-identity--enterprise chat-header-identity--compact",
                 chat.type === "direct"
                   ? "chat-header-identity--direct"
                   : "chat-header-identity--group",
@@ -480,22 +480,22 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
               </div>
 
               {/* name + presence */}
-              <div key={chat._id} className="min-w-0 flex flex-col justify-center">
-                <h2 className="truncate font-semibold tracking-tight text-[15px] text-foreground transition-colors">
+              <div key={chat._id} className="chat-header-title-block min-w-0 flex flex-col justify-center">
+                <h2 className="chat-header-title truncate font-semibold tracking-tight text-[15px] text-foreground transition-colors">
                   {chat.type === "direct"
                     ? otherUser?.displayName
                     : chat.group?.name}
                 </h2>
-                <div className="flex items-center gap-1.5 mt-[2px]">
+                <div className="chat-header-subline flex items-center gap-1.5 mt-[2px]">
                   {chat.type === "direct" && (() => {
                     const pres = getUserPresence(otherUser?._id);
                     const lastActiveAt = getLastActiveAt(otherUser?._id);
                     if (pres === "online") {
                         return (
-                          <span className="flex items-center gap-1.5">
+                          <span className="chat-header-presence chat-header-presence--online flex items-center gap-1.5">
                             <span className="relative flex h-1.5 w-1.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-online/70 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-online"></span>
                             </span>
                             <span className="presence-pill-online">
                               Active now
@@ -506,34 +506,33 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     if (pres === "recently-active" && lastActiveAt) {
                       const timeStr = formatOnlineTime(new Date(lastActiveAt));
                       return (
-                        <span className="text-[12px] text-muted-foreground font-medium leading-none">
+                        <span className="chat-header-presence text-[12px] text-muted-foreground font-medium leading-none">
                           Active {timeStr} ago
                         </span>
                       );
                     }
                     return (
-                      <span className="text-[12px] text-muted-foreground/60 font-medium leading-none">
+                      <span className="chat-header-presence text-[12px] text-muted-foreground/60 font-medium leading-none">
                         Offline
                       </span>
                     );
                   })()}
                   {chat.type === "group" && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[12px] text-muted-foreground font-medium leading-none">
+                    <div className="chat-header-group-meta flex items-center gap-1.5">
+                      <span className="chat-header-presence text-[12px] text-muted-foreground font-medium leading-none">
                         {groupPresenceText}
                       </span>
-                      <span className="inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                      <span className="chat-header-context-pill hidden sm:inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
                         {groupAdminCount} admins
                       </span>
-                      <span className="inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                      <span className="chat-header-context-pill hidden md:inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                         You: {currentGroupRoleLabel}
                       </span>
-                      {(currentUserGroupRole === "owner" ||
-                        currentUserGroupRole === "admin") && (
+                      {(currentUserGroupRole === "owner" || currentUserGroupRole === "admin") && (
                         <GroupRoleBadge role={currentUserGroupRole} />
                       )}
                       {announcementOnly && (
-                        <span className="inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                        <span className="chat-header-context-pill hidden lg:inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
                           Announcement mode
                         </span>
                       )}
@@ -545,7 +544,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
           </div>
 
           {/* Right actions */}
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="chat-header-actions flex items-center gap-1 flex-shrink-0">
             <GlobalSearchDialog />
             <NotificationPreferencesDialog />
 
@@ -555,7 +554,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowMembersDialog(true)}
-                  className="hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  className="chat-header-pill-btn hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
                   title="View members"
                 >
                   <Users className="size-3.5 mr-1.5" />
@@ -572,7 +571,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       });
                     }}
                     disabled={isAnnouncementUpdating}
-                    className="hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
+                    className="chat-header-pill-btn hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
                     title={announcementOnly ? "Disable announcement mode" : "Enable announcement mode"}
                   >
                     {isAnnouncementUpdating ? (
@@ -592,7 +591,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     variant="outline"
                     size="sm"
                     onClick={() => setShowManageAdminsDialog(true)}
-                    className="hidden xl:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
+                    className="chat-header-pill-btn hidden xl:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
                     title="Manage admins"
                   >
                     <ShieldCheck className="size-3.5 mr-1.5" />
@@ -605,7 +604,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     variant="ghost"
                     size="icon"
                     onClick={() => setShowJoinLinkDialog(true)}
-                    className="hidden xl:inline-flex rounded-full text-muted-foreground hover:text-foreground"
+                    className="chat-header-action-btn hidden xl:inline-flex rounded-full text-muted-foreground hover:text-foreground"
                     title="Manage join link"
                     aria-label="Manage join link"
                   >
@@ -624,7 +623,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   title="Voice call"
                   aria-label="Start voice call"
                   onClick={() => {}}
-                  className="hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
+                  className="chat-header-action-btn hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
                 >
                   <Phone className="h-[18px] w-[18px]" />
                 </Button>
@@ -636,7 +635,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   title="Video call"
                   aria-label="Start video call"
                   onClick={() => {}}
-                  className="hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
+                  className="chat-header-action-btn hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
                 >
                   <Video className="h-[20px] w-[20px]" />
                 </Button>
@@ -651,16 +650,16 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   size="icon"
                   disabled={isDeleting}
                   aria-label="Open conversation actions"
-                  className="rounded-full text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-1"
+                  className="chat-header-action-btn rounded-full text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-1"
                 >
                   <MoreVertical className="h-[18px] w-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg border-border/60 overflow-hidden p-1">
+              <DropdownMenuContent align="end" className="chat-header-dropdown-panel w-56 rounded-xl shadow-lg border-border/60 overflow-hidden p-1">
                 {chat.type === "direct" && otherUser?._id && (
                   <DropdownMenuItem
                     onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                   >
                     <UserCircle className="h-[18px] w-[18px] text-muted-foreground" />
                     View profile
@@ -670,7 +669,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowMembersDialog(true), 100)}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                   >
                     <Users className="h-[18px] w-[18px] text-muted-foreground" />
                     View members
@@ -684,7 +683,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       void handleToggleAnnouncementMode();
                     }}
                     disabled={isAnnouncementUpdating}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                   >
                     <Megaphone className="h-[18px] w-[18px] text-muted-foreground" />
                     {announcementOnly ? "Disable announcement mode" : "Enable announcement mode"}
@@ -694,7 +693,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && isGroupCreator && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowManageAdminsDialog(true), 100)}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                   >
                     <ShieldCheck className="h-[18px] w-[18px] text-muted-foreground" />
                     Manage admins
@@ -704,7 +703,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && isGroupAdmin && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowJoinLinkDialog(true), 100)}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                   >
                     <Link2 className="h-[18px] w-[18px] text-muted-foreground" />
                     Manage join link
@@ -717,7 +716,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       event.preventDefault();
                       void handleRevokeGroupJoinLink();
                     }}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-500/10 dark:focus:text-red-300"
+                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
                   >
                     <Link2 className="h-[18px] w-[18px]" />
                     Revoke active join link
@@ -726,7 +725,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
                 <DropdownMenuItem
                   onSelect={() => navigate("/settings/notifications")}
-                  className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                  className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
                 >
                   <Bell className="h-[18px] w-[18px] text-muted-foreground" />
                   Notification settings
@@ -735,7 +734,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 <DropdownMenuSeparator className="bg-border/60 mx-1" />
                 <DropdownMenuItem
                   onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
-                  className="gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-500/10 dark:focus:text-red-300"
+                  className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
                 >
                   <Trash2 className="h-[18px] w-[18px]" />
                   Delete conversation
@@ -753,8 +752,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
           aria-busy={isDeleting}
         >
           <AlertDialogHeader className="items-center text-center space-y-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 ring-8 ring-red-50 dark:ring-red-500/10">
-              <Trash2 className="size-6 text-red-600 dark:text-red-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
+              <Trash2 className="size-6 text-destructive" />
             </div>
             <div className="space-y-1.5">
               <AlertDialogTitle className="text-xl font-bold tracking-tight">
@@ -780,7 +779,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
               disabled={isDeleting}
               className={cn(
                 "flex-1 rounded-full h-11 font-semibold text-white transition-all shadow-sm",
-                "bg-red-600 hover:bg-red-700 hover:shadow-md active:scale-[0.98]",
+                "bg-destructive hover:bg-destructive/90 hover:shadow-md active:scale-[0.98]",
                 isDeleting && "opacity-70 pointer-events-none"
               )}
             >

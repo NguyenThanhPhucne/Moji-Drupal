@@ -17,6 +17,38 @@ const sessionSchema = new mongoose.Schema(
       type: Date,
       required: true,
     },
+    absoluteExpiresAt: {
+      type: Date,
+      required: true,
+    },
+    lastUsedAt: {
+      type: Date,
+      default: Date.now,
+      index: true,
+    },
+    rotationCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    tokenFamily: {
+      type: String,
+      index: true,
+      default: null,
+    },
+    userAgentHash: {
+      type: String,
+      default: null,
+    },
+    ipHash: {
+      type: String,
+      default: null,
+    },
+    revokedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,

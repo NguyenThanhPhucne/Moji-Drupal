@@ -108,7 +108,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         data-chat-sidebar="true"
         variant="inset"
         className={cn(
-          "border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300",
+          "chat-sidebar-shell border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300",
           isCompact && "chat-sidebar-compact",
         )}
         style={
@@ -122,12 +122,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenu>
             <SidebarMenuItem>
               <div className={cn(
-                "flex w-full items-center justify-between px-3 py-2.5",
+                "chat-sidebar-brand flex w-full items-center justify-between px-3 py-2.5",
                 isCompact && "px-1 justify-center"
               )}>
                 {!isCompact && (
                   <div className="flex items-center gap-2">
-                    <div className="size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0 transition-all duration-200 hover:shadow-md hover:shadow-primary/30 hover:scale-105">
+                    <div className="chat-sidebar-brand-mark size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0 transition-all duration-200 hover:shadow-md hover:shadow-primary/30 hover:scale-105">
                       <span className="text-[13px] font-black text-white tracking-tight">M</span>
                     </div>
                     <div>
@@ -179,9 +179,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         aria-current={item.isActive ? "page" : undefined}
                         onClick={() => navigate(item.to)}
                         className={cn(
-                          "relative flex size-10 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--rail relative flex size-10 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
                           item.isActive
-                            ? "bg-primary/10 text-primary sidebar-tab-active"
+                            ? "bg-primary/10 text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
                             : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground hover:scale-105"
                         )}
                       >
@@ -206,9 +206,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         onClick={() => navigate(item.to)}
                         title={item.label}
                         className={cn(
-                          "relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--full relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                           item.isActive
-                            ? "bg-primary/[0.09] text-primary sidebar-tab-active"
+                            ? "bg-primary/[0.09] text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
                             : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80 hover:scale-[1.03]",
                         )}
                       >

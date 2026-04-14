@@ -512,18 +512,30 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {!globalOnly && (
-        <DialogTrigger asChild>
-          <button
-            type="button"
-            className="group hidden md:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
-          >
-            <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
-            <span className="flex-1 text-left text-[12px] truncate">Search...</span>
-            <kbd className="hidden sm:inline-flex items-center rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 shrink-0">
-              ⌘K
-            </kbd>
-          </button>
-        </DialogTrigger>
+        <>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open global search"
+              className="group hidden md:inline-flex lg:hidden items-center justify-center size-8 rounded-xl border border-border/50 bg-muted/40 text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+            >
+              <Search className="size-4 text-muted-foreground/70 group-hover:text-muted-foreground transition-colors" />
+            </button>
+          </DialogTrigger>
+
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="group hidden lg:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+            >
+              <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
+              <span className="flex-1 text-left text-[12px] truncate">Search...</span>
+              <kbd className="hidden sm:inline-flex items-center rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 shrink-0">
+                ⌘K
+              </kbd>
+            </button>
+          </DialogTrigger>
+        </>
       )}
 
       <DialogContent
@@ -715,10 +727,10 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                         <div
                           className={cn(
                             "size-8 rounded-full flex items-center justify-center border",
-                            item.type === "people" && "bg-blue-500/10 text-blue-600 border-blue-500/20",
-                            item.type === "groups" && "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
-                            item.type === "messages" && "bg-purple-500/10 text-purple-600 border-purple-500/20",
-                            item.type === "posts" && "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                            item.type === "people" && "bg-info/10 text-info border-info/20",
+                            item.type === "groups" && "bg-online/10 text-online border-online/20",
+                            item.type === "messages" && "bg-primary/10 text-primary border-primary/20",
+                            item.type === "posts" && "bg-warning/10 text-warning border-warning/20",
                           )}
                         >
                           {item.type === "people" && <Users className="size-[18px]" />}

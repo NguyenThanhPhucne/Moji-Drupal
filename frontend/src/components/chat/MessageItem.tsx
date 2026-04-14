@@ -72,21 +72,31 @@ export function DateDivider({ date }: Readonly<{ date: Date }>) {
 const ReactionBar = memo(function ReactionBar({
   reactions,
   onReact,
+  isOwn,
 }: {
   reactions: NonNullable<Message["reactions"]>;
   onReact: (emoji: string) => void;
+  isOwn: boolean;
 }) {
   const grouped: Record<string, number> = {};
   for (const r of reactions) grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1;
   if (Object.keys(grouped).length === 0) return null;
   return (
-    <div className="chat-reaction-bar-root">
+    <div
+      className={cn(
+        "chat-reaction-bar-root",
+        isOwn ? "chat-reaction-bar-root--own" : "chat-reaction-bar-root--peer",
+      )}
+    >
       {Object.entries(grouped).map(([emoji, count]) => (
         <button
           key={emoji}
           type="button"
           onClick={() => onReact(emoji)}
-          className="chat-reaction-bar-item"
+          className={cn(
+            "chat-reaction-bar-item",
+            isOwn ? "chat-reaction-bar-item--own" : "chat-reaction-bar-item--peer",
+          )}
         >
           <span>{emoji}</span>
           <span className="chat-reaction-bar-count">{count}</span>
@@ -207,8 +217,8 @@ const ContextMenu = memo(function ContextMenu({ // NOSONAR
       />
       <div
         role="menu"
-        style={{ position: "fixed", left: x, top: y, zIndex: 9999 }}
-        className="chat-context-menu animate-in zoom-in-95 fade-in duration-100"
+        style={{ left: x, top: y }}
+        className="chat-context-menu chat-context-menu--floating animate-in zoom-in-95 fade-in duration-100"
       >
         {items.map(({ icon: Icon, label, onClick, disabled, danger }) => (
           <button
@@ -517,7 +527,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   return (
     <div
       className={cn(
-        "absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-30 transition-all duration-150 motion-reduce:transition-none",
+        "chat-message-action-toolbar absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-30 transition-all duration-150 motion-reduce:transition-none",
         isOwn
           ? "right-[calc(100%+0.35rem)]"
           : "left-[calc(100%+0.35rem)]",
@@ -534,7 +544,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
           type="button"
           onClick={onToggleReactBar}
           aria-label="Add reaction"
-          className="chat-message-action-btn"
+          className="chat-message-action-btn chat-message-action-btn--icon"
         >
           <Smile className="size-3.5 text-muted-foreground" />
         </button>
@@ -543,7 +553,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
         type="button"
         onClick={onReply}
         aria-label="Reply"
-        className="chat-message-action-btn"
+        className="chat-message-action-btn chat-message-action-btn--icon"
       >
         <Reply className="size-3.5 text-muted-foreground" />
       </button>
@@ -552,8 +562,8 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
         onClick={onToggleBookmark}
         aria-label={bookmarked ? "Remove bookmark" : "Save message"}
         className={cn(
-          "chat-message-action-btn",
-          bookmarked && "text-amber-500",
+          "chat-message-action-btn chat-message-action-btn--icon",
+          bookmarked && "chat-bookmark-active",
         )}
       >
         <Bookmark
@@ -564,7 +574,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
         type="button"
         onClick={onOpenContext}
         aria-label="Open message actions"
-        className="chat-message-action-btn"
+        className="chat-message-action-btn chat-message-action-btn--icon"
       >
         <MoreHorizontal className="size-3.5 text-muted-foreground" />
       </button>
@@ -624,6 +634,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
       <ReactionBar
         reactions={message.isDeleted ? [] : (message.reactions ?? [])}
         onReact={onReact}
+        isOwn={isOwn}
       />
 
       <div
@@ -727,6 +738,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   onOpenContext: (event: React.MouseEvent<HTMLButtonElement>) => void;
   metaNode: React.ReactNode;
 }) {
+  const replyPreviewText = String(message.replyTo?.content || "").trim() || "Original message unavailable";
+
   return (
     <div
       className={cn(
@@ -743,7 +756,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
       {message.replyTo && !message.isDeleted && (
         <div className={cn("chat-reply-preview", isOwn ? "chat-reply-preview--own" : "chat-reply-preview--peer")}>
           <p className="chat-reply-preview__label">Replied to</p>
-          <p className="chat-reply-preview__text">{message.replyTo.content}</p>
+          <p className="chat-reply-preview__text">{replyPreviewText}</p>
         </div>
       )}
 
@@ -770,7 +783,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
             target="_blank"
             rel="noreferrer"
             className={cn(
-              "chat-link-preview-card mt-1.5 block max-w-[320px] rounded-xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-sm transition-colors hover:bg-card",
+              "chat-link-preview-card chat-link-preview-card--enterprise mt-1.5 block max-w-[320px] rounded-xl border border-border/70 bg-card/80 px-3 py-2.5 shadow-sm transition-colors hover:bg-card",
               isOwn ? "ml-auto" : "mr-auto",
             )}
           >
@@ -1345,33 +1358,26 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
 
   const imageCornerClass = isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]";
-  const ownUserId = String(user?._id);
+  const senderId = String(message.senderId || "");
   const ownBubbleToneClass =
     "chat-bubble-sent chat-message-bubble-shell chat-message-bubble-shell--own";
   const peerBubbleToneClass =
     "chat-bubble-received chat-message-bubble-shell chat-message-bubble-shell--peer";
   const bubbleToneClass = isOwn ? ownBubbleToneClass : peerBubbleToneClass;
 
-  const ownTopRightClass =
-    prevSenderId === ownUserId ? "rounded-tr-[4px]" : "rounded-tr-[18px]";
-  const ownBottomRightClass =
-    nextSenderId === ownUserId ? "rounded-br-[4px]" : "rounded-br-[18px]";
-  const peerTopLeftClass =
-    prevSenderId === message.senderId ? "rounded-tl-[4px]" : "rounded-tl-[18px]";
-  const peerBottomLeftClass =
-    nextSenderId === message.senderId ? "rounded-bl-[4px]" : "rounded-bl-[18px]";
+  const isPrevFromSameSender = String(prevSenderId || "") === senderId;
+  const isNextFromSameSender = String(nextSenderId || "") === senderId;
 
-  const ownRoundedClass = cn(
-    ownTopRightClass,
-    ownBottomRightClass,
-    "rounded-tl-[18px] rounded-bl-[18px]",
-  );
-  const peerRoundedClass = cn(
-    peerTopLeftClass,
-    peerBottomLeftClass,
-    "rounded-tr-[18px] rounded-br-[18px]",
-  );
-  const bubbleRoundedClass = isOwn ? ownRoundedClass : peerRoundedClass;
+  let bubbleClusterToken = "single";
+  if (isPrevFromSameSender && isNextFromSameSender) {
+    bubbleClusterToken = "middle";
+  } else if (!isPrevFromSameSender && isNextFromSameSender) {
+    bubbleClusterToken = "start";
+  } else if (isPrevFromSameSender && !isNextFromSameSender) {
+    bubbleClusterToken = "end";
+  }
+
+  const bubbleClusterClass = `chat-message-bubble-shell--cluster-${bubbleClusterToken}`;
 
   const renderReadOnlyBubble = () => (
     <div
@@ -1383,7 +1389,12 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
               "px-3.5 py-2.5",
               bubbleToneClass,
             ),
-        bubbleRoundedClass,
+        !hasOnlyImage && "chat-message-bubble-surface",
+        !hasOnlyImage && (isOwn
+          ? "chat-message-bubble-surface--own"
+          : "chat-message-bubble-surface--peer"),
+        !hasOnlyImage && actionBarVisible && "chat-message-bubble-surface--actions-visible",
+        bubbleClusterClass,
         message.isDeleted && "chat-message-bubble-shell--deleted opacity-50 italic",
         isBubblePressed && !message.isDeleted && "chat-message-bubble-shell--pressed",
         "select-text",
@@ -1435,7 +1446,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
             </span>
           )}
           {message.content && (
-            <p className="whitespace-pre-wrap break-words tracking-tight">{message.content}</p>
+            <p className="chat-message-content whitespace-pre-wrap break-words tracking-tight">{message.content}</p>
           )}
         </>
       )}
@@ -1620,8 +1631,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
           dismissible={!deleteActionLoading}
         >
           <DialogHeader className="items-center text-center space-y-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20 ring-8 ring-red-50 dark:ring-red-500/10">
-              <Trash2 className="size-6 text-red-600 dark:text-red-400" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
+              <Trash2 className="size-6 text-destructive" />
             </div>
             <div className="space-y-1.5">
               <DialogTitle className="text-xl font-bold tracking-tight">
@@ -1640,15 +1651,15 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
                 type="button"
                 disabled={!!deleteActionLoading}
                 onClick={handleConfirmUnsendForEveryone}
-                className="flex flex-col items-start text-left p-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/20 dark:hover:bg-red-950/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group"
+                className="flex flex-col items-start text-left p-4 rounded-xl border border-destructive/30 bg-destructive/10 hover:bg-destructive/15 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group"
               >
-                <p className="text-[15px] font-semibold text-red-700 dark:text-red-400">Unsend for everyone</p>
-                <p className="mt-1.5 text-[13px] text-red-600/80 dark:text-red-300/70 leading-relaxed font-medium">
+                <p className="text-[15px] font-semibold text-destructive">Unsend for everyone</p>
+                <p className="mt-1.5 text-[13px] text-destructive/80 leading-relaxed font-medium">
                   This message will be removed for everyone in this chat. Others
                   may have already seen or forwarded it.
                 </p>
                 {deleteActionLoading === "for-everyone" && (
-                  <p className="mt-2 text-xs font-semibold animate-pulse text-red-600">Processing...</p>
+                  <p className="mt-2 text-xs font-semibold animate-pulse text-destructive">Processing...</p>
                 )}
               </button>
             )}
