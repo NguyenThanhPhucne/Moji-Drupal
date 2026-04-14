@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import Session from "../models/Session.js";
 import { OAuth2Client } from "google-auth-library";
+import { registerRateLimitHit } from "../utils/antiSpam.js";
 
 const ACCESS_TOKEN_TTL = "30m"; // thuờng là dưới 15m
 const toPositiveInteger = (value, fallbackValue) => {
@@ -38,11 +39,19 @@ const SESSION_STRICT_FINGERPRINT = ["1", "true", "yes"].includes(
 const REFRESH_TOKEN_FORMAT_REGEX = /^[a-f0-9]{128}$/i;
 // Keep fallback snappy so sign-in does not feel blocked on network latency.
 const DRUPAL_AUTH_TIMEOUT_MS = 2500;
+const IS_PRODUCTION =
+  String(process.env.NODE_ENV || "").toLowerCase() === "production";
+const REFRESH_COOKIE_SECURE_FORCED = ["1", "true", "yes"].includes(
+  String(process.env.REFRESH_COOKIE_SECURE || "").toLowerCase(),
+);
+const REFRESH_COOKIE_SECURE = REFRESH_COOKIE_SECURE_FORCED || IS_PRODUCTION;
+const REFRESH_COOKIE_SAME_SITE = REFRESH_COOKIE_SECURE ? "none" : "lax";
 
 const REFRESH_COOKIE_BASE_OPTIONS = {
   httpOnly: true,
-  secure: true,
-  sameSite: "none",
+  secure: REFRESH_COOKIE_SECURE,
+  sameSite: REFRESH_COOKIE_SAME_SITE,
+  path: "/",
 };
 
 const issueAccessToken = (user, payload = {}) =>
@@ -66,6 +75,37 @@ const getClientIp = (req) => {
 
 const getClientUserAgent = (req) =>
   String(req.headers["user-agent"] || "").slice(0, 512);
+
+const getAuthRateLimitIdentity = (req, identifier = "") => {
+  const ip = getClientIp(req);
+  const normalizedIdentifier = String(identifier || "").trim().toLowerCase();
+
+  return normalizedIdentifier ? `${ip}:${normalizedIdentifier}` : ip;
+};
+
+const getAuthRateLimitBlockPayload = ({
+  req,
+  scope,
+  identifier,
+  message,
+}) => {
+  const antiSpamResult = registerRateLimitHit({
+    userId: getAuthRateLimitIdentity(req, identifier),
+    scope,
+  });
+
+  if (antiSpamResult.allowed) {
+    return null;
+  }
+
+  return {
+    status: 429,
+    body: {
+      message: `${message} Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+    },
+  };
+};
 
 const hashValue = (value) =>
   crypto.createHash("sha256").update(String(value || "")).digest("hex");
@@ -116,6 +156,15 @@ const computeSlidingExpiry = ({
   const slidingTime = nowTime + REFRESH_TOKEN_TTL_MS;
 
   return new Date(Math.min(slidingTime, absoluteTime));
+};
+
+const resolveAbsoluteSessionExpiry = (session, now = new Date()) => {
+  const createdAtTime = new Date(session?.createdAt || now).getTime();
+  const absoluteTime = session?.absoluteExpiresAt
+    ? new Date(session.absoluteExpiresAt).getTime()
+    : createdAtTime + REFRESH_TOKEN_ABSOLUTE_TTL_MS;
+
+  return new Date(absoluteTime);
 };
 
 const pruneActiveSessions = async (userId) => {
@@ -293,6 +342,18 @@ export const signUp = async (req, res) => {
       });
     }
 
+    const signupRateLimitError = getAuthRateLimitBlockPayload({
+      req,
+      scope: "auth:signup",
+      identifier: `${username}:${email}`,
+      message: "Too many sign-up attempts.",
+    });
+    if (signupRateLimitError) {
+      return res
+        .status(signupRateLimitError.status)
+        .json(signupRateLimitError.body);
+    }
+
     // kiểm tra username tồn tại chưa
     const duplicate = await User.findOne({ username });
 
@@ -339,6 +400,18 @@ export const signIn = async (req, res) => {
 
     if (!username || !password) {
       return res.status(400).json({ message: "Thiếu username hoặc password." });
+    }
+
+    const signInRateLimitError = getAuthRateLimitBlockPayload({
+      req,
+      scope: "auth:signin",
+      identifier: username,
+      message: "Too many sign-in attempts.",
+    });
+    if (signInRateLimitError) {
+      return res
+        .status(signInRateLimitError.status)
+        .json(signInRateLimitError.body);
     }
 
     const usernameInput = String(username).trim();
@@ -429,6 +502,19 @@ export const refreshToken = async (req, res) => {
   try {
     // lấy refresh token từ cookie
     const token = String(req.cookies?.refreshToken || "").trim();
+
+    const refreshRateLimitError = getAuthRateLimitBlockPayload({
+      req,
+      scope: "auth:refresh",
+      identifier: token.slice(0, 24),
+      message: "Too many refresh attempts.",
+    });
+    if (refreshRateLimitError) {
+      return res
+        .status(refreshRateLimitError.status)
+        .json(refreshRateLimitError.body);
+    }
+
     if (!token) {
       return res.status(401).json({ message: "Token không tồn tại." });
     }
@@ -468,8 +554,10 @@ export const refreshToken = async (req, res) => {
         .json({ message: "Token không hợp lệ hoặc đã hết hạn" });
     }
 
+    const effectiveAbsoluteExpiresAt = resolveAbsoluteSessionExpiry(session, now);
+
     // kiểm tra hết hạn chưa
-    if (session.expiresAt < now || session.absoluteExpiresAt < now) {
+    if (session.expiresAt < now || effectiveAbsoluteExpiresAt < now) {
       await Session.deleteOne({ _id: session._id });
       clearRefreshCookie(res);
       return res.status(403).json({ message: "Token đã hết hạn." });
@@ -517,7 +605,7 @@ export const refreshToken = async (req, res) => {
     const nextExpiresAt = computeSlidingExpiry({
       now,
       createdAt: session.createdAt,
-      absoluteExpiresAt: session.absoluteExpiresAt,
+      absoluteExpiresAt: effectiveAbsoluteExpiresAt,
     });
 
     const updateResult = await Session.updateOne(
@@ -530,6 +618,8 @@ export const refreshToken = async (req, res) => {
         $set: {
           refreshToken: rotatedRefreshToken,
           expiresAt: nextExpiresAt,
+          absoluteExpiresAt:
+            session.absoluteExpiresAt || effectiveAbsoluteExpiresAt,
           lastUsedAt: now,
           userAgentHash:
             currentFingerprint.userAgentHash || session.userAgentHash || null,
@@ -674,6 +764,18 @@ export const googleAuth = async (req, res) => {
       return res.status(400).json({ message: "Thiếu Google token" });
     }
 
+    const googleRateLimitError = getAuthRateLimitBlockPayload({
+      req,
+      scope: "auth:google",
+      identifier: String(token).slice(0, 24),
+      message: "Too many Google auth attempts.",
+    });
+    if (googleRateLimitError) {
+      return res
+        .status(googleRateLimitError.status)
+        .json(googleRateLimitError.body);
+    }
+
     const {
       googleId,
       email,
@@ -765,6 +867,18 @@ export const drupalSso = async (req, res) => {
 
     if (!uid || !username || !ts || !sig) {
       return res.status(400).json({ message: "Thiếu thông tin SSO" });
+    }
+
+    const drupalSsoRateLimitError = getAuthRateLimitBlockPayload({
+      req,
+      scope: "auth:drupal-sso",
+      identifier: `${uid}:${username}`,
+      message: "Too many SSO attempts.",
+    });
+    if (drupalSsoRateLimitError) {
+      return res
+        .status(drupalSsoRateLimitError.status)
+        .json(drupalSsoRateLimitError.body);
     }
 
     const candidateSecrets = [

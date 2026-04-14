@@ -9,6 +9,8 @@ import Conversation from "../models/Conversation.js";
 const app = express();
 
 const server = http.createServer(app);
+const IS_PRODUCTION =
+  String(process.env.NODE_ENV || "").toLowerCase() === "production";
 
 const getAllowedOrigins = () => {
   const originsFromList = String(process.env.CLIENT_URLS || "")
@@ -25,10 +27,38 @@ const getAllowedOrigins = () => {
 };
 
 const allowedOrigins = getAllowedOrigins();
+const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+
+const isLoopbackOrigin = (origin) => {
+  try {
+    const parsed = new URL(origin);
+    return LOCALHOST_HOSTNAMES.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const isAllowedSocketOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  if (!IS_PRODUCTION && isLoopbackOrigin(origin)) {
+    return true;
+  }
+
+  return false;
+};
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      callback(null, isAllowedSocketOrigin(origin));
+    },
     credentials: true,
   },
   // Giảm thời gian phát hiện mất kết nối để trạng thái online/offline mượt hơn.

@@ -28,6 +28,8 @@ import { v2 as cloudinary } from "cloudinary";
 dotenv.config();
 
 const PORT = process.env.PORT || 5001;
+const IS_PRODUCTION =
+  String(process.env.NODE_ENV || "").toLowerCase() === "production";
 
 const getAllowedOrigins = () => {
   const originsFromList = String(process.env.CLIENT_URLS || "")
@@ -44,6 +46,29 @@ const getAllowedOrigins = () => {
 };
 
 const allowedOrigins = getAllowedOrigins();
+const LOCALHOST_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1"]);
+
+const isLoopbackOrigin = (origin) => {
+  try {
+    const parsed = new URL(origin);
+    return LOCALHOST_HOSTNAMES.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const isAllowedOrigin = (origin) => {
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  // Keep development experience smooth across localhost/127.0.0.1 origins.
+  if (!IS_PRODUCTION && isLoopbackOrigin(origin)) {
+    return true;
+  }
+
+  return false;
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -52,7 +77,7 @@ const corsOptions = {
       return;
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }

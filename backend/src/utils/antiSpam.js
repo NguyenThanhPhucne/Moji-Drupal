@@ -1,19 +1,58 @@
 const RATE_LIMIT_RULES = {
+  "auth:signup": {
+    profile: "auth",
+    windowMs: 60 * 1000,
+    maxEvents: 6,
+  },
+  "auth:signin": {
+    profile: "auth",
+    windowMs: 60 * 1000,
+    maxEvents: 10,
+  },
+  "auth:google": {
+    profile: "auth",
+    windowMs: 60 * 1000,
+    maxEvents: 12,
+  },
+  "auth:drupal-sso": {
+    profile: "auth",
+    windowMs: 60 * 1000,
+    maxEvents: 16,
+  },
+  "auth:refresh": {
+    profile: "auth",
+    windowMs: 60 * 1000,
+    maxEvents: 40,
+  },
   "message:direct": {
+    profile: "chat",
     windowMs: 12 * 1000,
     maxEvents: 8,
   },
   "message:group": {
+    profile: "chat",
     windowMs: 10 * 1000,
     maxEvents: 10,
   },
+  "chat:link-preview": {
+    profile: "chat",
+    windowMs: 30 * 1000,
+    maxEvents: 20,
+  },
   "social:post": {
+    profile: "social",
     windowMs: 60 * 1000,
     maxEvents: 4,
   },
   "social:comment": {
+    profile: "social",
     windowMs: 20 * 1000,
     maxEvents: 8,
+  },
+  "social:reaction": {
+    profile: "social",
+    windowMs: 10 * 1000,
+    maxEvents: 16,
   },
 };
 
@@ -59,13 +98,16 @@ export const registerRateLimitHit = ({
   conversationId,
   postId,
 }) => {
-  const rule = RATE_LIMIT_RULES[String(scope || "")];
+  const normalizedScope = String(scope || "");
+  const rule = RATE_LIMIT_RULES[normalizedScope];
+  const profile = rule?.profile || "none";
 
   if (!rule) {
     return {
       allowed: true,
       retryAfterSeconds: 0,
       remaining: Infinity,
+      profile,
     };
   }
 
@@ -105,6 +147,7 @@ export const registerRateLimitHit = ({
       allowed: false,
       retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
       remaining: 0,
+      profile,
     };
   }
 
@@ -120,5 +163,6 @@ export const registerRateLimitHit = ({
     allowed: true,
     retryAfterSeconds: 0,
     remaining: Math.max(0, rule.maxEvents - nextTimestamps.length),
+    profile,
   };
 };

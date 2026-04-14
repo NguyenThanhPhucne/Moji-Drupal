@@ -72,6 +72,20 @@ type SetStateReaction = Dispatch<SetStateAction<SocialReactionType | null>>;
 type SetStateReactionSummary = Dispatch<SetStateAction<SocialReactionSummary>>;
 type SetStateVisibleReactors = Dispatch<SetStateAction<VisibleReactors>>;
 
+const MIN_REACTION_PENDING_MS = 180;
+const MIN_COMMENT_PENDING_MS = 220;
+
+const waitForMinimumPending = async (startedAt: number, minimumMs: number) => {
+  const elapsedMs = Date.now() - startedAt;
+  if (elapsedMs >= minimumMs) {
+    return;
+  }
+
+  await new Promise((resolve) => {
+    globalThis.setTimeout(resolve, minimumMs - elapsedMs);
+  });
+};
+
 const getReactionSummaryFromPost = (post: SocialPost): SocialReactionSummary => {
   const hasReactionSummary = Boolean(post.reactionSummary);
 
@@ -202,6 +216,8 @@ const runReactionFlow = async ({
     return;
   }
 
+  const pendingStartedAt = Date.now();
+
   const previousOwnReaction = displayOwnReaction;
   const previousCount = displayLikesCount;
   const previousSummary = { ...displayReactionSummary };
@@ -261,6 +277,7 @@ const runReactionFlow = async ({
     setDisplayReactionSummary(previousSummary);
     setDisplayVisibleReactors(post.visibleReactors || []);
   } finally {
+    await waitForMinimumPending(pendingStartedAt, MIN_REACTION_PENDING_MS);
     setLikePending(false);
     setManualReactionPickerOpen(false);
   }
@@ -306,22 +323,29 @@ const runSubmitCommentFlow = async ({
   }
 
   const previousCount = displayCommentsCount;
+  const pendingStartedAt = Date.now();
   setCommentPending(true);
   setDisplayCommentsCount((current) => current + 1);
 
-  const ok = await onComment(postId, normalized, parentCommentId);
-  if (ok) {
-    if (parentCommentId) {
-      setReplyDraftByCommentId((current) => ({ ...current, [parentCommentId]: "" }));
-      setReplyingToCommentId(null);
+  try {
+    const ok = await onComment(postId, normalized, parentCommentId);
+    if (ok) {
+      if (parentCommentId) {
+        setReplyDraftByCommentId((current) => ({ ...current, [parentCommentId]: "" }));
+        setReplyingToCommentId(null);
+      } else {
+        setCommentDraft("");
+      }
     } else {
-      setCommentDraft("");
+      setDisplayCommentsCount(previousCount);
     }
-  } else {
+  } catch (error) {
+    console.error("[social] submitComment error", error);
     setDisplayCommentsCount(previousCount);
+  } finally {
+    await waitForMinimumPending(pendingStartedAt, MIN_COMMENT_PENDING_MS);
+    setCommentPending(false);
   }
-
-  setCommentPending(false);
 };
 
 const runOpenEngagementFlow = async ({

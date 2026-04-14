@@ -1039,7 +1039,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     setEditValue(normalizedEditValue);
     setEditMode(false);
 
-    void editMessage(
+    editMessage(
       activeConversationId,
       message._id,
       normalizedEditValue,

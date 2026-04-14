@@ -1218,6 +1218,17 @@ export const markMessageRead = async (req, res) => {
 
 export const getLinkPreview = async (req, res) => {
   try {
+    const antiSpamResult = registerRateLimitHit({
+      userId: req.user?._id,
+      scope: "chat:link-preview",
+    });
+
+    if (!antiSpamResult.allowed) {
+      return res.status(429).json({
+        message: `You're requesting previews too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      });
+    }
+
     const preview = await resolveLinkMetadata(req.query.url);
     return res.status(200).json({ preview });
   } catch (error) {

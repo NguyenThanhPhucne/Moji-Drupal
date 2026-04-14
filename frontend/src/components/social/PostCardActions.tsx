@@ -1,4 +1,4 @@
-import { MessageCircle, Share2, ThumbsUp } from "lucide-react";
+import { Loader2, MessageCircle, Share2, ThumbsUp } from "lucide-react";
 import ReactionPopover from "@/components/social/ReactionPopover";
 import { ReactionGlyph } from "@/components/social/FacebookReactionIcons";
 import { cn } from "@/lib/utils";
@@ -49,6 +49,23 @@ const PostCardActions = ({
   onPrimaryLikeTouchStart,
   onPrimaryLikeTouchEnd,
 }: PostCardActionsProps) => {
+  let reactionIcon = (
+    <ThumbsUp className="h-4.5 w-4.5 group-active:scale-95 transition-transform" />
+  );
+
+  if (likePending) {
+    reactionIcon = <Loader2 className="h-4.5 w-4.5 animate-spin" />;
+  } else if (activeReaction) {
+    reactionIcon = (
+      <ReactionGlyph
+        reaction={displayedReaction}
+        className="h-5 w-5 like-bounce-burst group-active:scale-95"
+      />
+    );
+  }
+
+  const primaryLikeLabel = likePending ? "Updating..." : displayedReactionLabel;
+
   return (
     <>
       <div
@@ -102,6 +119,7 @@ const PostCardActions = ({
           <ReactionPopover
             activeReaction={activeReaction}
             open={reactionPickerOpen}
+            disabled={likePending}
             onMouseEnter={onOpenReactionPicker}
             onMouseLeave={onScheduleCloseReactionPicker}
             onSelect={onHandleReaction}
@@ -111,6 +129,7 @@ const PostCardActions = ({
             className={cn(
               "post-action-btn-hover social-post-comment-action social-post-action-btn flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold",
               displayedReactionColorClass,
+              likePending && "cursor-wait opacity-85",
             )}
             data-testid="post-like-button"
             onClick={() => {
@@ -139,12 +158,8 @@ const PostCardActions = ({
             }}
             disabled={likePending}
           >
-            {activeReaction ? (
-              <ReactionGlyph reaction={displayedReaction} className="h-5 w-5 like-bounce-burst group-active:scale-95" />
-            ) : (
-              <ThumbsUp className="h-4.5 w-4.5 group-active:scale-95 transition-transform" />
-            )}
-            {displayedReactionLabel}
+            {reactionIcon}
+            {primaryLikeLabel}
           </button>
         </div>
 

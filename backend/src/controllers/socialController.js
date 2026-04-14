@@ -1176,6 +1176,18 @@ export const toggleLikePost = async (req, res) => {
       return res.status(400).json({ message: "Invalid post id" });
     }
 
+    const antiSpamResult = registerRateLimitHit({
+      userId,
+      scope: "social:reaction",
+      postId,
+    });
+
+    if (!antiSpamResult.allowed) {
+      return res.status(429).json({
+        message: `You're reacting too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+      });
+    }
+
     const nextReactionType = normalizeReactionType(req.body?.reaction || "like");
     let updateOutcome = null;
     try {
