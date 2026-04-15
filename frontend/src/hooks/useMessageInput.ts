@@ -9,6 +9,11 @@ export const MAX_FILE_SIZE_MB = 5;
 export const MAX_MESSAGE_LENGTH = 1200;
 const TYPING_EMIT_INTERVAL_MS = 350;
 
+type MessageDraftState = {
+  value: string;
+  imagePreview: string | null;
+};
+
 export function useMessageInput(selectedConvo: Conversation) {
   const { user } = useAuthStore();
   const { sendDirectMessage, sendGroupMessage, replyingTo, setReplyingTo } = useChatStore();
@@ -24,6 +29,34 @@ export function useMessageInput(selectedConvo: Conversation) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isSendingRef = useRef(false);
+  const draftByConversationRef = useRef<Record<string, MessageDraftState>>({});
+  const previousConversationIdRef = useRef(String(selectedConvo._id || ""));
+
+  const persistDraft = useCallback(
+    (conversationId: string, nextValue: string, nextImagePreview: string | null) => {
+      const normalizedConversationId = String(conversationId || "").trim();
+      if (!normalizedConversationId) {
+        return;
+      }
+
+      const normalizedValue = String(nextValue || "");
+      const normalizedImagePreview = nextImagePreview || null;
+      const hasDraft = Boolean(
+        normalizedValue.trim() || normalizedImagePreview,
+      );
+
+      if (!hasDraft) {
+        delete draftByConversationRef.current[normalizedConversationId];
+        return;
+      }
+
+      draftByConversationRef.current[normalizedConversationId] = {
+        value: normalizedValue,
+        imagePreview: normalizedImagePreview,
+      };
+    },
+    [],
+  );
 
   const stopTyping = useCallback(() => {
     if (typing && socket?.connected) {
@@ -36,6 +69,7 @@ export function useMessageInput(selectedConvo: Conversation) {
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value.slice(0, MAX_MESSAGE_LENGTH);
     setValue(newValue);
+    persistDraft(selectedConvo._id, newValue, imagePreview);
 
     // Auto-resize textarea
     const el = textareaRef.current;
@@ -65,8 +99,20 @@ export function useMessageInput(selectedConvo: Conversation) {
   };
 
   const appendEmoji = (emoji: string) => {
-    setValue((prev) => `${prev}${emoji}`);
+    setValue((prev) => {
+      const nextValue = `${prev}${emoji}`;
+      persistDraft(selectedConvo._id, nextValue, imagePreview);
+      return nextValue;
+    });
   };
+
+  const setImagePreviewWithDraft = useCallback(
+    (nextImagePreview: string | null) => {
+      setImagePreview(nextImagePreview);
+      persistDraft(selectedConvo._id, value, nextImagePreview);
+    },
+    [persistDraft, selectedConvo._id, value],
+  );
 
   useEffect(() => {
     return () => {
@@ -82,16 +128,34 @@ export function useMessageInput(selectedConvo: Conversation) {
     };
   }, [socket, selectedConvo._id]);
 
-  // Reset draft when user switches conversation
+  // Keep per-conversation drafts instead of resetting on room switch.
   useEffect(() => {
-    setValue("");
-    setImagePreview(null);
+    const nextConversationId = String(selectedConvo._id || "");
+    const previousConversationId = previousConversationIdRef.current;
+
+    if (previousConversationId && previousConversationId !== nextConversationId) {
+      persistDraft(previousConversationId, value, imagePreview);
+      setReplyingTo(null);
+    }
+
+    const draft = draftByConversationRef.current[nextConversationId] || {
+      value: "",
+      imagePreview: null,
+    };
+
+    setValue(draft.value);
+    setImagePreview(draft.imagePreview);
     setReplyingTo(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+      const nextHeight = Math.min(textareaRef.current.scrollHeight, 120);
+      if (draft.value.trim()) {
+        textareaRef.current.style.height = `${Math.max(40, nextHeight)}px`;
+      }
     }
     lastTypingEmitAtRef.current = 0;
     setTyping(false);
+    previousConversationIdRef.current = nextConversationId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConvo._id]);
 
@@ -103,7 +167,9 @@ export function useMessageInput(selectedConvo: Conversation) {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
+    reader.onload = () => {
+      setImagePreviewWithDraft(reader.result as string);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -118,6 +184,7 @@ export function useMessageInput(selectedConvo: Conversation) {
     const currImage = imagePreview;
     setValue("");
     setImagePreview(null);
+    persistDraft(selectedConvo._id, "", null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
@@ -139,6 +206,7 @@ export function useMessageInput(selectedConvo: Conversation) {
           currValue,
           currImage ?? undefined,
           replyingTo?._id,
+          selectedConvo.group?.activeChannelId,
         );
       }
       setReplyingTo(null);
@@ -168,7 +236,7 @@ export function useMessageInput(selectedConvo: Conversation) {
     focused,
     setFocused,
     imagePreview,
-    setImagePreview,
+    setImagePreview: setImagePreviewWithDraft,
     replyingTo,
     setReplyingTo,
     textareaRef,

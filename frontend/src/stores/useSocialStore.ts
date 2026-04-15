@@ -4,6 +4,7 @@ import axios from "axios";
 import { socialService } from "@/services/socialService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
+import { handleRateLimitError } from "@/lib/rateLimitFeedback";
 import type {
   PaginationPayload,
   SocialComment,
@@ -129,8 +130,16 @@ export const useSocialStore = create<SocialState>((set) => ({
       }));
       return true;
     } catch (error) {
+      const rateLimit = handleRateLimitError(error, {
+        fallbackScope: "social:post",
+        actionLabel: "Posting too fast",
+      });
+      if (rateLimit.handled) {
+        return false;
+      }
+
       console.error("[social] createPost error", error);
-      toast.error("Cannot create post right now");
+      toast.error(getSocialErrorMessage(error, "Cannot create post right now"));
       return false;
     }
   },
@@ -344,6 +353,15 @@ export const useSocialStore = create<SocialState>((set) => ({
         exploreFeed: previousExploreFeed,
         profilePosts: previousProfilePosts,
       });
+
+      const rateLimit = handleRateLimitError(error, {
+        fallbackScope: "social:reaction",
+        actionLabel: "Reacting too fast",
+      });
+      if (rateLimit.handled) {
+        return false;
+      }
+
       console.error("[social] toggleLike error", error);
       toast.error(getSocialErrorMessage(error, "Cannot react to this post"));
       return false;
@@ -517,6 +535,14 @@ export const useSocialStore = create<SocialState>((set) => ({
       }));
       return true;
     } catch (error) {
+      const rateLimit = handleRateLimitError(error, {
+        fallbackScope: "social:comment",
+        actionLabel: "Commenting too fast",
+      });
+      if (rateLimit.handled) {
+        return false;
+      }
+
       console.error("[social] addComment error", error);
       toast.error("Cannot add comment");
       return false;

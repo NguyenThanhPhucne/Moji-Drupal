@@ -1,4 +1,4 @@
-import { ImageIcon, SendHorizontal, Smile } from "lucide-react";
+import { ImageIcon, Loader2, SendHorizontal, Smile } from "lucide-react";
 import { useCallback } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ interface VirtualizedCommentThreadItemProps {
   item: RootCommentThread;
   postAuthorId: string;
   currentUserId: string;
+  commentPending: boolean;
+  actionsDisabled: boolean;
   onOpenProfile?: (userId: string) => void;
   onDeleteComment: (commentId: string) => void;
   onReportComment?: (commentId: string) => void;
@@ -32,6 +34,8 @@ const VirtualizedCommentThreadItem = ({
   item,
   postAuthorId,
   currentUserId,
+  commentPending,
+  actionsDisabled,
   onOpenProfile,
   onDeleteComment,
   onReportComment,
@@ -54,6 +58,7 @@ const VirtualizedCommentThreadItem = ({
           String(currentUserId || "") === String(item.root.authorId._id || "") ||
           String(currentUserId || "") === String(postAuthorId || "")
         }
+        actionsDisabled={actionsDisabled}
         onDelete={() => onDeleteComment(item.root._id)}
         canReport={String(currentUserId || "") !== String(item.root.authorId._id || "")}
         onReport={() => onReportComment?.(item.root._id)}
@@ -82,6 +87,7 @@ const VirtualizedCommentThreadItem = ({
               String(currentUserId || "") === String(reply.authorId._id || "") ||
               String(currentUserId || "") === String(postAuthorId || "")
             }
+            actionsDisabled={actionsDisabled}
             onDelete={() => onDeleteComment(reply._id)}
             canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
             onReport={() => onReportComment?.(reply._id)}
@@ -95,6 +101,7 @@ const VirtualizedCommentThreadItem = ({
             onChange={(event) => onReplyDraftChange(item.root._id, event.target.value)}
             placeholder={`Reply to ${item.root.authorId.displayName}...`}
             className="social-post-comment-input social-post-comment-input-floating h-9 rounded-full shadow-none"
+            disabled={commentPending || actionsDisabled}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -108,8 +115,9 @@ const VirtualizedCommentThreadItem = ({
             variant="ghost"
             className="social-post-comment-action"
             onClick={() => onSubmitReply(item.root._id)}
+            disabled={commentPending || actionsDisabled}
           >
-            Reply
+            {commentPending ? "Sending..." : "Reply"}
           </Button>
         </div>
       )}
@@ -126,6 +134,7 @@ interface CommentsPanelProps {
   composerDisplayName: string;
   commentDraft: string;
   commentPending: boolean;
+  commentActionsDisabled: boolean;
   commentSort: "relevant" | "newest";
   rootsWithReplies: RootCommentThread[];
   collapsedRepliesByRoot: Record<string, boolean>;
@@ -154,6 +163,7 @@ const CommentsPanel = ({
   composerDisplayName,
   commentDraft,
   commentPending,
+  commentActionsDisabled,
   commentSort,
   rootsWithReplies,
   collapsedRepliesByRoot,
@@ -178,6 +188,8 @@ const CommentsPanel = ({
         item={item}
         postAuthorId={postAuthorId}
         currentUserId={currentUserId}
+        commentPending={commentPending}
+        actionsDisabled={commentActionsDisabled}
         onOpenProfile={onOpenProfile}
         onDeleteComment={onDeleteComment}
         onReportComment={onReportComment}
@@ -203,6 +215,8 @@ const CommentsPanel = ({
       postAuthorId,
       replyDraftByCommentId,
       replyingToCommentId,
+      commentPending,
+      commentActionsDisabled,
     ],
   );
 
@@ -211,13 +225,14 @@ const CommentsPanel = ({
   }
 
   return (
-    <section className="mt-3 space-y-3">
+    <section className="mt-3 space-y-3" aria-busy={commentPending}>
       <div className="flex items-center justify-end gap-1">
         <button
           type="button"
           className={cn("rounded px-2 py-1 text-xs font-medium", "social-segment-btn")}
           data-active={commentSort === "relevant"}
           onClick={() => onSetCommentSort("relevant")}
+          disabled={commentActionsDisabled || commentsLoading}
         >
           Most relevant
         </button>
@@ -226,6 +241,7 @@ const CommentsPanel = ({
           className={cn("rounded px-2 py-1 text-xs font-medium", "social-segment-btn")}
           data-active={commentSort === "newest"}
           onClick={() => onSetCommentSort("newest")}
+          disabled={commentActionsDisabled || commentsLoading}
         >
           Newest
         </button>
@@ -246,6 +262,7 @@ const CommentsPanel = ({
             onChange={(event) => onCommentDraftChange(event.target.value)}
             placeholder="Write a comment..."
             className="social-post-comment-input social-post-comment-input-floating h-10 rounded-full pr-28 text-sm shadow-none"
+            disabled={commentPending || commentActionsDisabled}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
                 event.preventDefault();
@@ -254,13 +271,13 @@ const CommentsPanel = ({
             }}
           />
           <div className="social-text-muted absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-2">
-            <button type="button" className="social-post-comment-action rounded p-0.5">
+            <button type="button" className="social-post-comment-action rounded p-0.5" disabled={commentPending || commentActionsDisabled}>
               <Smile className="h-4 w-4" />
             </button>
-            <button type="button" className="social-post-comment-action rounded p-0.5">
+            <button type="button" className="social-post-comment-action rounded p-0.5" disabled={commentPending || commentActionsDisabled}>
               <ImageIcon className="h-4 w-4" />
             </button>
-            <button type="button" className="social-post-comment-action rounded px-1 text-xs font-semibold">
+            <button type="button" className="social-post-comment-action rounded px-1 text-xs font-semibold" disabled={commentPending || commentActionsDisabled}>
               GIF
             </button>
           </div>
@@ -271,9 +288,17 @@ const CommentsPanel = ({
           size="sm"
           className="social-primary-btn h-9 rounded-full px-3"
           onClick={() => onSubmitComment(null)}
-          disabled={commentPending}
+          disabled={commentPending || commentActionsDisabled}
+          aria-busy={commentPending}
         >
-          <SendHorizontal className="h-4 w-4" />
+          {commentPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <SendHorizontal className="h-4 w-4" />
+          )}
+          <span className="text-xs font-semibold">
+            {commentPending ? "Sending" : "Send"}
+          </span>
         </Button>
       </div>
 
@@ -294,6 +319,7 @@ const CommentsPanel = ({
                   String(currentUserId || "") === String(item.root.authorId._id || "") ||
                   String(currentUserId || "") === String(postAuthorId || "")
                 }
+                actionsDisabled={commentActionsDisabled}
                 onDelete={() => onDeleteComment(item.root._id)}
                 canReport={String(currentUserId || "") !== String(item.root.authorId._id || "")}
                 onReport={() => onReportComment?.(item.root._id)}
@@ -324,6 +350,7 @@ const CommentsPanel = ({
                       String(currentUserId || "") === String(reply.authorId._id || "") ||
                       String(currentUserId || "") === String(postAuthorId || "")
                     }
+                    actionsDisabled={commentActionsDisabled}
                     onDelete={() => onDeleteComment(reply._id)}
                     canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
                     onReport={() => onReportComment?.(reply._id)}
@@ -337,6 +364,7 @@ const CommentsPanel = ({
                     onChange={(event) => onReplyDraftChange(item.root._id, event.target.value)}
                     placeholder={`Reply to ${item.root.authorId.displayName}...`}
                     className="social-post-comment-input social-post-comment-input-floating h-9 rounded-full shadow-none"
+                    disabled={commentPending || commentActionsDisabled}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
@@ -344,8 +372,14 @@ const CommentsPanel = ({
                       }
                     }}
                   />
-                  <Button type="button" size="sm" variant="ghost" onClick={() => onSubmitComment(item.root._id)}>
-                    Reply
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onSubmitComment(item.root._id)}
+                    disabled={commentPending || commentActionsDisabled}
+                  >
+                    {commentPending ? "Sending..." : "Reply"}
                   </Button>
                 </div>
               )}
@@ -362,7 +396,7 @@ const CommentsPanel = ({
           variant="ghost"
           className="social-text-muted w-full"
           onClick={() => onLoadMoreComments(postId)}
-          disabled={commentsLoading}
+          disabled={Boolean(commentsLoading) || commentActionsDisabled}
         >
           {commentsLoading ? "Loading..." : "View more comments"}
         </Button>

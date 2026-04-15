@@ -6,7 +6,10 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import Session from "../models/Session.js";
 import { OAuth2Client } from "google-auth-library";
-import { registerRateLimitHit } from "../utils/antiSpam.js";
+import {
+  applyRateLimitHeaders,
+  registerRateLimitHit,
+} from "../utils/antiSpam.js";
 
 const ACCESS_TOKEN_TTL = "30m"; // thuờng là dưới 15m
 const toPositiveInteger = (value, fallbackValue) => {
@@ -85,6 +88,7 @@ const getAuthRateLimitIdentity = (req, identifier = "") => {
 
 const getAuthRateLimitBlockPayload = ({
   req,
+  res,
   scope,
   identifier,
   message,
@@ -93,6 +97,7 @@ const getAuthRateLimitBlockPayload = ({
     userId: getAuthRateLimitIdentity(req, identifier),
     scope,
   });
+  applyRateLimitHeaders(res, antiSpamResult);
 
   if (antiSpamResult.allowed) {
     return null;
@@ -103,6 +108,8 @@ const getAuthRateLimitBlockPayload = ({
     body: {
       message: `${message} Try again in ${antiSpamResult.retryAfterSeconds}s.`,
       retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+      rateLimitScope: antiSpamResult.scope,
+      rateLimitProfile: antiSpamResult.profile,
     },
   };
 };
@@ -344,6 +351,7 @@ export const signUp = async (req, res) => {
 
     const signupRateLimitError = getAuthRateLimitBlockPayload({
       req,
+      res,
       scope: "auth:signup",
       identifier: `${username}:${email}`,
       message: "Too many sign-up attempts.",
@@ -404,6 +412,7 @@ export const signIn = async (req, res) => {
 
     const signInRateLimitError = getAuthRateLimitBlockPayload({
       req,
+      res,
       scope: "auth:signin",
       identifier: username,
       message: "Too many sign-in attempts.",
@@ -505,6 +514,7 @@ export const refreshToken = async (req, res) => {
 
     const refreshRateLimitError = getAuthRateLimitBlockPayload({
       req,
+      res,
       scope: "auth:refresh",
       identifier: token.slice(0, 24),
       message: "Too many refresh attempts.",
@@ -766,6 +776,7 @@ export const googleAuth = async (req, res) => {
 
     const googleRateLimitError = getAuthRateLimitBlockPayload({
       req,
+      res,
       scope: "auth:google",
       identifier: String(token).slice(0, 24),
       message: "Too many Google auth attempts.",
@@ -871,6 +882,7 @@ export const drupalSso = async (req, res) => {
 
     const drupalSsoRateLimitError = getAuthRateLimitBlockPayload({
       req,
+      res,
       scope: "auth:drupal-sso",
       identifier: `${uid}:${username}`,
       message: "Too many SSO attempts.",

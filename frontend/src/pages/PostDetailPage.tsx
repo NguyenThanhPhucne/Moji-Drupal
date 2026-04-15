@@ -89,7 +89,10 @@ const PostDetailPage = () => {
 
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-4 md:p-6">
-          <section className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar pr-1 space-stack-lg">
+          <section
+            className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar pr-1 space-stack-lg"
+            aria-label="Post detail content"
+          >
             <SocialTopHeader
               title={heading}
               subtitle="Shared post detail"
@@ -104,10 +107,14 @@ const PostDetailPage = () => {
                 <BackToChatCard onClick={() => navigate("/")} />
             </div>
 
-            {loading && <SocialPostSkeleton count={1} />}
+            {loading && (
+              <div role="status" aria-live="polite" aria-label="Loading post detail">
+                <SocialPostSkeleton count={1} />
+              </div>
+            )}
 
             {!loading && notFound && (
-              <div className="social-card-empty p-8 text-center">
+              <div className="social-card-empty p-8 text-center" role="status" aria-live="polite">
                 This post could not be found or you do not have access.
               </div>
             )}

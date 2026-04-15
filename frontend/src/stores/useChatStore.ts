@@ -6,9 +6,103 @@ import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 import { toast } from "sonner";
+import { handleRateLimitError } from "@/lib/rateLimitFeedback";
 
 const buildTempDirectConversationId = (recipientId: string) => {
   return `temp-direct-${String(recipientId)}`;
+};
+
+const UNDO_SEND_WINDOW_SECONDS = 7;
+const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
+const DEFAULT_GROUP_CHANNEL_ID = "general";
+
+const normalizeGroupChannelId = (channelId?: string | null) => {
+  const normalized = String(channelId || "")
+    .trim()
+    .toLowerCase();
+
+  return normalized || DEFAULT_GROUP_CHANNEL_ID;
+};
+
+const resolveConversationActiveGroupChannelId = (
+  conversation?: Conversation | null,
+) => {
+  if (conversation?.type !== "group") {
+    return null;
+  }
+
+  const channels = Array.isArray(conversation.group?.channels)
+    ? conversation.group.channels
+    : [];
+
+  const activeCandidate = normalizeGroupChannelId(
+    conversation.group?.activeChannelId,
+  );
+
+  if (channels.some((channel) => normalizeGroupChannelId(channel.channelId) === activeCandidate)) {
+    return activeCandidate;
+  }
+
+  if (channels.length > 0) {
+    return normalizeGroupChannelId(channels[0].channelId);
+  }
+
+  return DEFAULT_GROUP_CHANNEL_ID;
+};
+
+const resolveMessageGroupChannelId = (message: { groupChannelId?: string | null }) => {
+  return normalizeGroupChannelId(message.groupChannelId);
+};
+
+const extractApiErrorMessage = (error: unknown) => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "response" in error &&
+    typeof (error as { response?: { data?: { message?: unknown } } }).response
+      ?.data?.message === "string"
+  ) {
+    return (error as { response?: { data?: { message?: string } } }).response
+      ?.data?.message;
+  }
+
+  return null;
+};
+
+const notifyUnsendFailure = (mode: "standard" | "undo", error: unknown) => {
+  if (mode === "undo") {
+    toast.error(extractApiErrorMessage(error) || "Undo window expired.");
+    return;
+  }
+
+  toast.error("Could not remove message for everyone. Restored.");
+};
+
+const showUndoSendToast = ({
+  conversationId,
+  messageId,
+  onUndo,
+}: {
+  conversationId: string;
+  messageId: string;
+  onUndo: () => void;
+}) => {
+  const normalizedConversationId = String(conversationId || "").trim();
+  const normalizedMessageId = String(messageId || "").trim();
+
+  if (!normalizedConversationId || !normalizedMessageId) {
+    return;
+  }
+
+  toast.success("Message sent", {
+    id: `undo-send:${normalizedConversationId}:${normalizedMessageId}`,
+    duration: UNDO_SEND_WINDOW_MS,
+    description: `Undo available for ${UNDO_SEND_WINDOW_SECONDS}s.`,
+    action: {
+      label: "Undo",
+      onClick: onUndo,
+    },
+  });
 };
 
 const isPersistedConversationId = (value?: string | null) => {
@@ -178,9 +272,191 @@ const pruneTempConversationState = ({
   });
 };
 
+const rollbackOptimisticDirectSend = ({
+  optimisticConversationId,
+  tempId,
+  createdTempConversation,
+  removeMessageFromConversation,
+  setState,
+}: {
+  optimisticConversationId: string | null;
+  tempId: string;
+  createdTempConversation: boolean;
+  removeMessageFromConversation: (conversationId: string, messageId: string) => void;
+  setState: typeof useChatStore.setState;
+}) => {
+  if (!optimisticConversationId) {
+    return;
+  }
+
+  unregisterPendingOwnTempMessage({
+    conversationId: optimisticConversationId,
+    tempId,
+  });
+  removeMessageFromConversation(optimisticConversationId, tempId);
+
+  if (createdTempConversation) {
+    pruneTempConversationState({
+      optimisticConversationId,
+      fallbackActiveConversationId: null,
+      setState,
+    });
+  }
+};
+
 const toTimestamp = (value?: string) => {
   const ts = value ? new Date(value).getTime() : 0;
   return Number.isFinite(ts) ? ts : 0;
+};
+
+type PendingOwnTempMessageEntry = {
+  tempId: string;
+  content: string;
+  replyToId: string;
+  hasImage: boolean;
+};
+
+const pendingOwnTempMessagesByConversation = new Map<
+  string,
+  PendingOwnTempMessageEntry[]
+>();
+
+const normalizePendingOwnMessageDescriptor = ({
+  content,
+  replyToId,
+  hasImage,
+}: {
+  content?: string | null;
+  replyToId?: string | null;
+  hasImage?: boolean;
+}) => {
+  return {
+    content: String(content || "").trim(),
+    replyToId: String(replyToId || "").trim(),
+    hasImage: Boolean(hasImage),
+  };
+};
+
+const resolveReplyToId = (replyTo: unknown) => {
+  if (!replyTo) {
+    return "";
+  }
+
+  if (typeof replyTo === "string") {
+    return String(replyTo).trim();
+  }
+
+  if (typeof replyTo === "object") {
+    const replyRecord = replyTo as { _id?: string | number };
+    return String(replyRecord._id || "").trim();
+  }
+
+  return "";
+};
+
+const registerPendingOwnTempMessage = ({
+  conversationId,
+  tempId,
+  content,
+  replyToId,
+  hasImage,
+}: {
+  conversationId: string;
+  tempId: string;
+  content?: string | null;
+  replyToId?: string | null;
+  hasImage?: boolean;
+}) => {
+  const normalizedConversationId = String(conversationId || "").trim();
+  const normalizedTempId = String(tempId || "").trim();
+  if (!normalizedConversationId || !normalizedTempId) {
+    return;
+  }
+
+  const queue = pendingOwnTempMessagesByConversation.get(normalizedConversationId) || [];
+  queue.push({
+    tempId: normalizedTempId,
+    ...normalizePendingOwnMessageDescriptor({
+      content,
+      replyToId,
+      hasImage,
+    }),
+  });
+  pendingOwnTempMessagesByConversation.set(normalizedConversationId, queue);
+};
+
+const unregisterPendingOwnTempMessage = ({
+  conversationId,
+  tempId,
+}: {
+  conversationId: string;
+  tempId: string;
+}) => {
+  const normalizedConversationId = String(conversationId || "").trim();
+  const normalizedTempId = String(tempId || "").trim();
+  if (!normalizedConversationId || !normalizedTempId) {
+    return;
+  }
+
+  const queue = pendingOwnTempMessagesByConversation.get(normalizedConversationId);
+  if (!queue?.length) {
+    return;
+  }
+
+  const nextQueue = queue.filter((entry) => entry.tempId !== normalizedTempId);
+  if (!nextQueue.length) {
+    pendingOwnTempMessagesByConversation.delete(normalizedConversationId);
+    return;
+  }
+
+  pendingOwnTempMessagesByConversation.set(normalizedConversationId, nextQueue);
+};
+
+const consumeMatchingPendingOwnTempMessage = ({
+  conversationId,
+  content,
+  replyToId,
+  hasImage,
+}: {
+  conversationId: string;
+  content?: string | null;
+  replyToId?: string | null;
+  hasImage?: boolean;
+}) => {
+  const normalizedConversationId = String(conversationId || "").trim();
+  if (!normalizedConversationId) {
+    return null;
+  }
+
+  const queue = pendingOwnTempMessagesByConversation.get(normalizedConversationId);
+  if (!queue?.length) {
+    return null;
+  }
+
+  const normalizedDescriptor = normalizePendingOwnMessageDescriptor({
+    content,
+    replyToId,
+    hasImage,
+  });
+
+  const matchedIndex = queue.findIndex((entry) => {
+    return (
+      entry.content === normalizedDescriptor.content &&
+      entry.replyToId === normalizedDescriptor.replyToId &&
+      entry.hasImage === normalizedDescriptor.hasImage
+    );
+  });
+
+  const entryIndex = Math.max(0, matchedIndex);
+  const [matchedEntry] = queue.splice(entryIndex, 1);
+
+  if (queue.length > 0) {
+    pendingOwnTempMessagesByConversation.set(normalizedConversationId, queue);
+  } else {
+    pendingOwnTempMessagesByConversation.delete(normalizedConversationId);
+  }
+
+  return matchedEntry?.tempId || null;
 };
 
 const sortMessagesChronologically = <
@@ -244,7 +520,59 @@ export const useChatStore = create<ChatState>()(
       replyingTo: null,
 
       setReplyingTo: (message) => set({ replyingTo: message }),
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) => {
+        set({ activeConversationId: id });
+
+        const conversationId = String(id || "").trim();
+        if (!conversationId) {
+          return;
+        }
+
+        const preloadMessagesForActiveConversation = () => {
+          const activeMessageBucket = get().messages?.[conversationId];
+          if (activeMessageBucket?.items?.length) {
+            return;
+          }
+
+          get()
+            .fetchMessages(conversationId)
+            .catch((error) => {
+              console.error(
+                "Error preloading messages for active conversation:",
+                error,
+              );
+            });
+        };
+
+        const hasTargetConversation = get().conversations.some(
+          (conversation) => String(conversation._id) === conversationId,
+        );
+
+        if (hasTargetConversation) {
+          preloadMessagesForActiveConversation();
+          return;
+        }
+
+        get()
+          .fetchConversations()
+          .then(() => {
+            const syncedConversation = get().conversations.some(
+              (conversation) => String(conversation._id) === conversationId,
+            );
+
+            if (!syncedConversation) {
+              return;
+            }
+
+            preloadMessagesForActiveConversation();
+          })
+          .catch((error) => {
+            console.error(
+              "Error syncing conversations for active selection:",
+              error,
+            );
+          });
+      },
       reset: () => {
         set({
           conversations: [],
@@ -256,27 +584,68 @@ export const useChatStore = create<ChatState>()(
         });
       },
       fetchConversations: async () => {
-        try {
-          set({ convoLoading: true });
-          const { conversations } = await chatService.fetchConversations();
+        set({ convoLoading: true });
 
-          set({ conversations, convoLoading: false });
+        try {
+          const { conversations } = await chatService.fetchConversations();
+          set({ conversations });
+          return;
         } catch (error) {
+          const status =
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof (error as { response?: { status?: unknown } }).response?.status ===
+              "number"
+              ? Number((error as { response?: { status?: number } }).response?.status)
+              : null;
+
+          if (status === 401 || status === 403) {
+            try {
+              const { conversations } =
+                await chatService.fetchConversationsWithCookieSession();
+              set({ conversations });
+              return;
+            } catch (cookieSessionError) {
+              console.error(
+                "Error fetching conversations with cookie session fallback:",
+                cookieSessionError,
+              );
+            }
+          }
+
           console.error("Error fetching conversations:", error);
+        } finally {
           set({ convoLoading: false });
         }
       },
-      fetchMessages: async (conversationId) => {
-        const { activeConversationId, messages } = get();
+      fetchMessages: async (conversationId, channelId) => {
+        const { activeConversationId, messages, conversations } = get();
         const { user } = useAuthStore.getState();
 
         const convoId = conversationId ?? activeConversationId;
 
         if (!convoId) return;
 
+        const targetConversation = conversations.find(
+          (conversationItem) => conversationItem._id === convoId,
+        );
+
+        const resolvedGroupChannelId =
+          targetConversation?.type === "group"
+            ? normalizeGroupChannelId(
+                channelId || resolveConversationActiveGroupChannelId(targetConversation),
+              )
+            : null;
+
         const current = messages?.[convoId];
-        const nextCursor =
-          current?.nextCursor === undefined ? "" : current?.nextCursor;
+        const sameChannelBucket =
+          (current?.channelId || null) === (resolvedGroupChannelId || null);
+        let nextCursor: string | null = "";
+        if (sameChannelBucket) {
+          nextCursor =
+            current?.nextCursor === undefined ? "" : current?.nextCursor;
+        }
 
         if (nextCursor === null) return;
 
@@ -286,6 +655,7 @@ export const useChatStore = create<ChatState>()(
           const { messages: fetched, cursor } = await chatService.fetchMessages(
             convoId,
             nextCursor,
+            resolvedGroupChannelId || undefined,
           );
 
           const processed = fetched.map((m) => ({
@@ -294,7 +664,9 @@ export const useChatStore = create<ChatState>()(
           }));
 
           set((state) => {
-            const prev = state.messages[convoId]?.items ?? [];
+            const prev = sameChannelBucket
+              ? state.messages[convoId]?.items ?? []
+              : [];
             const merged =
               prev.length > 0 ? [...processed, ...prev] : processed;
               
@@ -310,6 +682,7 @@ export const useChatStore = create<ChatState>()(
                   items: normalized,
                   hasMore: !!cursor,
                   nextCursor: cursor ?? null,
+                  channelId: resolvedGroupChannelId || null,
                 },
               },
             };
@@ -380,6 +753,13 @@ export const useChatStore = create<ChatState>()(
         if (optimisticConversationId) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           get().addMessage(optimisticMessage as any);
+          registerPendingOwnTempMessage({
+            conversationId: optimisticConversationId,
+            tempId,
+            content: optimisticMessage.content,
+            replyToId: resolveReplyToId(optimisticMessage.replyTo),
+            hasImage: Boolean(optimisticMessage.imgUrl),
+          });
         }
 
         try {
@@ -393,6 +773,10 @@ export const useChatStore = create<ChatState>()(
 
           // Replace temp message with real one from server
           if (optimisticConversationId) {
+            unregisterPendingOwnTempMessage({
+              conversationId: optimisticConversationId,
+              tempId,
+            });
             get().removeMessageFromConversation(optimisticConversationId, tempId);
           }
 
@@ -424,35 +808,69 @@ export const useChatStore = create<ChatState>()(
               console.error("Error refreshing conversations", error);
             });
           }
-        } catch (error) {
-          // Rollback: remove the optimistic message
-          if (optimisticConversationId) {
-            get().removeMessageFromConversation(optimisticConversationId, tempId);
-          }
 
-          if (createdTempConversation && optimisticConversationId) {
-            pruneTempConversationState({
-              optimisticConversationId,
-              fallbackActiveConversationId: null,
-              setState: set,
-            });
-          }
+          const undoConversationId = String(
+            realConvoId || message.conversationId || "",
+          ).trim();
+          const undoMessageId = String(message._id || "").trim();
+
+          showUndoSendToast({
+            conversationId: undoConversationId,
+            messageId: undoMessageId,
+            onUndo: () => {
+              void get()
+                .unsendMessage(undoConversationId, undoMessageId, "undo")
+                .catch((undoError) => {
+                  console.error("Undo send failed", undoError);
+                });
+            },
+          });
+        } catch (error) {
+          // Rollback: remove optimistic artifacts for direct send failures.
+          rollbackOptimisticDirectSend({
+            optimisticConversationId,
+            tempId,
+            createdTempConversation,
+            removeMessageFromConversation: get().removeMessageFromConversation,
+            setState: set,
+          });
 
           // Reset reply context so user doesn't get stuck with stale reply preview
           set({ replyingTo: null });
 
-          toast.error("Failed to send message. Please try again.");
+          const rateLimit = handleRateLimitError(error, {
+            fallbackScope: "message:direct",
+            actionLabel: "Sending messages too fast",
+          });
+          if (!rateLimit.handled) {
+            toast.error("Failed to send message. Please try again.");
+          }
+
           console.error("Error sending direct message", error);
         }
       },
-      sendGroupMessage: async (conversationId, content, imgUrl, replyTo) => {
+      sendGroupMessage: async (
+        conversationId,
+        content,
+        imgUrl,
+        replyTo,
+        groupChannelId,
+      ) => {
         const user = useAuthStore.getState().user;
+        const conversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+        const effectiveGroupChannelId =
+          groupChannelId ||
+          resolveConversationActiveGroupChannelId(conversation) ||
+          DEFAULT_GROUP_CHANNEL_ID;
 
         // Optimistic message
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const optimisticMessage = {
           _id: tempId,
           conversationId,
+          groupChannelId: effectiveGroupChannelId,
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
@@ -469,6 +887,13 @@ export const useChatStore = create<ChatState>()(
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         get().addMessage(optimisticMessage as any);
+        registerPendingOwnTempMessage({
+          conversationId,
+          tempId,
+          content: optimisticMessage.content,
+          replyToId: resolveReplyToId(optimisticMessage.replyTo),
+          hasImage: Boolean(optimisticMessage.imgUrl),
+        });
 
         try {
           const { addMessage } = get();
@@ -477,9 +902,14 @@ export const useChatStore = create<ChatState>()(
             content,
             imgUrl,
             replyTo,
+            effectiveGroupChannelId,
           );
 
           // Replace temp with real
+          unregisterPendingOwnTempMessage({
+            conversationId,
+            tempId,
+          });
           get().removeMessageFromConversation(conversationId, tempId);
           addMessage(message);
 
@@ -488,12 +918,37 @@ export const useChatStore = create<ChatState>()(
               c._id === conversationId ? { ...c, seenBy: [] } : c,
             ),
           }));
+
+          const undoMessageId = String(message._id || "").trim();
+          showUndoSendToast({
+            conversationId,
+            messageId: undoMessageId,
+            onUndo: () => {
+              void get()
+                .unsendMessage(conversationId, undoMessageId, "undo")
+                .catch((undoError) => {
+                  console.error("Undo send failed", undoError);
+                });
+            },
+          });
         } catch (error) {
           // Rollback
+          unregisterPendingOwnTempMessage({
+            conversationId,
+            tempId,
+          });
           get().removeMessageFromConversation(conversationId, tempId);
           // Reset reply context so user doesn't get stuck with stale reply preview
           set({ replyingTo: null });
-          toast.error("Failed to send message. Please try again.");
+
+          const rateLimit = handleRateLimitError(error, {
+            fallbackScope: "message:group",
+            actionLabel: "Sending messages too fast",
+          });
+          if (!rateLimit.handled) {
+            toast.error("Failed to send message. Please try again.");
+          }
+
           console.error("Error sending group message", error);
         }
       },
@@ -504,6 +959,18 @@ export const useChatStore = create<ChatState>()(
           const convoId = message.conversationId;
 
           set((state) => {
+            const conversation = state.conversations.find(
+              (conversationItem) => conversationItem._id === convoId,
+            );
+            const loadedChannelId = state.messages[convoId]?.channelId || null;
+
+            if (conversation?.type === "group" && loadedChannelId) {
+              const incomingChannelId = resolveMessageGroupChannelId(message);
+              if (incomingChannelId !== normalizeGroupChannelId(loadedChannelId)) {
+                return state;
+              }
+            }
+
             let currentItems = state.messages[convoId]?.items ?? [];
             if (currentItems.some((m) => m._id === message._id)) {
               return state;
@@ -511,17 +978,19 @@ export const useChatStore = create<ChatState>()(
 
             // Defend against Socket/API race condition where socket broadcasts the real message
             // before our local API call resolves and tears down the optimistic (temp-) message.
-            if (message.isOwn && !message._id.startsWith("temp-")) {
-              const matchedTempIndex = currentItems.findIndex(
-                (m) =>
-                  m.isOwn &&
-                  String(m._id).startsWith("temp-") &&
-                  m.content === message.content
-              );
+            if (message.isOwn && !String(message._id).startsWith("temp-")) {
+              const matchedTempId = consumeMatchingPendingOwnTempMessage({
+                conversationId: convoId,
+                content: String(message.content || ""),
+                replyToId: resolveReplyToId(message.replyTo),
+                hasImage: Boolean(message.imgUrl),
+              });
 
-              if (matchedTempIndex !== -1) {
-                // If we found the phantom optimistic message, destroy it early
-                currentItems = currentItems.filter((_, idx) => idx !== matchedTempIndex);
+              if (matchedTempId) {
+                currentItems = currentItems.filter(
+                  (existingMessage) =>
+                    String(existingMessage._id) !== String(matchedTempId),
+                );
               }
             }
 
@@ -649,13 +1118,18 @@ export const useChatStore = create<ChatState>()(
             reactions: previousReactions,
           });
 
+          handleRateLimitError(error, {
+            fallbackScope: "message:reaction",
+            actionLabel: "Reacting too fast",
+          });
+
           console.error("Reaction error:", error);
         } finally {
           clearMessageMutation(mutationKey, mutationVersion);
           releaseMessageMutationLock(mutationKey);
         }
       },
-      unsendMessage: async (conversationId, messageId) => {
+      unsendMessage: async (conversationId, messageId, mode = "standard") => {
         const mutationKey = `unsend:${conversationId}:${messageId}`;
         if (!acquireMessageMutationLock(mutationKey)) {
           return;
@@ -686,7 +1160,10 @@ export const useChatStore = create<ChatState>()(
         });
 
         try {
-          const result = await chatService.unsendMessage(messageId);
+          const result =
+            mode === "undo"
+              ? await chatService.undoSendMessage(messageId)
+              : await chatService.unsendMessage(messageId);
 
           if (result?.message?._id) {
             get().updateMessage(conversationId, messageId, {
@@ -745,7 +1222,9 @@ export const useChatStore = create<ChatState>()(
             readBy: previousMessage.readBy ?? [],
             editedAt: previousMessage.editedAt ?? null,
           });
-          toast.error("Could not remove message for everyone. Restored.");
+
+          notifyUnsendFailure(mode, error);
+
           console.error("Unsend error:", error);
           throw error;
         } finally {
@@ -850,9 +1329,24 @@ export const useChatStore = create<ChatState>()(
 
       updateConversation: (conversation) => {
         set((state) => {
-          const nextList = state.conversations.map((c) =>
-            c._id === conversation._id ? { ...c, ...conversation } : c,
-          );
+          const nextList = state.conversations.map((c) => {
+            if (c._id !== conversation._id) {
+              return c;
+            }
+
+            return {
+              ...c,
+              ...conversation,
+              ...(conversation.group
+                ? {
+                    group: {
+                      ...c.group,
+                      ...conversation.group,
+                    },
+                  }
+                : {}),
+            };
+          });
 
           // Sort conversations chronologically so the latest updated conversation bubbles to the top
           nextList.sort((a, b) => {
@@ -868,39 +1362,89 @@ export const useChatStore = create<ChatState>()(
         try {
           const { user } = useAuthStore.getState();
           const { activeConversationId, conversations } = get();
+          const normalizedUserId = String(user?._id || "");
+          const normalizedActiveConversationId = String(
+            activeConversationId || "",
+          );
 
-          if (!activeConversationId || !user) {
+          if (!normalizedActiveConversationId || !normalizedUserId) {
             return;
           }
 
           const convo = conversations.find(
-            (c) => c._id === activeConversationId,
+            (c) => String(c._id) === normalizedActiveConversationId,
           );
 
           if (!convo) {
             return;
           }
 
-          if ((convo.unreadCounts?.[user._id] ?? 0) === 0) {
+          const activeGroupChannelId =
+            convo.type === "group"
+              ? resolveConversationActiveGroupChannelId(convo)
+              : null;
+          const myChannelUnreadMap =
+            convo.type === "group"
+              ? convo.group?.channelUnreadCounts?.[normalizedUserId] || {}
+              : {};
+          const hasUnreadForActiveChannel =
+            convo.type === "group" &&
+            activeGroupChannelId &&
+            Number(myChannelUnreadMap?.[activeGroupChannelId] || 0) > 0;
+
+          if (
+            (convo.unreadCounts?.[normalizedUserId] ?? 0) === 0 &&
+            !hasUnreadForActiveChannel
+          ) {
             return;
           }
 
           // Optimistic update
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id === activeConversationId && c.lastMessage
-                ? {
+              c._id !== activeConversationId || !c.lastMessage
+                ? c
+                : {
                     ...c,
                     unreadCounts: {
                       ...c.unreadCounts,
-                      [user._id]: 0,
+                      [normalizedUserId]:
+                        c.type === "group"
+                          ? Math.max(
+                              0,
+                              Number(c.unreadCounts?.[normalizedUserId] || 0) -
+                                Number(
+                                  c.group?.channelUnreadCounts?.[normalizedUserId]?.[
+                                    activeGroupChannelId || ""
+                                  ] || 0,
+                                ),
+                            )
+                          : 0,
                     },
-                  }
-                : c,
+                    ...(c.type === "group"
+                      ? {
+                          group: {
+                            ...c.group,
+                            channelUnreadCounts: {
+                              ...c.group?.channelUnreadCounts,
+                                [normalizedUserId]: {
+                                  ...c.group?.channelUnreadCounts?.[normalizedUserId],
+                                ...(activeGroupChannelId
+                                  ? { [activeGroupChannelId]: 0 }
+                                  : {}),
+                              },
+                            },
+                          },
+                        }
+                      : {}),
+                  },
             ),
           }));
 
-          await chatService.markAsSeen(activeConversationId);
+          await chatService.markAsSeen(
+            normalizedActiveConversationId,
+            activeGroupChannelId || undefined,
+          );
         } catch (error) {
           console.error("Error calling markAsSeen in store", error);
         }
@@ -1045,7 +1589,394 @@ export const useChatStore = create<ChatState>()(
           return false;
         }
       },
-      createGroupJoinLink: async (conversationId, expiresInHours = 24) => {
+      createGroupChannel: async (
+        conversationId,
+        name,
+        description,
+        options,
+      ) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return {
+            ok: false,
+            message: "Only group conversations support channels",
+          };
+        }
+
+        const normalizedName = String(name || "")
+          .replaceAll(/\s+/g, " ")
+          .trim();
+
+        if (normalizedName.length < 2 || normalizedName.length > 40) {
+          return {
+            ok: false,
+            message: "Channel name must be 2-40 characters",
+          };
+        }
+
+        try {
+          const result = await chatService.createGroupChannel(conversationId, {
+            name: normalizedName,
+            description: String(description || "").trim(),
+            categoryId: options?.categoryId ?? null,
+            sendRoles: options?.sendRoles,
+            position: options?.position,
+          });
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                items: [],
+                hasMore: false,
+                nextCursor: undefined,
+                channelId:
+                  result?.channel?.channelId ||
+                  normalizeGroupChannelId(
+                    result?.conversation?.group?.activeChannelId,
+                  ),
+              },
+            },
+          }));
+
+          await get().fetchMessages(conversationId);
+
+          return {
+            ok: true,
+          };
+        } catch (error: unknown) {
+          console.error("Failed to create group channel", error);
+
+          const apiMessage =
+            typeof error === "object" &&
+            error !== null &&
+            "response" in error &&
+            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
+              "string"
+              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+              : null;
+
+          return {
+            ok: false,
+            message: apiMessage || "Failed to create group channel",
+          };
+        }
+      },
+      updateGroupChannel: async (conversationId, channelId, payload) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return {
+            ok: false,
+            message: "Only group conversations support channels",
+          };
+        }
+
+        try {
+          const result = await chatService.updateGroupChannel(
+            conversationId,
+            channelId,
+            payload,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          return { ok: true };
+        } catch (error: unknown) {
+          const apiMessage = extractApiErrorMessage(error);
+
+          return {
+            ok: false,
+            message: apiMessage || "Failed to update group channel",
+          };
+        }
+      },
+      deleteGroupChannel: async (conversationId, channelId) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return {
+            ok: false,
+            message: "Only group conversations support channels",
+          };
+        }
+
+        try {
+          const result = await chatService.deleteGroupChannel(
+            conversationId,
+            channelId,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          const refreshedConversation = get().conversations.find(
+            (conversationItem) => conversationItem._id === conversationId,
+          );
+          const activeChannelId =
+            resolveConversationActiveGroupChannelId(refreshedConversation) ||
+            DEFAULT_GROUP_CHANNEL_ID;
+
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                items: [],
+                hasMore: false,
+                nextCursor: undefined,
+                channelId: activeChannelId,
+              },
+            },
+          }));
+
+          await get().fetchMessages(conversationId, activeChannelId);
+
+          return { ok: true };
+        } catch (error: unknown) {
+          const apiMessage = extractApiErrorMessage(error);
+
+          return {
+            ok: false,
+            message: apiMessage || "Failed to delete group channel",
+          };
+        }
+      },
+      reorderGroupChannels: async (conversationId, channelIds) => {
+        try {
+          const result = await chatService.reorderGroupChannels(
+            conversationId,
+            channelIds,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          return true;
+        } catch (error) {
+          console.error("Failed to reorder group channels", error);
+          return false;
+        }
+      },
+      createGroupChannelCategory: async (conversationId, name, position) => {
+        const normalizedName = String(name || "")
+          .replaceAll(/\s+/g, " ")
+          .trim();
+
+        if (normalizedName.length < 2 || normalizedName.length > 40) {
+          return {
+            ok: false,
+            message: "Category name must be 2-40 characters",
+          };
+        }
+
+        try {
+          const result = await chatService.createGroupChannelCategory(
+            conversationId,
+            {
+              name: normalizedName,
+              position,
+            },
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          return { ok: true };
+        } catch (error: unknown) {
+          const apiMessage = extractApiErrorMessage(error);
+          return {
+            ok: false,
+            message: apiMessage || "Failed to create category",
+          };
+        }
+      },
+      updateGroupChannelCategory: async (conversationId, categoryId, payload) => {
+        try {
+          const result = await chatService.updateGroupChannelCategory(
+            conversationId,
+            categoryId,
+            payload,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          return { ok: true };
+        } catch (error: unknown) {
+          const apiMessage = extractApiErrorMessage(error);
+          return {
+            ok: false,
+            message: apiMessage || "Failed to update category",
+          };
+        }
+      },
+      deleteGroupChannelCategory: async (conversationId, categoryId) => {
+        try {
+          const result = await chatService.deleteGroupChannelCategory(
+            conversationId,
+            categoryId,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          return { ok: true };
+        } catch (error: unknown) {
+          const apiMessage = extractApiErrorMessage(error);
+          return {
+            ok: false,
+            message: apiMessage || "Failed to delete category",
+          };
+        }
+      },
+      reorderGroupChannelCategories: async (conversationId, categoryIds) => {
+        try {
+          const result = await chatService.reorderGroupChannelCategories(
+            conversationId,
+            categoryIds,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          return true;
+        } catch (error) {
+          console.error("Failed to reorder channel categories", error);
+          return false;
+        }
+      },
+      fetchGroupChannelAnalytics: async (conversationId, days = 7) => {
+        try {
+          const result = await chatService.fetchGroupChannelAnalytics(
+            conversationId,
+            days,
+          );
+
+          return {
+            ok: true,
+            analytics: result.analytics,
+          };
+        } catch (error: unknown) {
+          const apiMessage = extractApiErrorMessage(error);
+
+          return {
+            ok: false,
+            message: apiMessage || "Failed to fetch channel analytics",
+          };
+        }
+      },
+      setGroupActiveChannel: async (conversationId, channelId) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return false;
+        }
+
+        const normalizedChannelId = normalizeGroupChannelId(channelId);
+        const previousBucket = get().messages[conversationId];
+
+        get().updateConversation({
+          _id: conversationId,
+          group: {
+            ...previousConversation.group,
+            activeChannelId: normalizedChannelId,
+          },
+        });
+
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [conversationId]: {
+              items: [],
+              hasMore: false,
+              nextCursor: undefined,
+              channelId: normalizedChannelId,
+            },
+          },
+        }));
+
+        try {
+          const result = await chatService.setGroupActiveChannel(
+            conversationId,
+            normalizedChannelId,
+          );
+
+          if (result?.conversation?._id) {
+            get().updateConversation({
+              ...result.conversation,
+              _id: result.conversation._id,
+            });
+          }
+
+          await get().fetchMessages(conversationId, normalizedChannelId);
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+
+          set((state) => {
+            const nextMessages = { ...state.messages };
+
+            if (previousBucket) {
+              nextMessages[conversationId] = previousBucket;
+            } else {
+              delete nextMessages[conversationId];
+            }
+
+            return {
+              messages: nextMessages,
+            };
+          });
+
+          console.error("Failed to switch group channel", error);
+          return false;
+        }
+      },
+      createGroupJoinLink: async (conversationId, options) => {
         const previousConversation = get().conversations.find(
           (conversationItem) => conversationItem._id === conversationId,
         );
@@ -1058,9 +1989,18 @@ export const useChatStore = create<ChatState>()(
         }
 
         try {
+          const expiresInHours =
+            typeof options?.expiresInHours === "number"
+              ? options.expiresInHours
+              : 24;
+
           const result = await chatService.createGroupJoinLink(
             conversationId,
-            expiresInHours,
+            {
+              expiresInHours,
+              maxUses: options?.maxUses ?? null,
+              oneTime: Boolean(options?.oneTime),
+            },
           );
 
           if (result?.conversation?._id) {
@@ -1076,9 +2016,17 @@ export const useChatStore = create<ChatState>()(
             ok: true,
             joinLinkUrl: result.joinLink?.url,
             expiresAt: result.joinLink?.expiresAt,
+            maxUses: result.joinLink?.maxUses ?? null,
+            oneTime: Boolean(result.joinLink?.oneTime),
+            remainingUses: result.joinLink?.remainingUses ?? null,
           };
         } catch (error: unknown) {
           console.error("Failed to create group join link", error);
+          const rateLimit = handleRateLimitError(error, {
+            fallbackScope: "chat:join-link",
+            actionLabel: "Join link actions are cooling down",
+          });
+
           const apiMessage =
             typeof error === "object" &&
             error !== null &&
@@ -1087,6 +2035,16 @@ export const useChatStore = create<ChatState>()(
               "string"
               ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
               : null;
+
+          if (rateLimit.handled) {
+            return {
+              ok: false,
+              message:
+                apiMessage ||
+                `Please retry in ${rateLimit.info?.retryAfterSeconds || 1}s`,
+              retryAfterSeconds: rateLimit.info?.retryAfterSeconds,
+            };
+          }
 
           return {
             ok: false,
@@ -1163,6 +2121,11 @@ export const useChatStore = create<ChatState>()(
           };
         } catch (error: unknown) {
           console.error("Failed to join group by link", error);
+          const rateLimit = handleRateLimitError(error, {
+            fallbackScope: "chat:join-link",
+            actionLabel: "Joining groups too fast",
+          });
+
           const apiMessage =
             typeof error === "object" &&
             error !== null &&
@@ -1171,6 +2134,16 @@ export const useChatStore = create<ChatState>()(
               "string"
               ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
               : null;
+
+          if (rateLimit.handled) {
+            return {
+              ok: false,
+              message:
+                apiMessage ||
+                `Please retry in ${rateLimit.info?.retryAfterSeconds || 1}s`,
+              retryAfterSeconds: rateLimit.info?.retryAfterSeconds,
+            };
+          }
 
           return {
             ok: false,
@@ -1305,6 +2278,17 @@ export const useChatStore = create<ChatState>()(
       // Only persist the active conversation ID to restore focus on reload.
       // Conversations list is always fetched fresh from the server to avoid stale data.
       partialize: (state) => ({ activeConversationId: state.activeConversationId }),
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState as Partial<ChatState> | undefined) || {};
+
+        return {
+          ...currentState,
+          ...persisted,
+          // Keep a runtime-selected conversation when hydration finishes later.
+          activeConversationId:
+            currentState.activeConversationId || persisted.activeConversationId || null,
+        };
+      },
     },
   ),
 );

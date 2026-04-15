@@ -17,7 +17,39 @@ export interface GroupJoinLinkMeta {
   expiresAt: string;
   createdAt?: string | null;
   createdBy?: string | null;
+  maxUses?: number | null;
+  useCount?: number;
+  remainingUses?: number | null;
+  oneTime?: boolean;
+  revokedAt?: string | null;
+  revokedBy?: string | null;
+  revokeReason?: string | null;
   isActive: boolean;
+}
+
+export type GroupChannelRole = "owner" | "admin" | "member";
+
+export interface GroupChannelPermissions {
+  sendRoles: GroupChannelRole[];
+}
+
+export interface GroupChannelCategoryMeta {
+  categoryId: string;
+  name: string;
+  position: number;
+  createdAt?: string | null;
+  createdBy?: string | null;
+}
+
+export interface GroupChannelMeta {
+  channelId: string;
+  name: string;
+  description?: string;
+  categoryId?: string | null;
+  position?: number;
+  permissions?: GroupChannelPermissions;
+  createdAt?: string | null;
+  createdBy?: string | null;
 }
 
 export interface Group {
@@ -25,6 +57,10 @@ export interface Group {
   createdBy: string;
   adminIds?: string[];
   announcementOnly?: boolean;
+  channels?: GroupChannelMeta[];
+  channelCategories?: GroupChannelCategoryMeta[];
+  channelUnreadCounts?: Record<string, Record<string, number>>;
+  activeChannelId?: string;
   joinLink?: GroupJoinLinkMeta | null;
 }
 
@@ -42,11 +78,48 @@ export interface LastMessage {
   _id: string;
   content: string;
   createdAt: string;
+  groupChannelId?: string | null;
   sender: {
     _id: string;
     displayName: string;
     avatarUrl?: string | null;
   };
+}
+
+export interface GroupChannelAnalyticsItem {
+  channelId: string;
+  name: string;
+  categoryId?: string | null;
+  position?: number;
+  currentMessages: number;
+  previousMessages: number;
+  messageGrowthPercent: number;
+  currentActiveSenders: number;
+  senderRetentionPercent: number;
+}
+
+export interface GroupChannelAnalyticsSummary {
+  membersCount: number;
+  currentMessages: number;
+  previousMessages: number;
+  currentActiveMembers: number;
+  previousActiveMembers: number;
+  currentRetentionRate: number;
+  previousRetentionRate: number;
+  retentionDelta: number;
+}
+
+export interface GroupChannelAnalyticsPayload {
+  conversationId: string;
+  rangeDays: number;
+  period: {
+    currentStart: string;
+    currentEnd: string;
+    previousStart: string;
+    previousEnd: string;
+  };
+  summary: GroupChannelAnalyticsSummary;
+  channels: GroupChannelAnalyticsItem[];
 }
 
 export interface Conversation {
@@ -75,6 +148,7 @@ export interface Reaction {
 export interface Message {
   _id: string;
   conversationId: string;
+  groupChannelId?: string | null;
   senderId: string;
   senderDisplayName?: string;
   content: string | null;

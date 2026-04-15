@@ -74,6 +74,9 @@ type SetStateVisibleReactors = Dispatch<SetStateAction<VisibleReactors>>;
 
 const MIN_REACTION_PENDING_MS = 180;
 const MIN_COMMENT_PENDING_MS = 220;
+const MIN_ENGAGEMENT_PENDING_MS = 140;
+const MIN_COMMENTS_TOGGLE_PENDING_MS = 120;
+const MIN_SHARE_PENDING_MS = 180;
 
 const waitForMinimumPending = async (startedAt: number, minimumMs: number) => {
   const elapsedMs = Date.now() - startedAt;
@@ -668,6 +671,9 @@ const SocialPostCard = ({
   const [likePending, setLikePending] = useState(false);
   const [manualReactionPickerOpen, setManualReactionPickerOpen] = useState(false);
   const [commentPending, setCommentPending] = useState(false);
+  const [engagementPending, setEngagementPending] = useState(false);
+  const [commentsTogglePending, setCommentsTogglePending] = useState(false);
+  const [sharePending, setSharePending] = useState(false);
   const [commentSort, setCommentSort] = useState<"relevant" | "newest">(commentsSortBy || "relevant");
   const [deleteIntent, setDeleteIntent] = useState<DeleteIntent | null>(null);
   const [deletePending, setDeletePending] = useState(false);
@@ -965,13 +971,28 @@ const SocialPostCard = ({
   };
 
   const toggleComments = async () => {
-    await toggleCommentsForPost({
-      showComments,
-      setShowComments,
-      comments,
-      onFetchComments,
-      postId: post._id,
-    });
+    if (commentsTogglePending) {
+      return;
+    }
+
+    const pendingStartedAt = Date.now();
+    setCommentsTogglePending(true);
+
+    try {
+      await toggleCommentsForPost({
+        showComments,
+        setShowComments,
+        comments,
+        onFetchComments,
+        postId: post._id,
+      });
+    } finally {
+      await waitForMinimumPending(
+        pendingStartedAt,
+        MIN_COMMENTS_TOGGLE_PENDING_MS,
+      );
+      setCommentsTogglePending(false);
+    }
   };
 
   const submitComment = useCallback(async (parentCommentId?: string | null) => {
@@ -1013,20 +1034,44 @@ const SocialPostCard = ({
   };
 
   const openEngagement = async () => {
-    await runOpenEngagementFlow({
-      setShowEngagement,
-      engagement,
-      onFetchEngagement,
-      postId: post._id,
-    });
+    if (engagementPending) {
+      return;
+    }
+
+    const pendingStartedAt = Date.now();
+    setEngagementPending(true);
+
+    try {
+      await runOpenEngagementFlow({
+        setShowEngagement,
+        engagement,
+        onFetchEngagement,
+        postId: post._id,
+      });
+    } finally {
+      await waitForMinimumPending(pendingStartedAt, MIN_ENGAGEMENT_PENDING_MS);
+      setEngagementPending(false);
+    }
   };
 
   const sharePost = async () => {
-    await runSharePostFlow({
-      postId: post._id,
-      authorDisplayName: post.authorId.displayName,
-      caption: post.caption,
-    });
+    if (sharePending) {
+      return;
+    }
+
+    const pendingStartedAt = Date.now();
+    setSharePending(true);
+
+    try {
+      await runSharePostFlow({
+        postId: post._id,
+        authorDisplayName: post.authorId.displayName,
+        caption: post.caption,
+      });
+    } finally {
+      await waitForMinimumPending(pendingStartedAt, MIN_SHARE_PENDING_MS);
+      setSharePending(false);
+    }
   };
 
   const composerAvatarUrl = user?.avatarUrl || "";
@@ -1099,9 +1144,34 @@ const SocialPostCard = ({
   };
 
   const deleteActionLabel = getDeleteActionLabel(deleteIntent, deletePending);
+  const interactionBusy =
+    likePending ||
+    commentPending ||
+    deletePending ||
+    commentsTogglePending ||
+    sharePending ||
+    engagementPending;
+  let interactionStatusLabel = "";
+  if (deletePending) {
+    interactionStatusLabel = "Deleting item";
+  } else if (commentPending) {
+    interactionStatusLabel = "Sending comment";
+  } else if (likePending) {
+    interactionStatusLabel = "Updating reaction";
+  } else if (commentsTogglePending) {
+    interactionStatusLabel = "Loading comments";
+  } else if (engagementPending) {
+    interactionStatusLabel = "Opening engagement details";
+  } else if (sharePending) {
+    interactionStatusLabel = "Preparing share";
+  }
 
   return (
-    <article className="social-card social-post-card p-4">
+    <article className="social-card social-post-card p-4" aria-busy={interactionBusy}>
+      <p className="sr-only" aria-live="polite">
+        {interactionStatusLabel}
+      </p>
+
       <PostCardHeader
         post={post}
         postedAgo={postedAgo}
@@ -1145,6 +1215,9 @@ const SocialPostCard = ({
         topReactionTypes={topReactionTypes}
         reactionSummaryLabel={reactionSummaryLabel}
         displayCommentsCount={displayCommentsCount}
+        engagementPending={engagementPending}
+        commentsPending={commentsTogglePending}
+        sharePending={sharePending}
         onOpenEngagement={() => {
           void openEngagement();
         }}
@@ -1179,6 +1252,7 @@ const SocialPostCard = ({
         composerDisplayName={composerDisplayName}
         commentDraft={commentDraft}
         commentPending={commentPending}
+        commentActionsDisabled={commentPending || deletePending}
         commentSort={commentSort}
         rootsWithReplies={rootsWithReplies}
         collapsedRepliesByRoot={collapsedRepliesByRoot}

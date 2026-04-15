@@ -1,4 +1,4 @@
-import { Bell, Home, MessageCircle, Search, Sparkles, Users2, Zap } from "lucide-react";
+import { Bell, Home, MessageCircle, Search, Users2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { useChatStore } from "@/stores/useChatStore";
-import { useSocialMotionStore } from "@/stores/useSocialMotionStore";
 
 interface SocialTopHeaderProps {
   title: string;
@@ -29,11 +28,6 @@ const SocialTopHeader = ({
     useNotificationStore();
   const { windows, focusWindow } = useMiniChatDockStore();
   const { setActiveConversation } = useChatStore();
-  const { preset: motionPreset } = useSocialMotionStore();
-
-  const motionLabel =
-    motionPreset === "premium-strict" ? "Premium strict" : "Responsive strict";
-  const MotionPresetIcon = motionPreset === "premium-strict" ? Sparkles : Zap;
 
   const effectiveSearchValue =
     typeof searchValue === "string" ? searchValue : localSearchValue;
@@ -116,9 +110,8 @@ const SocialTopHeader = ({
         <div className="social-topbar-brand">
           <div className="social-topbar-title-row">
             <h1 className="social-topbar-title">{title}</h1>
-            <span className="social-topbar-mode-badge" title={`Motion mode: ${motionLabel}`}>
-              <MotionPresetIcon className="h-3 w-3" aria-hidden="true" />
-              <span>{motionLabel}</span>
+            <span className="social-topbar-context-pill" title="Enterprise workspace">
+              Workspace
             </span>
           </div>
           {subtitle ? (

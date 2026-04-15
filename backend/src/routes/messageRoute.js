@@ -4,6 +4,7 @@ import {
   sendDirectMessage,
   sendGroupMessage,
   reactToMessage,
+  undoSendMessage,
   unsendMessage,
   removeMessageForMe,
   editMessage,
@@ -22,6 +23,7 @@ const router = express.Router();
 router.post("/direct", checkFriendship, sendDirectMessage);
 router.post("/group", checkGroupMembership, sendGroupMessage);
 router.post("/:messageId/react", reactToMessage);
+router.delete("/:messageId/undo", undoSendMessage);
 router.delete("/:messageId/unsend", unsendMessage);
 router.delete("/:messageId/remove-for-me", removeMessageForMe);
 router.put("/:messageId/edit", editMessage);

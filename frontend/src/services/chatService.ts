@@ -1,5 +1,11 @@
 import api from "@/lib/axios";
-import type { Conversation, ConversationResponse, Message } from "@/types/chat";
+import type {
+  Conversation,
+  ConversationResponse,
+  GroupChannelAnalyticsPayload,
+  GroupChannelRole,
+  Message,
+} from "@/types/chat";
 
 interface FetchMessageProps {
   messages: Message[];
@@ -26,7 +32,32 @@ interface GroupJoinLinkResponse {
     url: string;
     expiresAt: string;
     expiresInHours: number;
+    maxUses?: number | null;
+    oneTime?: boolean;
+    remainingUses?: number | null;
   };
+}
+
+interface GroupChannelMutationResponse {
+  conversation: Partial<Conversation>;
+  channel?: {
+    channelId: string;
+    name: string;
+    description?: string;
+    categoryId?: string | null;
+    permissions?: {
+      sendRoles: GroupChannelRole[];
+    };
+  };
+  category?: {
+    categoryId: string;
+    name: string;
+    position: number;
+  };
+}
+
+interface GroupChannelAnalyticsResponse {
+  analytics: GroupChannelAnalyticsPayload;
 }
 
 const pageLimit = 50;
@@ -37,11 +68,25 @@ export const chatService = {
     return res.data;
   },
 
-  async fetchMessages(id: string, cursor?: string): Promise<FetchMessageProps> {
+  async fetchConversationsWithCookieSession(): Promise<ConversationResponse> {
+    const res = await api.get("/conversations", {
+      headers: {
+        "x-moji-skip-auth": "1",
+      },
+    });
+    return res.data;
+  },
+
+  async fetchMessages(
+    id: string,
+    cursor?: string,
+    channelId?: string,
+  ): Promise<FetchMessageProps> {
     const res = await api.get(`/conversations/${id}/messages`, {
       params: {
         limit: pageLimit,
         ...(cursor ? { cursor } : {}),
+        ...(channelId ? { channelId } : {}),
       },
     });
 
@@ -71,18 +116,28 @@ export const chatService = {
     content: string = "",
     imgUrl?: string,
     replyTo?: string,
+    groupChannelId?: string,
   ) {
     const res = await api.post("/messages/group", {
       conversationId,
       content,
       imgUrl,
       replyTo,
+      groupChannelId,
     });
     return res.data.message;
   },
 
-  async markAsSeen(conversationId: string) {
-    const res = await api.patch(`/conversations/${conversationId}/seen`);
+  async markAsSeen(conversationId: string, channelId?: string) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/seen`,
+      {},
+      {
+        params: {
+          ...(channelId ? { channelId } : {}),
+        },
+      },
+    );
     return res.data;
   },
 
@@ -115,9 +170,140 @@ export const chatService = {
     return res.data.conversation as Partial<Conversation>;
   },
 
-  async createGroupJoinLink(conversationId: string, expiresInHours = 24) {
+  async createGroupChannel(
+    conversationId: string,
+    payload: {
+      name: string;
+      description?: string;
+      categoryId?: string | null;
+      sendRoles?: GroupChannelRole[];
+      position?: number;
+    },
+  ) {
+    const res = await api.post(
+      `/conversations/${conversationId}/channels`,
+      payload,
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async updateGroupChannel(
+    conversationId: string,
+    channelId: string,
+    payload: {
+      name?: string;
+      description?: string;
+      categoryId?: string | null;
+      sendRoles?: GroupChannelRole[];
+    },
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/channels/${channelId}`,
+      payload,
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async deleteGroupChannel(conversationId: string, channelId: string) {
+    const res = await api.delete(
+      `/conversations/${conversationId}/channels/${channelId}`,
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async reorderGroupChannels(conversationId: string, channelIds: string[]) {
+    const res = await api.patch(`/conversations/${conversationId}/channels/reorder`, {
+      channelIds,
+    });
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async createGroupChannelCategory(
+    conversationId: string,
+    payload: {
+      name: string;
+      position?: number;
+    },
+  ) {
+    const res = await api.post(
+      `/conversations/${conversationId}/channel-categories`,
+      payload,
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async updateGroupChannelCategory(
+    conversationId: string,
+    categoryId: string,
+    payload: {
+      name?: string;
+    },
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/channel-categories/${categoryId}`,
+      payload,
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async deleteGroupChannelCategory(conversationId: string, categoryId: string) {
+    const res = await api.delete(
+      `/conversations/${conversationId}/channel-categories/${categoryId}`,
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async reorderGroupChannelCategories(
+    conversationId: string,
+    categoryIds: string[],
+  ) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/channel-categories/reorder`,
+      { categoryIds },
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async fetchGroupChannelAnalytics(conversationId: string, days = 7) {
+    const res = await api.get(`/conversations/${conversationId}/channel-analytics`, {
+      params: { days },
+    });
+
+    return res.data as GroupChannelAnalyticsResponse;
+  },
+
+  async setGroupActiveChannel(conversationId: string, channelId: string) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/active-channel`,
+      { channelId },
+    );
+
+    return res.data as GroupChannelMutationResponse;
+  },
+
+  async createGroupJoinLink(
+    conversationId: string,
+    options?: {
+      expiresInHours?: number;
+      maxUses?: number | null;
+      oneTime?: boolean;
+    },
+  ) {
+    const expiresInHours =
+      typeof options?.expiresInHours === "number" ? options.expiresInHours : 24;
+
     const res = await api.post(`/conversations/${conversationId}/join-link`, {
       expiresInHours,
+      maxUses: options?.maxUses ?? null,
+      oneTime: Boolean(options?.oneTime),
     });
     return res.data as GroupJoinLinkResponse;
   },
@@ -153,6 +339,11 @@ export const chatService = {
 
   async unsendMessage(messageId: string) {
     const res = await api.delete(`/messages/${messageId}/unsend`);
+    return res.data as MessageSyncResponse;
+  },
+
+  async undoSendMessage(messageId: string) {
+    const res = await api.delete(`/messages/${messageId}/undo`);
     return res.data as MessageSyncResponse;
   },
 

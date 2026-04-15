@@ -12,6 +12,41 @@ const JoinGroupLinkPage = () => {
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("Joining group...");
+  const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
+  const [attemptVersion, setAttemptVersion] = useState(0);
+
+  useEffect(() => {
+    if (retryAfterSeconds <= 0) {
+      return;
+    }
+
+    const timer = globalThis.setInterval(() => {
+      setRetryAfterSeconds((previous) => (previous > 1 ? previous - 1 : 0));
+    }, 1000);
+
+    return () => {
+      globalThis.clearInterval(timer);
+    };
+  }, [retryAfterSeconds]);
+
+  useEffect(() => {
+    if (status !== "error") {
+      return;
+    }
+
+    if (retryAfterSeconds > 0) {
+      setMessage(`Too many join attempts. Retry in ${retryAfterSeconds}s.`);
+      return;
+    }
+
+    setMessage((previous) => {
+      if (previous.startsWith("Too many join attempts.")) {
+        return "You can retry joining now.";
+      }
+
+      return previous;
+    });
+  }, [retryAfterSeconds, status]);
 
   useEffect(() => {
     const token = String(searchParams.get("token") || "").trim();
@@ -19,6 +54,7 @@ const JoinGroupLinkPage = () => {
     if (!conversationId || !token) {
       setStatus("error");
       setMessage("Invalid join link. Please ask for a new invite.");
+      setRetryAfterSeconds(0);
       return;
     }
 
@@ -27,6 +63,7 @@ const JoinGroupLinkPage = () => {
     const run = async () => {
       setStatus("loading");
       setMessage("Joining group...");
+      setRetryAfterSeconds(0);
 
       const result = await joinGroupByLink(conversationId, token);
       if (cancelled) {
@@ -35,11 +72,18 @@ const JoinGroupLinkPage = () => {
 
       if (!result.ok) {
         setStatus("error");
+        if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
+          setRetryAfterSeconds(result.retryAfterSeconds);
+          setMessage(`Too many join attempts. Retry in ${result.retryAfterSeconds}s.`);
+          return;
+        }
+
         setMessage(result.message || "Could not join this group.");
         return;
       }
 
       setStatus("success");
+      setRetryAfterSeconds(0);
       setMessage(
         result.alreadyJoined
           ? "You are already in this group."
@@ -56,7 +100,7 @@ const JoinGroupLinkPage = () => {
     return () => {
       cancelled = true;
     };
-  }, [conversationId, joinGroupByLink, navigate, searchParams]);
+  }, [attemptVersion, conversationId, joinGroupByLink, navigate, searchParams]);
 
   return (
     <div className="min-h-[100svh] bg-background text-foreground flex items-center justify-center px-4">
@@ -78,6 +122,17 @@ const JoinGroupLinkPage = () => {
 
         {status === "error" && (
           <div className="mt-6 flex items-center gap-2">
+            <Button
+              type="button"
+              onClick={() => {
+                setAttemptVersion((previous) => previous + 1);
+              }}
+              disabled={retryAfterSeconds > 0}
+            >
+              {retryAfterSeconds > 0
+                ? `Retry in ${retryAfterSeconds}s`
+                : "Retry join"}
+            </Button>
             <Button type="button" variant="outline" onClick={() => navigate("/")}>
               Back to chat
             </Button>

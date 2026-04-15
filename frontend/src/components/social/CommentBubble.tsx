@@ -11,6 +11,7 @@ interface CommentBubbleProps {
   onReport?: () => void;
   canDelete?: boolean;
   canReport?: boolean;
+  actionsDisabled?: boolean;
   onOpenProfile?: (userId: string) => void;
 }
 
@@ -23,6 +24,7 @@ const CommentBubble = ({
   onReport,
   canDelete,
   canReport,
+  actionsDisabled = false,
   onOpenProfile,
 }: CommentBubbleProps) => {
   const authorName = comment.authorId.displayName || "User";
@@ -72,11 +74,17 @@ const CommentBubble = ({
         </div>
 
         <div className="social-comment-actions mt-1 flex items-center gap-2 px-1 text-xs">
-          <button type="button" className="font-semibold hover:underline">
-            Like
-          </button>
+          <span className="font-semibold text-muted-foreground/70">Like</span>
           <span>|</span>
-          <button type="button" className="font-semibold hover:underline" onClick={onReply}>
+          <button
+            type="button"
+            className={cn(
+              "font-semibold hover:underline",
+              actionsDisabled && "cursor-not-allowed opacity-60 no-underline",
+            )}
+            onClick={onReply}
+            disabled={actionsDisabled}
+          >
             Reply
           </button>
           {canDelete && (
@@ -84,8 +92,12 @@ const CommentBubble = ({
               <span>|</span>
               <button
                 type="button"
-                className="social-comment-delete font-semibold hover:underline"
+                className={cn(
+                  "social-comment-delete font-semibold hover:underline",
+                  actionsDisabled && "cursor-not-allowed opacity-60 no-underline",
+                )}
                 onClick={onDelete}
+                disabled={actionsDisabled}
                 data-testid={`delete-comment-${comment._id}`}
               >
                 Delete
@@ -97,8 +109,12 @@ const CommentBubble = ({
               <span>|</span>
               <button
                 type="button"
-                className="font-semibold hover:underline"
+                className={cn(
+                  "font-semibold hover:underline",
+                  actionsDisabled && "cursor-not-allowed opacity-60 no-underline",
+                )}
                 onClick={onReport}
+                disabled={actionsDisabled}
               >
                 Report
               </button>

@@ -7,13 +7,13 @@ const TermsPage = () => {
 
   return (
     <div className="min-h-[100svh] bg-background text-foreground flex items-center justify-center px-4 py-8">
-      <article className="w-full max-w-2xl rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm">
+      <article className="w-full max-w-2xl rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm" aria-labelledby="terms-page-title">
         <div className="mb-4 flex items-center gap-2 text-primary">
           <FileText className="size-4" />
           <p className="text-xs font-semibold uppercase tracking-wide">Legal</p>
         </div>
 
-        <h1 className="text-2xl font-semibold tracking-tight">Terms of Service</h1>
+        <h1 id="terms-page-title" className="text-2xl font-semibold tracking-tight">Terms of Service</h1>
         <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           By using this app, you agree to use the service responsibly, respect
           other users, and avoid abusive or unlawful behavior. Features and

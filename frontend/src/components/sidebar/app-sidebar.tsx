@@ -19,7 +19,7 @@ import {
   User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
@@ -39,10 +39,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { sidebarLayout } = useThemeStore();
   const { user } = useAuthStore();
   const { unreadSocialCount } = useNotificationStore();
-  const { convoLoading } = useChatStore();
+  const { convoLoading, conversations } = useChatStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const unreadChatCount = useMemo(() => {
+    const currentUserId = String(user?._id || "");
+    if (!currentUserId) {
+      return 0;
+    }
+
+    return (conversations || []).reduce((sum, conversation) => {
+      const unread = Number(conversation.unreadCounts?.[currentUserId] || 0);
+      return sum + (Number.isFinite(unread) ? unread : 0);
+    }, 0);
+  }, [conversations, user?._id]);
 
   const isCompact = sidebarLayout === "compact";
 
@@ -60,6 +72,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       icon: MessageSquare,
       to: "/",
       isActive: location.pathname === "/",
+      badge: unreadChatCount,
     },
     {
       key: "feed",
@@ -135,7 +148,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         Moji
                       </h1>
                       <p className="text-[10px] text-muted-foreground/60 leading-none mt-0.5">
-                        Messaging
+                        Workspace
                       </p>
                     </div>
                   </div>
@@ -187,7 +200,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       >
                         <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
                         {(item.badge ?? 0) > 0 && (
-                          <span className="absolute top-1 right-1 flex size-[7px] rounded-full bg-primary" />
+                          <span className="absolute -top-0.5 -right-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
+                            {item.badge && item.badge > 99 ? "99+" : item.badge}
+                          </span>
                         )}
                       </button>
                     );
@@ -215,7 +230,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <Icon className={cn("size-[18px]", item.isActive && "stroke-[2.2]")} />
                         <span className="leading-none">{item.label}</span>
                         {(item.badge ?? 0) > 0 && (
-                          <span className="absolute top-1.5 right-2 flex size-[7px] rounded-full bg-primary" />
+                          <span className="absolute top-1 right-1.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
+                            {item.badge && item.badge > 99 ? "99+" : item.badge}
+                          </span>
                         )}
                       </button>
                     );

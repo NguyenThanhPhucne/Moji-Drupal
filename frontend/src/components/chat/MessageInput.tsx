@@ -68,6 +68,40 @@ const CharRing = ({ value, max }: { value: number; max: number }) => {
   );
 };
 
+const resolveActiveGroupChannelName = (conversation: Conversation) => {
+  const activeChannelId = String(
+    conversation.group?.activeChannelId ||
+      conversation.group?.channels?.[0]?.channelId ||
+      "general",
+  );
+
+  return (
+    conversation.group?.channels?.find(
+      (channel) => String(channel.channelId) === activeChannelId,
+    )?.name || "general"
+  );
+};
+
+const resolveComposerPlaceholder = ({
+  canSendInCurrentMode,
+  isGroupConversation,
+  activeGroupChannelName,
+}: {
+  canSendInCurrentMode: boolean;
+  isGroupConversation: boolean;
+  activeGroupChannelName: string;
+}) => {
+  if (!canSendInCurrentMode) {
+    return "Only admins can send messages in announcement mode";
+  }
+
+  if (isGroupConversation) {
+    return `Message #${activeGroupChannelName}`;
+  }
+
+  return "Aa";
+};
+
 const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const { user } = useAuthStore();
   const {
@@ -141,9 +175,17 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     isGroupConversation &&
     ((selectedConvo.group?.adminIds || []).map(String).includes(myUserId) ||
       isGroupCreator);
+  const activeGroupChannelName = isGroupConversation
+    ? resolveActiveGroupChannelName(selectedConvo)
+    : "";
   const announcementOnly =
     isGroupConversation && Boolean(selectedConvo.group?.announcementOnly);
   const canSendInCurrentMode = !announcementOnly || isGroupAdmin;
+  const composerPlaceholder = resolveComposerPlaceholder({
+    canSendInCurrentMode,
+    isGroupConversation,
+    activeGroupChannelName,
+  });
   const sendDisabled = !hasSendable || !canSendInCurrentMode;
   const sendButtonToneClass = (() => {
     if (canSendInCurrentMode && hasSendable) {
@@ -271,11 +313,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             onKeyDown={handleKeyDown}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder={
-              canSendInCurrentMode
-                ? "Aa"
-                : "Only admins can send messages in announcement mode"
-            }
+            placeholder={composerPlaceholder}
             aria-label="Message input"
             disabled={!canSendInCurrentMode}
             className={cn(

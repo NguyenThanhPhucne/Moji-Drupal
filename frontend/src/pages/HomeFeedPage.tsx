@@ -15,6 +15,7 @@ import PostComposerSkeleton from "@/components/skeleton/PostComposerSkeleton";
 import SocialPostSkeleton from "@/components/skeleton/SocialPostSkeleton";
 import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { cn, getStaggerEnterClass } from "@/lib/utils";
@@ -35,6 +36,8 @@ const FEED_TAB_OFFSET: Record<FeedTab, number> = {
   photos: 100,
   text: 200,
 };
+
+const FEED_TABS: FeedTab[] = ["all", "photos", "text"];
 
 const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES = Object.freeze({
   muted: false,
@@ -237,6 +240,52 @@ const HomeFeedPage = () => {
   const isInitialHomeLoading = loadingHome && homeFeed.length === 0;
   const isLoadingMore = loadingHome && homeFeed.length > 0;
   const EmptyStateIcon = emptyStateConfig.icon;
+  const hasActiveFeedFilters =
+    feedTab !== "all" || searchQuery.trim().length > 0;
+  const feedTabButtonRefs = useRef<Record<FeedTab, HTMLButtonElement | null>>({
+    all: null,
+    photos: null,
+    text: null,
+  });
+
+  const handleFeedFilterKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = FEED_TABS.indexOf(feedTab);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      const nextIndex = (currentIndex + 1) % FEED_TABS.length;
+      const nextTab = FEED_TABS[nextIndex];
+      setFeedTab(nextTab);
+      feedTabButtonRefs.current[nextTab]?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      const nextIndex =
+        (currentIndex - 1 + FEED_TABS.length) % FEED_TABS.length;
+      const nextTab = FEED_TABS[nextIndex];
+      setFeedTab(nextTab);
+      feedTabButtonRefs.current[nextTab]?.focus();
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      setFeedTab("all");
+      feedTabButtonRefs.current.all?.focus();
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      setFeedTab("text");
+      feedTabButtonRefs.current.text?.focus();
+    }
+  };
 
   useEffect(() => {
     if (!accessToken || !user) return;
@@ -369,7 +418,10 @@ const HomeFeedPage = () => {
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <section className="social-feed-column min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
+            <section
+              className="social-feed-column min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
+              aria-label="Home feed timeline"
+            >
               <div className={getStaggerEnterClass(0)}>
                 <SocialTopHeader
                   title="Home"
@@ -409,14 +461,29 @@ const HomeFeedPage = () => {
               )}
 
               {/* ── Filter bar with live count badges ────────────────────── */}
-              <div className={cn("social-feed-filter-wrap", getStaggerEnterClass(4))}>
-                <div className="social-filter-tabs-container">
-                  {(["all", "photos", "text"] as const).map((tab) => (
+              <div className={cn("social-feed-filter-wrap social-feed-filter-sticky", getStaggerEnterClass(4))}>
+                <div
+                  className="social-filter-tabs-container"
+                  data-testid="feed-filter-tabs"
+                  role="tablist"
+                  aria-label="Feed filters"
+                  onKeyDown={handleFeedFilterKeyDown}
+                >
+                  {FEED_TABS.map((tab) => (
                     <button
                       key={tab}
                       type="button"
                       className="social-filter-tab micro-tap-chip"
                       data-active={feedTab === tab}
+                      ref={(element) => {
+                        feedTabButtonRefs.current[tab] = element;
+                      }}
+                      role="tab"
+                      id={`feed-tab-${tab}`}
+                      data-testid={`feed-tab-${tab}`}
+                      aria-controls="home-feed-results"
+                      aria-selected={feedTab === tab}
+                      tabIndex={feedTab === tab ? 0 : -1}
                       onClick={() => setFeedTab(tab)}
                     >
                       <span className="relative z-10 flex items-center">
@@ -450,7 +517,13 @@ const HomeFeedPage = () => {
               </div>
 
               {/* ── Post list ─────────────────────────────────────────────── */}
-              <div className="social-feed-post-stack space-stack-md">
+              <div
+                id="home-feed-results"
+                className="social-feed-post-stack space-stack-md"
+                role="region"
+                aria-live="polite"
+                aria-label={`Feed results for ${FEED_TAB_LABELS[feedTab]}`}
+              >
                 {isInitialHomeLoading && <SocialPostSkeleton count={3} />}
 
                 {filteredHomeFeed.map((post, index) => (
@@ -485,7 +558,7 @@ const HomeFeedPage = () => {
 
                 {/* ── Contextual empty state ──────────────────────────────── */}
                 {!loadingHome && filteredHomeFeed.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+                  <div className="enterprise-empty-state enterprise-empty-state--feed px-6 text-center">
                     <div className="size-14 rounded-full bg-muted/50 flex items-center justify-center mb-3 ring-4 ring-background shadow-sm">
                       <EmptyStateIcon className="h-6 w-6 text-primary" />
                     </div>
@@ -495,6 +568,19 @@ const HomeFeedPage = () => {
                     <p className="text-[12px] text-muted-foreground/70 mt-1 max-w-[240px]">
                       {emptyStateConfig.subtitle}
                     </p>
+                    {hasActiveFeedFilters && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setFeedTab("all");
+                        }}
+                      >
+                        Reset filters
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -509,7 +595,10 @@ const HomeFeedPage = () => {
             </section>
 
             {/* ── Right rail ──────────────────────────────────────────────── */}
-            <div className="social-feed-right-column order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5">
+            <div
+              className="social-feed-right-column social-feed-right-column--enterprise order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5"
+              aria-label="Feed insights and quick actions"
+            >
               {/* Notifications first — always visible above the fold */}
               <SocialNotificationsPanel
                 notifications={notifications}

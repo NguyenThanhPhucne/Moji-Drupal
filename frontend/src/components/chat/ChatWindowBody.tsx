@@ -102,8 +102,24 @@ const ChatWindowBody = () => {
   }, [allMessages, activeConversationId]);
   const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
   const selectedConvo = conversations.find(
-    (c) => c._id === activeConversationId,
+    (c) => String(c._id) === String(activeConversationId || ""),
   );
+  const activeGroupChannelId =
+    selectedConvo?.type === "group"
+      ? String(
+          selectedConvo.group?.activeChannelId ||
+            selectedConvo.group?.channels?.[0]?.channelId ||
+            "general",
+        )
+      : "";
+  const activeGroupChannelName =
+    selectedConvo?.type === "group"
+      ? (
+          selectedConvo.group?.channels?.find(
+            (channel) => String(channel.channelId) === activeGroupChannelId,
+          )?.name || "general"
+        )
+      : "";
 
   const myId = useMemo(
     () => (currentUser?._id ? String(currentUser._id) : ""),
@@ -358,7 +374,7 @@ const ChatWindowBody = () => {
   // Reset stale typing indicator when switching conversations.
   useEffect(() => {
     setTypingUsers({});
-  }, [activeConversationId]);
+  }, [activeConversationId, activeGroupChannelId]);
 
   useEffect(() => {
     const interval = globalThis.setInterval(() => {
@@ -564,7 +580,9 @@ const ChatWindowBody = () => {
         <div>
           <p className="text-[14px] font-semibold text-foreground/80">No messages yet</p>
           <p className="text-[12px] text-muted-foreground/60 mt-0.5">
-            Be the first to say something!
+            {selectedConvo.type === "group"
+              ? `Be the first to post in #${activeGroupChannelName}`
+              : "Be the first to say something!"}
           </p>
         </div>
       </div>
@@ -573,7 +591,7 @@ const ChatWindowBody = () => {
 
   return (
     <div
-      key={`chat-conversation-${activeConversationId}`}
+      key={`chat-conversation-${activeConversationId}-${activeGroupChannelId || "direct"}`}
       className="conversation-fade p-2 bg-background h-full flex flex-col overflow-hidden relative"
     >
       {selectedConvo.type === "group" && pinnedMessage && (

@@ -53,6 +53,7 @@ export function SignupForm({
           <form
             className="p-6 md:p-8 lg:p-10"
             onSubmit={handleSubmit(onSubmit)}
+            noValidate
           >
             <div className="space-stack-lg">
               {/* header - logo */}
@@ -78,11 +79,13 @@ export function SignupForm({
                     id="lastname"
                     placeholder="Last name"
                     autoComplete="family-name"
+                    aria-invalid={Boolean(errors.lastname)}
+                    aria-describedby={errors.lastname ? "signup-lastname-error" : undefined}
                     {...register("lastname")}
                   />
 
                   {errors.lastname && (
-                    <p className="error-message">{errors.lastname.message}</p>
+                    <p id="signup-lastname-error" className="error-message" role="alert">{errors.lastname.message}</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -94,10 +97,12 @@ export function SignupForm({
                     id="firstname"
                     placeholder="First name"
                     autoComplete="given-name"
+                    aria-invalid={Boolean(errors.firstname)}
+                    aria-describedby={errors.firstname ? "signup-firstname-error" : undefined}
                     {...register("firstname")}
                   />
                   {errors.firstname && (
-                    <p className="error-message">{errors.firstname.message}</p>
+                    <p id="signup-firstname-error" className="error-message" role="alert">{errors.firstname.message}</p>
                   )}
                 </div>
               </div>
@@ -112,10 +117,12 @@ export function SignupForm({
                   id="username"
                   placeholder="Username"
                   autoComplete="username"
+                  aria-invalid={Boolean(errors.username)}
+                  aria-describedby={errors.username ? "signup-username-error" : undefined}
                   {...register("username")}
                 />
                 {errors.username && (
-                  <p className="error-message">{errors.username.message}</p>
+                  <p id="signup-username-error" className="error-message" role="alert">{errors.username.message}</p>
                 )}
               </div>
 
@@ -129,10 +136,12 @@ export function SignupForm({
                   id="email"
                   placeholder="name@company.com"
                   autoComplete="email"
+                  aria-invalid={Boolean(errors.email)}
+                  aria-describedby={errors.email ? "signup-email-error" : undefined}
                   {...register("email")}
                 />
                 {errors.email && (
-                  <p className="error-message">{errors.email.message}</p>
+                  <p id="signup-email-error" className="error-message" role="alert">{errors.email.message}</p>
                 )}
               </div>
 
@@ -146,10 +155,12 @@ export function SignupForm({
                   id="password"
                   placeholder="Create a password"
                   autoComplete="new-password"
+                  aria-invalid={Boolean(errors.password)}
+                  aria-describedby={errors.password ? "signup-password-error" : undefined}
                   {...register("password")}
                 />
                 {errors.password && (
-                  <p className="error-message">{errors.password.message}</p>
+                  <p id="signup-password-error" className="error-message" role="alert">{errors.password.message}</p>
                 )}
               </div>
 

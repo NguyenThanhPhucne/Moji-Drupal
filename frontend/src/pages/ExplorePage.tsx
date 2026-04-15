@@ -99,6 +99,7 @@ const ExplorePage = () => {
       })
       .sort((a, b) => computeExploreScore(b) - computeExploreScore(a));
   }, [activeTag, exploreFeed, postComments, searchQuery, user?._id]);
+  const hasActiveFilters = Boolean(activeTag || searchQuery.trim());
 
   useEffect(() => {
     if (!accessToken || !user) {
@@ -123,7 +124,10 @@ const ExplorePage = () => {
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
-            <section className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
+            <section
+              className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
+              aria-label="Explore feed timeline"
+            >
               <div className={getStaggerEnterClass(0)}>
                 <SocialTopHeader
                   title="Explore"
@@ -179,6 +183,9 @@ const ExplorePage = () => {
                         Use the top search bar to filter posts by caption.
                       </span>
                     )}
+                    <span className="social-explore-filter-hint ml-auto" aria-live="polite">
+                      {filteredExploreFeed.length} result{filteredExploreFeed.length === 1 ? "" : "s"}
+                    </span>
                   </div>
                 </div>
 
@@ -229,6 +236,24 @@ const ExplorePage = () => {
                     </div>
                     <p className="social-text-main text-sm font-semibold">No posts match your current filters.</p>
                     <p className="social-text-muted mt-1 text-xs">Try another keyword or clear the current filter.</p>
+                    {hasActiveFilters && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3"
+                        onClick={() => {
+                          setActiveTag("");
+                          setSearchQuery("");
+                          setSearchParams((params) => {
+                            const next = new URLSearchParams(params);
+                            next.delete("tag");
+                            return next;
+                          });
+                        }}
+                      >
+                        Reset filters
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -250,7 +275,10 @@ const ExplorePage = () => {
               )}
             </section>
 
-            <div className="social-feed-right-column order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5">
+            <div
+              className="social-feed-right-column social-feed-right-column--enterprise order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5"
+              aria-label="Explore insights and quick actions"
+            >
               <div className="xl:hidden">
                 <SocialRightRail compact explorePosts={exploreFeed} />
               </div>

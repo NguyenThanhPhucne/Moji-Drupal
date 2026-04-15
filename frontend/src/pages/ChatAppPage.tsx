@@ -3,10 +3,106 @@ import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import GlobalSearchDialog from "@/components/chat/GlobalSearchDialog";
 import { useChatStore } from "@/stores/useChatStore";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 const ChatAppPage = () => {
-  const { activeConversationId, setActiveConversation } = useChatStore();
+  const {
+    activeConversationId,
+    setActiveConversation,
+    conversations,
+    convoLoading,
+    fetchConversations,
+  } = useChatStore();
+  const didBootstrapConversationsRef = useRef(false);
+  const activeSyncAttemptRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (didBootstrapConversationsRef.current || convoLoading) {
+      return;
+    }
+
+    if (conversations.length > 0) {
+      didBootstrapConversationsRef.current = true;
+      return;
+    }
+
+    didBootstrapConversationsRef.current = true;
+    fetchConversations().catch((error) => {
+      console.error("Error bootstrapping conversations on chat route:", error);
+    });
+  }, [conversations.length, convoLoading, fetchConversations]);
+
+  useEffect(() => {
+    const targetConversationId = String(activeConversationId || "").trim();
+
+    if (!targetConversationId || convoLoading) {
+      activeSyncAttemptRef.current = null;
+      return;
+    }
+
+    const hasTargetConversation = conversations.some(
+      (conversation) => String(conversation._id) === targetConversationId,
+    );
+
+    if (hasTargetConversation) {
+      activeSyncAttemptRef.current = null;
+      return;
+    }
+
+    if (activeSyncAttemptRef.current === targetConversationId) {
+      return;
+    }
+
+    activeSyncAttemptRef.current = targetConversationId;
+
+    fetchConversations()
+      .catch((error) => {
+        console.error(
+          "Error syncing active conversation on chat route:",
+          error,
+        );
+      })
+      .finally(() => {
+        if (activeSyncAttemptRef.current === targetConversationId) {
+          activeSyncAttemptRef.current = null;
+        }
+      });
+  }, [activeConversationId, conversations, convoLoading, fetchConversations]);
+
+  useEffect(() => {
+    if (convoLoading || conversations.length === 0) {
+      return;
+    }
+
+    const targetConversationId = String(activeConversationId || "").trim();
+    const hasTargetConversation = conversations.some(
+      (conversation) => String(conversation._id) === targetConversationId,
+    );
+
+    if (hasTargetConversation) {
+      return;
+    }
+
+    const fallbackConversation =
+      conversations.find(
+        (conversation) =>
+          conversation.type === "group" &&
+          (conversation.group?.channels?.length || 0) > 0,
+      ) ||
+      conversations.find((conversation) => conversation.type === "group") ||
+      conversations[0];
+
+    if (!fallbackConversation?._id) {
+      return;
+    }
+
+    const fallbackConversationId = String(fallbackConversation._id);
+    if (!fallbackConversationId || fallbackConversationId === targetConversationId) {
+      return;
+    }
+
+    setActiveConversation(fallbackConversationId);
+  }, [activeConversationId, conversations, convoLoading, setActiveConversation]);
 
   useEffect(() => {
     const handleOutsideCardClick = (event: MouseEvent) => {

@@ -96,6 +96,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
   const [isRefreshingContacts, setIsRefreshingContacts] = useState(false);
   const [openingContactId, setOpeningContactId] = useState<string | null>(null);
   const deferredContactQuery = useDeferredValue(contactQuery);
+  const contactButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     if (!hasFetchedRef.current && !loading) {
@@ -153,6 +154,10 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
       return displayName.includes(normalizedQuery) || username.includes(normalizedQuery);
     });
   }, [contacts, deferredContactQuery, presenceFilter]);
+  const visibleContacts = useMemo(
+    () => filteredContacts.slice(0, 24),
+    [filteredContacts],
+  );
 
   const trendingTags = useMemo(() => {
     const counter = new Map<string, number>();
@@ -228,6 +233,56 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
     });
   };
 
+  const handleContactItemKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    friendId: string,
+  ) => {
+    const currentIndex = visibleContacts.findIndex(
+      (contact) => String(contact._id) === String(friendId),
+    );
+
+    if (currentIndex < 0) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      const nextIndex = Math.min(visibleContacts.length - 1, currentIndex + 1);
+      const nextId = String(visibleContacts[nextIndex]?._id || "");
+      if (nextId) {
+        contactButtonRefs.current[nextId]?.focus();
+      }
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      const nextIndex = Math.max(0, currentIndex - 1);
+      const nextId = String(visibleContacts[nextIndex]?._id || "");
+      if (nextId) {
+        contactButtonRefs.current[nextId]?.focus();
+      }
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      const firstId = String(visibleContacts[0]?._id || "");
+      if (firstId) {
+        contactButtonRefs.current[firstId]?.focus();
+      }
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      const lastId = String(visibleContacts[visibleContacts.length - 1]?._id || "");
+      if (lastId) {
+        contactButtonRefs.current[lastId]?.focus();
+      }
+    }
+  };
+
   let railClassName = "social-right-rail sticky top-0 h-screen overflow-y-auto beautiful-scrollbar space-y-4 pr-1 pl-0.5";
   if (compact) {
     railClassName = "social-right-rail space-y-3";
@@ -240,7 +295,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
   const hasContactsFilter = presenceFilter !== "all" || deferredContactQuery.trim().length > 0;
 
   return (
-    <aside className={railClassName}>
+    <aside className={railClassName} aria-label="Social right rail">
       <section className="social-rail-card social-motion-card">
         <div className="social-rail-head">
           <span className="social-rail-title">
@@ -365,7 +420,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
           ) : null}
 
           {!showContactsLoading && filteredContacts.length > 0 ? (
-            filteredContacts.slice(0, 24).map((friend) => {
+            visibleContacts.map((friend) => {
               const friendId = String(friend._id);
               const isOpening = openingContactId === friendId;
 
@@ -373,10 +428,14 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
               <button
                 key={friend._id}
                 type="button"
+                ref={(element) => {
+                  contactButtonRefs.current[friendId] = element;
+                }}
                 disabled={Boolean(openingContactId)}
                 aria-busy={isOpening}
                 className="social-contact-item social-contact-hover social-scale-bounce-hover w-full text-left disabled:cursor-wait disabled:opacity-70"
                 onClick={() => handleContactClick(friend)}
+                onKeyDown={(event) => handleContactItemKeyDown(event, friendId)}
               >
                 <div className="relative flex-shrink-0">
                   <UserAvatar

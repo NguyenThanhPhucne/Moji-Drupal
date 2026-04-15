@@ -27,11 +27,19 @@ const api = axios.create({
 // Interceptor: reroute requests to Drupal when needed.
 api.interceptors.request.use((config) => {
   const { accessToken } = useAuthStore.getState();
+  const requestUrl = String(config.url || "");
+  const isRefreshRequest = requestUrl.includes("/auth/refresh");
+  const skipAuthHeader =
+    String(config.headers?.["x-moji-skip-auth"] || "") === "1";
+
+  if (skipAuthHeader) {
+    delete config.headers["x-moji-skip-auth"];
+  }
 
   // Keep all auth routes on Node.js for now.
 
   // Attach access token for Node.js chat routes.
-  if (accessToken) {
+  if (accessToken && !isRefreshRequest && !skipAuthHeader) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
 

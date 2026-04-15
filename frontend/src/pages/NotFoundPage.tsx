@@ -9,13 +9,13 @@ const NotFoundPage = () => {
 
   return (
     <div className="min-h-[100svh] bg-background text-foreground flex items-center justify-center px-4 py-8">
-      <article className="w-full max-w-lg rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm">
+      <article className="w-full max-w-lg rounded-2xl border border-border/70 bg-card/80 p-6 shadow-sm" aria-labelledby="not-found-title">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-primary">
           <SearchX className="size-3.5" />
           <span className="text-[11px] font-semibold uppercase tracking-wide">404</span>
         </div>
 
-        <h1 className="text-2xl font-semibold tracking-tight">Page Not Found</h1>
+        <h1 id="not-found-title" className="text-2xl font-semibold tracking-tight">Page Not Found</h1>
         <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
           The page you requested does not exist or was moved to a new path.
         </p>

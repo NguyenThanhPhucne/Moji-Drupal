@@ -39,6 +39,11 @@ const RATE_LIMIT_RULES = {
     windowMs: 30 * 1000,
     maxEvents: 20,
   },
+  "chat:join-link": {
+    profile: "chat",
+    windowMs: 30 * 1000,
+    maxEvents: 12,
+  },
   "social:post": {
     profile: "social",
     windowMs: 60 * 1000,
@@ -107,6 +112,9 @@ export const registerRateLimitHit = ({
       allowed: true,
       retryAfterSeconds: 0,
       remaining: Infinity,
+      limit: Infinity,
+      windowMs: 0,
+      scope: normalizedScope,
       profile,
     };
   }
@@ -147,6 +155,9 @@ export const registerRateLimitHit = ({
       allowed: false,
       retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
       remaining: 0,
+      limit: rule.maxEvents,
+      windowMs: rule.windowMs,
+      scope: normalizedScope,
       profile,
     };
   }
@@ -163,6 +174,52 @@ export const registerRateLimitHit = ({
     allowed: true,
     retryAfterSeconds: 0,
     remaining: Math.max(0, rule.maxEvents - nextTimestamps.length),
+    limit: rule.maxEvents,
+    windowMs: rule.windowMs,
+    scope: normalizedScope,
     profile,
   };
+};
+
+export const applyRateLimitHeaders = (res, rateLimitResult) => {
+  if (!res || !rateLimitResult) {
+    return;
+  }
+
+  const scope = String(rateLimitResult.scope || "").trim();
+  const profile = String(rateLimitResult.profile || "").trim();
+  const remaining = Number(rateLimitResult.remaining);
+  const limit = Number(rateLimitResult.limit);
+  const retryAfterSeconds = Number(rateLimitResult.retryAfterSeconds);
+  const windowMs = Number(rateLimitResult.windowMs);
+
+  if (scope) {
+    res.set("X-RateLimit-Scope", scope);
+  }
+
+  if (profile && profile !== "none") {
+    res.set("X-RateLimit-Profile", profile);
+  }
+
+  if (Number.isFinite(limit)) {
+    res.set("X-RateLimit-Limit", String(Math.max(0, Math.floor(limit))));
+  }
+
+  if (Number.isFinite(remaining)) {
+    res.set(
+      "X-RateLimit-Remaining",
+      String(Math.max(0, Math.floor(remaining))),
+    );
+  }
+
+  if (Number.isFinite(windowMs) && windowMs > 0) {
+    res.set(
+      "X-RateLimit-Window-Seconds",
+      String(Math.max(1, Math.ceil(windowMs / 1000))),
+    );
+  }
+
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    res.set("Retry-After", String(Math.max(1, Math.ceil(retryAfterSeconds))));
+  }
 };

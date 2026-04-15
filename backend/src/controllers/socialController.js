@@ -8,7 +8,10 @@ import Notification from "../models/Notification.js";
 import ContentReport from "../models/ContentReport.js";
 import { v2 as cloudinary } from "cloudinary";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
-import { registerRateLimitHit } from "../utils/antiSpam.js";
+import {
+  applyRateLimitHeaders,
+  registerRateLimitHit,
+} from "../utils/antiSpam.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 import { io } from "../socket/index.js";
 
@@ -17,6 +20,29 @@ const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"]
 const normalizeReactionType = (input) => {
   const normalized = String(input || "like").trim().toLowerCase();
   return SUPPORTED_REACTION_TYPES.includes(normalized) ? normalized : "like";
+};
+
+const parseRequestedReactionType = (input) => {
+  const normalized = String(input || "").trim().toLowerCase();
+
+  if (!normalized) {
+    return {
+      valid: true,
+      value: "like",
+    };
+  }
+
+  if (!SUPPORTED_REACTION_TYPES.includes(normalized)) {
+    return {
+      valid: false,
+      value: null,
+    };
+  }
+
+  return {
+    valid: true,
+    value: normalized,
+  };
 };
 
 const buildReactionSummary = (reactions) => {
@@ -645,10 +671,14 @@ export const createPost = async (req, res) => {
       userId,
       scope: "social:post",
     });
+    applyRateLimitHeaders(res, antiSpamResult);
 
     if (!antiSpamResult.allowed) {
       return res.status(429).json({
         message: `You're posting too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+        retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+        rateLimitScope: antiSpamResult.scope,
+        rateLimitProfile: antiSpamResult.profile,
       });
     }
 
@@ -1181,14 +1211,25 @@ export const toggleLikePost = async (req, res) => {
       scope: "social:reaction",
       postId,
     });
+    applyRateLimitHeaders(res, antiSpamResult);
 
     if (!antiSpamResult.allowed) {
       return res.status(429).json({
         message: `You're reacting too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+        retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+        rateLimitScope: antiSpamResult.scope,
+        rateLimitProfile: antiSpamResult.profile,
       });
     }
 
-    const nextReactionType = normalizeReactionType(req.body?.reaction || "like");
+    const parsedReactionType = parseRequestedReactionType(req.body?.reaction);
+    if (!parsedReactionType.valid || !parsedReactionType.value) {
+      return res.status(400).json({
+        message: `Reaction type is invalid. Allowed types: ${SUPPORTED_REACTION_TYPES.join(", ")}.`,
+      });
+    }
+
+    const nextReactionType = parsedReactionType.value;
     let updateOutcome = null;
     try {
       updateOutcome = await updatePostReactionWithCAS({
@@ -1276,10 +1317,14 @@ export const addComment = async (req, res) => {
       scope: "social:comment",
       postId,
     });
+    applyRateLimitHeaders(res, antiSpamResult);
 
     if (!antiSpamResult.allowed) {
       return res.status(429).json({
         message: `You're commenting too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+        retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+        rateLimitScope: antiSpamResult.scope,
+        rateLimitProfile: antiSpamResult.profile,
       });
     }
 

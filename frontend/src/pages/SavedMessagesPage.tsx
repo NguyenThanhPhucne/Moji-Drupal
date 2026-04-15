@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import {
@@ -101,6 +101,15 @@ const SAVED_PRESETS: Array<{
   { key: "text", label: "Text", Icon: MessageSquare },
 ];
 
+const SAVED_PRESET_KEYS: SavedPreset[] = [
+  "all",
+  "recent",
+  "tagged",
+  "notes",
+  "images",
+  "text",
+];
+
 const SavedMessagesPage = () => { // NOSONAR
   const navigate = useNavigate();
   const { bookmarks, pagination, fetchBookmarks, updateBookmarkMeta, loading } =
@@ -132,6 +141,15 @@ const SavedMessagesPage = () => { // NOSONAR
   const [bulkTagToRemove, setBulkTagToRemove] = useState("");
   const [bulkCollectionToRemove, setBulkCollectionToRemove] = useState("");
   const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const presetButtonRefs = useRef<Record<SavedPreset, HTMLButtonElement | null>>({
+    all: null,
+    recent: null,
+    tagged: null,
+    notes: null,
+    images: null,
+    text: null,
+  });
+  const savedResultsRegionId = "saved-messages-results";
 
   useEffect(() => {
     fetchConversations();
@@ -377,6 +395,45 @@ const SavedMessagesPage = () => { // NOSONAR
     });
   }, [bookmarks, savedPreset, searchQuery, collectionFilter]);
 
+  const handlePresetKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = SAVED_PRESET_KEYS.indexOf(savedPreset);
+    if (currentIndex < 0) {
+      return;
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      const nextIndex = (currentIndex + 1) % SAVED_PRESET_KEYS.length;
+      const nextPreset = SAVED_PRESET_KEYS[nextIndex];
+      setSavedPreset(nextPreset);
+      presetButtonRefs.current[nextPreset]?.focus();
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      const nextIndex =
+        (currentIndex - 1 + SAVED_PRESET_KEYS.length) % SAVED_PRESET_KEYS.length;
+      const nextPreset = SAVED_PRESET_KEYS[nextIndex];
+      setSavedPreset(nextPreset);
+      presetButtonRefs.current[nextPreset]?.focus();
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      setSavedPreset("all");
+      presetButtonRefs.current.all?.focus();
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      setSavedPreset("text");
+      presetButtonRefs.current.text?.focus();
+    }
+  };
+
   const openConversation = useCallback(async (conversationId: string) => {
     setActiveConversation(conversationId);
     await fetchMessages(conversationId);
@@ -545,10 +602,13 @@ const SavedMessagesPage = () => { // NOSONAR
 
       <div className="saved-page-shell">
         <div className="app-shell-panel p-3 md:p-4">
-          <div className="mx-auto w-full max-w-3xl flex flex-col gap-5 min-h-0">
+          <div
+            className="mx-auto w-full max-w-3xl flex flex-col gap-5 min-h-0"
+            aria-label="Saved messages workspace"
+          >
 
             {/* ── Hero Header ─────────────────────────────────────────── */}
-            <div className="saved-hero-header">
+            <section className="saved-hero-header" aria-labelledby="saved-messages-title">
               <div className="saved-hero-bg" aria-hidden="true" />
               <div className="relative flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-4">
@@ -557,7 +617,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   </div>
                   <div>
                     <p className="saved-hero-eyebrow">Bookmarks</p>
-                    <h1 className="saved-hero-title">Saved Messages</h1>
+                    <h1 id="saved-messages-title" className="saved-hero-title">Saved Messages</h1>
                     <p className="saved-hero-subtitle">
                       {savedItemsSubtitle}
                     </p>
@@ -569,6 +629,8 @@ const SavedMessagesPage = () => { // NOSONAR
                     variant="outline"
                     size="sm"
                     onClick={() => setShowFilters((f) => !f)}
+                    aria-expanded={showFilters}
+                    aria-controls="saved-filter-panel"
                     className={cn(
                       "saved-filter-toggle-btn gap-2",
                       showFilters && "saved-filter-toggle-btn--active",
@@ -581,16 +643,17 @@ const SavedMessagesPage = () => { // NOSONAR
                   <BackToChatCard onClick={() => navigate("/")} />
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* ── Search bar + pinned query ───────────────────────────── */}
-            <div className="flex flex-wrap items-center gap-2">
+            <section className="flex flex-wrap items-center gap-2" aria-label="Saved message search and pinned query">
               <div className="relative saved-search-focus-ring rounded-xl flex-1 min-w-[220px]">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground/60 pointer-events-none" />
                 <Input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search saved messages, notes, tags, collections..."
+                  aria-label="Search saved messages"
                   className="saved-search-input pl-10 h-10 rounded-xl"
                 />
                 {searchQuery && (
@@ -612,6 +675,7 @@ const SavedMessagesPage = () => { // NOSONAR
                 onClick={pinCurrentQuery}
                 className="gap-1.5"
                 title="Pin current query"
+                aria-label="Pin current query"
               >
                 <Pin className="size-3.5" />
                 Pin query
@@ -625,6 +689,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   onClick={isPinnedQueryActive ? clearPinnedQuery : applyPinnedQuery}
                   className="gap-1.5"
                   title={isPinnedQueryActive ? "Clear pinned query" : "Apply pinned query"}
+                  aria-label={isPinnedQueryActive ? "Clear pinned query" : "Apply pinned query"}
                 >
                   {isPinnedQueryActive ? (
                     <>
@@ -639,7 +704,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   )}
                 </Button>
               )}
-            </div>
+            </section>
 
             {pinnedQuery && (
               <p className="text-xs text-muted-foreground/75">
@@ -673,7 +738,12 @@ const SavedMessagesPage = () => { // NOSONAR
               )}
             </div>
 
-            <div className="saved-preset-strip">
+            <div
+              className="saved-preset-strip"
+              role="tablist"
+              aria-label="Saved message smart views"
+              onKeyDown={handlePresetKeyDown}
+            >
               {SAVED_PRESETS.map(({ key, label, Icon }) => (
                 <button
                   key={key}
@@ -681,6 +751,14 @@ const SavedMessagesPage = () => { // NOSONAR
                   onClick={() => setSavedPreset(key)}
                   data-active={savedPreset === key}
                   className="saved-preset-chip micro-tap-chip"
+                  ref={(element) => {
+                    presetButtonRefs.current[key] = element;
+                  }}
+                  role="tab"
+                  id={`saved-preset-tab-${key}`}
+                  aria-controls={savedResultsRegionId}
+                  aria-selected={savedPreset === key}
+                  tabIndex={savedPreset === key ? 0 : -1}
                 >
                   <Icon className="size-3.5" />
                   <span>{label}</span>
@@ -720,7 +798,12 @@ const SavedMessagesPage = () => { // NOSONAR
 
             {/* ── Collapsible Filter Panel ─────────────────────────────── */}
             {showFilters && (
-              <div className="saved-filter-panel animate-in fade-in slide-in-from-top-2 duration-200">
+              <div
+                id="saved-filter-panel"
+                className="saved-filter-panel animate-in fade-in slide-in-from-top-2 duration-200"
+                role="region"
+                aria-label="Saved message filters"
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div className="flex flex-col gap-1">
                     <label htmlFor="saved-filter-conversation" className="saved-filter-label">Conversation</label>
@@ -795,12 +878,18 @@ const SavedMessagesPage = () => { // NOSONAR
             {/* ── Selection Toolbar ─────────────────────────────────────── */}
             {filteredBookmarks.length > 0 && (
               <div className="saved-select-toolbar">
+                <p className="sr-only" aria-live="polite">
+                  {unreadCount > 0
+                    ? `${unreadCount} bookmarks selected`
+                    : "No bookmarks selected"}
+                </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={unreadCount === filteredBookmarks.length ? clearSelection : selectAllVisible}
                     className="saved-select-all-btn micro-tap-chip"
                     aria-label="Toggle select all"
+                    aria-pressed={unreadCount === filteredBookmarks.length && unreadCount > 0}
                   >
                     {unreadCount === filteredBookmarks.length && unreadCount > 0
                       ? <CheckSquare className="size-4 text-primary" />
@@ -818,6 +907,8 @@ const SavedMessagesPage = () => { // NOSONAR
                         type="button"
                         onClick={() => setShowBulkPanel((v) => !v)}
                         className="saved-select-all-btn micro-tap-chip gap-1.5"
+                        aria-expanded={showBulkPanel}
+                        aria-controls="saved-bulk-panel"
                       >
                         <Tags className="size-3.5" />
                         <span className="text-xs">Bulk metadata</span>
@@ -844,7 +935,12 @@ const SavedMessagesPage = () => { // NOSONAR
 
                 {/* Bulk tag sub-panel */}
                 {showBulkPanel && unreadCount > 0 && (
-                  <div className="saved-bulk-panel animate-in fade-in slide-in-from-top-1 duration-150 space-y-3">
+                  <div
+                    id="saved-bulk-panel"
+                    className="saved-bulk-panel animate-in fade-in slide-in-from-top-1 duration-150 space-y-3"
+                    role="region"
+                    aria-label="Bulk bookmark metadata actions"
+                  >
                     <div>
                       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
                         <Tag className="size-3.5" />
@@ -899,7 +995,13 @@ const SavedMessagesPage = () => { // NOSONAR
             )}
 
             {/* ── Bookmark list ───────────────────────────────────────── */}
-            <div className="flex flex-col gap-3 min-h-0">
+            <section
+              id={savedResultsRegionId}
+              className="flex flex-col gap-3 min-h-0"
+              role="region"
+              aria-live="polite"
+              aria-label={`Saved results in ${savedPreset} view`}
+            >
               {loading && bookmarks.length === 0 && (
                 <SavedMessageSkeleton count={4} />
               )}
@@ -935,7 +1037,7 @@ const SavedMessagesPage = () => { // NOSONAR
                 const isImage = Boolean(bookmark.messageId.imgUrl);
 
                 return (
-                  <div
+                  <article
                     key={bookmark._id}
                     className={cn(
                       "saved-bookmark-card bookmark-card-hover",
@@ -943,6 +1045,7 @@ const SavedMessagesPage = () => { // NOSONAR
                       index < 6 && `animate-in fade-in slide-in-from-bottom-2 duration-300`,
                     )}
                     style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
+                    aria-label={`Saved message from ${conversationName}`}
                   >
                     {/* Card top row */}
                     <div className="flex items-start justify-between gap-3">
@@ -953,6 +1056,7 @@ const SavedMessagesPage = () => { // NOSONAR
                           onClick={() => toggleBookmarkSelection(bookmark._id)}
                           className="micro-tap-chip mt-0.5 flex-shrink-0 transition-transform duration-150 hover:scale-110"
                           aria-label={isSelected ? "Deselect" : "Select"}
+                          aria-pressed={isSelected}
                         >
                           {isSelected
                             ? <CheckSquare className="size-4 text-primary" />
@@ -999,6 +1103,7 @@ const SavedMessagesPage = () => { // NOSONAR
                         variant="ghost"
                         onClick={() => openConversation(bookmark.messageId.conversationId)}
                         className="flex-shrink-0 gap-1.5 text-xs h-7 px-2.5 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
+                        aria-label={`Open ${conversationName} conversation`}
                       >
                         <ExternalLink className="size-3.5" />
                         Open
@@ -1056,18 +1161,21 @@ const SavedMessagesPage = () => { // NOSONAR
                           onChange={(e) => setTagDraft(e.target.value)}
                           placeholder="tags, separated, by comma"
                           className="h-8 text-sm"
+                          aria-label="Edit bookmark tags"
                         />
                         <Input
                           value={collectionDraft}
                           onChange={(e) => setCollectionDraft(e.target.value)}
                           placeholder="collections, separated, by comma"
                           className="h-8 text-sm"
+                          aria-label="Edit bookmark collections"
                         />
                         <textarea
                           value={noteDraft}
                           onChange={(e) => setNoteDraft(e.target.value)}
                           className="min-h-[64px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
                           placeholder="Personal note…"
+                          aria-label="Edit bookmark note"
                         />
                         <div className="flex items-center gap-2">
                           <Button type="button" size="sm" onClick={saveBookmarkMeta} className="h-7 px-3">
@@ -1110,7 +1218,7 @@ const SavedMessagesPage = () => { // NOSONAR
                         </div>
                       </div>
                     )}
-                  </div>
+                  </article>
                 );
               })}
 
@@ -1125,13 +1233,14 @@ const SavedMessagesPage = () => { // NOSONAR
                       variant="outline"
                       onClick={loadMoreBookmarks}
                       className="h-9 rounded-xl px-6 text-sm border-border/60 hover:border-border hover:bg-muted/50"
+                      aria-label="Load more saved messages"
                     >
                       Load more
                     </Button>
                   )}
                 </div>
               )}
-            </div>
+            </section>
           </div>
         </div>
       </div>

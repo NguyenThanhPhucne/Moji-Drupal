@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
@@ -128,7 +128,7 @@ const ProfilePage = () => { // NOSONAR
     setPhotosDialogOpen(true);
   };
 
-  const goPrevPhoto = () => {
+  const goPrevPhoto = useCallback(() => {
     if (!profilePhotos.length) {
       return;
     }
@@ -136,9 +136,9 @@ const ProfilePage = () => { // NOSONAR
     setActivePhotoIndex((current) =>
       current === 0 ? profilePhotos.length - 1 : current - 1,
     );
-  };
+  }, [profilePhotos.length]);
 
-  const goNextPhoto = () => {
+  const goNextPhoto = useCallback(() => {
     if (!profilePhotos.length) {
       return;
     }
@@ -146,7 +146,39 @@ const ProfilePage = () => { // NOSONAR
     setActivePhotoIndex((current) =>
       current === profilePhotos.length - 1 ? 0 : current + 1,
     );
-  };
+  }, [profilePhotos.length]);
+
+  const handlePhotoDialogKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!hasPhotoDialogContent) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goPrevPhoto();
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goNextPhoto();
+        return;
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault();
+        setActivePhotoIndex(0);
+        return;
+      }
+
+      if (event.key === "End") {
+        event.preventDefault();
+        setActivePhotoIndex(Math.max(0, profilePhotos.length - 1));
+      }
+    },
+    [goNextPhoto, goPrevPhoto, hasPhotoDialogContent, profilePhotos.length],
+  );
 
   return (
     <SidebarProvider>
@@ -154,11 +186,18 @@ const ProfilePage = () => { // NOSONAR
 
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
-          <section className="social-profile-layout social-profile-frame min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg">
+          <section
+            className="social-profile-layout social-profile-frame min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
+            aria-label="Profile content"
+          >
             {loadingProfile && !profile ? (
               <ProfileHeaderSkeleton />
             ) : (
-              <div className={`social-surface-card social-profile-hero overflow-hidden ${getStaggerEnterClass(0)}`}>
+              <div
+                className={`social-surface-card social-profile-hero overflow-hidden ${getStaggerEnterClass(0)}`}
+                role="region"
+                aria-label="Profile header"
+              >
                 <div className="social-profile-cover-gradient social-profile-cover relative h-[350px] w-full">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.7),transparent_55%)]" />
                   <div className="social-profile-hero-atmosphere" aria-hidden="true">
@@ -253,7 +292,10 @@ const ProfilePage = () => { // NOSONAR
               </div>
             ) : (
               <div className={`social-profile-columns grid gap-4 lg:grid-cols-[4fr_6fr] ${getStaggerEnterClass(1)}`}>
-                <aside className="social-profile-sidebar lg:sticky lg:top-20 lg:self-start">
+                <aside
+                  className="social-profile-sidebar lg:sticky lg:top-20 lg:self-start"
+                  aria-label="Profile highlights"
+                >
                   <div className="social-card social-profile-panel p-4">
                     <h3 className="social-text-main text-base font-semibold">About</h3>
                     <p className="social-text-muted mt-2 text-sm">{profile?.bio || "No bio yet"}</p>
@@ -331,7 +373,7 @@ const ProfilePage = () => { // NOSONAR
                   </div>
                 </aside>
 
-                <div className="social-profile-main">
+                <div className="social-profile-main" role="region" aria-label="Profile posts timeline">
                   {profile?._id === user?._id && (
                     <PostComposer onCreate={createPost} />
                   )}
@@ -391,6 +433,7 @@ const ProfilePage = () => { // NOSONAR
             <DialogContent
               contentClassMode="bare"
               className="social-lightbox-dialog social-profile-photo-dialog max-w-[min(96vw,1200px)] sm:max-w-5xl p-3 sm:p-4"
+              onKeyDown={handlePhotoDialogKeyDown}
             >
               <DialogHeader className="social-profile-photo-dialog-head">
                 <div className="social-profile-photo-dialog-title-row">
@@ -415,7 +458,10 @@ const ProfilePage = () => { // NOSONAR
                 ) : null}
               </DialogHeader>
 
-              <div className="social-lightbox-stage social-profile-photo-stage relative mt-2 flex h-[75vh] items-center justify-center overflow-hidden rounded-xl">
+              <div
+                className="social-lightbox-stage social-profile-photo-stage relative mt-2 flex h-[75vh] items-center justify-center overflow-hidden rounded-xl"
+                aria-label="Photo viewer"
+              >
                 <div className="social-profile-photo-stage-glow" aria-hidden="true" />
 
                 {activePhotoUrl ? (
@@ -434,6 +480,7 @@ const ProfilePage = () => { // NOSONAR
                       variant="secondary"
                       className="social-profile-photo-nav social-profile-photo-nav--prev absolute left-3 top-1/2 -translate-y-1/2"
                       onClick={goPrevPhoto}
+                      aria-label="Previous photo"
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </Button>
@@ -443,6 +490,7 @@ const ProfilePage = () => { // NOSONAR
                       variant="secondary"
                       className="social-profile-photo-nav social-profile-photo-nav--next absolute right-3 top-1/2 -translate-y-1/2"
                       onClick={goNextPhoto}
+                      aria-label="Next photo"
                     >
                       <ChevronRight className="h-5 w-5" />
                     </Button>

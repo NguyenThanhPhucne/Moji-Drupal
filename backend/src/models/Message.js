@@ -44,6 +44,11 @@ const messageSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    groupChannelId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -107,6 +112,7 @@ const messageSchema = new mongoose.Schema(
 
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, isDeleted: 1, createdAt: -1 });
+messageSchema.index({ conversationId: 1, groupChannelId: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1, createdAt: -1 });
 messageSchema.index(
   { content: "text" },

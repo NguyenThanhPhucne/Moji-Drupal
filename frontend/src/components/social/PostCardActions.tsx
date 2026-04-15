@@ -11,6 +11,9 @@ interface PostCardActionsProps {
   topReactionTypes: SocialReactionType[];
   reactionSummaryLabel: string;
   displayCommentsCount: number;
+  engagementPending: boolean;
+  commentsPending: boolean;
+  sharePending: boolean;
   onOpenEngagement: () => void;
   onToggleComments: () => void;
   onSharePost: () => void;
@@ -33,6 +36,9 @@ const PostCardActions = ({
   topReactionTypes,
   reactionSummaryLabel,
   displayCommentsCount,
+  engagementPending,
+  commentsPending,
+  sharePending,
   onOpenEngagement,
   onToggleComments,
   onSharePost,
@@ -65,6 +71,9 @@ const PostCardActions = ({
   }
 
   const primaryLikeLabel = likePending ? "Updating..." : displayedReactionLabel;
+  const commentsLabel = commentsPending ? "Loading..." : "Comment";
+  const shareLabel = sharePending ? "Sharing..." : "Share";
+  const commentsCountLabel = `${displayCommentsCount} comments`;
 
   return (
     <>
@@ -78,6 +87,8 @@ const PostCardActions = ({
             className="flex items-center gap-1 hover:underline"
             onClick={onOpenEngagement}
             data-testid="post-engagement-trigger"
+            disabled={engagementPending}
+            aria-busy={engagementPending}
           >
             <span className="inline-flex -space-x-1">
               {topReactionTypes.length ? (
@@ -94,7 +105,7 @@ const PostCardActions = ({
             </span>
             <span className="counter-slide-wrapper">
               <span key={reactionSummaryLabel} className="counter-slide-inner animate-in slide-in-from-bottom-2 fade-in duration-300">
-                {reactionSummaryLabel}
+                {engagementPending ? "Loading..." : reactionSummaryLabel}
               </span>
             </span>
           </button>
@@ -106,8 +117,10 @@ const PostCardActions = ({
           className="hover:underline"
           onClick={onToggleComments}
           data-testid="post-comments-count-trigger"
+          disabled={commentsPending}
+          aria-busy={commentsPending}
         >
-          {displayCommentsCount} comments
+          <span aria-live="polite">{commentsCountLabel}</span>
         </button>
       </div>
 
@@ -157,9 +170,10 @@ const PostCardActions = ({
               onOpenReactionPicker();
             }}
             disabled={likePending}
+            aria-busy={likePending}
           >
             {reactionIcon}
-            {primaryLikeLabel}
+            <span aria-live="polite">{primaryLikeLabel}</span>
           </button>
         </div>
 
@@ -168,9 +182,15 @@ const PostCardActions = ({
           className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold"
           onClick={onToggleComments}
           data-testid="post-comment-button"
+          disabled={commentsPending}
+          aria-busy={commentsPending}
         >
-          <MessageCircle className="h-4 w-4" />
-          Comment
+          {commentsPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <MessageCircle className="h-4 w-4" />
+          )}
+          <span aria-live="polite">{commentsLabel}</span>
         </button>
 
         <button
@@ -178,9 +198,15 @@ const PostCardActions = ({
           className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold"
           onClick={onSharePost}
           data-testid="post-share-button"
+          disabled={sharePending}
+          aria-busy={sharePending}
         >
-          <Share2 className="h-4 w-4" />
-          Share
+          {sharePending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Share2 className="h-4 w-4" />
+          )}
+          <span aria-live="polite">{shareLabel}</span>
         </button>
       </div>
     </>

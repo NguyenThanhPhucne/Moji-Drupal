@@ -1,9 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./styles/chat-enterprise-polish.css";
 @import "./styles/social-enterprise-polish.css";
 @import "./styles/chat-contrast-qa.css";
+@import "./styles/enterprise-clean-refresh.css";
 
 @custom-variant dark (&:is(.dark *));
 @config "../tailwind.config.ts";
@@ -63,7 +64,7 @@
     --popover-foreground: 240 15% 15%;
 
     /* Primary - Original Sky Blue */
-    --primary: 204 89% 51%;
+    --primary: 204 89% 40%;
     --primary-foreground: 0 0% 100%;
     /* Blue Light */
     --primary-glow: 206 100% 70%;
@@ -74,7 +75,7 @@
 
     /* Muted */
     --muted: 210 30% 92%;
-    --muted-foreground: 210 15% 50%;
+    --muted-foreground: 210 16% 41%;
     --surface-hover-bg: 210 32% 88%;
     --surface-hover-foreground: 217 30% 18%;
 
@@ -115,11 +116,11 @@
     --warning-foreground: 0 0% 100%;
 
     /* Info */
-    --info: 204 89% 51%;
+    --info: 204 89% 40%;
     --info-foreground: 0 0% 100%;
 
     /* Destructive */
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 100%;
 
     /* Border and input */
@@ -436,13 +437,13 @@ html[data-motion="reduced"] * {
 
 /* ── Default: Blue (already in :root) ──────────────────────────────────── */
 [data-accent="blue"] {
-  --primary:              204 89% 51%;
+  --primary:              204 89% 40%;
   --primary-foreground:   0 0% 100%;
-  --ring:                 204 89% 51%;
-  --gradient-primary:     linear-gradient(135deg, hsl(204,89%,51%), hsl(206,100%,70%));
-  --gradient-chat:        linear-gradient(135deg, hsl(204,89%,51%), hsl(210,80%,65%));
-  --shadow-soft:          0 8px 32px -8px hsl(204 89% 51% / 0.2);
-  --chat-bubble-sent:     204 89% 51%;
+  --ring:                 204 89% 40%;
+  --gradient-primary:     linear-gradient(135deg, hsl(204,89%,40%), hsl(206,100%,61%));
+  --gradient-chat:        linear-gradient(135deg, hsl(204,89%,40%), hsl(210,80%,55%));
+  --shadow-soft:          0 8px 32px -8px hsl(204 89% 40% / 0.2);
+  --chat-bubble-sent:     204 89% 40%;
   --chat-bubble-sent-foreground: 0 0% 100%;
 }
 .dark[data-accent="blue"], .dark [data-accent="blue"] {

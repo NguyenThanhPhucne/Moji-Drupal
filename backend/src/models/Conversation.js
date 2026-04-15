@@ -113,6 +113,96 @@ const participantSchema = new mongoose.Schema(
   },
 );
 
+const groupChannelPermissionsSchema = new mongoose.Schema(
+  {
+    sendRoles: {
+      type: [String],
+      default: ["owner", "admin", "member"],
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+const groupChannelCategorySchema = new mongoose.Schema(
+  {
+    categoryId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    position: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
+const groupChannelSchema = new mongoose.Schema(
+  {
+    channelId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    categoryId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    position: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    permissions: {
+      type: groupChannelPermissionsSchema,
+      default: () => ({ sendRoles: ["owner", "admin", "member"] }),
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  },
+);
+
 const groupSchema = new mongoose.Schema(
   {
     name: {
@@ -133,6 +223,23 @@ const groupSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    channels: {
+      type: [groupChannelSchema],
+      default: [],
+    },
+    channelCategories: {
+      type: [groupChannelCategorySchema],
+      default: [],
+    },
+    channelUnreadCounts: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    activeChannelId: {
+      type: String,
+      default: "general",
+      trim: true,
+    },
     joinLink: {
       tokenHash: {
         type: String,
@@ -149,6 +256,33 @@ const groupSchema = new mongoose.Schema(
       createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        default: null,
+      },
+      maxUses: {
+        type: Number,
+        default: null,
+        min: 1,
+      },
+      useCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      oneTime: {
+        type: Boolean,
+        default: false,
+      },
+      revokedAt: {
+        type: Date,
+        default: null,
+      },
+      revokedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      revokeReason: {
+        type: String,
         default: null,
       },
     },
@@ -172,6 +306,11 @@ const lastMessageSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       default: null,
+    },
+    groupChannelId: {
+      type: String,
+      default: null,
+      trim: true,
     },
   },
   {

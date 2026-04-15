@@ -1,5 +1,10 @@
 import type { Socket } from "socket.io-client";
-import type { Conversation, Message } from "./chat";
+import type {
+  Conversation,
+  GroupChannelAnalyticsPayload,
+  GroupChannelRole,
+  Message,
+} from "./chat";
 import type { Friend, FriendRequest, User } from "./user";
 
 export interface AuthState {
@@ -44,6 +49,7 @@ export interface ChatState {
       items: Message[];
       hasMore: boolean; // infinite-scroll
       nextCursor?: string | null; // pagination cursor
+      channelId?: string | null;
     }
   >;
   activeConversationId: string | null;
@@ -56,7 +62,7 @@ export interface ChatState {
   setReplyingTo: (message: Message | null) => void;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
-  fetchMessages: (conversationId?: string) => Promise<void>;
+  fetchMessages: (conversationId?: string, channelId?: string) => Promise<void>;
   sendDirectMessage: (
     recipientId: string,
     content: string,
@@ -69,6 +75,7 @@ export interface ChatState {
     content: string,
     imgUrl?: string,
     replyTo?: string,
+    groupChannelId?: string,
   ) => Promise<void>;
   // add message
   addMessage: (message: Message) => void;
@@ -83,7 +90,11 @@ export interface ChatState {
     messageId: string,
     emoji: string,
   ) => Promise<void>;
-  unsendMessage: (conversationId: string, messageId: string) => Promise<void>;
+  unsendMessage: (
+    conversationId: string,
+    messageId: string,
+    mode?: "standard" | "undo",
+  ) => Promise<void>;
   removeMessageFromConversation: (
     conversationId: string,
     messageId: string,
@@ -117,20 +128,111 @@ export interface ChatState {
     memberId: string,
     makeAdmin: boolean,
   ) => Promise<boolean>;
+  createGroupChannel: (
+    conversationId: string,
+    name: string,
+    description?: string,
+    options?: {
+      categoryId?: string | null;
+      sendRoles?: GroupChannelRole[];
+      position?: number;
+    },
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  updateGroupChannel: (
+    conversationId: string,
+    channelId: string,
+    payload: {
+      name?: string;
+      description?: string;
+      categoryId?: string | null;
+      sendRoles?: GroupChannelRole[];
+    },
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  deleteGroupChannel: (
+    conversationId: string,
+    channelId: string,
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  reorderGroupChannels: (
+    conversationId: string,
+    channelIds: string[],
+  ) => Promise<boolean>;
+  createGroupChannelCategory: (
+    conversationId: string,
+    name: string,
+    position?: number,
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  updateGroupChannelCategory: (
+    conversationId: string,
+    categoryId: string,
+    payload: {
+      name?: string;
+    },
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  deleteGroupChannelCategory: (
+    conversationId: string,
+    categoryId: string,
+  ) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  reorderGroupChannelCategories: (
+    conversationId: string,
+    categoryIds: string[],
+  ) => Promise<boolean>;
+  fetchGroupChannelAnalytics: (
+    conversationId: string,
+    days?: number,
+  ) => Promise<{
+    ok: boolean;
+    analytics?: GroupChannelAnalyticsPayload;
+    message?: string;
+  }>;
+  setGroupActiveChannel: (
+    conversationId: string,
+    channelId: string,
+  ) => Promise<boolean>;
   createGroupJoinLink: (
     conversationId: string,
-    expiresInHours?: number,
+    options?: {
+      expiresInHours?: number;
+      maxUses?: number | null;
+      oneTime?: boolean;
+    },
   ) => Promise<{
     ok: boolean;
     joinLinkUrl?: string;
     expiresAt?: string;
+    maxUses?: number | null;
+    oneTime?: boolean;
+    remainingUses?: number | null;
     message?: string;
+    retryAfterSeconds?: number;
   }>;
   revokeGroupJoinLink: (conversationId: string) => Promise<boolean>;
   joinGroupByLink: (
     conversationId: string,
     token: string,
-  ) => Promise<{ ok: boolean; alreadyJoined?: boolean; message?: string }>;
+  ) => Promise<{
+    ok: boolean;
+    alreadyJoined?: boolean;
+    message?: string;
+    retryAfterSeconds?: number;
+  }>;
   pinGroupMessage: (
     conversationId: string,
     messageId?: string | null,

@@ -44,16 +44,34 @@ const ReactionPopover = ({
     reactionButtonRefs.current[safeIndex]?.focus();
   }, []);
 
+  const resolveFocusedIndex = useCallback(() => {
+    const activeElement = globalThis.document?.activeElement;
+    const focusedIndex = reactionButtonRefs.current.indexOf(
+      activeElement as HTMLButtonElement,
+    );
+
+    if (focusedIndex >= 0) {
+      return focusedIndex;
+    }
+
+    const activeReactionIndex = reactions.findIndex(
+      (reaction) => reaction.type === activeReaction,
+    );
+
+    if (activeReactionIndex >= 0) {
+      return activeReactionIndex;
+    }
+
+    return 0;
+  }, [activeReaction]);
+
   const handlePopoverKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (disabled) {
         return;
       }
 
-      const activeElement = globalThis.document?.activeElement;
-      const focusedIndex = reactionButtonRefs.current.indexOf(
-        activeElement as HTMLButtonElement,
-      );
+      const focusedIndex = resolveFocusedIndex();
 
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
         event.preventDefault();
@@ -78,8 +96,13 @@ const ReactionPopover = ({
         focusReactionByIndex(reactions.length - 1);
       }
     },
-    [disabled, focusReactionByIndex],
+    [disabled, focusReactionByIndex, resolveFocusedIndex],
   );
+
+  const activeReactionIndex = reactions.findIndex(
+    (item) => item.type === activeReaction,
+  );
+  const defaultFocusIndex = Math.max(0, activeReactionIndex);
 
   return (
     <div
@@ -124,6 +147,8 @@ const ReactionPopover = ({
               disabled={disabled}
               title={reaction.label}
               aria-label={reaction.label}
+              aria-pressed={isActive}
+              tabIndex={index === defaultFocusIndex ? 0 : -1}
             >
               <span className="transition-transform duration-150 group-hover/icon:-translate-y-0.5">
                 <ReactionGlyph reaction={reaction.type} className="h-6 w-6" />

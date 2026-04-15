@@ -52,6 +52,7 @@ export function SigninForm({
           <form
             className="p-6 md:p-8 lg:p-10"
             onSubmit={handleSubmit(onSubmit)}
+            noValidate
           >
             <div className="space-stack-lg">
               {/* header - logo */}
@@ -76,10 +77,12 @@ export function SigninForm({
                   id="username"
                   placeholder="Username or email"
                   autoComplete="username"
+                  aria-invalid={Boolean(errors.username)}
+                  aria-describedby={errors.username ? "signin-username-error" : undefined}
                   {...register("username")}
                 />
                 {errors.username && (
-                  <p className="text-destructive text-sm">
+                  <p id="signin-username-error" className="text-destructive text-sm" role="alert">
                     {errors.username.message}
                   </p>
                 )}
@@ -95,10 +98,12 @@ export function SigninForm({
                   id="password"
                   placeholder="Password"
                   autoComplete="current-password"
+                  aria-invalid={Boolean(errors.password)}
+                  aria-describedby={errors.password ? "signin-password-error" : undefined}
                   {...register("password")}
                 />
                 {errors.password && (
-                  <p className="text-destructive text-sm">
+                  <p id="signin-password-error" className="text-destructive text-sm" role="alert">
                     {errors.password.message}
                   </p>
                 )}

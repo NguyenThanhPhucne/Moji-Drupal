@@ -42,6 +42,60 @@ const pendingDeletedCommentUpdates = new Map<
   { deletedCommentIds: string[]; commentsCount?: number }
 >();
 
+const normalizeGroupChannelId = (value: unknown) => {
+  const scalarValue =
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+      ? String(value)
+      : "";
+
+  const normalized = scalarValue
+    .trim()
+    .toLowerCase();
+
+  return normalized || "general";
+};
+
+const shouldAutoMarkSeenForIncomingMessage = ({
+  activeConversationId,
+  conversations,
+  message,
+}: {
+  activeConversationId: string | null;
+  conversations: Array<{
+    _id: string;
+    type: "direct" | "group";
+    group?: {
+      activeChannelId?: string;
+    };
+  }>;
+  message: {
+    conversationId: string;
+    groupChannelId?: string | null;
+  };
+}) => {
+  if (activeConversationId !== message.conversationId) {
+    return false;
+  }
+
+  const activeConversation = conversations.find(
+    (conversationItem) => conversationItem._id === message.conversationId,
+  );
+
+  if (activeConversation?.type !== "group") {
+    return true;
+  }
+
+  const activeChannelId = normalizeGroupChannelId(
+    activeConversation.group?.activeChannelId,
+  );
+  const incomingChannelId = normalizeGroupChannelId(message.groupChannelId);
+
+  return activeChannelId === incomingChannelId;
+};
+
 type SocialBurstPayload = {
   likeUpdates: Map<
     string,
@@ -910,6 +964,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         _id: conversation.lastMessage._id,
         content: conversation.lastMessage.content,
         createdAt: conversation.lastMessage.createdAt,
+        groupChannelId: conversation.lastMessage.groupChannelId,
         sender: {
           _id: conversation.lastMessage.senderId,
           displayName: "",
@@ -920,24 +975,31 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       const updatedConversation = {
         ...conversation,
         lastMessage,
+        group: conversation.group,
         unreadCounts: unreadCounts || {},
       };
 
-      const existingConversation = useChatStore
-        .getState()
-        .conversations.find((c) => c._id === conversation._id);
+      const chatState = useChatStore.getState();
+
+      const existingConversation = chatState.conversations.find(
+        (c) => c._id === conversation._id,
+      );
 
       if (!existingConversation) {
         useChatStore.getState().fetchConversations();
       }
 
-      if (
-        useChatStore.getState().activeConversationId === message.conversationId
-      ) {
-        useChatStore.getState().markAsSeen();
-      }
+      const shouldMarkAsSeen = shouldAutoMarkSeenForIncomingMessage({
+        activeConversationId: chatState.activeConversationId,
+        conversations: chatState.conversations,
+        message,
+      });
 
       useChatStore.getState().updateConversation(updatedConversation);
+
+      if (shouldMarkAsSeen) {
+        useChatStore.getState().markAsSeen();
+      }
     });
 
     // read message
@@ -948,6 +1010,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         lastMessageAt: conversation.lastMessageAt,
         unreadCounts: conversation.unreadCounts,
         seenBy: conversation.seenBy,
+        group: conversation.group,
       };
 
       useChatStore.getState().updateConversation(updated);

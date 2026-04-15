@@ -62,6 +62,21 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
 
   const name = convo.group?.name ?? "";
   const myUserId = String(user._id || "");
+  const myChannelUnreadMap =
+    convo.group?.channelUnreadCounts?.[myUserId] || {};
+  const channelUnreadBadges = (convo.group?.channels || [])
+    .map((channel) => {
+      const channelId = String(channel.channelId || "");
+      const unread = Number(myChannelUnreadMap?.[channelId] || 0);
+      return {
+        channelId,
+        name: String(channel.name || channelId),
+        unread,
+      };
+    })
+    .filter((channel) => channel.unread > 0)
+    .sort((a, b) => b.unread - a.unread)
+    .slice(0, 3);
   const ownerId = String(convo.group?.createdBy || "");
   const adminIds = new Set((convo.group?.adminIds || []).map(String));
   let myRole: "owner" | "admin" | "member" = "member";
@@ -94,7 +109,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           ? new Date(convo.lastMessage.createdAt)
           : undefined
       }
-      isActive={activeConversationId === convo._id}
+      isActive={String(activeConversationId || "") === String(convo._id)}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
       mentionCount={mentionCount}
@@ -138,6 +153,22 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
               </span>
             )}
           </p>
+          {channelUnreadBadges.length > 0 && (
+            <div className="mt-1 flex items-center gap-1 overflow-x-auto beautiful-scrollbar pb-0.5">
+              {channelUnreadBadges.map((channel) => (
+                <span
+                  key={channel.channelId}
+                  className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                  title={`#${channel.name}: ${channel.unread} unread`}
+                >
+                  <span>#{channel.name}</span>
+                  <span className="rounded-full bg-primary/20 px-1 py-[1px] leading-none">
+                    {channel.unread > 99 ? "99+" : channel.unread}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       }
     />

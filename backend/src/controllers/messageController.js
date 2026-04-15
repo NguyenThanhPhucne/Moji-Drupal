@@ -9,16 +9,119 @@ import {
 } from "../utils/messageHelper.js";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
-import { registerRateLimitHit } from "../utils/antiSpam.js";
+import {
+  applyRateLimitHeaders,
+  registerRateLimitHit,
+} from "../utils/antiSpam.js";
 import { lookup as dnsLookup } from "node:dns/promises";
 import net from "node:net";
 
 import { buildDirectConversationKey } from "../services/conversationService.js";
 
+const UNDO_SEND_WINDOW_SECONDS = 7;
+const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
+const DEFAULT_GROUP_CHANNEL_ID = "general";
+const GROUP_CHANNEL_ROLE_OPTIONS = ["owner", "admin", "member"];
+
 const createHttpError = (status, message) => {
   const error = new Error(message);
   error.status = status;
   return error;
+};
+
+const toPlainObject = (value) => {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  if (value instanceof Map) {
+    return Object.fromEntries(value);
+  }
+
+  if (typeof value.toObject === "function") {
+    return value.toObject();
+  }
+
+  return { ...value };
+};
+
+const waitFor = (ms) => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+};
+
+const buildConversationSyncUpdatePayload = (conversation) => {
+  const payload = {
+    seenBy: Array.isArray(conversation?.seenBy)
+      ? conversation.seenBy
+      : [],
+    lastMessageAt: conversation?.lastMessageAt || null,
+    lastMessage: conversation?.lastMessage || null,
+    unreadCounts: toPlainObject(conversation?.unreadCounts),
+  };
+
+  if (conversation?.type === "group") {
+    payload["group.channelUnreadCounts"] = toPlainObject(
+      conversation?.group?.channelUnreadCounts,
+    );
+  }
+
+  return payload;
+};
+
+const syncConversationAfterCreateMessage = async ({
+  conversation,
+  message,
+  senderId,
+  maxRetries = 25,
+}) => {
+  const conversationId = toStringId(
+    conversation?._id || message?.conversationId,
+  );
+
+  if (!conversationId) {
+    throw createHttpError(400, "Conversation id không hợp lệ");
+  }
+
+  let currentConversation = conversation;
+
+  for (let attempt = 0; attempt < maxRetries; attempt += 1) {
+    if (!currentConversation) {
+      currentConversation = await Conversation.findById(conversationId);
+    }
+
+    if (!currentConversation) {
+      throw createHttpError(404, "Không tìm thấy cuộc trò chuyện");
+    }
+
+    updateConversationAfterCreateMessage(currentConversation, message, senderId);
+
+    const updateResult = await Conversation.updateOne(
+      {
+        _id: conversationId,
+        __v: currentConversation.__v,
+      },
+      {
+        $set: buildConversationSyncUpdatePayload(currentConversation),
+        $inc: { __v: 1 },
+      },
+    );
+
+    if (updateResult.modifiedCount === 1) {
+      currentConversation.__v = Number(currentConversation.__v || 0) + 1;
+      return currentConversation;
+    }
+
+    const backoffMs = Math.min(30, 3 + attempt * 2);
+    await waitFor(backoffMs);
+    currentConversation = await Conversation.findById(conversationId);
+  }
+
+  throw createHttpError(
+    409,
+    "Không thể đồng bộ trạng thái cuộc trò chuyện. Vui lòng thử lại.",
+  );
 };
 
 const ensureDirectConversationForSend = async ({
@@ -129,6 +232,130 @@ const ensureConversationMembership = async (conversationId, userId) => {
 
 const toStringId = (value) => value?.toString?.() || String(value || "");
 
+const sanitizeGroupChannelName = (value) => {
+  return String(value || "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+};
+
+const normalizeGroupChannelId = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  return normalized || DEFAULT_GROUP_CHANNEL_ID;
+};
+
+const normalizeGroupChannelRole = (value) => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (GROUP_CHANNEL_ROLE_OPTIONS.includes(normalized)) {
+    return normalized;
+  }
+
+  return null;
+};
+
+const normalizeGroupChannelSendRoles = (roles) => {
+  const normalizedRoles = Array.isArray(roles)
+    ? roles
+        .map((role) => normalizeGroupChannelRole(role))
+        .filter(Boolean)
+    : [];
+
+  const deduped = Array.from(new Set(normalizedRoles));
+  if (deduped.length === 0) {
+    return [...GROUP_CHANNEL_ROLE_OPTIONS];
+  }
+
+  return deduped;
+};
+
+const toGroupChannelSlug = (name) => {
+  const normalized = sanitizeGroupChannelName(name)
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "");
+
+  return normalized || "channel";
+};
+
+const resolveGroupChannelState = (conversation) => {
+  const rawChannels = Array.isArray(conversation?.group?.channels)
+    ? conversation.group.channels
+    : [];
+  const normalizedChannels = [];
+  const existingIds = new Set();
+
+  rawChannels.forEach((channel, index) => {
+    const channelName = sanitizeGroupChannelName(channel?.name);
+    if (!channelName) {
+      return;
+    }
+
+    const channelId = normalizeGroupChannelId(
+      channel?.channelId || toGroupChannelSlug(channelName),
+    );
+
+    if (existingIds.has(channelId)) {
+      return;
+    }
+
+    existingIds.add(channelId);
+    normalizedChannels.push({
+      channelId,
+      name: channelName,
+      description: sanitizeGroupChannelName(channel?.description),
+      categoryId: channel?.categoryId || null,
+      position: Number.isFinite(Number(channel?.position))
+        ? Math.max(0, Math.floor(Number(channel.position)))
+        : index,
+      permissions: {
+        sendRoles: normalizeGroupChannelSendRoles(
+          channel?.permissions?.sendRoles,
+        ),
+      },
+    });
+  });
+
+  if (normalizedChannels.length === 0) {
+    normalizedChannels.push({
+      channelId: DEFAULT_GROUP_CHANNEL_ID,
+      name: "general",
+      description: "",
+      categoryId: null,
+      position: 0,
+      permissions: {
+        sendRoles: [...GROUP_CHANNEL_ROLE_OPTIONS],
+      },
+    });
+  }
+
+  normalizedChannels.sort((a, b) => {
+    if (a.position !== b.position) {
+      return a.position - b.position;
+    }
+
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  });
+
+  const activeCandidate = normalizeGroupChannelId(
+    conversation?.group?.activeChannelId,
+  );
+  const activeChannelId = normalizedChannels.some(
+    (channel) => channel.channelId === activeCandidate,
+  )
+    ? activeCandidate
+    : normalizedChannels[0].channelId;
+
+  return {
+    channels: normalizedChannels,
+    activeChannelId,
+  };
+};
+
 const isJoinLinkActive = (joinLink) => {
   const expiresAt = joinLink?.expiresAt ? new Date(joinLink.expiresAt) : null;
   return Boolean(expiresAt && Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() > Date.now());
@@ -159,10 +386,35 @@ const isGroupConversationAdmin = (conversation, userId) => {
   );
 };
 
+const getGroupConversationMemberRole = (conversation, userId) => {
+  const normalizedUserId = toStringId(userId);
+  const creatorId = toStringId(conversation?.group?.createdBy);
+
+  if (creatorId && creatorId === normalizedUserId) {
+    return "owner";
+  }
+
+  if (isGroupConversationAdmin(conversation, userId)) {
+    return "admin";
+  }
+
+  return "member";
+};
+
 const toGroupConversationUpdatePayload = (conversation) => {
   const group = conversation?.group?.toObject
     ? conversation.group.toObject()
     : conversation?.group || {};
+  const { channels, activeChannelId } = resolveGroupChannelState({ group });
+  const channelCategories = Array.isArray(group?.channelCategories)
+    ? group.channelCategories
+    : [];
+  const channelUnreadCounts =
+    group?.channelUnreadCounts &&
+    typeof group.channelUnreadCounts === "object" &&
+    !Array.isArray(group.channelUnreadCounts)
+      ? group.channelUnreadCounts
+      : {};
   const pinnedMessage = conversation?.pinnedMessage?.toObject
     ? conversation.pinnedMessage.toObject()
     : conversation?.pinnedMessage || null;
@@ -174,6 +426,10 @@ const toGroupConversationUpdatePayload = (conversation) => {
       createdBy: toStringId(group.createdBy),
       adminIds: (group.adminIds || []).map((adminId) => toStringId(adminId)),
       announcementOnly: Boolean(group.announcementOnly),
+      channels,
+      channelCategories,
+      channelUnreadCounts,
+      activeChannelId,
       joinLink: toJoinLinkMeta(group.joinLink),
     },
     pinnedMessage: pinnedMessage
@@ -198,6 +454,7 @@ const formatConversationSyncPayload = (conversation) => {
       _id: conversation.lastMessage?._id,
       content: conversation.lastMessage?.content,
       createdAt: conversation.lastMessage?.createdAt,
+      groupChannelId: conversation.lastMessage?.groupChannelId || null,
       sender: {
         _id:
           conversation.lastMessage?.senderId?.toString?.() ||
@@ -225,6 +482,7 @@ const normalizeReplyToId = (replyTo) => {
 const resolveValidatedReplyTo = async ({
   replyTo,
   conversationId,
+  expectedGroupChannelId = null,
 }) => {
   const normalizedReplyTo = normalizeReplyToId(replyTo);
   if (!normalizedReplyTo) {
@@ -232,7 +490,7 @@ const resolveValidatedReplyTo = async ({
   }
 
   const replyTarget = await Message.findById(normalizedReplyTo)
-    .select("_id conversationId")
+    .select("_id conversationId groupChannelId")
     .lean();
 
   if (!replyTarget) {
@@ -244,6 +502,22 @@ const resolveValidatedReplyTo = async ({
       400,
       "Tin nhắn trả lời phải thuộc cùng cuộc trò chuyện",
     );
+  }
+
+  if (expectedGroupChannelId) {
+    const normalizedExpectedChannelId = normalizeGroupChannelId(
+      expectedGroupChannelId,
+    );
+    const normalizedReplyTargetChannelId = normalizeGroupChannelId(
+      replyTarget.groupChannelId,
+    );
+
+    if (normalizedReplyTargetChannelId !== normalizedExpectedChannelId) {
+      throw createHttpError(
+        400,
+        "Tin nhắn trả lời phải thuộc cùng group channel",
+      );
+    }
   }
 
   return replyTarget._id;
@@ -654,10 +928,14 @@ export const sendDirectMessage = async (req, res) => {
       scope: "message:direct",
       conversationId: conversation._id,
     });
+    applyRateLimitHeaders(res, antiSpamResult);
 
     if (!antiSpamResult.allowed) {
       return res.status(429).json({
         message: `You're sending messages too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+        retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+        rateLimitScope: antiSpamResult.scope,
+        rateLimitProfile: antiSpamResult.profile,
       });
     }
 
@@ -680,17 +958,22 @@ export const sendDirectMessage = async (req, res) => {
       message = await message.populate("replyTo", "content senderId");
     }
 
-    updateConversationAfterCreateMessage(conversation, message, senderId);
-
-    await conversation.save();
+    const syncedConversation = await syncConversationAfterCreateMessage({
+      conversation,
+      message,
+      senderId,
+    });
 
     // Người nhận chưa chắc đã join room của conversation mới,
     // nên cần gửi sự kiện new-conversation vào user room trước.
     if (isNewConversation) {
-      await emitDirectConversationCreated({ conversation, senderId });
+      await emitDirectConversationCreated({
+        conversation: syncedConversation,
+        senderId,
+      });
     }
 
-    emitNewMessage(io, conversation, message);
+    emitNewMessage(io, syncedConversation, message);
 
     return res.status(201).json({ message });
   } catch (error) {
@@ -705,11 +988,55 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { conversationId, content, imgUrl, replyTo } = req.body;
+    const { conversationId, content, imgUrl, replyTo, groupChannelId } = req.body;
     const senderId = req.user._id;
-    const conversation = req.conversation;
+    const normalizedConversationId = String(conversationId || "").trim();
+    const normalizedRequestedChannelId = String(groupChannelId || "").trim();
     const normalizedContent = String(content || "").trim();
     const hasImagePayload = Boolean(String(imgUrl || "").trim());
+
+    if (!mongoose.isValidObjectId(normalizedConversationId)) {
+      return res.status(400).json({ message: "Conversation id không hợp lệ" });
+    }
+
+    const conversation = await Conversation.findById(normalizedConversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Không tìm thấy cuộc trò chuyện" });
+    }
+
+    const isMember = conversation.participants.some(
+      (participant) => String(participant.userId) === String(senderId),
+    );
+    if (!isMember) {
+      return res.status(403).json({ message: "Không có quyền gửi tin nhắn" });
+    }
+
+    const { channels, activeChannelId } = resolveGroupChannelState(conversation);
+    const effectiveGroupChannelId = normalizeGroupChannelId(
+      normalizedRequestedChannelId || activeChannelId,
+    );
+
+    const isValidGroupChannel = channels.some(
+      (channel) => channel.channelId === effectiveGroupChannelId,
+    );
+
+    if (!isValidGroupChannel) {
+      return res.status(400).json({ message: "Group channel không hợp lệ" });
+    }
+
+    const targetChannel = channels.find(
+      (channel) => channel.channelId === effectiveGroupChannelId,
+    );
+    const senderRole = getGroupConversationMemberRole(conversation, senderId);
+    const sendRoles = normalizeGroupChannelSendRoles(
+      targetChannel?.permissions?.sendRoles,
+    );
+
+    if (!sendRoles.includes(senderRole)) {
+      return res.status(403).json({
+        message: "Your role is not allowed to send in this channel",
+      });
+    }
 
     const isAnnouncementOnly = Boolean(conversation?.group?.announcementOnly);
     if (isAnnouncementOnly && !isGroupConversationAdmin(conversation, senderId)) {
@@ -725,23 +1052,29 @@ export const sendGroupMessage = async (req, res) => {
     const antiSpamResult = registerRateLimitHit({
       userId: senderId,
       scope: "message:group",
-      conversationId,
+      conversationId: normalizedConversationId,
     });
+    applyRateLimitHeaders(res, antiSpamResult);
 
     if (!antiSpamResult.allowed) {
       return res.status(429).json({
         message: `You're sending messages too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+        retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+        rateLimitScope: antiSpamResult.scope,
+        rateLimitProfile: antiSpamResult.profile,
       });
     }
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
     const validatedReplyTo = await resolveValidatedReplyTo({
       replyTo,
-      conversationId,
+      conversationId: normalizedConversationId,
+      expectedGroupChannelId: effectiveGroupChannelId,
     });
 
     let message = await Message.create({
-      conversationId,
+      conversationId: normalizedConversationId,
+      groupChannelId: effectiveGroupChannelId,
       senderId,
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
@@ -752,13 +1085,20 @@ export const sendGroupMessage = async (req, res) => {
       message = await message.populate("replyTo", "content senderId");
     }
 
-    updateConversationAfterCreateMessage(conversation, message, senderId);
+    const syncedConversation = await syncConversationAfterCreateMessage({
+      conversation,
+      message,
+      senderId,
+    });
 
-    await conversation.save();
-    emitNewMessage(io, conversation, message);
+    emitNewMessage(io, syncedConversation, message);
 
     return res.status(201).json({ message });
   } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
     console.error("Lỗi xảy ra khi gửi tin nhắn nhóm", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
@@ -1015,6 +1355,57 @@ export const unsendMessage = async (req, res) => {
   }
 };
 
+export const undoSendMessage = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId).select(
+      "_id senderId conversationId createdAt isDeleted",
+    );
+
+    if (!message) {
+      return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
+    }
+
+    const isMember = await ensureConversationMembership(
+      message.conversationId,
+      userId,
+    );
+    if (!isMember) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
+
+    if (String(message.senderId) !== String(userId)) {
+      return res.status(403).json({ message: "Không có quyền hoàn tác tin nhắn này" });
+    }
+
+    if (message.isDeleted) {
+      return res.status(200).json({
+        message,
+        conversation: null,
+      });
+    }
+
+    const createdAtTs = new Date(message.createdAt).getTime();
+    const ageMs = Number.isFinite(createdAtTs)
+      ? Math.max(0, Date.now() - createdAtTs)
+      : UNDO_SEND_WINDOW_MS + 1;
+
+    if (ageMs > UNDO_SEND_WINDOW_MS) {
+      return res.status(410).json({
+        message: `Undo window expired. You can undo only within ${UNDO_SEND_WINDOW_SECONDS}s.`,
+        undoWindowSeconds: UNDO_SEND_WINDOW_SECONDS,
+      });
+    }
+
+    return unsendMessage(req, res);
+  } catch (error) {
+    console.error("Lỗi khi hoàn tác gửi tin nhắn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 export const removeMessageForMe = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -1222,10 +1613,14 @@ export const getLinkPreview = async (req, res) => {
       userId: req.user?._id,
       scope: "chat:link-preview",
     });
+    applyRateLimitHeaders(res, antiSpamResult);
 
     if (!antiSpamResult.allowed) {
       return res.status(429).json({
         message: `You're requesting previews too fast. Try again in ${antiSpamResult.retryAfterSeconds}s.`,
+        retryAfterSeconds: antiSpamResult.retryAfterSeconds,
+        rateLimitScope: antiSpamResult.scope,
+        rateLimitProfile: antiSpamResult.profile,
       });
     }
 
@@ -1287,14 +1682,20 @@ const forwardToDirectRecipient = async ({ recipientId, senderId, originalMessage
 
     message = await message.populate("forwardedFrom", "displayName avatarUrl");
 
-    updateConversationAfterCreateMessage(conversation, message, senderId);
-    await conversation.save();
+    const syncedConversation = await syncConversationAfterCreateMessage({
+      conversation,
+      message,
+      senderId,
+    });
 
     if (isNewConversation) {
-      await emitDirectConversationCreated({ conversation, senderId });
+      await emitDirectConversationCreated({
+        conversation: syncedConversation,
+        senderId,
+      });
     }
 
-    emitNewMessage(io, conversation, message);
+    emitNewMessage(io, syncedConversation, message);
     return message;
   } catch (error) {
     console.error(`Error forwarding to user ${recipientId}:`, error);
@@ -1326,10 +1727,13 @@ const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }
 
     message = await message.populate("forwardedFrom", "displayName avatarUrl");
 
-    updateConversationAfterCreateMessage(conversation, message, senderId);
-    await conversation.save();
+    const syncedConversation = await syncConversationAfterCreateMessage({
+      conversation,
+      message,
+      senderId,
+    });
 
-    emitNewMessage(io, conversation, message);
+    emitNewMessage(io, syncedConversation, message);
     return message;
   } catch (error) {
     console.error(`Error forwarding to group ${groupId}:`, error);

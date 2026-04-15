@@ -157,7 +157,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
           ? new Date(convo.lastMessage.createdAt)
           : undefined
       }
-      isActive={activeConversationId === convo._id}
+      isActive={String(activeConversationId || "") === String(convo._id)}
       onSelect={handleSelectConversation}
       unreadCount={unreadCount}
       mentionCount={mentionCount}
