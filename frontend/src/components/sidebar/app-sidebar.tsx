@@ -9,6 +9,7 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import {
   Bookmark,
@@ -181,32 +182,43 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               {isCompact ? (
                 /* ── Compact rail: vertical icon list ───────────────────── */
                 <div className="chat-sidebar-nav-rail flex flex-col items-center gap-1 py-1">
-                  {[...navItems, ...bottomNavItems].map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.key}
-                        type="button"
-                        title={item.label}
-                        aria-label={item.label}
-                        aria-current={item.isActive ? "page" : undefined}
-                        onClick={() => navigate(item.to)}
-                        className={cn(
-                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--rail relative flex size-10 items-center justify-center rounded-xl transition-[background-color,color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
-                          item.isActive
-                            ? "bg-primary/10 text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
-                            : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
-                        )}
-                      >
-                        <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
-                        {(item.badge ?? 0) > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
-                            {item.badge && item.badge > 99 ? "99+" : item.badge}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                  <div className="flex flex-col items-center gap-1">
+                    {[...navItems, ...bottomNavItems].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          title={item.label}
+                          aria-label={item.label}
+                          aria-current={item.isActive ? "page" : undefined}
+                          onClick={() => navigate(item.to)}
+                          className={cn(
+                            "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--rail relative flex size-10 items-center justify-center rounded-xl transition-[background-color,color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+                            item.isActive
+                              ? "bg-primary/10 text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
+                              : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
+                          )}
+                        >
+                          <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
+                          {(item.badge ?? 0) > 0 && (
+                            <span className="absolute -top-0.5 -right-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
+                              {item.badge && item.badge > 99 ? "99+" : item.badge}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <SidebarSeparator className="mx-0 my-1.5 w-7" />
+
+                  <div className="flex flex-col items-center gap-1.5">
+                    <CreateNewChat compact />
+                    <NewGroupChatModal />
+                    <FriendsManagerDialog />
+                    <AddFriendModal />
+                  </div>
                 </div>
               ) : (
                 /* ── Full: single-row horizontal tab bar ──────────────── */

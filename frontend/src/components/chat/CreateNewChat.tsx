@@ -4,8 +4,9 @@ import { Dialog, DialogTrigger } from "../ui/dialog";
 import { MessageCircle } from "lucide-react";
 import FriendListModal from "../createNewChat/FriendListModal";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
-const CreateNewChat = () => {
+const CreateNewChat = ({ compact = false }: { compact?: boolean }) => {
   const [open, setOpen] = useState(false);
   const { getFriends } = useFriendStore();
 
@@ -16,6 +17,29 @@ const CreateNewChat = () => {
       await getFriends();
     }
   };
+
+  if (compact) {
+    return (
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            title="New message"
+            aria-label="Start a new message"
+            className={cn(
+              "chat-sidebar-quick-action flex size-9 items-center justify-center rounded-xl border border-border/65 bg-background/80 text-muted-foreground/80 transition-[background-color,color,border-color,transform] duration-200",
+              "hover:bg-muted/70 hover:text-foreground hover:border-border",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+            )}
+          >
+            <MessageCircle className="size-4.5" />
+          </button>
+        </DialogTrigger>
+
+        <FriendListModal />
+      </Dialog>
+    );
+  }
 
   return (
     <div className="flex gap-2">

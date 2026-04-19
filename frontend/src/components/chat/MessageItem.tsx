@@ -929,6 +929,7 @@ interface MessageItemProps {
   }>;
   showDateDivider?: boolean;
   isNew?: boolean; // only animate truly new messages
+  isSearchTarget?: boolean;
   onForward?: () => void;
   canPinMessage?: boolean;
   isPinned?: boolean;
@@ -947,6 +948,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   seenUsers = [],
   showDateDivider,
   isNew = false,
+  isSearchTarget = false,
   onForward,
   canPinMessage = false,
   isPinned = false,
@@ -1442,9 +1444,10 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const actionBarVisible =
     isMessageHovered || reactBarVisible || Boolean(contextMenu);
   const wrapperClassName = cn(
-    "flex gap-2 px-2 group relative",
+    "flex gap-2 px-2 group relative transition-colors duration-500",
     isOwn ? "flex-row-reverse" : "flex-row",
     isNew && "message-slide-in",
+    isSearchTarget && "rounded-2xl bg-primary/[0.08] ring-1 ring-primary/35",
     isLastFromSender ? "pt-2 pb-[2px]" : "py-[2px]",
   );
 
