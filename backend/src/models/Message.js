@@ -3,6 +3,109 @@ import { adjustMessageCountInDrupal } from "../libs/drupalSync.js";
 
 const normalizeObjectIdValue = (value) => value?.toString?.() || String(value || "");
 
+const DEPENDENT_CLEANUP_MODES = new Set(["strict", "compensate"]);
+const DEFAULT_DEPENDENT_CLEANUP_MODE = "strict";
+const MESSAGE_CLEANUP_COMPENSATION_COLLECTION = "message_cleanup_compensations";
+
+const resolveDependentCleanupMode = (options = {}) => {
+  const requestedMode = String(
+    options?.dependentCleanupMode ||
+      process.env.MESSAGE_DEPENDENT_CLEANUP_MODE ||
+      DEFAULT_DEPENDENT_CLEANUP_MODE,
+  )
+    .trim()
+    .toLowerCase();
+
+  return DEPENDENT_CLEANUP_MODES.has(requestedMode)
+    ? requestedMode
+    : DEFAULT_DEPENDENT_CLEANUP_MODE;
+};
+
+const normalizeDependentCleanupContext = (context) => {
+  if (!context || typeof context !== "object" || Array.isArray(context)) {
+    return {};
+  }
+
+  return Object.entries(context).reduce((nextContext, [key, value]) => {
+    if (value === null || value === undefined) {
+      nextContext[key] = null;
+      return nextContext;
+    }
+
+    if (
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      nextContext[key] = value;
+      return nextContext;
+    }
+
+    const normalized = normalizeObjectIdValue(value);
+    nextContext[key] = normalized || null;
+    return nextContext;
+  }, {});
+};
+
+const queueDependentCleanupCompensation = async ({
+  messageIds,
+  options,
+  error,
+}) => {
+  const collection = mongoose?.connection?.db?.collection?.(
+    MESSAGE_CLEANUP_COMPENSATION_COLLECTION,
+  );
+
+  if (!collection) {
+    return false;
+  }
+
+  await collection.insertOne({
+    scope: "message-dependents",
+    status: "pending",
+    messageIds: [...messageIds],
+    cleanupContext: normalizeDependentCleanupContext(
+      options?.dependentCleanupContext,
+    ),
+    errorName: String(error?.name || "Error"),
+    errorMessage: String(error?.message || error),
+    retryCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  return true;
+};
+
+const handleDependentCleanupFailure = async ({
+  normalizedIds,
+  options,
+  error,
+}) => {
+  const cleanupMode = resolveDependentCleanupMode(options);
+  if (cleanupMode !== "compensate") {
+    throw error;
+  }
+
+  const queued = await queueDependentCleanupCompensation({
+    messageIds: normalizedIds,
+    options,
+    error,
+  });
+
+  if (!queued) {
+    throw error;
+  }
+
+  console.error(
+    "[Message.cleanup] Dependent cleanup failed; compensation task queued.",
+    {
+      messageIds: normalizedIds,
+      error: String(error?.message || error),
+    },
+  );
+};
+
 const cleanupMessageDependents = async (messageIds, options = {}) => {
   if (options?.skipDependentCleanup) {
     return;
@@ -32,7 +135,11 @@ const cleanupMessageDependents = async (messageIds, options = {}) => {
       }),
     ]);
   } catch (error) {
-    console.error("[Message.cleanup] Failed to cleanup dependent documents:", error);
+    await handleDependentCleanupFailure({
+      normalizedIds,
+      options,
+      error,
+    });
   }
 };
 
@@ -172,15 +279,15 @@ messageSchema.pre("deleteOne", { document: false, query: true }, async function 
 });
 
 messageSchema.post("deleteOne", async function () {
-  try {
-    const query = this.getQuery();
-    const options = this.getOptions?.() || {};
-    const conversationId =
-      this._conversationIdForSingleDelete ||
-      normalizeObjectIdValue(query?.conversationId) ||
-      null;
+  const query = this.getQuery();
+  const options = this.getOptions?.() || {};
+  const conversationId =
+    this._conversationIdForSingleDelete ||
+    normalizeObjectIdValue(query?.conversationId) ||
+    null;
 
-    if (conversationId && !options.skipCounterSync) {
+  if (conversationId && !options.skipCounterSync) {
+    try {
 
       // Fire-and-forget: Decrement MongoDB Conversation.messageCount
       import("./Conversation.js").then(({ default: Conversation }) => {
@@ -193,12 +300,12 @@ messageSchema.post("deleteOne", async function () {
       }).catch(() => {/* Circular import guard */});
 
       await adjustMessageCountInDrupal(conversationId, -1);
+    } catch (error) {
+      console.error("Failed to update message count in Drupal:", error);
     }
-
-    await cleanupMessageDependents(this._deletedMessageIds, options);
-  } catch (error) {
-    console.error("Failed to update message count in Drupal:", error);
   }
+
+  await cleanupMessageDependents(this._deletedMessageIds, options);
 });
 
 messageSchema.pre("findOneAndDelete", async function () {
@@ -216,14 +323,14 @@ messageSchema.pre("findOneAndDelete", async function () {
 });
 
 messageSchema.post("findOneAndDelete", async function (doc) {
-  try {
-    const options = this.getOptions?.() || {};
-    const conversationId =
-      normalizeObjectIdValue(doc?.conversationId) ||
-      this._conversationIdForSingleDelete ||
-      null;
+  const options = this.getOptions?.() || {};
+  const conversationId =
+    normalizeObjectIdValue(doc?.conversationId) ||
+    this._conversationIdForSingleDelete ||
+    null;
 
-    if (conversationId && !options.skipCounterSync) {
+  if (conversationId && !options.skipCounterSync) {
+    try {
       import("./Conversation.js").then(({ default: Conversation }) => {
         Conversation.updateOne(
           { _id: conversationId },
@@ -234,13 +341,13 @@ messageSchema.post("findOneAndDelete", async function (doc) {
       }).catch(() => {/* Circular import guard */});
 
       await adjustMessageCountInDrupal(conversationId, -1);
+    } catch (error) {
+      console.error("Failed to update message count in Drupal (findOneAndDelete):", error);
     }
-
-    const deletedMessageIds = doc?._id ? [doc._id] : this._deletedMessageIds;
-    await cleanupMessageDependents(deletedMessageIds, options);
-  } catch (error) {
-    console.error("Failed to update message count in Drupal (findOneAndDelete):", error);
   }
+
+  const deletedMessageIds = doc?._id ? [doc._id] : this._deletedMessageIds;
+  await cleanupMessageDependents(deletedMessageIds, options);
 });
 
 messageSchema.pre("deleteMany", async function () {
@@ -269,17 +376,17 @@ messageSchema.pre("deleteMany", async function () {
 });
 
 messageSchema.post("deleteMany", async function (result) {
-  try {
-    const options = this.getOptions?.() || {};
-    const conversationId = this._conversationIdForBulkDelete;
+  const options = this.getOptions?.() || {};
+  const conversationId = this._conversationIdForBulkDelete;
 
-    if (conversationId && !options.skipCounterSync) {
-      const deletedCount =
-        typeof result?.deletedCount === "number"
-          ? result.deletedCount
-          : this._bulkDeleteMessageCount || 0;
+  if (conversationId && !options.skipCounterSync) {
+    const deletedCount =
+      typeof result?.deletedCount === "number"
+        ? result.deletedCount
+        : this._bulkDeleteMessageCount || 0;
 
-      if (deletedCount > 0) {
+    if (deletedCount > 0) {
+      try {
         // Fire-and-forget: Bulk decrement MongoDB Conversation.messageCount
         import("./Conversation.js").then(({ default: Conversation }) => {
           Conversation.updateOne(
@@ -291,13 +398,13 @@ messageSchema.post("deleteMany", async function (result) {
         }).catch(() => {/* Circular import guard */});
 
         await adjustMessageCountInDrupal(conversationId, -deletedCount);
+      } catch (error) {
+        console.error("Failed to update message count in Drupal (deleteMany):", error);
       }
     }
-
-    await cleanupMessageDependents(this._deletedMessageIdsForBulkDelete, options);
-  } catch (error) {
-    console.error("Failed to update message count in Drupal (deleteMany):", error);
   }
+
+  await cleanupMessageDependents(this._deletedMessageIdsForBulkDelete, options);
 });
 
 const Message = mongoose.model("Message", messageSchema);

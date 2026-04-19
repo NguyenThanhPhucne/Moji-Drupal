@@ -21,6 +21,7 @@ import {
   Search,
   SlidersHorizontal,
   ChevronDown,
+  ChevronUp,
   NotebookText,
   type LucideIcon,
 } from "lucide-react";
@@ -632,13 +633,17 @@ const SavedMessagesPage = () => { // NOSONAR
                     aria-expanded={showFilters}
                     aria-controls="saved-filter-panel"
                     className={cn(
-                      "saved-filter-toggle-btn gap-2",
+                      "saved-filter-toggle-btn saved-filter-toggle-btn--command gap-2",
                       showFilters && "saved-filter-toggle-btn--active",
                     )}
                   >
                     <SlidersHorizontal className="size-3.5" />
                     Filters
-                    <ChevronDown className={cn("size-3.5 transition-transform duration-200", showFilters && "rotate-180")} />
+                    {showFilters ? (
+                      <ChevronUp className="size-3.5" />
+                    ) : (
+                      <ChevronDown className="size-3.5" />
+                    )}
                   </Button>
                   <BackToChatCard onClick={() => navigate("/")} />
                 </div>
@@ -742,6 +747,7 @@ const SavedMessagesPage = () => { // NOSONAR
               className="saved-preset-strip"
               role="tablist"
               aria-label="Saved message smart views"
+              tabIndex={0}
               onKeyDown={handlePresetKeyDown}
             >
               {SAVED_PRESETS.map(({ key, label, Icon }) => (
@@ -750,7 +756,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   type="button"
                   onClick={() => setSavedPreset(key)}
                   data-active={savedPreset === key}
-                  className="saved-preset-chip micro-tap-chip"
+                  className="saved-preset-chip saved-preset-chip--command micro-tap-chip"
                   ref={(element) => {
                     presetButtonRefs.current[key] = element;
                   }}
@@ -773,7 +779,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   type="button"
                   onClick={() => setCollectionFilter("")}
                   data-active={collectionFilter === ""}
-                  className="saved-preset-chip micro-tap-chip"
+                  className="saved-preset-chip saved-preset-chip--command micro-tap-chip"
                 >
                   <Tags className="size-3.5" />
                   <span>All collections</span>
@@ -786,7 +792,7 @@ const SavedMessagesPage = () => { // NOSONAR
                     type="button"
                     onClick={() => setCollectionFilter(item.name)}
                     data-active={collectionFilter === item.name}
-                    className="saved-preset-chip micro-tap-chip"
+                    className="saved-preset-chip saved-preset-chip--command micro-tap-chip"
                   >
                     <Tags className="size-3.5" />
                     <span>{item.name}</span>
@@ -798,10 +804,9 @@ const SavedMessagesPage = () => { // NOSONAR
 
             {/* ── Collapsible Filter Panel ─────────────────────────────── */}
             {showFilters && (
-              <div
+              <section
                 id="saved-filter-panel"
                 className="saved-filter-panel animate-in fade-in slide-in-from-top-2 duration-200"
-                role="region"
                 aria-label="Saved message filters"
               >
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -872,7 +877,7 @@ const SavedMessagesPage = () => { // NOSONAR
                     Clear all filters
                   </button>
                 )}
-              </div>
+              </section>
             )}
 
             {/* ── Selection Toolbar ─────────────────────────────────────── */}
@@ -887,7 +892,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   <button
                     type="button"
                     onClick={unreadCount === filteredBookmarks.length ? clearSelection : selectAllVisible}
-                    className="saved-select-all-btn micro-tap-chip"
+                    className="saved-select-all-btn saved-select-all-btn--command micro-tap-chip"
                     aria-label="Toggle select all"
                     aria-pressed={unreadCount === filteredBookmarks.length && unreadCount > 0}
                   >
@@ -906,7 +911,7 @@ const SavedMessagesPage = () => { // NOSONAR
                       <button
                         type="button"
                         onClick={() => setShowBulkPanel((v) => !v)}
-                        className="saved-select-all-btn micro-tap-chip gap-1.5"
+                        className="saved-select-all-btn saved-select-all-btn--command micro-tap-chip gap-1.5"
                         aria-expanded={showBulkPanel}
                         aria-controls="saved-bulk-panel"
                       >
@@ -916,7 +921,7 @@ const SavedMessagesPage = () => { // NOSONAR
                       <button
                         type="button"
                         onClick={exportSelectedCsv}
-                        className="saved-select-all-btn micro-tap-chip gap-1.5"
+                        className="saved-select-all-btn saved-select-all-btn--command micro-tap-chip gap-1.5"
                       >
                         <Download className="size-3.5" />
                         <span className="text-xs">Export CSV</span>
@@ -924,7 +929,7 @@ const SavedMessagesPage = () => { // NOSONAR
                       <button
                         type="button"
                         onClick={clearSelection}
-                        className="saved-select-all-btn micro-tap-chip gap-1 text-muted-foreground/70"
+                        className="saved-select-all-btn saved-select-all-btn--command micro-tap-chip gap-1 text-muted-foreground/70"
                       >
                         <X className="size-3.5" />
                         <span className="text-xs">Clear</span>
@@ -935,10 +940,9 @@ const SavedMessagesPage = () => { // NOSONAR
 
                 {/* Bulk tag sub-panel */}
                 {showBulkPanel && unreadCount > 0 && (
-                  <div
+                  <section
                     id="saved-bulk-panel"
                     className="saved-bulk-panel animate-in fade-in slide-in-from-top-1 duration-150 space-y-3"
-                    role="region"
                     aria-label="Bulk bookmark metadata actions"
                   >
                     <div>
@@ -989,7 +993,7 @@ const SavedMessagesPage = () => { // NOSONAR
                         </Button>
                       </div>
                     </div>
-                  </div>
+                  </section>
                 )}
               </div>
             )}
@@ -998,7 +1002,6 @@ const SavedMessagesPage = () => { // NOSONAR
             <section
               id={savedResultsRegionId}
               className="flex flex-col gap-3 min-h-0"
-              role="region"
               aria-live="polite"
               aria-label={`Saved results in ${savedPreset} view`}
             >
@@ -1010,7 +1013,7 @@ const SavedMessagesPage = () => { // NOSONAR
                 <div className="saved-empty-state animate-in fade-in slide-in-from-bottom-2 duration-500">
                   <div className="saved-empty-icon relative">
                     <Bookmark className="size-7 text-muted-foreground/50" />
-                    <span className="absolute inset-0 rounded-full border border-muted-foreground/20 animate-ping opacity-20" />
+                    <span className="saved-empty-icon-ring absolute inset-0 rounded-full border border-muted-foreground/20 opacity-40" />
                   </div>
                   <p className="text-[15px] font-semibold text-foreground/80 mt-4">
                     {searchQuery ? `No results for "${searchQuery}"` : "No saved messages yet"}
@@ -1040,7 +1043,7 @@ const SavedMessagesPage = () => { // NOSONAR
                   <article
                     key={bookmark._id}
                     className={cn(
-                      "saved-bookmark-card bookmark-card-hover",
+                      "saved-bookmark-card saved-bookmark-card--command bookmark-card-hover",
                       isSelected && "saved-bookmark-card--selected",
                       index < 6 && `animate-in fade-in slide-in-from-bottom-2 duration-300`,
                     )}
@@ -1054,7 +1057,7 @@ const SavedMessagesPage = () => { // NOSONAR
                         <button
                           type="button"
                           onClick={() => toggleBookmarkSelection(bookmark._id)}
-                          className="micro-tap-chip mt-0.5 flex-shrink-0 transition-transform duration-150 hover:scale-110"
+                          className="saved-select-checkbox saved-select-checkbox--command micro-tap-chip mt-0.5 flex-shrink-0 transition-colors duration-150"
                           aria-label={isSelected ? "Deselect" : "Select"}
                           aria-pressed={isSelected}
                         >

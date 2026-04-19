@@ -307,6 +307,10 @@ const lastMessageSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    editedAt: {
+      type: Date,
+      default: null,
+    },
     groupChannelId: {
       type: String,
       default: null,

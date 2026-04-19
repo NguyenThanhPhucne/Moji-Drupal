@@ -25,6 +25,12 @@ interface MessageSyncResponse {
   conversation?: Partial<Conversation> | null;
 }
 
+interface RemoveForMeResponse {
+  success: boolean;
+  alreadyHidden: boolean;
+  conversation?: Partial<Conversation> | null;
+}
+
 interface GroupJoinLinkResponse {
   conversation: Partial<Conversation>;
   joinLink: {
@@ -349,7 +355,7 @@ export const chatService = {
 
   async removeMessageForMe(messageId: string) {
     const res = await api.delete(`/messages/${messageId}/remove-for-me`);
-    return res.data;
+    return res.data as RemoveForMeResponse;
   },
 
   async editMessage(messageId: string, content: string) {

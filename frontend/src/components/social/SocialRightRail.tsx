@@ -8,7 +8,7 @@ import {
   MessageCircle,
   RefreshCw,
   Search,
-  Sparkles,
+  SlidersHorizontal,
   Users,
   Zap,
 } from "lucide-react";
@@ -21,6 +21,7 @@ import { useSocialMotionStore } from "@/stores/useSocialMotionStore";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserAvatar from "@/components/chat/UserAvatar";
+import { cn } from "@/lib/utils";
 import type { SocialPost } from "@/types/social";
 import { toast } from "sonner";
 
@@ -158,6 +159,26 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
     () => filteredContacts.slice(0, 24),
     [filteredContacts],
   );
+  const contactPresenceSummary = useMemo(() => {
+    return contacts.reduce(
+      (accumulator, contact) => {
+        if (contact.presence === "online") {
+          accumulator.online += 1;
+        } else if (contact.presence === "recently-active") {
+          accumulator.recent += 1;
+        } else {
+          accumulator.offline += 1;
+        }
+
+        return accumulator;
+      },
+      {
+        online: 0,
+        recent: 0,
+        offline: 0,
+      },
+    );
+  }, [contacts]);
 
   const trendingTags = useMemo(() => {
     const counter = new Map<string, number>();
@@ -276,19 +297,21 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
 
     if (event.key === "End") {
       event.preventDefault();
-      const lastId = String(visibleContacts[visibleContacts.length - 1]?._id || "");
+      const lastId = String(visibleContacts.at(-1)?._id || "");
       if (lastId) {
         contactButtonRefs.current[lastId]?.focus();
       }
     }
   };
 
-  let railClassName = "social-right-rail sticky top-0 h-screen overflow-y-auto beautiful-scrollbar space-y-4 pr-1 pl-0.5";
-  if (compact) {
-    railClassName = "social-right-rail space-y-3";
-  } else if (embedded) {
-    railClassName = "social-right-rail space-y-4";
-  }
+  const railClassName = cn(
+    "social-right-rail social-right-rail--command",
+    compact ? "social-right-rail--compact space-y-3" : "space-y-4",
+    embedded && "social-right-rail--embedded",
+    !compact &&
+      !embedded &&
+      "sticky top-0 h-screen overflow-y-auto beautiful-scrollbar pr-1 pl-0.5",
+  );
 
   const showContactsLoading = !hasFetchedRef.current && loading;
   const showSuggestionsLoading = !hasFetchedRef.current || loading;
@@ -296,10 +319,10 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
 
   return (
     <aside className={railClassName} aria-label="Social right rail">
-      <section className="social-rail-card social-motion-card">
+      <section className="social-rail-card social-rail-card--command social-rail-card--motion social-motion-card">
         <div className="social-rail-head">
           <span className="social-rail-title">
-            <Sparkles className="h-4 w-4" />
+            <SlidersHorizontal className="h-4 w-4" />
             Motion presets
           </span>
         </div>
@@ -318,7 +341,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             onClick={() => setMotionPreset("premium-strict")}
           >
             <span className="social-motion-option-icon" aria-hidden="true">
-              <Sparkles className="h-3.5 w-3.5" />
+              <SlidersHorizontal className="h-3.5 w-3.5" />
             </span>
             <span className="social-motion-option-copy">
               <span className="social-motion-option-title">{MOTION_COPY["premium-strict"].title}</span>
@@ -345,7 +368,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
         </div>
       </section>
 
-      <section className="social-rail-card">
+      <section className="social-rail-card social-rail-card--command social-rail-card--contacts">
         <div className="social-rail-head">
           <span className="social-rail-title">
             <Users className="h-4 w-4" />
@@ -354,7 +377,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
           <span className="social-rail-counter">{filteredContacts.length}/{contacts.length}</span>
         </div>
 
-        <div className="mt-2 space-y-2">
+        <div className="social-contacts-toolbar mt-2 space-y-2">
           <div className="flex items-center gap-1.5">
             {CONTACT_FILTERS.map((filter) => {
               const active = presenceFilter === filter.value;
@@ -377,7 +400,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             })}
           </div>
 
-          <div className="flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1.5">
+          <div className="social-contact-search-shell flex items-center gap-2 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1.5">
             <Search className="h-3.5 w-3.5 text-muted-foreground/75" />
             <input
               value={contactQuery}
@@ -402,6 +425,18 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
                 isRefreshingContacts ? "animate-spin" : "",
               ].join(" ")} />
             </button>
+          </div>
+
+          <div className="social-contacts-presence-strip social-contacts-presence-strip--command">
+            <span className="social-presence-stat social-presence-stat--online">
+              Online {contactPresenceSummary.online}
+            </span>
+            <span className="social-presence-stat social-presence-stat--recent">
+              Recent {contactPresenceSummary.recent}
+            </span>
+            <span className="social-presence-stat social-presence-stat--offline">
+              Offline {contactPresenceSummary.offline}
+            </span>
           </div>
         </div>
 
@@ -433,7 +468,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
                 }}
                 disabled={Boolean(openingContactId)}
                 aria-busy={isOpening}
-                className="social-contact-item social-contact-hover social-scale-bounce-hover w-full text-left disabled:cursor-wait disabled:opacity-70"
+                className="social-contact-item social-contact-item--command social-contact-hover social-scale-bounce-hover w-full text-left disabled:cursor-wait disabled:opacity-70"
                 onClick={() => handleContactClick(friend)}
                 onKeyDown={(event) => handleContactItemKeyDown(event, friendId)}
               >
@@ -473,7 +508,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
       </section>
 
 
-      <section className="social-rail-card">
+      <section className="social-rail-card social-rail-card--command social-rail-card--suggestions">
         <div className="social-rail-head">
           <span className="social-rail-title">
             <Compass className="h-4 w-4" />
@@ -498,12 +533,12 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
 
           {!showSuggestionsLoading && suggestions.length > 0 ? (
             suggestions.map((person) => (
-              <div key={person._id} className="social-suggestion-item social-scale-bounce-hover transition-all duration-300">
+              <div key={person._id} className="social-suggestion-item social-suggestion-item--command transition-colors duration-200">
                 <div className="flex items-center gap-2 min-w-0">
                   <UserAvatar type="chat" name={person.displayName} avatarUrl={person.avatarUrl || undefined} />
                   <span className="truncate text-sm font-medium">{person.displayName}</span>
                 </div>
-                <Button type="button" size="sm" variant="outline" className="rounded-full shadow-sm hover:border-primary/50 text-[12px] h-7 px-3 active:scale-95 transition-all" onClick={() => navigate(`/profile/${person._id}`)}>
+                <Button type="button" size="sm" variant="outline" className="rounded-full shadow-sm hover:border-primary/50 text-[12px] h-7 px-3 transition-colors" onClick={() => navigate(`/profile/${person._id}`)}>
                   View
                 </Button>
               </div>
@@ -514,7 +549,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
         </div>
       </section>
 
-      <section className="social-rail-card">
+      <section className="social-rail-card social-rail-card--command social-rail-card--shortcuts">
         <div className="social-rail-head">
           <span className="social-rail-title">
             <Flag className="h-4 w-4" />
@@ -527,7 +562,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
             <button
               key={item.tag}
               type="button"
-              className="trending-chip-upgrade social-scale-bounce-hover micro-tap-chip"
+              className="trending-chip-upgrade trending-chip-upgrade--command micro-tap-chip"
               onClick={() => navigate(`/explore?tag=${encodeURIComponent(item.tag)}`)}
             >
               <Hash className="social-trending-tag-icon" />
@@ -539,7 +574,7 @@ const SocialRightRail = ({ explorePosts = [], compact = false, embedded = false 
           {!trendingTags.length && <p className="social-rail-empty">No shortcuts yet.</p>}
         </div>
 
-        <Button type="button" variant="ghost" className="mt-2 w-full justify-start" onClick={() => navigate("/explore")}> 
+        <Button type="button" variant="ghost" className="social-rail-explore-btn mt-2 w-full justify-start" onClick={() => navigate("/explore")}> 
           <MessageCircle className="h-4 w-4" />
           Open Explore
         </Button>

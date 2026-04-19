@@ -12,6 +12,7 @@ export type SocialPreferences = {
   follow: boolean;
   like: boolean;
   comment: boolean;
+  mention: boolean;
   friendAccepted: boolean;
   system: boolean;
   mutedUserIds: string[];
@@ -33,6 +34,7 @@ export type NotificationPreset = {
     | "follow"
     | "like"
     | "comment"
+    | "mention"
     | "friendAccepted"
     | "system"
     | "digestEnabled"
@@ -53,6 +55,7 @@ export const DEFAULT_SOCIAL_PREFS: SocialPreferences = {
   follow: true,
   like: true,
   comment: true,
+  mention: true,
   friendAccepted: true,
   system: true,
   mutedUserIds: [],
@@ -76,6 +79,7 @@ export const NOTIFICATION_PRESETS: Record<NotificationPresetKey, NotificationPre
       follow: false,
       like: false,
       comment: false,
+      mention: true,
       friendAccepted: false,
       system: true,
       digestEnabled: true,
@@ -96,6 +100,7 @@ export const NOTIFICATION_PRESETS: Record<NotificationPresetKey, NotificationPre
       follow: true,
       like: true,
       comment: true,
+      mention: true,
       friendAccepted: true,
       system: true,
       digestEnabled: false,
@@ -116,6 +121,7 @@ export const NOTIFICATION_PRESETS: Record<NotificationPresetKey, NotificationPre
       follow: true,
       like: true,
       comment: true,
+      mention: true,
       friendAccepted: true,
       system: true,
       digestEnabled: false,
@@ -142,6 +148,7 @@ export const isNotificationPresetActive = (
     | "follow"
     | "like"
     | "comment"
+    | "mention"
     | "friendAccepted"
     | "system"
     | "digestEnabled"
@@ -158,6 +165,7 @@ export const isNotificationPresetActive = (
     social.follow === preset.social.follow &&
     social.like === preset.social.like &&
     social.comment === preset.social.comment &&
+    social.mention === preset.social.mention &&
     social.friendAccepted === preset.social.friendAccepted &&
     social.system === preset.social.system &&
     social.digestEnabled === preset.social.digestEnabled &&

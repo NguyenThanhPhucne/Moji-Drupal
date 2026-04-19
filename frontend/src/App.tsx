@@ -71,6 +71,21 @@ function AppRoutes() {
   const routeSceneKey = `${location.pathname}${location.search}`;
   const mainRef = useRef<HTMLElement | null>(null);
 
+  const moveFocusToMain = () => {
+    const mainElement =
+      mainRef.current ??
+      globalThis.document.getElementById("primary-main");
+
+    if (mainElement) {
+      mainElement.focus({ preventScroll: true });
+      mainElement.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+
+    if (globalThis.location.hash !== "#primary-main") {
+      globalThis.location.hash = "#primary-main";
+    }
+  };
+
   useEffect(() => {
     const handleBrowserHistorySync = () => {
       const browserPath = `${globalThis.location.pathname}${globalThis.location.search}${globalThis.location.hash}`;
@@ -108,6 +123,16 @@ function AppRoutes() {
         className="app-skip-link"
         aria-label="Skip to main content"
         data-testid="skip-to-main-link"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            moveFocusToMain();
+          }
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          moveFocusToMain();
+        }}
       >
         Skip to main content
       </a>

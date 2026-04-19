@@ -58,7 +58,7 @@ const UserAvatar = ({
           type === "sidebar" && "size-[42px] text-sm",
           type === "chat" && "size-8 text-sm",
           type === "profile" && "size-24 text-3xl shadow-md",
-          canPreview && "cursor-zoom-in hover:brightness-110 focus-visible:ring-2 ring-primary ring-offset-2 ring-offset-background transition-all duration-200",
+          canPreview && "cursor-zoom-in hover:brightness-110 focus-visible:ring-2 ring-primary ring-offset-2 ring-offset-background transition-[filter,box-shadow] duration-200",
           className ?? "",
         )}
         role={canPreview ? "button" : undefined}

@@ -105,7 +105,7 @@ const SocialTopHeader = ({
   }, [openPreferredChat]);
 
   return (
-    <header className="social-topbar social-card">
+    <header className="social-topbar social-topbar--command social-card">
       <div className="social-topbar-main">
         <div className="social-topbar-brand">
           <div className="social-topbar-title-row">

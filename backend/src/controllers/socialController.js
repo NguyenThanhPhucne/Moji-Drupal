@@ -418,6 +418,7 @@ const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES = Object.freeze({
   follow: true,
   like: true,
   comment: true,
+  mention: true,
   friendAccepted: true,
   system: true,
   mutedUserIds: [],
@@ -430,9 +431,13 @@ const SOCIAL_NOTIFICATION_PREF_KEY_BY_TYPE = Object.freeze({
   follow: "follow",
   like: "like",
   comment: "comment",
+  mention: "mention",
   friend_accepted: "friendAccepted",
   system: "system",
 });
+
+const MAX_MENTION_USERNAMES_PER_COMMENT = 20;
+const MENTION_USERNAME_REGEX = /(^|\W)@(\w{2,32})/g;
 
 const normalizeObjectIdList = (value) => {
   if (!Array.isArray(value)) {
@@ -448,13 +453,58 @@ const normalizeObjectIdList = (value) => {
   ];
 };
 
+const extractMentionUsernames = (rawContent) => {
+  const content = String(rawContent || "");
+  if (!content) {
+    return [];
+  }
+
+  const matcher = new RegExp(MENTION_USERNAME_REGEX.source, "g");
+  const usernames = new Set();
+  let match = matcher.exec(content);
+
+  while (match) {
+    const username = String(match[2] || "").trim().toLowerCase();
+    if (username) {
+      usernames.add(username);
+      if (usernames.size >= MAX_MENTION_USERNAMES_PER_COMMENT) {
+        break;
+      }
+    }
+
+    match = matcher.exec(content);
+  }
+
+  return [...usernames];
+};
+
+const resolveMentionRecipientIds = async ({ content, actorId }) => {
+  const usernames = extractMentionUsernames(content);
+  if (usernames.length === 0) {
+    return [];
+  }
+
+  const actorIdString = String(actorId || "").trim();
+  const mentionedUsers = await User.find({ username: { $in: usernames } })
+    .select("_id")
+    .lean();
+
+  return [
+    ...new Set(
+      mentionedUsers
+        .map((user) => String(user?._id || "").trim())
+        .filter((recipientId) => recipientId && recipientId !== actorIdString),
+    ),
+  ];
+};
+
 const resolveSocialNotificationPreferences = (rawPreferences) => {
   if (!rawPreferences || typeof rawPreferences !== "object") {
     return { ...DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES };
   }
 
   const next = { ...DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES };
-  ["muted", "follow", "like", "comment", "friendAccepted", "system", "digestEnabled"].forEach((key) => {
+  ["muted", "follow", "like", "comment", "mention", "friendAccepted", "system", "digestEnabled"].forEach((key) => {
     if (typeof rawPreferences[key] === "boolean") {
       next[key] = rawPreferences[key];
     }
@@ -565,6 +615,62 @@ const createAndEmitNotification = async ({
   }
 
   return populated;
+};
+
+const notifyCommentParticipants = async ({
+  postAuthorId,
+  actorId,
+  postId,
+  commentId,
+  commentContent,
+}) => {
+  const commentPreview = String(commentContent || "").trim();
+  const compactPreview =
+    commentPreview.length > 80
+      ? `${commentPreview.slice(0, 80)}...`
+      : commentPreview;
+
+  const mentionRecipientIds = await resolveMentionRecipientIds({
+    content: commentContent,
+    actorId,
+  });
+  const normalizedPostAuthorId = String(postAuthorId || "").trim();
+  const postAuthorMentioned =
+    normalizedPostAuthorId.length > 0 &&
+    mentionRecipientIds.includes(normalizedPostAuthorId);
+  const mentionMessage = compactPreview
+    ? `mentioned you: "${compactPreview}"`
+    : "mentioned you in a comment";
+
+  if (!postAuthorMentioned) {
+    await createAndEmitNotification({
+      recipientId: postAuthorId,
+      actorId,
+      type: "comment",
+      postId,
+      commentId,
+      message: compactPreview
+        ? `commented: "${compactPreview}"`
+        : "commented on your post",
+    });
+  }
+
+  if (mentionRecipientIds.length === 0) {
+    return;
+  }
+
+  await Promise.all(
+    mentionRecipientIds.map((recipientId) =>
+      createAndEmitNotification({
+        recipientId,
+        actorId,
+        type: "mention",
+        postId,
+        commentId,
+        message: mentionMessage,
+      }),
+    ),
+  );
 };
 
 const emitSocialLikeUpdated = ({
@@ -1372,21 +1478,12 @@ export const addComment = async (req, res) => {
       commentsCount: post.commentsCount,
     });
 
-    const commentPreview = String(comment.content || "").trim();
-    const compactPreview =
-      commentPreview.length > 80
-        ? `${commentPreview.slice(0, 80)}...`
-        : commentPreview;
-
-    await createAndEmitNotification({
-      recipientId: post.authorId,
+    await notifyCommentParticipants({
+      postAuthorId: post.authorId,
       actorId: userId,
-      type: "comment",
       postId: post._id,
       commentId: comment._id,
-      message: compactPreview
-        ? `commented: "${compactPreview}"`
-        : "commented on your post",
+      commentContent: comment.content,
     });
 
     await invalidateCache(`feed:*`);

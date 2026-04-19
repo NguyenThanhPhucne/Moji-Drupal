@@ -1118,10 +1118,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       },
     );
 
-    socket.on("message-hidden-for-user", ({ conversationId, messageId }) => {
+    socket.on("message-hidden-for-user", ({
+      conversationId,
+      messageId,
+      conversation,
+    }) => {
       useChatStore
         .getState()
         .removeMessageFromConversation(conversationId, messageId);
+
+      if (conversation?._id) {
+        useChatStore.getState().updateConversation(conversation);
+      }
     });
 
     socket.on(
@@ -1213,6 +1221,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
           },
         },
       });
+    });
+
+    // Friend removed - other user's friend list updates in realtime
+    socket.on("friend-removed", ({ removedBy }) => {
+      if (!removedBy) return;
+      const friendStore = useFriendStore.getState();
+      friendStore.getFriends();
     });
 
     socket.on("social-notification", ({ notification }) => {

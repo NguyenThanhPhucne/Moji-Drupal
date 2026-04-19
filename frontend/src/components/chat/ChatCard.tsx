@@ -1,5 +1,6 @@
 // Card import removed - using plain div instead
 import { formatOnlineTime, cn } from "@/lib/utils";
+import { memo } from "react";
 
 interface ChatCardProps {
   convoId: string;
@@ -13,7 +14,7 @@ interface ChatCardProps {
   subtitle: React.ReactNode;
 }
 
-const ChatCard = ({
+const ChatCardInner = ({
   convoId,
   name,
   timestamp,
@@ -36,15 +37,15 @@ const ChatCard = ({
       aria-pressed={isActive}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "chat-sidebar-card chat-card-hover-shimmer cursor-pointer rounded-[14px] border px-3.5 py-2.5 select-none relative overflow-hidden",
-        "transition-[transform,background-color,border-color,box-shadow] duration-200 active:scale-[0.985]",
+        "chat-sidebar-card chat-sidebar-card--enterprise chat-sidebar-card--command cursor-pointer rounded-[14px] border px-3.5 py-2.5 select-none relative overflow-hidden",
+        "transition-[background-color,border-color,box-shadow] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-1",
         "w-full text-left",
         "group",
         !isActive &&
-          "border-transparent hover:bg-muted/50 hover:border-border/70 hover:translate-x-[1.5px]",
+          "border-transparent hover:bg-muted/50 hover:border-border/70",
         isActive
-          ? "bg-primary/[0.11] border-primary/20 shadow-[0_14px_24px_-22px_hsl(var(--primary)/0.82)]"
+          ? "bg-primary/[0.11] border-primary/20 shadow-[0_12px_20px_-22px_hsl(var(--primary)/0.62)]"
           : "bg-transparent",
       )}
       onClick={() => onSelect(convoId)}
@@ -52,7 +53,7 @@ const ChatCard = ({
       {/* Active left pill indicator — gradient style */}
       <span
         className={cn(
-          "chat-sidebar-card-indicator absolute left-0 top-2 bottom-2 rounded-r-full transition-all duration-250 ease-out",
+          "chat-sidebar-card-indicator chat-sidebar-card-indicator--command absolute left-0 top-2 bottom-2 rounded-r-full transition-[width,opacity,background-color] duration-250 ease-out",
           isActive
             ? "w-[3.5px] opacity-100 bg-gradient-to-b from-primary via-primary to-primary/70"
             : "w-0 opacity-0"
@@ -99,14 +100,14 @@ const ChatCard = ({
               {subtitle}
             </div>
 
-            <div className="flex flex-shrink-0 items-center gap-1.5">
+            <div className="flex flex-shrink-0 items-center gap-1">
               {hasMention && (
-                <span className="chat-sidebar-card-badge chat-sidebar-card-badge--mention badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-extrabold text-white shadow-sm">
+                <span className="chat-sidebar-card-badge chat-sidebar-card-badge--mention chat-sidebar-card-badge--command inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-extrabold text-white shadow-sm">
                   @{(mentionCount ?? 0) > 9 ? "9+" : mentionCount}
                 </span>
               )}
               {hasUnread && (
-                <span className="chat-sidebar-card-badge unread-badge-entry badge-pop inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white shadow-sm">
+                <span className="chat-sidebar-card-badge chat-sidebar-card-badge--command inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-white shadow-sm">
                   {(unreadCount ?? 0) > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -117,5 +118,7 @@ const ChatCard = ({
     </button>
   );
 };
+
+const ChatCard = memo(ChatCardInner);
 
 export default ChatCard;

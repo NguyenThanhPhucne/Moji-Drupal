@@ -83,6 +83,10 @@ const userSchema = new mongoose.Schema(
           type: Boolean,
           default: true,
         },
+        mention: {
+          type: Boolean,
+          default: true,
+        },
         friendAccepted: {
           type: Boolean,
           default: true,

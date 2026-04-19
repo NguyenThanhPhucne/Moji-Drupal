@@ -69,40 +69,7 @@ const ChatAppPage = () => {
       });
   }, [activeConversationId, conversations, convoLoading, fetchConversations]);
 
-  useEffect(() => {
-    if (convoLoading || conversations.length === 0) {
-      return;
-    }
 
-    const targetConversationId = String(activeConversationId || "").trim();
-    const hasTargetConversation = conversations.some(
-      (conversation) => String(conversation._id) === targetConversationId,
-    );
-
-    if (hasTargetConversation) {
-      return;
-    }
-
-    const fallbackConversation =
-      conversations.find(
-        (conversation) =>
-          conversation.type === "group" &&
-          (conversation.group?.channels?.length || 0) > 0,
-      ) ||
-      conversations.find((conversation) => conversation.type === "group") ||
-      conversations[0];
-
-    if (!fallbackConversation?._id) {
-      return;
-    }
-
-    const fallbackConversationId = String(fallbackConversation._id);
-    if (!fallbackConversationId || fallbackConversationId === targetConversationId) {
-      return;
-    }
-
-    setActiveConversation(fallbackConversationId);
-  }, [activeConversationId, conversations, convoLoading, setActiveConversation]);
 
   useEffect(() => {
     const handleOutsideCardClick = (event: MouseEvent) => {

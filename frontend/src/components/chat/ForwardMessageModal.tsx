@@ -148,7 +148,7 @@ export const ForwardMessageModal = ({ isOpen, onClose, messageId }: ForwardMessa
         <div className="max-h-[300px] overflow-y-auto beautiful-scrollbar px-1.5 py-1.5">
           {filteredFriends.length === 0 && filteredGroups.length === 0 && (
             <div className="py-10 flex flex-col items-center gap-2 text-muted-foreground/60">
-              <span className="text-2xl">🔍</span>
+              <Search className="h-5 w-5" />
               <p className="text-[12.5px]">No results found</p>
             </div>
           )}
@@ -165,7 +165,7 @@ export const ForwardMessageModal = ({ isOpen, onClose, messageId }: ForwardMessa
                       key={friend._id}
                       onClick={() => toggleUser(friend._id)}
                       className={cn(
-                        "w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-all duration-150 text-left",
+                        "w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-colors duration-150 text-left",
                         isSelected
                           ? "bg-primary/[0.08] hover:bg-primary/[0.12]"
                           : "hover:bg-muted/60"
@@ -182,7 +182,7 @@ export const ForwardMessageModal = ({ isOpen, onClose, messageId }: ForwardMessa
                         <span className={cn("text-[13.5px] font-medium leading-none", isSelected && "text-primary")}>{friend.displayName}</span>
                       </div>
                       <div className={cn(
-                        "size-5 rounded-full border-[1.5px] flex items-center justify-center transition-all duration-150",
+                        "size-5 rounded-full border-[1.5px] flex items-center justify-center transition-colors duration-150",
                         isSelected
                           ? "bg-primary border-primary text-primary-foreground forward-select-pop"
                           : "border-muted-foreground/30"
@@ -208,7 +208,7 @@ export const ForwardMessageModal = ({ isOpen, onClose, messageId }: ForwardMessa
                       key={groupConv._id}
                       onClick={() => toggleGroup(groupConv._id)}
                       className={cn(
-                        "w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-all duration-150 text-left",
+                        "w-full flex items-center justify-between px-2.5 py-2 rounded-xl transition-colors duration-150 text-left",
                         isSelected
                           ? "bg-primary/[0.08] hover:bg-primary/[0.12]"
                           : "hover:bg-muted/60"
@@ -222,7 +222,7 @@ export const ForwardMessageModal = ({ isOpen, onClose, messageId }: ForwardMessa
                         <span className={cn("text-[13.5px] font-medium leading-none", isSelected && "text-primary")}>{groupConv.group.name}</span>
                       </div>
                       <div className={cn(
-                        "size-5 rounded-full border-[1.5px] flex items-center justify-center transition-all duration-150",
+                        "size-5 rounded-full border-[1.5px] flex items-center justify-center transition-colors duration-150",
                         isSelected
                           ? "bg-primary border-primary text-primary-foreground forward-select-pop"
                           : "border-muted-foreground/30"
@@ -259,7 +259,7 @@ export const ForwardMessageModal = ({ isOpen, onClose, messageId }: ForwardMessa
               onClick={handleForward}
               disabled={totalSelected === 0 || isForwarding}
               size="sm"
-              className="rounded-full px-4 h-8 text-[12.5px] font-semibold bg-primary text-primary-foreground hover:brightness-110 shadow-sm hover:shadow-md transition-all active:scale-[0.97] disabled:opacity-50"
+              className="rounded-full px-4 h-8 text-[12.5px] font-semibold bg-primary text-primary-foreground shadow-sm transition-[background-color,color,box-shadow,opacity] hover:bg-primary/90 disabled:opacity-50"
             >
               <SendHorizontal className="size-3.5 mr-1.5" />
               {isForwarding ? "Sending..." : "Forward"}

@@ -68,7 +68,7 @@ export interface SocialNotification {
   _id: string;
   recipientId: string;
   actorId: SocialUserLite;
-  type: "follow" | "like" | "comment" | "system" | "friend_accepted";
+  type: "follow" | "like" | "comment" | "mention" | "system" | "friend_accepted";
   postId?: string | null;
   conversationId?: string | null;
   commentId?: string | null;

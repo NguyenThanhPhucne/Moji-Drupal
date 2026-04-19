@@ -12,20 +12,22 @@
 /* ──────────────────────────────────── */
 /* Z-Index Scale — Standardized Global Stack  */
 /* ──────────────────────────────────── */
+:root {
+  --z-base:       0;     /* static content */
+  --z-raised:     10;    /* floating buttons, tooltips */
+  --z-header:     20;    /* sticky headers */
+  --z-sidebar:    30;    /* overlay sidebars on mobile */
+  --z-dock:       50;    /* mini chat dock */
+  --z-dropdown:   100;   /* dropdowns/popovers */
+  --z-context:    130;   /* context menus (above dropdowns) */
+  --z-modal:      200;   /* modal dialogs */
+  --z-overlay:    300;   /* lightboxes, fullscreen overlays */
+  --z-toast:      9999;  /* system toasts/alerts — always topmost UI */
+  --z-skip-link:  10001; /* a11y skip-to-content link — above everything */
+}
 *, *::before, *::after {
   /* CSS custom properties for z-index are applied per-class below */
 }
-/* z-stack guide:
-   --z-base       : 0    (static content)
-   --z-raised     : 10   (floating buttons, tooltips)
-   --z-header     : 20   (sticky headers)
-   --z-sidebar    : 30   (overlay sidebars on mobile)
-   --z-dock       : 50   (mini chat dock)
-   --z-dropdown   : 100  (dropdowns/popovers)
-   --z-modal      : 200  (modal dialogs)
-   --z-overlay    : 300  (lightboxes)
-   --z-toast      : 9999 (system toasts/alerts)
-*/
 
 .chat-thread-infinite {
   display: flex;
@@ -238,8 +240,8 @@
     --chat-bubble-padding-x: 0.875rem;
     --chat-row-padding-y: 0.25rem;
     --chat-row-padding-x: 0.625rem;
-    --chat-bubble-radius: 20px;
-    --chat-bubble-tail-radius: 4px;
+    --chat-bubble-radius: 12px;
+    --chat-bubble-tail-radius: 3px;
   }
 
   .dark {
@@ -710,12 +712,15 @@ html[data-motion="reduced"] * {
   }
 
   .elevated-card {
-    @apply rounded-2xl border border-border/70 bg-card/85 backdrop-blur transition-all duration-300;
+    @apply rounded-2xl border border-border/70 bg-card/85 backdrop-blur;
+    transition:
+      box-shadow 0.3s ease,
+      border-color 0.3s ease,
+      background-color 0.3s ease;
     box-shadow: var(--shadow-soft);
   }
 
   .elevated-card:hover {
-    transform: translateY(-2px);
     box-shadow: var(--shadow-bubble);
     border-color: hsl(var(--primary)/0.2);
   }
@@ -930,6 +935,11 @@ html[data-motion="reduced"] * {
 
   .chat-message-bubble-shell--pressed {
     filter: brightness(0.985) saturate(1.02);
+  }
+
+  .chat-message-bubble-surface:active {
+    transform: scale(0.98);
+    transition-duration: 80ms;
   }
 
   .chat-message-bubble-surface {
@@ -1289,11 +1299,13 @@ html[data-motion="reduced"] * {
     @apply fixed flex items-center justify-center size-9 rounded-full shadow-lg border border-border/50;
     background: hsl(var(--background) / 0.95);
     backdrop-filter: blur(8px);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .scroll-fab:hover {
-    transform: scale(1.1);
     box-shadow: var(--shadow-bubble);
   }
 
@@ -1528,7 +1540,11 @@ html[data-motion="reduced"] * {
 
   /* ─── Post action button hover glow ─────────────────────────────── */
   .post-action-btn-hover {
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+      color 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .post-action-btn-hover:hover {
@@ -1556,7 +1572,10 @@ html[data-motion="reduced"] * {
   /* ─── Social contact item hover ─────────────────────────────────── */
   .social-contact-hover {
     border-radius: 10px;
-    transition: all 0.14s ease;
+    transition:
+      transform 0.14s ease,
+      background-color 0.14s ease,
+      color 0.14s ease;
     padding: 5px 8px;
     margin: 0 -8px;
   }
@@ -1622,7 +1641,12 @@ html[data-motion="reduced"] * {
     border: 1px solid hsl(var(--border) / 0.6);
     background: hsl(var(--muted) / 0.5);
     color: hsl(var(--foreground) / 0.8);
-    transition: all 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
   }
 
   .trending-chip-upgrade:hover {
@@ -1674,14 +1698,16 @@ html[data-motion="reduced"] * {
     border-radius: 14px;
     background: hsl(var(--card) / 0.7);
     border: 1px solid hsl(var(--border) / 0.5);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: default;
   }
 
   .profile-stat-chip:hover {
     background: hsl(var(--primary) / 0.06);
     border-color: hsl(var(--primary) / 0.2);
-    transform: translateY(-2px);
     box-shadow: 0 4px 12px hsl(var(--primary) / 0.08);
   }
 
@@ -1723,13 +1749,12 @@ html[data-motion="reduced"] * {
 
   /* ─── Bookmark card — elevated hover ────────────────────────────── */
   .bookmark-card-hover {
-    transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    transition: box-shadow 0.18s ease, border-color 0.18s ease;
   }
 
   .bookmark-card-hover:hover {
     border-color: hsl(var(--primary) / 0.2) !important;
     box-shadow: 0 4px 20px hsl(var(--primary) / 0.07), 0 1px 3px hsl(0 0% 0% / 0.04);
-    transform: translateY(-1px);
   }
 
   /* ─── Saved page search input focus ─────────────────────────────── */
@@ -1748,23 +1773,28 @@ html[data-motion="reduced"] * {
     color: white !important;
     border: none !important;
     box-shadow: 0 4px 14px hsl(var(--primary) / 0.3) !important;
-    transition: all 0.2s ease !important;
+    transition:
+      box-shadow 0.2s ease,
+      filter 0.2s ease,
+      background-color 0.2s ease !important;
   }
 
   .profile-action-gradient:hover {
     box-shadow: 0 6px 20px hsl(var(--primary) / 0.4) !important;
-    transform: translateY(-1px) !important;
     filter: brightness(1.05);
   }
 
   .profile-action-gradient:active {
-    transform: scale(0.97) !important;
+    filter: brightness(1.02);
   }
 
   /* ─── Follow button states ───────────────────────────────────────── */
   .follow-btn-following {
     border: 1px solid hsl(var(--border));
-    transition: all 0.2s ease;
+    transition:
+      border-color 0.2s ease,
+      color 0.2s ease,
+      background-color 0.2s ease;
   }
 
   .follow-btn-following:hover {
@@ -1801,7 +1831,12 @@ html[data-motion="reduced"] * {
 
   /* ─── Message action toolbar ─────────────────────────────────────── */
   .msg-action-bar {
-    @apply flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/95 backdrop-blur-sm shadow-md p-0.5 opacity-0 scale-90 transition-all duration-150 pointer-events-none;
+    @apply flex items-center gap-0.5 rounded-xl border border-border/60 bg-background/95 backdrop-blur-sm shadow-md p-0.5 opacity-0 scale-90 pointer-events-none;
+    transition:
+      opacity 0.15s ease,
+      transform 0.15s ease,
+      border-color 0.15s ease,
+      background-color 0.15s ease;
   }
   .group:hover .msg-action-bar,
   .msg-action-bar:focus-within {
@@ -2115,11 +2150,9 @@ html[data-motion="reduced"] * {
 
   /* ─── Hover lift card ────────────────────────────────────────────── */
   .hover-lift {
-    transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1),
-                box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: box-shadow 0.18s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .hover-lift:hover {
-    transform: translateY(-2px);
     box-shadow: 0 8px 24px -6px hsl(var(--primary) / 0.18);
   }
 
@@ -2172,7 +2205,7 @@ html[data-motion="reduced"] * {
     /* Ensure chat header is always above message bubbles */
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: var(--z-header);
   }
 
   .chat-header-identity {
@@ -2457,7 +2490,7 @@ html[data-motion="reduced"] * {
 
   .chat-context-menu--floating {
     position: fixed;
-    z-index: 130;
+    z-index: var(--z-context);
   }
 
   /* ── Reply Preview Bubble ──────────────────────────────────────── */
@@ -2630,7 +2663,7 @@ html[data-motion="reduced"] * {
     position: absolute;
     bottom: 16px;
     right: 16px;
-    z-index: 20;
+    z-index: var(--z-header);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3105,7 +3138,7 @@ html[data-motion="reduced"] * {
 .settings-toolbar {
   position: sticky;
   top: 0;
-  z-index: 5;
+    z-index: var(--z-raised, 5);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3735,7 +3768,7 @@ html[data-motion="reduced"] * {
 .lightbox-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-overlay);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3774,7 +3807,7 @@ html[data-motion="reduced"] * {
   justify-content: space-between;
   padding: 0 16px;
   background: linear-gradient(to bottom, hsl(0 0% 0% / 0.7), transparent);
-  z-index: 10;
+  z-index: var(--z-raised);
   gap: 8px;
 }
 
@@ -4020,7 +4053,7 @@ html[data-motion="reduced"] * {
 
 .welcome-content {
   position: relative;
-  z-index: 10;
+  z-index: var(--z-raised);
   text-align: center;
   max-width: 500px;
   width: 100%;
@@ -4062,7 +4095,11 @@ html[data-motion="reduced"] * {
   border: 1px solid hsl(var(--border) / 0.5);
   border-radius: 16px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
   backdrop-filter: blur(8px);
   width: 100%;
   color: hsl(var(--foreground));
@@ -4071,7 +4108,6 @@ html[data-motion="reduced"] * {
 .welcome-action-card:hover {
   background: hsl(var(--background));
   border-color: hsl(var(--border));
-  transform: translateY(-2px);
   box-shadow: 0 8px 24px hsl(0 0% 0% / 0.04);
 }
 

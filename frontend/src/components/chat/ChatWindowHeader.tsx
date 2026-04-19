@@ -23,8 +23,6 @@ import {
   Bell,
   MoreVertical,
   Trash2,
-  Phone,
-  Video,
   UserCircle,
   Megaphone,
   ShieldCheck,
@@ -92,6 +90,18 @@ function getGroupPresenceText(
 
 type GroupMemberRole = "owner" | "admin" | "member";
 
+type PendingDestructiveAction =
+  | {
+      type: "channel";
+      channelId: string;
+      channelName: string;
+    }
+  | {
+      type: "category";
+      categoryId: string;
+      categoryName: string;
+    };
+
 const GROUP_ROLE_PRIORITY: Record<GroupMemberRole, number> = {
   owner: 0,
   admin: 1,
@@ -114,16 +124,10 @@ const getGroupMemberRole = (
   return "member";
 };
 
-const getGroupRoleLabel = (role: GroupMemberRole) => {
-  if (role === "owner") {
-    return "Owner";
-  }
-
-  if (role === "admin") {
-    return "Admin";
-  }
-
-  return "Member";
+const GROUP_ROLE_LABEL: Record<GroupMemberRole, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
 };
 
 const formatUnreadCountLabel = (unreadCount: number) => {
@@ -203,6 +207,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   ]);
   const [isSavingChannelSettings, setIsSavingChannelSettings] = useState(false);
   const [isDeletingChannel, setIsDeletingChannel] = useState(false);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
+  const [pendingDestructiveAction, setPendingDestructiveAction] =
+    useState<PendingDestructiveAction | null>(null);
   const [categoryDrafts, setCategoryDrafts] = useState<Record<string, string>>({});
   const [analyticsDays, setAnalyticsDays] = useState(7);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -263,25 +270,6 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const announcementOnly =
     chat?.type === "group" &&
     Boolean(chat.group?.announcementOnly);
-  const currentUserGroupRole: GroupMemberRole =
-    chat?.type === "group"
-      ? getGroupMemberRole(myUserId, ownerId, groupAdminIds)
-      : "member";
-  const currentGroupRoleLabel = getGroupRoleLabel(currentUserGroupRole);
-  const groupAdminCount = useMemo(() => {
-    if (chat?.type !== "group") {
-      return 0;
-    }
-
-    const effectiveAdmins = new Set<string>([ownerId]);
-    groupAdminIds.forEach((memberId) => {
-      if (memberId) {
-        effectiveAdmins.add(memberId);
-      }
-    });
-
-    return effectiveAdmins.size;
-  }, [chat?.type, groupAdminIds, ownerId]);
   const groupMembersWithRole = useMemo(() => {
     if (chat?.type !== "group") {
       return [];
@@ -363,12 +351,30 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
       : "";
   const activeGroupChannel =
     chat?.type === "group"
-      ? groupChannels.find((channel) => String(channel.channelId) === activeGroupChannelId) ||
-        groupChannels[0]
+      ? groupChannels.find(
+          (channel) => String(channel.channelId) === activeGroupChannelId,
+        ) || groupChannels[0] || null
       : null;
   const activeGroupChannelUnread =
+    chat?.type === "group" && activeGroupChannel
+      ? Math.max(0, Number(myChannelUnreadMap?.[activeGroupChannel.channelId] || 0))
+      : 0;
+  const activeGroupChannelPosition =
+    chat?.type === "group" && activeGroupChannel
+      ? Math.max(
+          0,
+          groupChannels.findIndex(
+            (channel) => String(channel.channelId) === String(activeGroupChannel.channelId),
+          ),
+        ) + 1
+      : 0;
+  const currentUserGroupRole =
+    chat?.type === "group" && myUserId
+      ? getGroupMemberRole(myUserId, ownerId, groupAdminIds)
+      : null;
+  const groupLeadershipCount =
     chat?.type === "group"
-      ? Number(myChannelUnreadMap?.[activeGroupChannelId] || 0)
+      ? new Set([ownerId, ...Array.from(groupAdminIds)].filter(Boolean)).size
       : 0;
   const totalGroupUnread =
     chat?.type === "group"
@@ -377,15 +383,21 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
           return sum + (Number.isFinite(parsedCount) ? Math.max(0, parsedCount) : 0);
         }, 0)
       : 0;
-  const activeChannelOrdinal =
-    chat?.type === "group"
-      ? Math.max(
-          1,
-          groupChannels.findIndex(
-            (channel) => String(channel.channelId) === activeGroupChannelId,
-          ) + 1,
-        )
-      : 1;
+  const groupHeaderStatusLabel = (() => {
+    if (chat?.type !== "group") {
+      return "";
+    }
+
+    if (announcementOnly) {
+      return "Announce only";
+    }
+
+    if (totalGroupUnread > 0) {
+      return `${formatUnreadCountLabel(totalGroupUnread)} unread`;
+    }
+
+    return "Realtime";
+  })();
   const groupedChannelOptions = useMemo(() => {
     if (chat?.type !== "group") {
       return [] as Array<{
@@ -503,7 +515,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
   if (!chat) {
     return (
-      <header className="md:hidden chat-header-shell chat-header-shell--elevated sticky top-0 flex items-center gap-2 px-4 py-2 w-full">
+      <header className="chat-header-shell chat-header-shell--command chat-header-shell--elevated sticky top-0 flex w-full items-center gap-2 px-4 py-2 md:hidden">
         <SidebarTrigger className="-ml-1 text-foreground" />
       </header>
     );
@@ -733,7 +745,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     const currentIndex = groupChannels.findIndex(
       (channel) => String(channel.channelId) === activeGroupChannelId,
     );
-    const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+    const safeCurrentIndex = Math.max(0, currentIndex);
     const delta = direction === "next" ? 1 : -1;
     const nextIndex =
       (safeCurrentIndex + delta + groupChannels.length) % groupChannels.length;
@@ -888,7 +900,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     }
   };
 
-  const handleDeleteSelectedChannel = async () => {
+  const handleDeleteSelectedChannel = () => {
     if (chat.type !== "group" || !selectedManageChannel) {
       return;
     }
@@ -898,28 +910,11 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
       return;
     }
 
-    const confirmed = globalThis.confirm(
-      `Delete #${selectedManageChannel.name}? This removes channel messages permanently.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setIsDeletingChannel(true);
-      const result = await deleteGroupChannel(chat._id, selectedManageChannel.channelId);
-
-      if (!result.ok) {
-        toast.error(result.message || "Could not delete channel");
-        return;
-      }
-
-      toast.success("Channel deleted");
-      await refreshChannelAnalytics();
-    } finally {
-      setIsDeletingChannel(false);
-    }
+    setPendingDestructiveAction({
+      type: "channel",
+      channelId: selectedManageChannel.channelId,
+      channelName: selectedManageChannel.name,
+    });
   };
 
   const handleMoveCategory = async (
@@ -980,7 +975,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     toast.success("Category updated");
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
+  const handleDeleteCategory = (categoryId: string) => {
     if (chat.type !== "group") {
       return;
     }
@@ -988,21 +983,67 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     const categoryName =
       groupChannelCategories.find((category) => category.categoryId === categoryId)
         ?.name || "this category";
-    const confirmed = globalThis.confirm(
-      `Delete category "${categoryName}"? Channels will become uncategorized.`,
-    );
 
-    if (!confirmed) {
+    setPendingDestructiveAction({
+      type: "category",
+      categoryId,
+      categoryName,
+    });
+  };
+
+  const closeDestructiveActionDialog = () => {
+    if (isDeletingChannel || isDeletingCategory) {
       return;
     }
 
-    const result = await deleteGroupChannelCategory(chat._id, categoryId);
-    if (!result.ok) {
-      toast.error(result.message || "Could not delete category");
+    setPendingDestructiveAction(null);
+  };
+
+  const handleConfirmDestructiveAction = async () => {
+    if (chat.type !== "group" || !pendingDestructiveAction) {
       return;
     }
 
-    toast.success("Category deleted");
+    if (pendingDestructiveAction.type === "channel") {
+      try {
+        setIsDeletingChannel(true);
+        const result = await deleteGroupChannel(
+          chat._id,
+          pendingDestructiveAction.channelId,
+        );
+
+        if (!result.ok) {
+          toast.error(result.message || "Could not delete channel");
+          return;
+        }
+
+        toast.success("Channel deleted");
+        setPendingDestructiveAction(null);
+        await refreshChannelAnalytics();
+      } finally {
+        setIsDeletingChannel(false);
+      }
+
+      return;
+    }
+
+    try {
+      setIsDeletingCategory(true);
+      const result = await deleteGroupChannelCategory(
+        chat._id,
+        pendingDestructiveAction.categoryId,
+      );
+
+      if (!result.ok) {
+        toast.error(result.message || "Could not delete category");
+        return;
+      }
+
+      toast.success("Category deleted");
+      setPendingDestructiveAction(null);
+    } finally {
+      setIsDeletingCategory(false);
+    }
   };
 
   const handleCreateCategory = async () => {
@@ -1073,18 +1114,40 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     return "Unlimited uses";
   })();
 
+  let destructiveActionTitle = "Delete this item?";
+  let destructiveActionDescription =
+    "This action cannot be undone.";
+  let destructiveActionButtonLabel = "Yes, delete";
+
+  if (pendingDestructiveAction?.type === "channel") {
+    destructiveActionTitle = `Delete #${pendingDestructiveAction.channelName}?`;
+    destructiveActionDescription =
+      "This permanently removes all messages in this channel. This action cannot be undone.";
+  } else if (pendingDestructiveAction?.type === "category") {
+    destructiveActionTitle =
+      `Delete category "${pendingDestructiveAction.categoryName}"?`;
+    destructiveActionDescription =
+      "Channels in this category will become uncategorized. This action cannot be undone.";
+  }
+
+  if (isDeletingChannel) {
+    destructiveActionButtonLabel = "Deleting channel...";
+  } else if (isDeletingCategory) {
+    destructiveActionButtonLabel = "Deleting category...";
+  }
+
   return (
     <>
-      <header className="gradient-border-bottom chat-header-shell chat-header-shell--elevated chat-window-header-main sticky top-0 flex items-center px-4 py-3">
-        <div className="chat-header-row flex items-center gap-2 w-full justify-between">
-          <div className="chat-header-left flex items-center gap-2 min-w-0">
+      <header className="gradient-border-bottom chat-header-shell chat-header-shell--command chat-header-shell--elevated chat-window-header-main sticky top-0 flex items-center px-4 py-3">
+        <div className="chat-header-row chat-header-row--command">
+          <div className="chat-header-left min-w-0">
             {/* Sidebar toggle — only on mobile */}
             <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
 
             {/* Avatar + name */}
             <div
               className={cn(
-                "chat-header-identity chat-header-identity--enterprise chat-header-identity--compact",
+                "chat-header-identity chat-header-identity--command chat-header-identity--enterprise chat-header-identity--compact",
                 chat.type === "direct"
                   ? "chat-header-identity--direct"
                   : "chat-header-identity--group",
@@ -1137,77 +1200,74 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     const lastActiveAt = getLastActiveAt(otherUser?._id);
                     if (pres === "online") {
                         return (
-                          <span className="chat-header-presence chat-header-presence--online flex items-center gap-1.5">
-                            <span className="relative flex h-1.5 w-1.5">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-online/70 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-online"></span>
-                            </span>
-                            <span className="presence-pill-online">
-                              Active now
-                            </span>
+                          <span className="chat-header-direct-status chat-header-direct-status--online inline-flex items-center gap-1">
+                            <span className="chat-header-direct-status-dot" aria-hidden="true" />
+                            <span className="chat-header-direct-status-label">Active now</span>
                           </span>
                         );
                     }
                     if (pres === "recently-active" && lastActiveAt) {
                       const timeStr = formatOnlineTime(new Date(lastActiveAt));
                       return (
-                        <span className="chat-header-presence text-[12px] text-muted-foreground font-medium leading-none">
+                        <span className="chat-header-direct-status chat-header-direct-status--recent inline-flex items-center gap-1 text-[12px] font-medium leading-none">
                           Active {timeStr} ago
                         </span>
                       );
                     }
                     return (
-                      <span className="chat-header-presence text-[12px] text-muted-foreground/60 font-medium leading-none">
+                      <span className="chat-header-direct-status chat-header-direct-status--offline inline-flex items-center gap-1 text-[12px] font-medium leading-none">
                         Offline
                       </span>
                     );
                   })()}
                   {chat.type === "group" && (
-                    <div className="chat-header-group-meta flex items-center gap-1.5">
+                    <div className="chat-header-group-meta">
                       <span className="chat-header-presence text-[12px] text-muted-foreground font-medium leading-none">
                         {groupPresenceText}
                       </span>
+                      <span
+                        className={cn(
+                          "chat-header-group-status inline-flex items-center gap-1 font-semibold",
+                          announcementOnly || totalGroupUnread > 0
+                            ? "chat-header-group-status--alert"
+                            : "chat-header-group-status--neutral",
+                        )}
+                        aria-live="polite"
+                      >
+                        {announcementOnly ? (
+                          <Megaphone className="chat-header-group-status-icon size-2.5" />
+                        ) : (
+                          <span className="chat-header-group-status-dot" aria-hidden="true" />
+                        )}
+                        {groupHeaderStatusLabel}
+                      </span>
+
                       {activeGroupChannel && (
-                        <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                          <Hash className="size-2.5" />
-                          #{activeGroupChannel.name}
+                        <span className="chat-header-context-pill chat-header-context-pill--channel inline-flex items-center rounded-full text-[10px] font-semibold">
+                          <Hash className="chat-header-context-pill-icon size-2.5" />
+                          <span className="chat-header-context-pill-channel-name">#{activeGroupChannel.name}</span>
+                          {groupChannels.length > 1 && (
+                            <span className="chat-header-context-pill-channel-index">
+                              {activeGroupChannelPosition}/{groupChannels.length}
+                            </span>
+                          )}
                           {activeGroupChannelUnread > 0 && (
-                            <span className="inline-flex min-w-4 items-center justify-center rounded-full bg-primary/20 px-1 text-[9px] leading-none">
-                              {activeGroupChannelUnread > 99
-                                ? "99+"
-                                : activeGroupChannelUnread}
+                            <span className="chat-header-context-pill-badge inline-flex items-center justify-center rounded-full text-[9px] font-bold">
+                              {formatUnreadCountLabel(activeGroupChannelUnread)}
                             </span>
                           )}
                         </span>
                       )}
-                      <span className="chat-header-context-pill hidden sm:inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                        {activeChannelOrdinal}/{groupChannels.length} channels
-                      </span>
-                      <span className="chat-header-context-pill hidden sm:inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                        {groupAdminCount} admins
-                      </span>
-                      {totalGroupUnread > 0 && (
-                        <span
-                          className="chat-header-context-pill hidden md:inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
-                          aria-live="polite"
-                        >
-                          {formatUnreadCountLabel(totalGroupUnread)} unread
+
+                      {currentUserGroupRole && (
+                        <span className="chat-header-context-pill chat-header-context-pill--role hidden lg:inline-flex items-center text-[10px] font-semibold">
+                          <span>You: {GROUP_ROLE_LABEL[currentUserGroupRole]}</span>
+                          <span className="chat-header-context-pill-role-meta">
+                            · {groupLeadershipCount} lead
+                            {groupLeadershipCount === 1 ? "" : "s"}
+                          </span>
                         </span>
                       )}
-                      <span className="chat-header-context-pill hidden md:inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                        You: {currentGroupRoleLabel}
-                      </span>
-                      {(currentUserGroupRole === "owner" || currentUserGroupRole === "admin") && (
-                        <GroupRoleBadge role={currentUserGroupRole} />
-                      )}
-                      {announcementOnly && (
-                        <span className="chat-header-context-pill hidden lg:inline-flex items-center rounded-full border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-                          Announcement mode
-                        </span>
-                      )}
-                      <span className="chat-header-context-pill hidden xl:inline-flex items-center rounded-full border border-border/70 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                        Alt + ↑/↓ to switch channel
-                      </span>
                     </div>
                   )}
                 </div>
@@ -1216,46 +1276,59 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
           </div>
 
           {/* Right actions */}
-          <div className="chat-header-actions flex items-center gap-1 flex-shrink-0">
+          <div className="chat-header-actions chat-header-actions--command flex flex-shrink-0 items-center">
             <GlobalSearchDialog />
             <NotificationPreferencesDialog />
 
             {chat.type === "group" && (
-              <>
-                <div className="hidden md:flex items-center gap-1.5">
-                  <span id="group-channel-shortcut-hint" className="sr-only">
-                    Use Alt plus Arrow Up or Arrow Down to switch channels quickly.
-                  </span>
-                  <select
-                    id="group-channel-switcher"
-                    data-testid="group-channel-switcher-header"
-                    value={activeGroupChannelId}
-                    onChange={(event) => {
-                      void handleSwitchGroupChannel(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      const isPrevShortcut =
-                        (event.altKey && event.key === "ArrowUp") ||
-                        (event.ctrlKey && event.shiftKey && event.key === "[");
-                      const isNextShortcut =
-                        (event.altKey && event.key === "ArrowDown") ||
-                        (event.ctrlKey && event.shiftKey && event.key === "]");
+              <div className="hidden md:flex items-center gap-1.5">
+                <span id="group-channel-shortcut-hint" className="sr-only">
+                  Use Alt plus Arrow Up or Arrow Down to switch channels quickly.
+                </span>
+                <select
+                  id="group-channel-switcher"
+                  data-testid="group-channel-switcher-header"
+                  value={activeGroupChannelId}
+                  onChange={(event) => {
+                    void handleSwitchGroupChannel(event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    const isPrevShortcut =
+                      (event.altKey && event.key === "ArrowUp") ||
+                      (event.ctrlKey && event.shiftKey && event.key === "[");
+                    const isNextShortcut =
+                      (event.altKey && event.key === "ArrowDown") ||
+                      (event.ctrlKey && event.shiftKey && event.key === "]");
 
-                      if (!isPrevShortcut && !isNextShortcut) {
-                        return;
-                      }
+                    if (!isPrevShortcut && !isNextShortcut) {
+                      return;
+                    }
 
-                      event.preventDefault();
-                      handleCycleGroupChannel(isNextShortcut ? "next" : "prev");
-                    }}
-                    aria-label="Switch active group channel"
-                    aria-describedby="group-channel-shortcut-hint"
-                    title="Switch group channel"
-                    className="h-8 min-w-[130px] rounded-full border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/35"
-                  >
-                    {groupedChannelOptions.map((section) => {
-                      if (section.categoryId === null) {
-                        return section.channels.map((channel) => {
+                    event.preventDefault();
+                    handleCycleGroupChannel(isNextShortcut ? "next" : "prev");
+                  }}
+                  aria-label="Switch active group channel"
+                  aria-describedby="group-channel-shortcut-hint"
+                  title="Switch group channel"
+                  className="chat-channel-select h-8 min-w-[130px] rounded-full border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/35"
+                >
+                  {groupedChannelOptions.map((section) => {
+                    if (section.categoryId === null) {
+                      return section.channels.map((channel) => {
+                        const unread = Number(
+                          myChannelUnreadMap?.[channel.channelId] || 0,
+                        );
+                        return (
+                          <option key={channel.channelId} value={channel.channelId}>
+                            {buildChannelSelectLabel(channel.name, unread)}
+                          </option>
+                        );
+                      });
+                    }
+
+                    return (
+                      <optgroup key={section.categoryId} label={section.label}>
+                        {section.channels.map((channel) => {
                           const unread = Number(
                             myChannelUnreadMap?.[channel.channelId] || 0,
                           );
@@ -1264,143 +1337,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                               {buildChannelSelectLabel(channel.name, unread)}
                             </option>
                           );
-                        });
-                      }
-
-                      return (
-                        <optgroup key={section.categoryId} label={section.label}>
-                          {section.channels.map((channel) => {
-                            const unread = Number(
-                              myChannelUnreadMap?.[channel.channelId] || 0,
-                            );
-                            return (
-                              <option key={channel.channelId} value={channel.channelId}>
-                                {buildChannelSelectLabel(channel.name, unread)}
-                              </option>
-                            );
-                          })}
-                        </optgroup>
-                      );
-                    })}
-                  </select>
-
-                  {isGroupAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowManageChannelsDialog(true)}
-                      className="chat-header-pill-btn hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                      title="Manage channels"
-                    >
-                      <Settings2 className="size-3.5 mr-1.5" />
-                      Manage
-                    </Button>
-                  )}
-
-                  {isGroupAdmin && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowCreateChannelDialog(true)}
-                      className="chat-header-pill-btn hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                      title="Create channel"
-                    >
-                      <Plus className="size-3.5 mr-1.5" />
-                      Channel
-                    </Button>
-                  )}
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowMembersDialog(true)}
-                  className="chat-header-pill-btn hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                  title="View members"
-                >
-                  <Users className="size-3.5 mr-1.5" />
-                  Members
-                </Button>
-
-                {isGroupAdmin && (
-                  <Button
-                    variant={announcementOnly ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      handleToggleAnnouncementMode().catch((error) => {
-                        console.error("Failed to toggle announcement mode", error);
-                      });
-                    }}
-                    disabled={isAnnouncementUpdating}
-                    className="chat-header-pill-btn hidden lg:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
-                    title={announcementOnly ? "Disable announcement mode" : "Enable announcement mode"}
-                  >
-                    {isAnnouncementUpdating ? (
-                      <span
-                        className="skeleton-shimmer mr-1.5 inline-flex size-3.5 rounded-full"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <Megaphone className="size-3.5 mr-1.5" />
-                    )}
-                    {announcementOnly ? "Announcement on" : "Announcement off"}
-                  </Button>
-                )}
-
-                {isGroupCreator && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowManageAdminsDialog(true)}
-                    className="chat-header-pill-btn hidden xl:inline-flex rounded-full h-8 px-3 text-xs font-semibold"
-                    title="Manage admins"
-                  >
-                    <ShieldCheck className="size-3.5 mr-1.5" />
-                    Admins
-                  </Button>
-                )}
-
-                {isGroupAdmin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowJoinLinkDialog(true)}
-                    className="chat-header-action-btn hidden xl:inline-flex rounded-full text-muted-foreground hover:text-foreground"
-                    title="Manage join link"
-                    aria-label="Manage join link"
-                  >
-                    <Link2 className="size-4" />
-                  </Button>
-                )}
-              </>
-            )}
-
-              {/* Phone call quick action */}
-            {chat.type === "direct" && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Voice call"
-                  aria-label="Start voice call"
-                  onClick={() => {}}
-                  className="chat-header-action-btn hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
-                >
-                  <Phone className="h-[18px] w-[18px]" />
-                </Button>
-
-                {/* Video call quick action */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Video call"
-                  aria-label="Start video call"
-                  onClick={() => {}}
-                  className="chat-header-action-btn hidden md:flex rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-150 hover:scale-110 active:scale-95"
-                >
-                  <Video className="h-[20px] w-[20px]" />
-                </Button>
-              </>
+                        })}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+              </div>
             )}
 
             {/* More menu */}
@@ -1411,16 +1353,16 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   size="icon"
                   disabled={isDeleting}
                   aria-label="Open conversation actions"
-                  className="chat-header-action-btn rounded-full text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/10 transition-colors ml-1"
+                  className="chat-header-action-btn chat-header-action-btn--command rounded-full"
                 >
                   <MoreVertical className="h-[18px] w-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="chat-header-dropdown-panel w-56 rounded-xl shadow-lg border-border/60 overflow-hidden p-1">
+              <DropdownMenuContent align="end" className="chat-header-dropdown-panel chat-header-dropdown-panel--command w-56 rounded-xl shadow-lg border-border/60 overflow-hidden p-1">
                 {chat.type === "direct" && otherUser?._id && (
                   <DropdownMenuItem
                     onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <UserCircle className="h-[18px] w-[18px] text-muted-foreground" />
                     View profile
@@ -1430,7 +1372,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowMembersDialog(true), 100)}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <Users className="h-[18px] w-[18px] text-muted-foreground" />
                     View members
@@ -1444,7 +1386,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       void handleToggleAnnouncementMode();
                     }}
                     disabled={isAnnouncementUpdating}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <Megaphone className="h-[18px] w-[18px] text-muted-foreground" />
                     {announcementOnly ? "Disable announcement mode" : "Enable announcement mode"}
@@ -1454,7 +1396,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && isGroupCreator && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowManageAdminsDialog(true), 100)}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <ShieldCheck className="h-[18px] w-[18px] text-muted-foreground" />
                     Manage admins
@@ -1463,8 +1405,18 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
                 {chat.type === "group" && isGroupAdmin && (
                   <DropdownMenuItem
+                    onSelect={() => setTimeout(() => setShowCreateChannelDialog(true), 100)}
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
+                  >
+                    <Plus className="h-[18px] w-[18px] text-muted-foreground" />
+                    Create channel
+                  </DropdownMenuItem>
+                )}
+
+                {chat.type === "group" && isGroupAdmin && (
+                  <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowManageChannelsDialog(true), 100)}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <Settings2 className="h-[18px] w-[18px] text-muted-foreground" />
                     Manage channels
@@ -1474,7 +1426,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && isGroupAdmin && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowJoinLinkDialog(true), 100)}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <Link2 className="h-[18px] w-[18px] text-muted-foreground" />
                     Manage join link
@@ -1487,7 +1439,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       event.preventDefault();
                       void handleRevokeGroupJoinLink();
                     }}
-                    className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
                   >
                     <Link2 className="h-[18px] w-[18px]" />
                     Revoke active join link
@@ -1496,7 +1448,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
                 <DropdownMenuItem
                   onSelect={() => navigate("/settings/notifications")}
-                  className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 focus:bg-black/5 dark:focus:bg-white/10"
+                  className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                 >
                   <Bell className="h-[18px] w-[18px] text-muted-foreground" />
                   Notification settings
@@ -1505,7 +1457,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 <DropdownMenuSeparator className="bg-border/60 mx-1" />
                 <DropdownMenuItem
                   onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
-                  className="chat-header-dropdown-item gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
+                  className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
                 >
                   <Trash2 className="h-[18px] w-[18px]" />
                   Delete conversation
@@ -1514,12 +1466,13 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
             </DropdownMenu>
           </div>
         </div>
+
       </header>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent
-          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-all"
+          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-[border-color,background-color,box-shadow] duration-200"
           aria-busy={isDeleting}
         >
           <AlertDialogHeader className="items-center text-center space-y-4">
@@ -1542,19 +1495,69 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
             </div>
           </AlertDialogHeader>
           <AlertDialogFooter className="sm:flex-row gap-3 sm:space-x-0 pt-2 w-full">
-            <AlertDialogCancel disabled={isDeleting} className="flex-1 rounded-full h-11 font-semibold border-border/60 hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <AlertDialogCancel disabled={isDeleting} className="flex-1 h-11 rounded-full border-border/60 font-semibold transition-colors hover:bg-muted/55">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConversation}
               disabled={isDeleting}
               className={cn(
-                "flex-1 rounded-full h-11 font-semibold text-white transition-all shadow-sm",
-                "bg-destructive hover:bg-destructive/90 hover:shadow-md active:scale-[0.98]",
+                "flex-1 h-11 rounded-full bg-destructive font-semibold text-white transition-colors",
+                "hover:bg-destructive/90",
                 isDeleting && "opacity-70 pointer-events-none"
               )}
             >
               {isDeleting ? "Deleting..." : "Yes, delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingDestructiveAction)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeDestructiveActionDialog();
+          }
+        }}
+      >
+        <AlertDialogContent
+          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-[border-color,background-color,box-shadow] duration-200"
+          aria-busy={isDeletingChannel || isDeletingCategory}
+        >
+          <AlertDialogHeader className="items-center text-center space-y-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
+              <Trash2 className="size-6 text-destructive" />
+            </div>
+            <div className="space-y-1.5">
+              <AlertDialogTitle className="text-xl font-bold tracking-tight">
+                {destructiveActionTitle}
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-[15px] font-medium leading-relaxed text-muted-foreground/80 px-2">
+                {destructiveActionDescription}
+              </AlertDialogDescription>
+            </div>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:flex-row gap-3 sm:space-x-0 pt-2 w-full">
+            <AlertDialogCancel
+              disabled={isDeletingChannel || isDeletingCategory}
+              className="flex-1 h-11 rounded-full border-border/60 font-semibold transition-colors hover:bg-muted/55"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                void handleConfirmDestructiveAction();
+              }}
+              disabled={isDeletingChannel || isDeletingCategory}
+              className={cn(
+                "flex-1 h-11 rounded-full bg-destructive font-semibold text-white transition-colors",
+                "hover:bg-destructive/90",
+                (isDeletingChannel || isDeletingCategory) && "opacity-70 pointer-events-none",
+              )}
+            >
+              {destructiveActionButtonLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1861,8 +1864,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                         variant="ghost"
                         size="icon"
                         className="size-7 text-destructive"
+                        disabled={isDeletingCategory || isDeletingChannel}
                         onClick={() => {
-                          void handleDeleteCategory(category.categoryId);
+                          handleDeleteCategory(category.categoryId);
                         }}
                       >
                         <Trash2 className="size-3.5" />
@@ -1968,7 +1972,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       type="button"
                       variant="destructive"
                       onClick={() => {
-                        void handleDeleteSelectedChannel();
+                        handleDeleteSelectedChannel();
                       }}
                       disabled={
                         isDeletingChannel || selectedManageChannel.channelId === "general"
@@ -2058,7 +2062,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                               className={cn(
                                 "font-semibold",
                                 item.messageGrowthPercent >= 0
-                                  ? "text-emerald-600"
+                                  ? "text-online"
                                   : "text-destructive",
                               )}
                             >

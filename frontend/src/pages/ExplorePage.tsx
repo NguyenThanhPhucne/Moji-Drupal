@@ -125,7 +125,7 @@ const ExplorePage = () => {
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section
-              className="social-feed-column w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
+              className="social-feed-column social-feed-column--command social-feed-column--editorial social-feed-column--explore w-full min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
               aria-label="Explore feed timeline"
             >
               <div className={getStaggerEnterClass(0)}>
@@ -150,12 +150,12 @@ const ExplorePage = () => {
                 />
               </div>
 
-              <div className="social-feed-post-stack space-stack-md">
-                <div className={`social-card social-explore-filter-panel p-3 ${getStaggerEnterClass(3)}`}>
-                  <div className="social-explore-filter-row">
+              <div className="social-feed-post-stack social-feed-post-stack--command social-feed-post-stack--editorial social-feed-post-stack--explore space-stack-md">
+                <div className={`social-card social-explore-filter-panel social-explore-filter-panel--command p-3 ${getStaggerEnterClass(3)}`}>
+                  <div className="social-explore-filter-row social-explore-filter-row--command">
                     {activeTag ? (
                       <>
-                        <span className="social-explore-tag-chip">
+                        <span className="social-explore-tag-chip social-explore-tag-chip--command">
                           <Hash className="h-3.5 w-3.5" />
                           <span>{activeTag}</span>
                         </span>
@@ -163,7 +163,7 @@ const ExplorePage = () => {
                           type="button"
                           size="sm"
                           variant="ghost"
-                          className="social-explore-clear-btn"
+                          className="social-explore-clear-btn social-explore-clear-btn--command"
                           onClick={() => {
                             setActiveTag("");
                             setSearchParams((params) => {
@@ -178,12 +178,12 @@ const ExplorePage = () => {
                         </Button>
                       </>
                     ) : (
-                      <span className="social-explore-filter-hint">
+                      <span className="social-explore-filter-hint social-explore-filter-hint--command">
                         <Search className="h-3.5 w-3.5" />
                         Use the top search bar to filter posts by caption.
                       </span>
                     )}
-                    <span className="social-explore-filter-hint ml-auto" aria-live="polite">
+                    <span className="social-explore-filter-hint social-explore-filter-hint--command ml-auto" aria-live="polite">
                       {filteredExploreFeed.length} result{filteredExploreFeed.length === 1 ? "" : "s"}
                     </span>
                   </div>
@@ -230,8 +230,8 @@ const ExplorePage = () => {
                   />
                 )}
                 {!loadingExplore && filteredExploreFeed.length === 0 && (
-                  <div className="social-card-empty social-explore-empty-state p-8 text-center">
-                    <div className="social-explore-empty-icon" aria-hidden="true">
+                  <div className="social-card-empty social-explore-empty-state social-explore-empty-state--command p-8 text-center">
+                    <div className="social-explore-empty-icon social-explore-empty-icon--command" aria-hidden="true">
                       <SearchX className="h-5 w-5" />
                     </div>
                     <p className="social-text-main text-sm font-semibold">No posts match your current filters.</p>
@@ -276,7 +276,7 @@ const ExplorePage = () => {
             </section>
 
             <div
-              className="social-feed-right-column social-feed-right-column--enterprise order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5"
+              className="social-feed-right-column social-feed-right-column--command social-feed-right-column--enterprise social-feed-right-column--editorial order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5"
               aria-label="Explore insights and quick actions"
             >
               <div className="xl:hidden">

@@ -7,6 +7,10 @@ import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CornerUpRight } from "lucide-react";
+import { memo, useCallback } from "react";
+
+const LEGACY_PHOTO_PREVIEW = "\ud83d\udcf7 Photo";
 
 type DirectUserLite = {
   _id: string;
@@ -43,7 +47,10 @@ const resolveLastMessagePreview = (
 ) => {
   const lastMessage = convo.lastMessage?.content ?? "";
 
-  if (lastMessage === "📷 Photo") {
+  if (
+    lastMessage === "Photo attachment" ||
+    lastMessage === LEGACY_PHOTO_PREVIEW
+  ) {
     return resolvePhotoPreviewText(convo, currentUser, otherUser);
   }
 
@@ -86,7 +93,7 @@ const resolveActiveStatusText = (
   return "Offline";
 };
 
-const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
+const DirectMessageCardInner = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
   const {
     activeConversationId,
@@ -132,7 +139,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     normalizedCurrentUser,
   );
 
-  const handleSelectConversation = async (id: string) => {
+  const handleSelectConversation = useCallback(async (id: string) => {
     setActiveConversation(id);
 
     if (location.pathname !== "/") {
@@ -142,7 +149,7 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     if (!messages[id]) {
       await fetchMessages(id);
     }
-  };
+  }, [setActiveConversation, location.pathname, navigate, messages, fetchMessages]);
 
   const userPresence = getUserPresence(otherUser?._id);
   const lastActiveAt = getLastActiveAt(otherUser?._id);
@@ -185,8 +192,12 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
             )}
           >
             {isForwardedPreview && (
-              <span className="inline-flex items-center text-[10px] text-muted-foreground/50 font-medium shrink-0">
-                ↪️
+              <span
+                className="inline-flex items-center text-[10px] text-muted-foreground/50 font-medium shrink-0"
+                aria-label="Forwarded message"
+                title="Forwarded message"
+              >
+                <CornerUpRight className="size-3" aria-hidden="true" />
               </span>
             )}
             <span className="truncate">{lastMessage || "\u00A0"}</span>
@@ -211,6 +222,8 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
     />
   );
 };
+
+const DirectMessageCard = memo(DirectMessageCardInner);
 
 export default DirectMessageCard;
 

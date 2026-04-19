@@ -241,7 +241,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
 
   return (
     <>
-      <div className="social-card social-composer-card p-4">
+      <div className="social-card social-composer-card social-composer-card--command p-4">
         <div className="flex items-center gap-3">
           <div className="social-avatar-badge social-composer-avatar flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-semibold">
             {avatarUrl ? (
@@ -252,7 +252,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
           </div>
           <button
             type="button"
-            className="social-composer-prompt social-composer-trigger social-composer-trigger-glow h-11 flex-1 rounded-full px-4 text-left text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="social-composer-prompt social-composer-prompt--command social-composer-trigger social-composer-trigger-glow h-11 flex-1 rounded-full px-4 text-left text-sm transition-[border-color,background-color,box-shadow,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             onClick={() => setIsOpen(true)}
           >
             What's on your mind?

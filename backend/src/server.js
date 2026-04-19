@@ -11,11 +11,16 @@ import bookmarkRoute from "./routes/bookmarkRoute.js";
 import searchRoute from "./routes/searchRoute.js";
 import socialRoute from "./routes/socialRoute.js";
 import safetyRoute from "./routes/safetyRoute.js";
+import maintenanceRoute from "./routes/maintenanceRoute.js";
 import {
   getAdminConversations,
   deleteConversation,
   getAdminConversation,
 } from "./controllers/conversationController.js";
+import {
+  startMessageCleanupCompensationWorker,
+  stopMessageCleanupCompensationWorker,
+} from "./services/messageCleanupCompensationService.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import { requestSecurityGuard } from "./middlewares/requestSecurityMiddleware.js";
@@ -130,12 +135,19 @@ app.use("/api/bookmarks", bookmarkRoute);
 app.use("/api/search", searchRoute);
 app.use("/api/social", socialRoute);
 app.use("/api/safety", safetyRoute);
+app.use("/api/maintenance", maintenanceRoute);
 
 try {
   await connectDB();
 
   // Initialize Drupal sync
   initDrupalSync();
+
+  try {
+    await startMessageCleanupCompensationWorker();
+  } catch (workerError) {
+    console.error("Failed to start compensation worker:", workerError);
+  }
 
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server started on port ${PORT}`);
@@ -146,15 +158,25 @@ try {
   process.exit(1);
 }
 
-// Graceful shutdown
-process.on("SIGINT", async () => {
+let shutdownTriggered = false;
+
+const shutdownGracefully = async () => {
+  if (shutdownTriggered) {
+    return;
+  }
+
+  shutdownTriggered = true;
   console.log("\nShutting down gracefully...");
+
+  await stopMessageCleanupCompensationWorker();
   await closeDrupalSync();
   process.exit(0);
+};
+
+process.on("SIGINT", () => {
+  void shutdownGracefully();
 });
 
-process.on("SIGTERM", async () => {
-  console.log("\nShutting down gracefully...");
-  await closeDrupalSync();
-  process.exit(0);
+process.on("SIGTERM", () => {
+  void shutdownGracefully();
 });

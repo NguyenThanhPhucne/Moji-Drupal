@@ -2,22 +2,25 @@ import { formatDistanceToNow } from "date-fns";
 import {
   Bell,
   BellOff,
+  AtSign,
   CheckCheck,
   Clock3,
   Inbox,
-  Heart,
+  Loader2,
+  ThumbsUp,
   MessageCircle,
   Users,
   UserCheck,
   Settings2,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn, getStaggerEnterClass } from "@/lib/utils";
 import type { SocialNotification } from "@/types/social";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   isNotificationPresetActive,
@@ -32,8 +35,9 @@ const TYPE_META: Record<
   SocialNotification["type"],
   { Icon: React.FC<{ className?: string }>; colorClass: string }
 > = {
-  like:            { Icon: Heart,         colorClass: "notification-kind-like-bg" },
+  like:            { Icon: ThumbsUp,      colorClass: "notification-kind-like-bg" },
   comment:         { Icon: MessageCircle, colorClass: "notification-kind-comment-bg" },
+  mention:         { Icon: AtSign,        colorClass: "notification-kind-mention-bg" },
   follow:          { Icon: Users,         colorClass: "notification-kind-follow-bg" },
   system:          { Icon: Bell,          colorClass: "notification-kind-system-bg" },
   friend_accepted: { Icon: UserCheck,     colorClass: "notification-kind-friend-accepted-bg" },
@@ -95,6 +99,7 @@ interface SocialNotificationsPanelProps {
     follow?: boolean;
     like?: boolean;
     comment?: boolean;
+    mention?: boolean;
     friendAccepted?: boolean;
     system?: boolean;
     mutedUserIds?: string[];
@@ -111,11 +116,12 @@ interface SocialNotificationsPanelProps {
 
 const TYPE_PREF_KEY: Record<
   SocialNotification["type"],
-  "follow" | "like" | "comment" | "friendAccepted" | "system"
+  "follow" | "like" | "comment" | "mention" | "friendAccepted" | "system"
 > = {
   follow: "follow",
   like: "like",
   comment: "comment",
+  mention: "mention",
   system: "system",
   friend_accepted: "friendAccepted",
 };
@@ -123,6 +129,17 @@ const TYPE_PREF_KEY: Record<
 const DIGEST_WINDOW_OPTIONS = [1, 3, 6, 12, 24];
 
 type DeliveryPreferenceToggleKey = "message" | "sound" | "desktop";
+type QuickFilterKey = "all" | "mentions" | "quiet";
+
+const QUICK_FILTERS: Array<{
+  key: QuickFilterKey;
+  label: string;
+  Icon: LucideIcon;
+}> = [
+  { key: "all", label: "All", Icon: Bell },
+  { key: "mentions", label: "Mentions", Icon: AtSign },
+  { key: "quiet", label: "Quiet", Icon: BellOff },
+];
 
 // ─── Main component ───────────────────────────────────────────────────────────
 const SocialNotificationsPanel = ({
@@ -138,6 +155,9 @@ const SocialNotificationsPanel = ({
   onUpdateDeliveryPreferences,
 }: SocialNotificationsPanelProps) => {
   const [showPreferences, setShowPreferences] = useState(false);
+  const [pendingQuickFilter, setPendingQuickFilter] =
+    useState<QuickFilterKey | null>(null);
+  const [listTransitionSeed, setListTransitionSeed] = useState(0);
 
   type SocialPreferencesUpdate = Parameters<
     SocialNotificationsPanelProps["onUpdateSocialPreferences"]
@@ -148,16 +168,13 @@ const SocialNotificationsPanel = ({
     | "follow"
     | "like"
     | "comment"
+    | "mention"
     | "friendAccepted"
     | "system"
     | "digestEnabled";
 
-  const filteredNotifications = useMemo(() => {
+  const scopeVisibleNotifications = useMemo(() => {
     return notifications.filter((notification) => {
-      if (socialPreferences.muted) {
-        return false;
-      }
-
       const actorId = String(notification.actorId?._id || "");
       if (
         actorId &&
@@ -174,16 +191,95 @@ const SocialNotificationsPanel = ({
         return false;
       }
 
+      return true;
+    });
+  }, [
+    notifications,
+    socialPreferences.mutedConversationIds,
+    socialPreferences.mutedUserIds,
+  ]);
+
+  const filteredNotifications = useMemo(() => {
+    return scopeVisibleNotifications.filter((notification) => {
+      if (socialPreferences.muted) {
+        return false;
+      }
+
       const prefKey = TYPE_PREF_KEY[notification.type];
       return Boolean(socialPreferences[prefKey]);
     });
-  }, [notifications, socialPreferences]);
+  }, [scopeVisibleNotifications, socialPreferences]);
 
   const unread = filteredNotifications.filter((n) => !n.isRead).length;
   const visibleNotifications = useMemo(
     () => (compact ? filteredNotifications.slice(0, 5) : filteredNotifications.slice(0, 12)),
     [compact, filteredNotifications],
   );
+
+  const activeQuickFilter = useMemo<QuickFilterKey>(() => {
+    if (socialPreferences.muted) {
+      return "quiet";
+    }
+
+    const mentionAligned =
+      socialPreferences.mention &&
+      !socialPreferences.follow &&
+      !socialPreferences.like &&
+      !socialPreferences.comment &&
+      !socialPreferences.friendAccepted &&
+      !socialPreferences.system;
+
+    return mentionAligned ? "mentions" : "all";
+  }, [
+    socialPreferences.comment,
+    socialPreferences.follow,
+    socialPreferences.friendAccepted,
+    socialPreferences.like,
+    socialPreferences.mention,
+    socialPreferences.muted,
+    socialPreferences.system,
+  ]);
+
+  const quickFilterCounts = useMemo(
+    () => ({
+      all: scopeVisibleNotifications.length,
+      mentions: scopeVisibleNotifications.filter(
+        (notification) => notification.type === "mention",
+      ).length,
+      quiet: socialPreferences.muted ? scopeVisibleNotifications.length : 0,
+    }),
+    [scopeVisibleNotifications, socialPreferences.muted],
+  );
+
+  const notificationStatusLabel = unread > 0 ? `${unread} unread` : "All caught up";
+  const visibilityStatusLabel = (() => {
+    if (activeQuickFilter === "quiet") {
+      return "Quiet mode on";
+    }
+
+    if (activeQuickFilter === "mentions") {
+      return `Mentions only · ${filteredNotifications.length} available`;
+    }
+
+    return `All activity · ${filteredNotifications.length} available`;
+  })();
+  const activeQuickFilterLabel =
+    QUICK_FILTERS.find((filter) => filter.key === activeQuickFilter)?.label ||
+    "All";
+  const quickFilterStatusLabel = pendingQuickFilter
+    ? `Applying ${
+        QUICK_FILTERS.find((filter) => filter.key === pendingQuickFilter)?.label ||
+        "selected"
+      } filter...`
+    : visibilityStatusLabel;
+
+  useEffect(() => {
+    setListTransitionSeed((seed) => seed + 1);
+  }, [
+    activeQuickFilter,
+    filteredNotifications.length,
+    socialPreferences.digestEnabled,
+  ]);
 
   const digestWindowHours = useMemo(() => {
     const parsed = Number(socialPreferences.digestWindowHours || 6);
@@ -254,6 +350,36 @@ const SocialNotificationsPanel = ({
 
   const updateDigestWindow = async (nextHours: number) => {
     await onUpdateSocialPreferences({ digestWindowHours: nextHours });
+  };
+
+  const applyQuickFilter = async (filterKey: QuickFilterKey) => {
+    if (filterKey === "quiet") {
+      await onUpdateSocialPreferences({ muted: true });
+      return;
+    }
+
+    if (filterKey === "mentions") {
+      await onUpdateSocialPreferences({
+        muted: false,
+        follow: false,
+        like: false,
+        comment: false,
+        mention: true,
+        friendAccepted: false,
+        system: false,
+      });
+      return;
+    }
+
+    await onUpdateSocialPreferences({
+      muted: false,
+      follow: true,
+      like: true,
+      comment: true,
+      mention: true,
+      friendAccepted: true,
+      system: true,
+    });
   };
 
   const applyNotificationPreset = async (presetKey: NotificationPresetKey) => {
@@ -351,12 +477,12 @@ const SocialNotificationsPanel = ({
       <div
         key={notification._id}
         className={cn(
-          "group rounded-xl transition-all duration-150",
+          "social-notification-item social-notification-item--command group rounded-xl transition-colors duration-150",
           getStaggerEnterClass(index),
           compact ? "px-2.5 py-2" : "px-3 py-2.5",
           notification.isRead
             ? "hover:bg-muted/50"
-            : "bg-primary/[0.07] hover:bg-primary/[0.12]",
+            : "social-notification-item--unread bg-primary/[0.07] hover:bg-primary/[0.12]",
         )}
       >
         <div className="flex items-start gap-3">
@@ -437,7 +563,7 @@ const SocialNotificationsPanel = ({
             </div>
           </button>
 
-          <div className="flex items-center gap-1 pt-0.5">
+          <div className="social-notification-item-actions flex items-center gap-1 pt-0.5 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
             <Button
               type="button"
               variant="ghost"
@@ -485,58 +611,132 @@ const SocialNotificationsPanel = ({
       {/* ── Header ── */}
       <div
         className={cn(
-          "flex items-center justify-between border-b border-border/60",
+          "border-b border-border/60",
           compact ? "px-3 py-2.5" : "px-4 py-3",
         )}
       >
-        <div className="flex items-center gap-2">
-          <Bell className={cn(compact ? "h-4 w-4" : "h-5 w-5", "text-foreground")} />
-          <h3
-            className={cn(
-              "font-semibold text-foreground",
-              compact ? "text-sm" : "text-base",
-            )}
-          >
-            Notifications
-          </h3>
-          {unread > 0 && (
-            <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
-              {unread > 99 ? "99+" : unread}
-            </span>
-          )}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Bell className={cn(compact ? "h-4 w-4" : "h-5 w-5", "text-foreground")} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3
+                  className={cn(
+                    "font-semibold text-foreground",
+                    compact ? "text-sm" : "text-base",
+                  )}
+                >
+                  Notifications
+                </h3>
+                {unread > 0 && (
+                  <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
+              </div>
+              {!compact && (
+                <p className="text-[11px] text-muted-foreground">
+                  {notificationStatusLabel} · {visibilityStatusLabel}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPreferences((current) => !current)}
+              className={cn(
+                "gap-1 text-muted-foreground hover:text-foreground",
+                compact ? "h-7 px-2" : "h-8 px-2.5",
+              )}
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              <span className="sr-only">Notification preferences</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onReadAll}
+              disabled={unread === 0}
+              className={cn(
+                "gap-1.5 text-muted-foreground hover:text-foreground",
+                compact ? "h-7 px-2 text-xs" : "h-8 px-2.5 text-xs",
+              )}
+            >
+              <CheckCheck className="h-3.5 w-3.5" />
+              {!compact && <span>Mark as read</span>}
+              {compact && <span className="sr-only">Mark as read</span>}
+            </Button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowPreferences((current) => !current)}
-            className={cn(
-              "gap-1 text-muted-foreground hover:text-foreground",
-              compact ? "h-7 px-2" : "h-8 px-2.5",
-            )}
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-            <span className="sr-only">Notification preferences</span>
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onReadAll}
-            disabled={unread === 0}
-            className={cn(
-              "gap-1.5 text-muted-foreground hover:text-foreground",
-              compact ? "h-7 px-2 text-xs" : "h-8 px-2.5 text-xs",
-            )}
-          >
-            <CheckCheck className="h-3.5 w-3.5" />
-            {!compact && <span>Mark as read</span>}
-            {compact && <span className="sr-only">Mark as read</span>}
-          </Button>
+        <div className={cn("social-notification-filter-row mt-2", compact && "mt-1.5")}>
+          {QUICK_FILTERS.map(({ key, label, Icon }) => {
+            const active = activeQuickFilter === key;
+            const count = quickFilterCounts[key];
+            const showCount = key !== "quiet" && count > 0;
+            const isPending = pendingQuickFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                disabled={preferencesBusy || (pendingQuickFilter !== null && !isPending)}
+                onClick={async () => {
+                  setPendingQuickFilter(key);
+                  try {
+                    await applyQuickFilter(key);
+                  } catch (error) {
+                    console.error("Failed to apply notification quick filter", error);
+                  } finally {
+                    setPendingQuickFilter((current) =>
+                      current === key ? null : current,
+                    );
+                  }
+                }}
+                className={cn(
+                  "social-notification-filter-chip micro-tap-chip",
+                  active && "social-notification-filter-chip--active",
+                  isPending && "social-notification-filter-chip--pending",
+                )}
+                aria-pressed={active}
+                aria-busy={isPending}
+                title={`Switch to ${label.toLowerCase()} notifications`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{label}</span>
+                {showCount && (
+                  <span className="social-notification-filter-chip-badge">
+                    {count > 99 ? "99+" : count}
+                  </span>
+                )}
+                {isPending && (
+                  <Loader2 className="social-notification-filter-chip-spinner h-3 w-3 animate-spin" />
+                )}
+              </button>
+            );
+          })}
         </div>
+
+        <p className="social-notification-filter-summary" aria-live="polite">
+          <span className="social-notification-filter-summary-chip">
+            {activeQuickFilterLabel}
+          </span>
+          <span className="social-notification-filter-summary-text">
+            {quickFilterStatusLabel}
+          </span>
+        </p>
+
+        {preferencesBusy && (
+          <div className="social-notification-settings-sync" role="status" aria-live="polite">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>Syncing notification preferences...</span>
+          </div>
+        )}
       </div>
 
       {showPreferences && (
@@ -654,6 +854,7 @@ const SocialNotificationsPanel = ({
               { key: "follow" as const, label: "Follows" },
               { key: "like" as const, label: "Likes" },
               { key: "comment" as const, label: "Comments" },
+              { key: "mention" as const, label: "Mentions" },
               { key: "friendAccepted" as const, label: "Friend accepted" },
               { key: "system" as const, label: "System" },
             ].map(({ key, label }) => (
@@ -772,8 +973,9 @@ const SocialNotificationsPanel = ({
 
       {/* ── Notification list ── */}
       <div
+        key={`notification-list-${listTransitionSeed}`}
         className={cn(
-          "overflow-y-auto beautiful-scrollbar",
+          "social-notification-list-shell overflow-y-auto beautiful-scrollbar",
           compact
             ? "max-h-[36svh] p-1.5"
             : "max-h-[calc(100svh-10rem)] p-2",

@@ -38,14 +38,14 @@ const BackToChatCard = ({ onClick, unreadCount = 0 }: BackToChatCardProps) => {
         "relative inline-flex items-center gap-2 select-none cursor-pointer",
         "rounded-full border border-primary/25 bg-primary/6 px-4 py-2",
         "text-[13px] font-semibold text-primary shadow-sm",
-        "transition-all duration-150 hover:bg-primary/12 hover:border-primary/40 hover:shadow hover:-translate-y-px",
-        "active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
+        "transition-colors duration-150 hover:bg-primary/12 hover:border-primary/40",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
         "group"
       )}
       aria-label="Back to chat"
     >
       <MessageSquare
-        className="size-4 transition-transform duration-200 group-hover:scale-110 group-hover:rotate-[-6deg]"
+        className="size-4"
       />
       Back to chat
       {hasUnread && (

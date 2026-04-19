@@ -102,7 +102,7 @@ const ChatWindowLayout = () => {
   }
 
   return (
-    <SidebarInset className="app-shell-panel glass-strong flex h-full min-h-0 flex-1 md:border md:border-border/80 md:rounded-2xl overflow-hidden shadow-soft">
+    <SidebarInset className="app-shell-panel chat-main-shell glass-strong flex h-full min-h-0 flex-1 overflow-hidden shadow-soft md:rounded-2xl md:border md:border-border/80">
       {/* Header */}
       <div
         key={`chat-header-${selectedConvo._id}`}
@@ -112,7 +112,7 @@ const ChatWindowLayout = () => {
       </div>
 
       {selectedConvo.type === "group" && layoutGroupChannels.length > 0 && (
-        <div className="hidden md:flex items-center gap-2 border-b border-border/70 bg-background px-3 py-2">
+        <div className="chat-channel-rail hidden items-center gap-2 border-b border-border/70 bg-background px-3 py-2 md:flex">
           <span className="text-[11px] font-semibold text-muted-foreground/70">
             Channel
           </span>
@@ -134,7 +134,7 @@ const ChatWindowLayout = () => {
               handleLayoutGroupChannelCycle(isNextShortcut ? "next" : "prev");
             }}
             aria-label="Switch active group channel"
-            className="h-8 min-w-[130px] rounded-full border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/35"
+            className="chat-channel-select h-8 min-w-[130px] rounded-full border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/35"
           >
             {layoutGroupChannels.map((channel) => (
               <option key={channel.channelId} value={channel.channelId}>
@@ -146,7 +146,7 @@ const ChatWindowLayout = () => {
       )}
 
       {/* Body */}
-      <div className="flex-1 min-h-0 bg-background">
+      <div className="chat-body-shell chat-body-shell--command flex-1 min-h-0 bg-background">
         <div
           key={`chat-body-${selectedConvo._id}`}
           className="h-full conversation-fade"
@@ -160,7 +160,9 @@ const ChatWindowLayout = () => {
       </div>
 
       {/* Footer */}
-      <MessageInput selectedConvo={selectedConvo} />
+      <div className="chat-footer-shell chat-footer-shell--command">
+        <MessageInput selectedConvo={selectedConvo} />
+      </div>
     </SidebarInset>
   );
 };

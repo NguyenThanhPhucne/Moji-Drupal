@@ -7,8 +7,11 @@ import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { Crown, Shield } from "lucide-react";
+import { memo, useCallback } from "react";
 
-const GroupChatCard = ({ convo }: { convo: Conversation }) => {
+const LEGACY_PHOTO_PREVIEW = "\ud83d\udcf7 Photo";
+
+const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
   const {
     activeConversationId,
@@ -28,7 +31,10 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   // ── Context-aware last message preview (Bug #2 fix) ────────────────────
   let lastMessagePreview = convo.lastMessage?.content ?? "";
 
-  if (lastMessagePreview === "📷 Photo") {
+  if (
+    lastMessagePreview === "Photo attachment" ||
+    lastMessagePreview === LEGACY_PHOTO_PREVIEW
+  ) {
     const lastMsg = convo.lastMessage as {
       senderId?: string;
       sender?: { _id: string };
@@ -90,7 +96,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   const onlineSet = new Set(onlineUsers);
   const onlineMemberCount = convo.participants.filter(p => onlineSet.has(String(p._id))).length;
 
-  const handleSelectConversation = async (id: string) => {
+  const handleSelectConversation = useCallback(async (id: string) => {
     setActiveConversation(id);
     if (location.pathname !== "/") {
       navigate("/");
@@ -98,7 +104,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
     if (!messages[id]) {
       await fetchMessages(id);
     }
-  };
+  }, [setActiveConversation, location.pathname, navigate, messages, fetchMessages]);
 
   return (
     <ChatCard
@@ -174,5 +180,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
     />
   );
 };
+
+const GroupChatCard = memo(GroupChatCardInner);
 
 export default GroupChatCard;

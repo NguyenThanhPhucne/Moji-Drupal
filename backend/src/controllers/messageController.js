@@ -22,6 +22,15 @@ const UNDO_SEND_WINDOW_SECONDS = 7;
 const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
 const DEFAULT_GROUP_CHANNEL_ID = "general";
 const GROUP_CHANNEL_ROLE_OPTIONS = ["owner", "admin", "member"];
+const MAX_MESSAGE_CONTENT_LENGTH = 5000;
+
+const assertValidMessageId = (messageId, res) => {
+  if (!mongoose.isValidObjectId(messageId)) {
+    res.status(400).json({ message: "Message id không hợp lệ" });
+    return false;
+  }
+  return true;
+};
 
 const createHttpError = (status, message) => {
   const error = new Error(message);
@@ -454,6 +463,7 @@ const formatConversationSyncPayload = (conversation) => {
       _id: conversation.lastMessage?._id,
       content: conversation.lastMessage?.content,
       createdAt: conversation.lastMessage?.createdAt,
+      editedAt: conversation.lastMessage?.editedAt || null,
       groupChannelId: conversation.lastMessage?.groupChannelId || null,
       sender: {
         _id:
@@ -469,6 +479,56 @@ const formatConversationSyncPayload = (conversation) => {
         ? Object.fromEntries(conversation.unreadCounts)
         : conversation.unreadCounts || {},
     seenBy: (conversation.seenBy || []).map((id) => id?.toString?.() || id),
+  };
+};
+
+const buildMessagePreviewContent = (message) => {
+  const normalizedContent = String(message?.content || "").trim();
+  if (normalizedContent) {
+    return normalizedContent;
+  }
+
+  if (message?.imgUrl) {
+    return "📷 Photo";
+  }
+
+  return "";
+};
+
+const buildUserScopedConversationSyncPayload = async ({
+  conversationId,
+  userId,
+}) => {
+  const latestVisibleMessage = await Message.findOne({
+    conversationId,
+    hiddenFor: { $ne: userId },
+  })
+    .select("_id content imgUrl senderId createdAt groupChannelId")
+    .sort({ createdAt: -1, _id: -1 })
+    .lean();
+
+  if (!latestVisibleMessage) {
+    return {
+      _id: toStringId(conversationId),
+      lastMessage: null,
+      lastMessageAt: null,
+    };
+  }
+
+  return {
+    _id: toStringId(conversationId),
+    lastMessage: {
+      _id: toStringId(latestVisibleMessage._id),
+      content: buildMessagePreviewContent(latestVisibleMessage),
+      createdAt: latestVisibleMessage.createdAt,
+      groupChannelId: latestVisibleMessage.groupChannelId || null,
+      sender: {
+        _id: toStringId(latestVisibleMessage.senderId),
+        displayName: "",
+        avatarUrl: null,
+      },
+    },
+    lastMessageAt: latestVisibleMessage.createdAt,
   };
 };
 
@@ -912,6 +972,12 @@ export const sendDirectMessage = async (req, res) => {
       return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
     }
 
+    if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return res.status(400).json({
+        message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+      });
+    }
+
     if (String(recipientId) === String(senderId)) {
       return res.status(400).json({ message: "Không thể tự nhắn cho chính mình" });
     }
@@ -1049,6 +1115,12 @@ export const sendGroupMessage = async (req, res) => {
       return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
     }
 
+    if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return res.status(400).json({
+        message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+      });
+    }
+
     const antiSpamResult = registerRateLimitHit({
       userId: senderId,
       scope: "message:group",
@@ -1107,6 +1179,7 @@ export const sendGroupMessage = async (req, res) => {
 export const reactToMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const { emoji } = req.body;
     const userId = req.user._id;
     const normalizedEmoji = String(emoji || "").trim();
@@ -1209,6 +1282,7 @@ export const reactToMessage = async (req, res) => {
 export const unsendMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const userId = req.user._id;
 
     const message = await Message.findById(messageId);
@@ -1358,6 +1432,7 @@ export const unsendMessage = async (req, res) => {
 export const undoSendMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const userId = req.user._id;
 
     const message = await Message.findById(messageId).select(
@@ -1409,6 +1484,7 @@ export const undoSendMessage = async (req, res) => {
 export const removeMessageForMe = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const userId = req.user._id;
 
     const message = await Message.findById(messageId);
@@ -1436,16 +1512,32 @@ export const removeMessageForMe = async (req, res) => {
       },
     );
 
+    let userScopedConversation = null;
+
     if (hideResult.modifiedCount) {
+      try {
+        userScopedConversation = await buildUserScopedConversationSyncPayload({
+          conversationId: message.conversationId,
+          userId,
+        });
+      } catch (syncError) {
+        console.error(
+          "[removeMessageForMe] Failed to build user-scoped conversation preview",
+          syncError,
+        );
+      }
+
       io.to(userIdStr).emit("message-hidden-for-user", {
         conversationId: message.conversationId,
         messageId: message._id,
+        conversation: userScopedConversation,
       });
     }
 
     return res.status(200).json({
       success: true,
       alreadyHidden: !hideResult.modifiedCount,
+      conversation: userScopedConversation,
     });
   } catch (error) {
     console.error("Lỗi khi gỡ tin nhắn ở phía bạn:", error);
@@ -1457,11 +1549,18 @@ export const removeMessageForMe = async (req, res) => {
 export const editMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const { content } = req.body;
     const userId = req.user._id;
 
     if (!content?.trim()) {
       return res.status(400).json({ message: "Nội dung không được trống" });
+    }
+
+    if (content.trim().length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return res.status(400).json({
+        message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+      });
     }
 
     const message = await Message.findById(messageId);
@@ -1524,6 +1623,7 @@ export const editMessage = async (req, res) => {
         $set: {
           "lastMessage.content": updatedMessage.content,
           "lastMessage.createdAt": updatedMessage.createdAt,
+          "lastMessage.editedAt": updatedMessage.editedAt,
         },
       },
       { new: true },
@@ -1551,6 +1651,7 @@ export const editMessage = async (req, res) => {
 export const markMessageRead = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const userId = req.user._id;
 
     const existingMessage =
@@ -1744,6 +1845,7 @@ const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }
 export const forwardMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const { recipientIds, groupIds } = normalizeForwardTargets(req.body || {});
     const senderId = req.user._id;
 
@@ -1754,6 +1856,14 @@ export const forwardMessage = async (req, res) => {
     const originalMessage = await Message.findById(messageId);
     if (!originalMessage) {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn gốc" });
+    }
+
+    const isMemberOfSource = await ensureConversationMembership(
+      originalMessage.conversationId,
+      senderId,
+    );
+    if (!isMemberOfSource) {
+      return res.status(403).json({ message: "Không có quyền forward tin nhắn từ cuộc trò chuyện này" });
     }
 
     const deniedResponse = buildForwardDeniedResponse({
@@ -1789,6 +1899,7 @@ export const forwardMessage = async (req, res) => {
 export const toggleForwardable = async (req, res) => {
   try {
     const { messageId } = req.params;
+    if (!assertValidMessageId(messageId, res)) return;
     const { isForwardable } = req.body;
     const senderId = req.user._id;
 

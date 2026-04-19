@@ -11,7 +11,7 @@ import {
 } from "react";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { ArrowDown, Pin, X } from "lucide-react";
+import { ArrowDown, MessageCircle, Pin, X } from "lucide-react";
 import { ForwardMessageModal } from "./ForwardMessageModal";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -576,7 +576,9 @@ const ChatWindowBody = () => {
   if (!messages?.length) {
     return (
       <div className="flex h-full items-center justify-center flex-col gap-2.5 text-muted-foreground px-8 text-center bg-background animate-in fade-in slide-in-from-bottom-2 duration-500">
-        <span className="text-4xl select-none">👋</span>
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/40" aria-hidden="true">
+          <MessageCircle className="h-6 w-6 text-muted-foreground/70" />
+        </span>
         <div>
           <p className="text-[14px] font-semibold text-foreground/80">No messages yet</p>
           <p className="text-[12px] text-muted-foreground/60 mt-0.5">
@@ -592,10 +594,10 @@ const ChatWindowBody = () => {
   return (
     <div
       key={`chat-conversation-${activeConversationId}-${activeGroupChannelId || "direct"}`}
-      className="conversation-fade p-2 bg-background h-full flex flex-col overflow-hidden relative"
+      className="conversation-fade chat-thread-shell chat-thread-shell--command p-1.5 sm:p-2 bg-background h-full flex flex-col overflow-hidden relative"
     >
       {selectedConvo.type === "group" && pinnedMessage && (
-        <div className="mb-2 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.07] px-3 py-2">
+        <div className="chat-pinned-banner chat-pinned-banner--command mb-1.5 flex items-center gap-2 rounded-xl border border-primary/25 bg-primary/[0.07] px-2.5 py-1.5 sm:mb-2 sm:px-3 sm:py-2">
           <Pin className="size-3.5 text-primary flex-shrink-0" />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-primary/90">
@@ -610,7 +612,7 @@ const ChatWindowBody = () => {
           <button
             type="button"
             onClick={handleJumpToPinned}
-            className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors"
+            className="chat-pinned-banner-action rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/15 transition-colors"
           >
             Jump
           </button>
@@ -621,7 +623,7 @@ const ChatWindowBody = () => {
               onClick={() => {
                 void pinGroupMessage(selectedConvo._id, null);
               }}
-              className="rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+              className="chat-pinned-banner-dismiss rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
               aria-label="Unpin message"
             >
               <X className="size-3.5" />
@@ -634,7 +636,7 @@ const ChatWindowBody = () => {
         <div className="flex-1 min-h-0 overflow-hidden">
           <div
             className={cn(
-              "flex justify-center transition-all duration-300 overflow-hidden",
+              "flex justify-center overflow-hidden transition-[height,opacity,margin] duration-300",
               messageLoading && messages.length > 0
                 ? "h-10 opacity-100 mt-4 mb-2"
                 : "h-0 opacity-0 mt-0 mb-0",
@@ -668,7 +670,7 @@ const ChatWindowBody = () => {
 
       {/* ── Typing indicator ── */}
       {typingUserList.length > 0 && (
-        <div className="typing-bubble-wrap">
+        <div className="typing-bubble-wrap typing-bubble-wrap--command">
           <div className="typing-avatars">
             {typingUserList.slice(0, 3).map((typingUser) => (
               <div key={typingUser.userId} className="typing-avatar">
@@ -703,7 +705,7 @@ const ChatWindowBody = () => {
         onClick={scrollToBottom}
         aria-label="Scroll to latest messages"
         className={cn(
-          "scroll-to-bottom-fab",
+          "scroll-to-bottom-fab scroll-to-bottom-fab--command",
           showScrollButton
             ? "scroll-btn-enter pointer-events-auto"
             : "scroll-btn-exit pointer-events-none",

@@ -24,14 +24,14 @@ const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
   }
 
   return (
-    <div className="relative flex -space-x-1.5 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-[1.5px] hover:-space-x-1 transition-all duration-200">
+    <div className="relative flex -space-x-1.5 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-[1.5px]">
       {avatars}
 
       {/* if there are more than 4 avatars, render overflow indicator */}
       {participants.length > limit && (
         <div 
           className={cn(
-            "flex items-center z-10 justify-center rounded-full bg-primary/10 ring-[1.5px] ring-background text-primary font-bold transition-all",
+            "flex items-center z-10 justify-center rounded-full bg-primary/10 ring-[1.5px] ring-background text-primary font-bold transition-colors",
             type === "sidebar" ? "size-[42px] text-sm" : "size-8 text-xs"
           )}
         >

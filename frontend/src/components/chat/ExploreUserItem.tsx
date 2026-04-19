@@ -13,10 +13,22 @@ interface ExploreUserItemProps {
 }
 
 export const ExploreUserItem = ({ person, onViewProfile, customActions }: ExploreUserItemProps) => {
+  const actions = customActions ?? (onViewProfile ? (
+    <Button
+      variant="outline"
+      className="rounded-full shadow-sm group-hover:border-primary/50 group-hover:text-primary transition-colors text-[13px] h-8 px-4 font-semibold"
+      onClick={() => {
+        if (person._id) onViewProfile(person._id);
+      }}
+    >
+      View
+    </Button>
+  ) : null);
+
   return (
     <div className="enterprise-list-item group">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <div className="group-hover:scale-105 transition-transform duration-300">
+        <div>
           <UserAvatar type="sidebar" name={person.displayName || "Unknown"} avatarUrl={person.avatarUrl || undefined} />
         </div>
         <div className="font-medium">
@@ -26,19 +38,7 @@ export const ExploreUserItem = ({ person, onViewProfile, customActions }: Explor
       </div>
       
       <div className="group-focus-within:opacity-100 enterprise-action-reveal gap-2 sm:visible">
-        {customActions ? (
-          customActions
-        ) : onViewProfile ? (
-          <Button 
-            variant="outline" 
-            className="rounded-full shadow-sm group-hover:border-primary/50 group-hover:text-primary transition-colors text-[13px] h-8 px-4 font-semibold active:scale-95"
-            onClick={() => {
-              if (person._id) onViewProfile(person._id);
-            }}
-          >
-            View
-          </Button>
-        ) : null}
+        {actions}
       </div>
     </div>
   );

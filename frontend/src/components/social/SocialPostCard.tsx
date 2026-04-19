@@ -592,7 +592,7 @@ const PostMediaBlock = ({
       <button
         type="button"
         className={cn(
-          "social-post-media-block social-media-tile image-hover-shimmer mt-3 flex w-full items-center justify-center overflow-hidden rounded-lg border",
+          "social-post-media-block social-post-media-block--command social-post-media-single social-media-tile image-hover-shimmer mt-2.5 flex w-full items-center justify-center overflow-hidden rounded-lg border",
           portrait ? "max-h-[620px]" : "max-h-[500px]",
         )}
         onClick={() => onOpenLightbox(0)}
@@ -609,11 +609,18 @@ const PostMediaBlock = ({
 
   const countStr = mediaUrls.length >= 4 ? "4+" : String(mediaUrls.length);
   const remaining = mediaUrls.length - 4;
+  let layoutVariant = "quad";
+  if (mediaUrls.length === 2) {
+    layoutVariant = "duo";
+  } else if (mediaUrls.length === 3) {
+    layoutVariant = "triad";
+  }
 
   return (
     <div
-      className="social-post-media-block social-mosaic-layout"
+      className="social-post-media-block social-post-media-block--command social-mosaic-layout social-mosaic-layout--command"
       data-count={countStr}
+      data-layout={layoutVariant}
     >
       {mediaUrls.slice(0, 4).map((media, index) => {
         const isLast = index === 3 && remaining > 0;
@@ -621,7 +628,8 @@ const PostMediaBlock = ({
           <button
             key={`${media}-${index}`}
             type="button"
-            className="social-mosaic-tile image-hover-shimmer"
+            className="social-mosaic-tile social-mosaic-tile--command image-hover-shimmer"
+            data-hero={index === 0 ? "true" : "false"}
             onClick={() => onOpenLightbox(index)}
           >
             <img src={media} alt={`post media ${index + 1}`} loading="lazy" />
@@ -1167,7 +1175,7 @@ const SocialPostCard = ({
   }
 
   return (
-    <article className="social-card social-post-card p-4" aria-busy={interactionBusy}>
+    <article className="social-card social-post-card social-post-card--command social-post-card-hierarchy social-post-card--editorial p-3.5" aria-busy={interactionBusy}>
       <p className="sr-only" aria-live="polite">
         {interactionStatusLabel}
       </p>
@@ -1186,16 +1194,16 @@ const SocialPostCard = ({
       />
 
       {post.caption && (
-        <p className="social-post-plain-text mt-3 whitespace-pre-wrap text-sm">{post.caption}</p>
+        <p className="social-post-plain-text social-post-caption social-post-caption--editorial mt-2.5 whitespace-pre-wrap text-sm">{post.caption}</p>
       )}
 
       {post.tags.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="social-post-tags-wrap mt-1.5 flex flex-wrap gap-2">
           {post.tags.map((tag) => (
             <button
               key={`${post._id}-${tag}`}
               type="button"
-              className="social-tag-btn text-sm font-medium hover:underline"
+              className="social-tag-btn social-tag-btn--command text-sm font-medium hover:underline"
               onClick={() => onSelectTag?.(tag)}
             >
               #{tag}

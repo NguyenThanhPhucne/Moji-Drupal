@@ -44,6 +44,7 @@ const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES = Object.freeze({
   follow: true,
   like: true,
   comment: true,
+  mention: true,
   friendAccepted: true,
   system: true,
   mutedUserIds: [] as string[],
@@ -123,6 +124,8 @@ const HomeFeedPage = () => {
       follow: socialPrefs?.follow ?? DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.follow,
       like: socialPrefs?.like ?? DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.like,
       comment: socialPrefs?.comment ?? DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.comment,
+      mention:
+        socialPrefs?.mention ?? DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.mention,
       friendAccepted:
         socialPrefs?.friendAccepted ??
         DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES.friendAccepted,
@@ -299,6 +302,7 @@ const HomeFeedPage = () => {
       follow?: boolean;
       like?: boolean;
       comment?: boolean;
+      mention?: boolean;
       friendAccepted?: boolean;
       system?: boolean;
       mutedUserIds?: string[];
@@ -419,7 +423,7 @@ const HomeFeedPage = () => {
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section
-              className="social-feed-column min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
+              className="social-feed-column social-feed-column--command social-feed-column--editorial min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
               aria-label="Home feed timeline"
             >
               <div className={getStaggerEnterClass(0)}>
@@ -461,12 +465,13 @@ const HomeFeedPage = () => {
               )}
 
               {/* ── Filter bar with live count badges ────────────────────── */}
-              <div className={cn("social-feed-filter-wrap social-feed-filter-sticky", getStaggerEnterClass(4))}>
+              <div className={cn("social-feed-filter-wrap social-feed-filter-wrap--command social-feed-filter-wrap--editorial social-feed-filter-sticky", getStaggerEnterClass(4))}>
                 <div
                   className="social-filter-tabs-container"
                   data-testid="feed-filter-tabs"
                   role="tablist"
                   aria-label="Feed filters"
+                  tabIndex={0}
                   onKeyDown={handleFeedFilterKeyDown}
                 >
                   {FEED_TABS.map((tab) => (
@@ -517,10 +522,9 @@ const HomeFeedPage = () => {
               </div>
 
               {/* ── Post list ─────────────────────────────────────────────── */}
-              <div
+              <section
                 id="home-feed-results"
-                className="social-feed-post-stack space-stack-md"
-                role="region"
+                className="social-feed-post-stack social-feed-post-stack--command social-feed-post-stack--editorial space-stack-md"
                 aria-live="polite"
                 aria-label={`Feed results for ${FEED_TAB_LABELS[feedTab]}`}
               >
@@ -583,7 +587,7 @@ const HomeFeedPage = () => {
                     )}
                   </div>
                 )}
-              </div>
+              </section>
 
               {/* ── Infinite scroll sentinel ──────────────────────────────── */}
               <div ref={sentinelRef} className="h-4" aria-hidden="true" />
@@ -596,7 +600,7 @@ const HomeFeedPage = () => {
 
             {/* ── Right rail ──────────────────────────────────────────────── */}
             <div
-              className="social-feed-right-column social-feed-right-column--enterprise order-last xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100svh-2.5rem)] xl:overflow-y-auto xl:beautiful-scrollbar space-y-3 xl:space-y-4 xl:pr-0.5"
+              className="social-feed-right-column social-feed-right-column--command social-feed-right-column--enterprise social-feed-right-column--editorial order-last space-y-3 xl:sticky xl:top-4 xl:max-h-[calc(100svh-2.5rem)] xl:self-start xl:overflow-y-auto xl:beautiful-scrollbar xl:space-y-4 xl:pr-0.5"
               aria-label="Feed insights and quick actions"
             >
               {/* Notifications first — always visible above the fold */}

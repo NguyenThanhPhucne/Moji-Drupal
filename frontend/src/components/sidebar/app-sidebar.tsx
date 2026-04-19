@@ -121,7 +121,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         data-chat-sidebar="true"
         variant="inset"
         className={cn(
-          "chat-sidebar-shell border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300",
+          "chat-sidebar-shell chat-sidebar-shell--command border-r border-border/60 bg-sidebar/90 backdrop-blur-xl transition-[width] duration-300",
           isCompact && "chat-sidebar-compact",
         )}
         style={
@@ -135,12 +135,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenu>
             <SidebarMenuItem>
               <div className={cn(
-                "chat-sidebar-brand flex w-full items-center justify-between px-3 py-2.5",
+                "chat-sidebar-brand chat-sidebar-brand--command flex w-full items-center justify-between px-3 py-2.5",
                 isCompact && "px-1 justify-center"
               )}>
                 {!isCompact && (
                   <div className="flex items-center gap-2">
-                    <div className="chat-sidebar-brand-mark size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0 transition-all duration-200 hover:shadow-md hover:shadow-primary/30 hover:scale-105">
+                    <div className="chat-sidebar-brand-mark chat-sidebar-brand-mark--command size-7 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0 transition-[box-shadow,background-color] duration-200 hover:shadow-sm hover:shadow-primary/20">
                       <span className="text-[13px] font-black text-white tracking-tight">M</span>
                     </div>
                     <div>
@@ -180,7 +180,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarGroupContent>
               {isCompact ? (
                 /* ── Compact rail: vertical icon list ───────────────────── */
-                <div className="flex flex-col items-center gap-1 py-1">
+                <div className="chat-sidebar-nav-rail flex flex-col items-center gap-1 py-1">
                   {[...navItems, ...bottomNavItems].map((item) => {
                     const Icon = item.icon;
                     return (
@@ -192,10 +192,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         aria-current={item.isActive ? "page" : undefined}
                         onClick={() => navigate(item.to)}
                         className={cn(
-                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--rail relative flex size-10 items-center justify-center rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--rail relative flex size-10 items-center justify-center rounded-xl transition-[background-color,color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
                           item.isActive
                             ? "bg-primary/10 text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
-                            : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground hover:scale-105"
+                            : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
                         )}
                       >
                         <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
@@ -210,7 +210,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </div>
               ) : (
                 /* ── Full: single-row horizontal tab bar ──────────────── */
-                <div className="flex gap-1 px-1 pb-1">
+                <div className="chat-sidebar-nav-grid flex gap-1 px-1 pb-1">
                   {[...navItems, ...bottomNavItems].map((item) => {
                     const Icon = item.icon;
                     return (
@@ -221,10 +221,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         onClick={() => navigate(item.to)}
                         title={item.label}
                         className={cn(
-                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--full relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--full relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-[background-color,color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                           item.isActive
                             ? "bg-primary/[0.09] text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
-                            : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80 hover:scale-[1.03]",
+                            : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80",
                         )}
                       >
                         <Icon className={cn("size-[18px]", item.isActive && "stroke-[2.2]")} />

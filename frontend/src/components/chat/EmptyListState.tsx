@@ -13,7 +13,7 @@ export const EmptyListState = ({ type, query, onExploreClick }: EmptyListStatePr
       <div className="enterprise-empty-state animate-in fade-in slide-in-from-bottom-1 duration-400">
         <div className="enterprise-empty-icon relative">
           <Compass className="size-5 text-primary/70" />
-          <span className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-25" />
+          <span className="absolute inset-0 rounded-full border border-primary/20 opacity-40" />
         </div>
         <p className="text-[13.5px] font-medium text-foreground/80 mt-1">No suggestions right now</p>
         <p className="text-xs text-muted-foreground/70 mt-1 max-w-[200px] leading-relaxed">
@@ -38,7 +38,7 @@ export const EmptyListState = ({ type, query, onExploreClick }: EmptyListStatePr
       </p>
       {type === "no-friends" && onExploreClick && (
         <Button
-          className="mt-5 rounded-full shadow-sm hover:shadow-md active:scale-95 transition-all profile-action-gradient"
+          className="mt-5 rounded-full shadow-sm transition-colors profile-action-gradient"
           onClick={onExploreClick}
         >
           <Compass className="size-4 mr-1.5" />

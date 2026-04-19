@@ -53,6 +53,7 @@ const NotificationPreferencesSettings = ({
       follow: socialPrefs?.follow ?? DEFAULT_SOCIAL_PREFS.follow,
       like: socialPrefs?.like ?? DEFAULT_SOCIAL_PREFS.like,
       comment: socialPrefs?.comment ?? DEFAULT_SOCIAL_PREFS.comment,
+      mention: socialPrefs?.mention ?? DEFAULT_SOCIAL_PREFS.mention,
       friendAccepted:
         socialPrefs?.friendAccepted ?? DEFAULT_SOCIAL_PREFS.friendAccepted,
       system: socialPrefs?.system ?? DEFAULT_SOCIAL_PREFS.system,
@@ -158,8 +159,8 @@ const NotificationPreferencesSettings = ({
   }
 
   return (
-    <div className={cn("space-y-4", className)}>
-      <section className="space-y-2.5">
+    <div className={cn("notification-preferences-layout space-y-4", className)}>
+      <section className="notification-preferences-section notification-preferences-section--presets space-y-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Quick presets
         </p>
@@ -183,7 +184,7 @@ const NotificationPreferencesSettings = ({
                   });
                 }}
                 className={cn(
-                  "micro-tap-chip rounded-xl border px-3 py-2 text-left transition-colors",
+                  "notification-preset-chip micro-tap-chip rounded-xl border px-3 py-2 text-left transition-colors",
                   active
                     ? "border-primary/45 bg-primary/10"
                     : "border-border/70 bg-background/80 hover:border-primary/30 hover:bg-muted/30",
@@ -207,7 +208,7 @@ const NotificationPreferencesSettings = ({
         </div>
       </section>
 
-      <section className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-3">
+      <section className="notification-preferences-section notification-preferences-section--delivery space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           Delivery
         </p>
@@ -231,7 +232,7 @@ const NotificationPreferencesSettings = ({
         ].map((item) => (
           <label
             key={item.key}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-2.5 py-2"
+            className="notification-preference-row notification-preference-row--delivery flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/80 px-2.5 py-2"
           >
             <span className="min-w-0">
               <span className="block text-xs font-semibold text-foreground/90">
@@ -254,7 +255,7 @@ const NotificationPreferencesSettings = ({
         ))}
       </section>
 
-      <section className="space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-3">
+      <section className="notification-preferences-section notification-preferences-section--social space-y-2.5 rounded-xl border border-border/70 bg-muted/20 p-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             Social quiet mode
@@ -275,12 +276,13 @@ const NotificationPreferencesSettings = ({
             { key: "follow" as const, label: "Follows" },
             { key: "like" as const, label: "Likes" },
             { key: "comment" as const, label: "Comments" },
+            { key: "mention" as const, label: "Mentions" },
             { key: "friendAccepted" as const, label: "Friend accepted" },
             { key: "system" as const, label: "System" },
           ].map((item) => (
             <label
               key={item.key}
-              className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/80 px-2.5 py-1.5 text-xs"
+              className="notification-preference-row notification-preference-row--social flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/80 px-2.5 py-1.5 text-xs"
             >
               <span className="text-foreground/85">{item.label}</span>
               <Switch
@@ -327,7 +329,7 @@ const NotificationPreferencesSettings = ({
                     });
                   }}
                   className={cn(
-                    "micro-tap-chip rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
+                    "notification-digest-chip micro-tap-chip rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
                     socialPreferences.digestWindowHours === hours
                       ? "border-primary/45 bg-primary/10 text-primary"
                       : "border-border/70 bg-background text-muted-foreground hover:text-foreground",
@@ -341,10 +343,11 @@ const NotificationPreferencesSettings = ({
         </div>
       </section>
 
-      <div className="flex items-center justify-end">
+      <div className="notification-preferences-footer flex items-center justify-end">
         <Button
           type="button"
           variant="outline"
+          className="notification-preferences-reset"
           disabled={saving}
           onClick={() => {
             applyPreset("balanced").catch((error) => {

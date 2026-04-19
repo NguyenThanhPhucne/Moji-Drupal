@@ -48,7 +48,7 @@ const VirtualizedCommentThreadItem = ({
   onSubmitReply,
 }: VirtualizedCommentThreadItemProps) => {
   return (
-    <div className="space-y-2 pb-2 social-comment-tree-line">
+    <article className="social-comment-thread social-comment-thread--command social-comment-tree-line space-y-2 pb-2">
       <CommentBubble
         comment={item.root}
         postAuthorId={postAuthorId}
@@ -67,40 +67,43 @@ const VirtualizedCommentThreadItem = ({
       {item.replies.length > 0 && (
         <button
           type="button"
-          className="social-text-muted ml-10 text-xs font-semibold hover:underline"
+          className="social-comment-thread-toggle social-text-muted ml-10 text-xs font-semibold hover:underline"
           onClick={() => onToggleCollapsed(item.root._id)}
         >
           {collapsed ? `View ${item.replies.length} replies` : "Hide replies"}
         </button>
       )}
 
-      {!collapsed &&
-        item.replies.map((reply) => (
-          <CommentBubble
-            key={reply._id}
-            comment={reply}
-            postAuthorId={postAuthorId}
-            onOpenProfile={onOpenProfile}
-            isReply
-            onReply={() => onStartReply(item.root._id)}
-            canDelete={
-              String(currentUserId || "") === String(reply.authorId._id || "") ||
-              String(currentUserId || "") === String(postAuthorId || "")
-            }
-            actionsDisabled={actionsDisabled}
-            onDelete={() => onDeleteComment(reply._id)}
-            canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
-            onReport={() => onReportComment?.(reply._id)}
-          />
-        ))}
+      {!collapsed && (
+        <div className="social-comment-replies-stack space-y-2">
+          {item.replies.map((reply) => (
+            <CommentBubble
+              key={reply._id}
+              comment={reply}
+              postAuthorId={postAuthorId}
+              onOpenProfile={onOpenProfile}
+              isReply
+              onReply={() => onStartReply(item.root._id)}
+              canDelete={
+                String(currentUserId || "") === String(reply.authorId._id || "") ||
+                String(currentUserId || "") === String(postAuthorId || "")
+              }
+              actionsDisabled={actionsDisabled}
+              onDelete={() => onDeleteComment(reply._id)}
+              canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
+              onReport={() => onReportComment?.(reply._id)}
+            />
+          ))}
+        </div>
+      )}
 
       {replying && (
-        <div className="ml-10 flex items-center gap-2">
+        <div className="social-comment-reply-composer ml-10 flex items-center gap-2">
           <Input
             value={replyDraft}
             onChange={(event) => onReplyDraftChange(item.root._id, event.target.value)}
             placeholder={`Reply to ${item.root.authorId.displayName}...`}
-            className="social-post-comment-input social-post-comment-input-floating h-9 rounded-full shadow-none"
+            className="social-post-comment-input social-post-comment-input--command social-post-comment-input-floating h-9 rounded-full shadow-none"
             disabled={commentPending || actionsDisabled}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -113,7 +116,7 @@ const VirtualizedCommentThreadItem = ({
             type="button"
             size="sm"
             variant="ghost"
-            className="social-post-comment-action"
+            className="social-post-comment-action social-comment-reply-send"
             onClick={() => onSubmitReply(item.root._id)}
             disabled={commentPending || actionsDisabled}
           >
@@ -121,7 +124,7 @@ const VirtualizedCommentThreadItem = ({
           </Button>
         </div>
       )}
-    </div>
+    </article>
   );
 };
 
@@ -225,11 +228,14 @@ const CommentsPanel = ({
   }
 
   return (
-    <section className="mt-3 space-y-3" aria-busy={commentPending}>
-      <div className="flex items-center justify-end gap-1">
+    <section className="social-comments-panel social-comments-panel--command mt-3 space-y-3" aria-busy={commentPending}>
+      <div className="social-comments-toolbar flex items-center justify-end gap-1">
         <button
           type="button"
-          className={cn("rounded px-2 py-1 text-xs font-medium", "social-segment-btn")}
+          className={cn(
+            "social-comments-sort-btn rounded px-2 py-1 text-xs font-medium",
+            "social-segment-btn",
+          )}
           data-active={commentSort === "relevant"}
           onClick={() => onSetCommentSort("relevant")}
           disabled={commentActionsDisabled || commentsLoading}
@@ -238,7 +244,10 @@ const CommentsPanel = ({
         </button>
         <button
           type="button"
-          className={cn("rounded px-2 py-1 text-xs font-medium", "social-segment-btn")}
+          className={cn(
+            "social-comments-sort-btn rounded px-2 py-1 text-xs font-medium",
+            "social-segment-btn",
+          )}
           data-active={commentSort === "newest"}
           onClick={() => onSetCommentSort("newest")}
           disabled={commentActionsDisabled || commentsLoading}
@@ -247,7 +256,7 @@ const CommentsPanel = ({
         </button>
       </div>
 
-      <div className="social-comment-composer flex items-center gap-2">
+      <div className="social-comment-composer social-comment-composer--command flex items-center gap-2">
         <div className="social-avatar-badge social-comment-avatar flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-xs font-semibold">
           {composerAvatarUrl ? (
             <img src={composerAvatarUrl} alt={composerDisplayName} className="h-full w-full object-cover" />
@@ -261,7 +270,7 @@ const CommentsPanel = ({
             value={commentDraft}
             onChange={(event) => onCommentDraftChange(event.target.value)}
             placeholder="Write a comment..."
-            className="social-post-comment-input social-post-comment-input-floating h-10 rounded-full pr-28 text-sm shadow-none"
+            className="social-post-comment-input social-post-comment-input--command social-post-comment-input-floating h-10 rounded-full pr-28 text-sm shadow-none"
             disabled={commentPending || commentActionsDisabled}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -303,98 +312,43 @@ const CommentsPanel = ({
       </div>
 
       {rootsWithReplies.length > 100 ? (
-        <div className="max-h-[440px] overflow-hidden">
+        <div className="social-comments-thread-viewport max-h-[440px] overflow-hidden">
           <Virtuoso data={rootsWithReplies} itemContent={renderVirtuosoItem} />
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="social-comments-thread-list space-y-2">
           {rootsWithReplies.map((item) => (
-            <div key={item.root._id} className="space-y-2 social-comment-tree-line pb-2">
-              <CommentBubble
-                comment={item.root}
-                postAuthorId={postAuthorId}
-                onOpenProfile={onOpenProfile}
-                onReply={() => onStartReply(item.root._id)}
-                canDelete={
-                  String(currentUserId || "") === String(item.root.authorId._id || "") ||
-                  String(currentUserId || "") === String(postAuthorId || "")
-                }
-                actionsDisabled={commentActionsDisabled}
-                onDelete={() => onDeleteComment(item.root._id)}
-                canReport={String(currentUserId || "") !== String(item.root.authorId._id || "")}
-                onReport={() => onReportComment?.(item.root._id)}
-              />
-
-              {item.replies.length > 0 && (
-                <button
-                  type="button"
-                  className="social-text-muted ml-10 text-xs font-semibold hover:underline"
-                  onClick={() => onToggleRootReplies(item.root._id)}
-                >
-                  {collapsedRepliesByRoot[item.root._id]
-                    ? `View ${item.replies.length} replies`
-                    : "Hide replies"}
-                </button>
-              )}
-
-              {!collapsedRepliesByRoot[item.root._id] &&
-                item.replies.map((reply) => (
-                  <CommentBubble
-                    key={reply._id}
-                    comment={reply}
-                    postAuthorId={postAuthorId}
-                    onOpenProfile={onOpenProfile}
-                    isReply
-                    onReply={() => onStartReply(item.root._id)}
-                    canDelete={
-                      String(currentUserId || "") === String(reply.authorId._id || "") ||
-                      String(currentUserId || "") === String(postAuthorId || "")
-                    }
-                    actionsDisabled={commentActionsDisabled}
-                    onDelete={() => onDeleteComment(reply._id)}
-                    canReport={String(currentUserId || "") !== String(reply.authorId._id || "")}
-                    onReport={() => onReportComment?.(reply._id)}
-                  />
-                ))}
-
-              {replyingToCommentId === item.root._id && (
-                <div className="ml-10 flex items-center gap-2">
-                  <Input
-                    value={replyDraftByCommentId[item.root._id] || ""}
-                    onChange={(event) => onReplyDraftChange(item.root._id, event.target.value)}
-                    placeholder={`Reply to ${item.root.authorId.displayName}...`}
-                    className="social-post-comment-input social-post-comment-input-floating h-9 rounded-full shadow-none"
-                    disabled={commentPending || commentActionsDisabled}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        onSubmitComment(item.root._id);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => onSubmitComment(item.root._id)}
-                    disabled={commentPending || commentActionsDisabled}
-                  >
-                    {commentPending ? "Sending..." : "Reply"}
-                  </Button>
-                </div>
-              )}
-            </div>
+            <VirtualizedCommentThreadItem
+              key={item.root._id}
+              item={item}
+              postAuthorId={postAuthorId}
+              currentUserId={currentUserId}
+              commentPending={commentPending}
+              actionsDisabled={commentActionsDisabled}
+              onOpenProfile={onOpenProfile}
+              onDeleteComment={onDeleteComment}
+              onReportComment={onReportComment}
+              collapsed={Boolean(collapsedRepliesByRoot[item.root._id])}
+              onToggleCollapsed={onToggleRootReplies}
+              replying={replyingToCommentId === item.root._id}
+              onStartReply={onStartReply}
+              replyDraft={replyDraftByCommentId[item.root._id] || ""}
+              onReplyDraftChange={onReplyDraftChange}
+              onSubmitReply={(rootId) => onSubmitComment(rootId)}
+            />
           ))}
         </div>
       )}
 
-      {!rootsWithReplies.length && <p className="social-text-muted text-sm">No comments yet.</p>}
+      {!rootsWithReplies.length && (
+        <p className="social-comments-empty social-text-muted text-sm">No comments yet.</p>
+      )}
 
       {commentsPagination?.hasNextPage && (
         <Button
           type="button"
           variant="ghost"
-          className="social-text-muted w-full"
+          className="social-comments-loadmore social-text-muted w-full"
           onClick={() => onLoadMoreComments(postId)}
           disabled={Boolean(commentsLoading) || commentActionsDisabled}
         >

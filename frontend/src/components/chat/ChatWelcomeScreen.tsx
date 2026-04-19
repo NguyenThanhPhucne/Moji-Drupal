@@ -16,6 +16,9 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useState } from "react";
 import NewGroupChatModal from "./NewGroupChatModal";
 import { cn } from "@/lib/utils";
+import { Dialog } from "../ui/dialog";
+import { useFriendStore } from "@/stores/useFriendStore";
+import FriendListModal from "../createNewChat/FriendListModal";
 
 const ICON_PARTICLES = [
   { Icon: MessageCircle, style: "absolute -top-5 -left-6 size-4 animate-float opacity-60" },
@@ -31,18 +34,17 @@ const FEATURE_PILLS = [
 ];
 
 const ChatWelcomeScreen = () => {
-  const { conversations } = useChatStore();
+  const conversations = useChatStore((state) => state.conversations);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showNewDirect, setShowNewDirect] = useState(false);
+  const { getFriends } = useFriendStore();
 
   const directConvos = conversations.filter((c) => c.type === "direct");
   const conversationLabel = conversations.length === 1 ? "conversation" : "conversations";
 
-  const handleStartNewChat = () => {
-    // Open friend list sidebar or navigate — for now scroll sidebar into view
-    const sidebarBtn = document.querySelector("[data-chat-card='true']") as HTMLElement | null;
-    if (sidebarBtn) {
-      sidebarBtn.focus();
-    }
+  const handleOpenNewDirectChat = async () => {
+    await getFriends();
+    setShowNewDirect(true);
   };
 
   return (
@@ -101,12 +103,12 @@ const ChatWelcomeScreen = () => {
           <div className="animate-in fade-in slide-in-from-bottom-1 duration-500 delay-500 flex items-center gap-2.5">
             <button
               type="button"
-              onClick={handleStartNewChat}
+              onClick={handleOpenNewDirectChat}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold",
                 "bg-primary text-primary-foreground shadow-sm",
-                "hover:brightness-110 hover:shadow-md hover:scale-105 active:scale-95",
-                "transition-all duration-200",
+                "hover:bg-primary/90 active:scale-[0.97]",
+                "transition-all duration-150",
               )}
             >
               <Plus className="size-3.5" />
@@ -119,8 +121,8 @@ const ChatWelcomeScreen = () => {
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold",
                 "bg-muted/70 border border-border/50 text-foreground/80",
-                "hover:bg-muted hover:border-border hover:text-foreground hover:scale-105 active:scale-95",
-                "transition-all duration-200",
+                "hover:bg-muted hover:border-border hover:text-foreground active:scale-[0.97]",
+                "transition-all duration-150",
               )}
             >
               <Users className="size-3.5" />
@@ -141,6 +143,11 @@ const ChatWelcomeScreen = () => {
         </div>
       </div>
 
+      {/* New Direct Chat Modal */}
+      <Dialog open={showNewDirect} onOpenChange={setShowNewDirect}>
+        <FriendListModal />
+      </Dialog>
+
       {/* New Group Modal */}
       <NewGroupChatModal
         isOpen={showNewGroup}
@@ -151,3 +158,4 @@ const ChatWelcomeScreen = () => {
 };
 
 export default ChatWelcomeScreen;
+

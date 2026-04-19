@@ -29,7 +29,7 @@ export const FriendListItem = ({
       {onChat && (
         <Button
           type="button"
-          className="size-9 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white shadow-sm hover:shadow active:scale-95 transition-all"
+          className="size-9 rounded-full bg-primary/10 text-primary hover:bg-primary hover:text-white shadow-sm transition-colors"
           size="icon"
           onClick={() => onChat(friend._id)}
           disabled={disabled}
@@ -47,7 +47,7 @@ export const FriendListItem = ({
           type="button"
           size="icon"
           variant="ghost"
-          className="size-9 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive active:scale-95 transition-all"
+          className="size-9 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
           onClick={() => onRemove(friend._id, friend.displayName)}
           disabled={disabled}
           title="Remove Friend"
@@ -74,7 +74,7 @@ export const FriendListItem = ({
           onRemove={onRemove ? () => onRemove(friend._id, friend.displayName) : undefined}
           disabled={disabled}
         >
-          <div className="cursor-pointer group-hover:scale-105 group-hover:shadow-md transition-all duration-300 rounded-full">
+          <div className="cursor-pointer rounded-full transition-shadow duration-200">
             <UserAvatar
               type="sidebar"
               name={friend.displayName}

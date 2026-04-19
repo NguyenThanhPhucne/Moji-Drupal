@@ -1,7 +1,14 @@
 import { useCallback, useRef } from "react";
 import type { KeyboardEvent } from "react";
+import {
+  AlertCircle,
+  Frown,
+  Heart,
+  Smile,
+  Sparkles,
+  ThumbsUp,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ReactionGlyph } from "@/components/social/FacebookReactionIcons";
 import type { SocialReactionType } from "@/types/social";
 
 interface ReactionPopoverProps {
@@ -24,6 +31,30 @@ const reactions: Array<{
   { type: "sad", label: "Sad" },
   { type: "angry", label: "Angry" },
 ];
+
+const getProfessionalReactionIcon = (reaction: SocialReactionType) => {
+  if (reaction === "like") {
+    return ThumbsUp;
+  }
+
+  if (reaction === "love") {
+    return Heart;
+  }
+
+  if (reaction === "haha") {
+    return Smile;
+  }
+
+  if (reaction === "wow") {
+    return Sparkles;
+  }
+
+  if (reaction === "sad") {
+    return Frown;
+  }
+
+  return AlertCircle;
+};
 
 const ReactionPopover = ({
   activeReaction,
@@ -107,10 +138,10 @@ const ReactionPopover = ({
   return (
     <div
       className={cn(
-        "absolute -top-14 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-border/70 bg-popover/95 px-2.5 py-1.5 shadow-[0_10px_28px_hsl(var(--foreground)/0.18)] backdrop-blur-[2px] transition-all duration-150",
+        "social-reaction-popover social-reaction-popover--command absolute -top-14 left-1/2 z-30 -translate-x-1/2 rounded-2xl border border-border/70 bg-popover/95 px-2.5 py-1.5 shadow-[0_10px_28px_hsl(var(--foreground)/0.18)] backdrop-blur-[2px] transition-[opacity,transform,border-color,background-color,box-shadow] duration-150",
         open
-          ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
-          : "pointer-events-none translate-y-1 scale-95 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100",
+          ? "pointer-events-auto translate-y-0 opacity-100"
+          : "pointer-events-none translate-y-1 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100",
         disabled && "opacity-90",
       )}
       role="toolbar"
@@ -124,6 +155,8 @@ const ReactionPopover = ({
       <div className="flex items-center gap-1">
         {reactions.map((reaction, index) => {
           const isActive = activeReaction === reaction.type;
+          const ReactionIcon = getProfessionalReactionIcon(reaction.type);
+
           return (
             <button
               key={reaction.type}
@@ -132,9 +165,9 @@ const ReactionPopover = ({
               }}
               type="button"
               className={cn(
-                  "group/icon inline-flex h-9 w-9 items-center justify-center rounded-full text-base transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1",
-                !disabled && "hover:-translate-y-1 hover:scale-[1.22]",
-                isActive ? "bg-primary/12" : "hover:bg-muted/70",
+                "social-reaction-popover-btn social-reaction-popover-btn--command inline-flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-base transition-[background-color,border-color,color,opacity] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1",
+                !disabled && "hover:bg-muted/70",
+                isActive ? "bg-primary/12 border-primary/25" : "bg-transparent",
                 disabled && "cursor-not-allowed",
               )}
               onClick={() => {
@@ -150,8 +183,8 @@ const ReactionPopover = ({
               aria-pressed={isActive}
               tabIndex={index === defaultFocusIndex ? 0 : -1}
             >
-              <span className="transition-transform duration-150 group-hover/icon:-translate-y-0.5">
-                <ReactionGlyph reaction={reaction.type} className="h-6 w-6" />
+              <span className="social-reaction-popover-icon">
+                <ReactionIcon className="h-5 w-5" />
               </span>
             </button>
           );

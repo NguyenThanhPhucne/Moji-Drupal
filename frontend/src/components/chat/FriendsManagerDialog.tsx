@@ -270,7 +270,7 @@ const FriendsManagerDialog = () => {
         </button>
       </DialogTrigger>
 
-      <DialogContent className="people-manager-modal sm:max-w-[700px] p-0 overflow-hidden gap-0 flex flex-col bg-card">
+      <DialogContent className="people-manager-modal people-manager-modal--command sm:max-w-[700px] p-0 overflow-hidden gap-0 flex flex-col bg-card">
         <DialogHeader className="modal-stagger-item px-6 pt-6 pb-2">
           <DialogTitle className="text-xl">Friends Hub</DialogTitle>
           <DialogDescription>
@@ -280,10 +280,10 @@ const FriendsManagerDialog = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="people-manager-tabs w-full flex-1 flex flex-col min-h-0">
           <div className="px-6 relative">
-            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0 h-auto gap-6">
+            <TabsList className="people-manager-tabs-list people-manager-tabs-list--command w-full justify-start rounded-none border-b bg-transparent p-0 h-auto gap-6">
               <TabsTrigger
                 value="all-friends"
-                className="relative rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all outline-none"
+                className="people-manager-tab-trigger people-manager-tab-trigger--command relative rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-[color,border-color,background-color] outline-none"
               >
                 <Users className="h-4 w-4 mr-2" />
                 My Friends
@@ -293,7 +293,7 @@ const FriendsManagerDialog = () => {
               </TabsTrigger>
               <TabsTrigger
                 value="explore"
-                className="relative rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-all outline-none"
+                className="people-manager-tab-trigger people-manager-tab-trigger--command relative rounded-none border-b-2 border-transparent px-1 pb-3 pt-2 font-semibold text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none transition-[color,border-color,background-color] outline-none"
               >
                 <Compass className="h-4 w-4 mr-2" />
                 Explore
@@ -311,7 +311,7 @@ const FriendsManagerDialog = () => {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="Search by name or username"
-                    className="search-input-pill pl-9 h-10 border-border/80 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all rounded-xl"
+                    className="people-manager-search-input people-manager-search-input--command search-input-pill pl-9 h-10 rounded-xl border-border/80 transition-[border-color,box-shadow,background-color] focus-visible:border-primary/50 focus-visible:ring-primary/20"
                   />
                 </div>
 
@@ -435,7 +435,7 @@ const FriendsManagerDialog = () => {
                      value={exploreQuery}
                      onChange={(event) => setExploreQuery(event.target.value)}
                      placeholder="Search suggested people"
-                     className="search-input-pill pl-9 h-10 border-border/80 focus-visible:ring-primary/20 focus-visible:border-primary/50 transition-all rounded-xl"
+                     className="people-manager-search-input people-manager-search-input--command search-input-pill pl-9 h-10 rounded-xl border-border/80 transition-[border-color,box-shadow,background-color] focus-visible:border-primary/50 focus-visible:ring-primary/20"
                    />
                  </div>
 
@@ -488,7 +488,7 @@ const FriendsManagerDialog = () => {
               Keep Friend
             </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-md font-semibold focus:ring-destructive rounded-xl h-10 transition-all active:scale-[0.98]"
+              className="people-manager-danger-action people-manager-danger-action--command bg-destructive text-destructive-foreground hover:bg-destructive/90 font-semibold focus:ring-destructive rounded-xl h-10 transition-colors"
               onClick={() => {
                 handleRemoveFriend().catch((error) => {
                   console.error("Failed to remove friend", error);

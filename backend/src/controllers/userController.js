@@ -39,6 +39,7 @@ const SOCIAL_BOOLEAN_KEYS = new Set([
   "follow",
   "like",
   "comment",
+  "mention",
   "friendAccepted",
   "system",
   "digestEnabled",

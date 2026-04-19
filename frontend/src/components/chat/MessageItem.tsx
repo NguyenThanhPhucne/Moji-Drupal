@@ -6,6 +6,10 @@ import { format, isToday, isYesterday } from "date-fns";
 import {
   Reply,
   Smile,
+  Sparkles,
+  Frown,
+  Heart,
+  ThumbsUp,
   Trash2,
   Edit2,
   Copy,
@@ -18,6 +22,7 @@ import {
   Unlock,
   Pin,
   Flag,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import { createPortal } from "react-dom";
@@ -36,7 +41,68 @@ import {
 } from "../ui/dialog";
 import ImageLightbox from "./ImageLightbox";
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "👏"];
+const REACTION_EMOJI = Object.freeze({
+  like: "\u{1F44D}",
+  love: "\u{2764}\u{FE0F}",
+  haha: "\u{1F602}",
+  wow: "\u{1F62E}",
+  sad: "\u{1F622}",
+  clap: "\u{1F44F}",
+});
+
+const QUICK_REACTIONS: Array<{
+  id: string;
+  emoji: string;
+  label: string;
+  Icon: LucideIcon;
+}> = [
+  { id: "like", emoji: REACTION_EMOJI.like, label: "Like", Icon: ThumbsUp },
+  { id: "love", emoji: REACTION_EMOJI.love, label: "Love", Icon: Heart },
+  { id: "haha", emoji: REACTION_EMOJI.haha, label: "Haha", Icon: Smile },
+  { id: "wow", emoji: REACTION_EMOJI.wow, label: "Wow", Icon: Sparkles },
+  { id: "sad", emoji: REACTION_EMOJI.sad, label: "Sad", Icon: Frown },
+  { id: "clap", emoji: REACTION_EMOJI.clap, label: "Applause", Icon: ThumbsUp },
+];
+
+const normalizeReactionEmoji = (emoji: string) => {
+  if (emoji === "\u{2764}") {
+    return REACTION_EMOJI.love;
+  }
+
+  return emoji;
+};
+
+const getReactionMetaByEmoji = (
+  emoji: string,
+): { label: string; Icon: LucideIcon } => {
+  const normalized = normalizeReactionEmoji(emoji);
+
+  if (normalized === REACTION_EMOJI.like) {
+    return { label: "Like", Icon: ThumbsUp };
+  }
+
+  if (normalized === REACTION_EMOJI.love) {
+    return { label: "Love", Icon: Heart };
+  }
+
+  if (normalized === REACTION_EMOJI.haha) {
+    return { label: "Haha", Icon: Smile };
+  }
+
+  if (normalized === REACTION_EMOJI.wow) {
+    return { label: "Wow", Icon: Sparkles };
+  }
+
+  if (normalized === REACTION_EMOJI.sad) {
+    return { label: "Sad", Icon: Frown };
+  }
+
+  if (normalized === REACTION_EMOJI.clap) {
+    return { label: "Applause", Icon: ThumbsUp };
+  }
+
+  return { label: "Reaction", Icon: Smile };
+};
 
 const URL_PATTERN = /(https?:\/\/[^\s]+)/i;
 const MOBILE_CONTEXT_LONG_PRESS_MS = 420;
@@ -79,7 +145,15 @@ const ReactionBar = memo(function ReactionBar({
   isOwn: boolean;
 }) {
   const grouped: Record<string, number> = {};
-  for (const r of reactions) grouped[r.emoji] = (grouped[r.emoji] ?? 0) + 1;
+  for (const reaction of reactions) {
+    const normalizedEmoji = normalizeReactionEmoji(String(reaction.emoji || ""));
+    if (!normalizedEmoji) {
+      continue;
+    }
+
+    grouped[normalizedEmoji] = (grouped[normalizedEmoji] ?? 0) + 1;
+  }
+
   if (Object.keys(grouped).length === 0) return null;
   return (
     <div
@@ -88,20 +162,26 @@ const ReactionBar = memo(function ReactionBar({
         isOwn ? "chat-reaction-bar-root--own" : "chat-reaction-bar-root--peer",
       )}
     >
-      {Object.entries(grouped).map(([emoji, count]) => (
-        <button
-          key={emoji}
-          type="button"
-          onClick={() => onReact(emoji)}
-          className={cn(
-            "chat-reaction-bar-item",
-            isOwn ? "chat-reaction-bar-item--own" : "chat-reaction-bar-item--peer",
-          )}
-        >
-          <span>{emoji}</span>
-          <span className="chat-reaction-bar-count">{count}</span>
-        </button>
-      ))}
+      {Object.entries(grouped).map(([emoji, count]) => {
+        const { Icon, label } = getReactionMetaByEmoji(emoji);
+
+        return (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onReact(emoji)}
+            className={cn(
+              "chat-reaction-bar-item chat-reaction-bar-item--command",
+              isOwn ? "chat-reaction-bar-item--own" : "chat-reaction-bar-item--peer",
+            )}
+            aria-label={`${count} ${label} reactions`}
+            title={label}
+          >
+            <Icon className="chat-reaction-icon" aria-hidden="true" />
+            <span className="chat-reaction-bar-count">{count}</span>
+          </button>
+        );
+      })}
     </div>
   );
 });
@@ -111,28 +191,34 @@ const QuickReactBar = memo(function QuickReactBar({
   onReact,
   visible,
 }: {
-  onReact: (e: string) => void;
+  onReact: (emoji: string) => void;
   visible: boolean;
 }) {
   return (
     <div
       className={cn(
-        "chat-quick-react-bar",
+        "chat-quick-react-bar chat-quick-react-bar--command",
         visible
           ? "chat-quick-react-bar--visible"
           : "chat-quick-react-bar--hidden",
       )}
     >
-      {QUICK_REACTIONS.map((em) => (
-        <button
-          key={em}
-          type="button"
-          onClick={() => onReact(em)}
-          className="chat-quick-react-item"
-        >
-          {em}
-        </button>
-      ))}
+      {QUICK_REACTIONS.map((reaction) => {
+        const Icon = reaction.Icon;
+
+        return (
+          <button
+            key={reaction.id}
+            type="button"
+            onClick={() => onReact(reaction.emoji)}
+            className="chat-quick-react-item chat-quick-react-item--command"
+            aria-label={`React ${reaction.label}`}
+            title={reaction.label}
+          >
+            <Icon className="chat-quick-react-icon" aria-hidden="true" />
+          </button>
+        );
+      })}
     </div>
   );
 });
@@ -301,7 +387,7 @@ const SeenStatus = memo(function SeenStatus({
     >
       <span
         className={cn(
-          "transition-all duration-300",
+          "transition-[color,opacity] duration-300",
           reduceMotion && "transition-none",
           seenJustUpdated && "text-primary font-semibold",
         )}
@@ -364,7 +450,7 @@ const SeenStatus = memo(function SeenStatus({
                 {groupSeenUser.avatarUrl ? (
                   <span
                     className={cn(
-                      "inline-flex transition-all duration-200 motion-reduce:transition-none",
+                      "inline-flex transition-[margin,opacity] duration-200 motion-reduce:transition-none",
                       avatarIndex > 0 && "-ml-1",
                     )}
                   >
@@ -377,7 +463,7 @@ const SeenStatus = memo(function SeenStatus({
                 ) : (
                   <span
                     className={cn(
-                      "size-3.5 rounded-full bg-muted border border-background text-[8px] leading-none flex items-center justify-center text-muted-foreground font-semibold transition-all duration-200 motion-reduce:transition-none",
+                      "size-3.5 rounded-full bg-muted border border-background text-[8px] leading-none flex items-center justify-center text-muted-foreground font-semibold transition-[margin,opacity] duration-200 motion-reduce:transition-none",
                       avatarIndex > 0 && "-ml-1",
                     )}
                   >
@@ -527,13 +613,13 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   return (
     <div
       className={cn(
-        "chat-message-action-toolbar absolute top-1/2 -translate-y-1/2 flex items-center gap-1 z-30 transition-all duration-150 motion-reduce:transition-none",
+        "chat-message-action-toolbar chat-message-action-toolbar--command absolute top-1/2 -translate-y-1/2 flex items-center gap-[3px] z-30 transition-[opacity,transform] duration-150 motion-reduce:transition-none",
         isOwn
-          ? "right-[calc(100%+0.35rem)]"
-          : "left-[calc(100%+0.35rem)]",
+          ? "right-[calc(100%+0.3rem)]"
+          : "left-[calc(100%+0.3rem)]",
         actionBarVisible
-          ? "opacity-100 scale-100 pointer-events-auto"
-          : cn("opacity-0 scale-95 pointer-events-none", hiddenActionOffsetClass),
+          ? "opacity-100 pointer-events-auto"
+          : cn("opacity-0 pointer-events-none", hiddenActionOffsetClass),
       )}
     >
       <div className="relative">
@@ -544,39 +630,39 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
           type="button"
           onClick={onToggleReactBar}
           aria-label="Add reaction"
-          className="chat-message-action-btn chat-message-action-btn--icon"
+          className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
         >
-          <Smile className="size-3.5 text-muted-foreground" />
+          <Smile className="size-[13px] text-muted-foreground" />
         </button>
       </div>
       <button
         type="button"
         onClick={onReply}
         aria-label="Reply"
-        className="chat-message-action-btn chat-message-action-btn--icon"
+        className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
       >
-        <Reply className="size-3.5 text-muted-foreground" />
+        <Reply className="size-[13px] text-muted-foreground" />
       </button>
       <button
         type="button"
         onClick={onToggleBookmark}
         aria-label={bookmarked ? "Remove bookmark" : "Save message"}
         className={cn(
-          "chat-message-action-btn chat-message-action-btn--icon",
+          "chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command",
           bookmarked && "chat-bookmark-active",
         )}
       >
         <Bookmark
-          className={cn("size-3.5", bookmarked && "fill-current")}
+          className={cn("size-[13px]", bookmarked && "fill-current")}
         />
       </button>
       <button
         type="button"
         onClick={onOpenContext}
         aria-label="Open message actions"
-        className="chat-message-action-btn chat-message-action-btn--icon"
+        className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
       >
-        <MoreHorizontal className="size-3.5 text-muted-foreground" />
+        <MoreHorizontal className="size-[13px] text-muted-foreground" />
       </button>
     </div>
   );
@@ -909,6 +995,15 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const bookmarked = isBookmarked(message._id);
 
   const canEdit = isOwn;
+  const resolvedConversationId = useMemo(() => {
+    const conversationFromMessage = String(message.conversationId || "").trim();
+    if (conversationFromMessage) {
+      return conversationFromMessage;
+    }
+
+    const activeConversation = String(activeConversationId || "").trim();
+    return activeConversation || null;
+  }, [activeConversationId, message.conversationId]);
 
   const isLastFromSender =
     index === 0 || prevSenderId !== String(message.senderId);
@@ -963,11 +1058,11 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
   const handleReact = useCallback(
     async (emoji: string) => {
-      if (!activeConversationId) return;
-      await reactToMessage(activeConversationId, message._id, emoji);
+      if (!resolvedConversationId) return;
+      await reactToMessage(resolvedConversationId, message._id, emoji);
       setReactBarVisible(false);
     },
-    [activeConversationId, message._id, reactToMessage],
+    [message._id, reactToMessage, resolvedConversationId],
   );
 
   const handleDoubleClickBubble = useCallback(() => {
@@ -975,7 +1070,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       return;
     }
 
-    void handleReact("❤️");
+    void handleReact(REACTION_EMOJI.love);
   }, [handleReact, message.isDeleted]);
 
   const handleOpenDeleteDialog = useCallback(() => {
@@ -984,30 +1079,30 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   }, []);
 
   const handleConfirmRemoveForMe = useCallback(async () => {
-    if (!activeConversationId) return;
+    if (!resolvedConversationId) return;
     setDeleteActionLoading("for-me");
     try {
-      await removeMessageForMe(activeConversationId, message._id);
+      await removeMessageForMe(resolvedConversationId, message._id);
       setDeleteDialogOpen(false);
     } catch {
       // Toast + rollback are handled inside the chat store.
     } finally {
       setDeleteActionLoading(null);
     }
-  }, [activeConversationId, message._id, removeMessageForMe]);
+  }, [message._id, removeMessageForMe, resolvedConversationId]);
 
   const handleConfirmUnsendForEveryone = useCallback(async () => {
-    if (!activeConversationId || !isOwn) return;
+    if (!resolvedConversationId || !isOwn) return;
     setDeleteActionLoading("for-everyone");
     try {
-      await unsendMessage(activeConversationId, message._id);
+      await unsendMessage(resolvedConversationId, message._id);
       setDeleteDialogOpen(false);
     } catch {
       // Toast + rollback are handled inside the chat store.
     } finally {
       setDeleteActionLoading(null);
     }
-  }, [activeConversationId, isOwn, message._id, unsendMessage]);
+  }, [isOwn, message._id, resolvedConversationId, unsendMessage]);
 
   const handleCopy = useCallback(async () => {
     if (!message.content) {
@@ -1031,7 +1126,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       return;
     }
 
-    if (!activeConversationId) {
+    if (!resolvedConversationId) {
       showActionHint("Unable to save right now", "error");
       return;
     }
@@ -1040,7 +1135,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     setEditMode(false);
 
     editMessage(
-      activeConversationId,
+      resolvedConversationId,
       message._id,
       normalizedEditValue,
     ).catch(() => {
@@ -1050,8 +1145,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     editValue,
     message.content,
     message._id,
-    activeConversationId,
     editMessage,
+    resolvedConversationId,
     showActionHint,
   ]);
 
@@ -1626,7 +1721,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       >
         <DialogContent
           aria-describedby={undefined}
-          className="chat-modal-shell max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-all"
+          className="chat-modal-shell max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-[border-color,background-color,box-shadow] duration-200"
           showCloseButton={!deleteActionLoading}
           dismissible={!deleteActionLoading}
         >
@@ -1651,7 +1746,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
                 type="button"
                 disabled={!!deleteActionLoading}
                 onClick={handleConfirmUnsendForEveryone}
-                className="flex flex-col items-start text-left p-4 rounded-xl border border-destructive/30 bg-destructive/10 hover:bg-destructive/15 transition-colors disabled:opacity-60 disabled:cursor-not-allowed group"
+                className="chat-delete-scope-option chat-delete-scope-option--danger flex flex-col items-start group"
               >
                 <p className="text-[15px] font-semibold text-destructive">Unsend for everyone</p>
                 <p className="mt-1.5 text-[13px] text-destructive/80 leading-relaxed font-medium">
@@ -1668,7 +1763,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
               type="button"
               disabled={!!deleteActionLoading}
               onClick={handleConfirmRemoveForMe}
-              className="flex flex-col items-start text-left p-4 rounded-xl border border-border/80 bg-background hover:bg-muted/50 transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-ring focus:outline-none"
+              className="chat-delete-scope-option flex flex-col items-start"
             >
               <p className="text-[15px] font-semibold text-foreground">Remove for you</p>
               <p className="mt-1.5 text-[13px] text-muted-foreground leading-relaxed font-medium">
@@ -1686,7 +1781,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
               type="button"
               disabled={!!deleteActionLoading}
               onClick={() => setDeleteDialogOpen(false)}
-              className="flex items-center justify-center rounded-full h-10 px-6 font-semibold border border-transparent hover:bg-black/5 dark:hover:bg-white/10 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="chat-modal-btn flex items-center justify-center rounded-full h-10 px-6 font-semibold"
             >
               Cancel
             </button>

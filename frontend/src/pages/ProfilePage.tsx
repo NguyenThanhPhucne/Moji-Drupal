@@ -187,18 +187,17 @@ const ProfilePage = () => { // NOSONAR
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <section
-            className="social-profile-layout social-profile-frame min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
+            className="social-profile-layout social-profile-layout--command social-profile-frame min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
             aria-label="Profile content"
           >
             {loadingProfile && !profile ? (
               <ProfileHeaderSkeleton />
             ) : (
-              <div
-                className={`social-surface-card social-profile-hero overflow-hidden ${getStaggerEnterClass(0)}`}
-                role="region"
+              <section
+                className={`social-surface-card social-profile-hero social-profile-hero-card social-profile-hero-card--command overflow-hidden ${getStaggerEnterClass(0)}`}
                 aria-label="Profile header"
               >
-                <div className="social-profile-cover-gradient social-profile-cover relative h-[350px] w-full">
+                <div className="social-profile-cover-gradient social-profile-cover social-profile-cover--command relative h-[350px] w-full">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.7),transparent_55%)]" />
                   <div className="social-profile-hero-atmosphere" aria-hidden="true">
                     <span className="social-profile-hero-orb social-profile-hero-orb--a" />
@@ -207,8 +206,8 @@ const ProfilePage = () => { // NOSONAR
                   </div>
                 </div>
 
-                <div className="social-profile-body relative px-6 pb-5 pt-24">
-                  <div className="social-profile-avatar-wrap absolute left-6 top-0 h-40 w-40 overflow-hidden rounded-full border-4 border-white shadow-sm">
+                <div className="social-profile-body social-profile-body--command relative px-6 pb-5 pt-24">
+                  <div className="social-profile-avatar-wrap social-profile-avatar-wrap--command absolute left-6 top-0 h-40 w-40 overflow-hidden rounded-full border-4 border-white shadow-sm">
                     <UserAvatar
                       type="profile"
                       name={profile?.displayName || "Profile"}
@@ -218,7 +217,7 @@ const ProfilePage = () => { // NOSONAR
                     />
                   </div>
 
-                  <div className="social-profile-heading flex flex-wrap items-end justify-between gap-4">
+                  <div className="social-profile-heading social-profile-heading--command flex flex-wrap items-end justify-between gap-4">
                     <div className="social-profile-identity space-y-1.5">
                       <div className="social-profile-meta-row">
                         <span className="social-profile-meta-pill">
@@ -236,7 +235,7 @@ const ProfilePage = () => { // NOSONAR
                       {profile?.bio && <p className="social-text-main social-profile-bio text-sm leading-relaxed">{profile.bio}</p>}
 
                       {/* Premium stat chips */}
-                      <div className="social-profile-stat-grid pt-1">
+                      <div className="social-profile-stat-grid social-profile-stat-grid--command pt-1">
                         {[
                           { value: profile?.postCount ?? 0, label: "Posts" },
                           { value: profile?.friendCount ?? 0, label: "Friends" },
@@ -251,9 +250,9 @@ const ProfilePage = () => { // NOSONAR
                       </div>
                     </div>
 
-                    <div className="social-profile-actions flex items-center gap-2 flex-wrap">
+                    <div className="social-profile-actions social-profile-actions--command flex items-center gap-2 flex-wrap">
                       {profile?._id === user?._id ? (
-                        <Button type="button" variant="secondary" className="social-profile-action-btn social-avatar-badge social-text-main hover:opacity-90 transition-all hover:shadow-md">
+                        <Button type="button" variant="secondary" className="social-profile-action-btn social-avatar-badge social-text-main transition-colors hover:opacity-90">
                           Edit profile
                         </Button>
                       ) : null}
@@ -275,7 +274,7 @@ const ProfilePage = () => { // NOSONAR
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
 
             {profileAccessDenied ? (
@@ -291,16 +290,16 @@ const ProfilePage = () => { // NOSONAR
                 </p>
               </div>
             ) : (
-              <div className={`social-profile-columns grid gap-4 lg:grid-cols-[4fr_6fr] ${getStaggerEnterClass(1)}`}>
+              <div className={`social-profile-columns social-profile-columns--command grid gap-4 lg:grid-cols-[4fr_6fr] ${getStaggerEnterClass(1)}`}>
                 <aside
-                  className="social-profile-sidebar lg:sticky lg:top-20 lg:self-start"
+                  className="social-profile-sidebar social-profile-sidebar--command lg:sticky lg:top-20 lg:self-start"
                   aria-label="Profile highlights"
                 >
-                  <div className="social-card social-profile-panel p-4">
+                  <div className="social-card social-profile-panel social-profile-panel--command p-4">
                     <h3 className="social-text-main text-base font-semibold">About</h3>
                     <p className="social-text-muted mt-2 text-sm">{profile?.bio || "No bio yet"}</p>
                   </div>
-                  <div className="social-card social-profile-panel p-4">
+                  <div className="social-card social-profile-panel social-profile-panel--command p-4">
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="social-text-main text-base font-semibold">Photos</h3>
                       {profilePhotos.length > 0 ? (
@@ -344,7 +343,7 @@ const ProfilePage = () => { // NOSONAR
                       <p className="social-text-muted mt-2 text-sm">No photos yet.</p>
                     )}
                   </div>
-                  <div className="social-card social-profile-panel p-4">
+                  <div className="social-card social-profile-panel social-profile-panel--command p-4">
                     <h3 className="social-text-main text-base font-semibold">Friends</h3>
                     <p className="social-text-muted mt-1 text-sm">{profile?.friendCount || 0} friends</p>
 
@@ -373,7 +372,7 @@ const ProfilePage = () => { // NOSONAR
                   </div>
                 </aside>
 
-                <div className="social-profile-main" role="region" aria-label="Profile posts timeline">
+                <section className="social-profile-main social-profile-main--command" aria-label="Profile posts timeline">
                   {profile?._id === user?._id && (
                     <PostComposer onCreate={createPost} />
                   )}
@@ -412,7 +411,7 @@ const ProfilePage = () => { // NOSONAR
                       No posts yet.
                     </div>
                   )}
-                </div>
+                </section>
               </div>
             )}
 

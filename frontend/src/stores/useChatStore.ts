@@ -713,7 +713,7 @@ export const useChatStore = create<ChatState>()(
           : null;
         const nowIso = new Date().toISOString();
         const optimisticPreviewContent =
-          String(content || "").trim() || (imgUrl ? "📷 Photo" : "New message");
+          String(content || "").trim() || (imgUrl ? "Photo attachment" : "New message");
 
         const {
           optimisticConversationId,
@@ -1234,28 +1234,45 @@ export const useChatStore = create<ChatState>()(
       },
       removeMessageForMe: async (conversationId, messageId) => {
         const previousItems = get().messages[conversationId]?.items ?? [];
-        const hasTargetMessage = previousItems.some(
-          (messageItem) => messageItem._id === messageId,
-        );
+        const removedMessage =
+          previousItems.find((messageItem) => messageItem._id === messageId) ?? null;
 
-        if (!hasTargetMessage) {
+        if (!removedMessage) {
           return;
         }
 
         get().removeMessageFromConversation(conversationId, messageId);
 
         try {
-          await chatService.removeMessageForMe(messageId);
+          const removeResult = await chatService.removeMessageForMe(messageId);
+          if (removeResult?.conversation?._id) {
+            get().updateConversation(
+              removeResult.conversation as Partial<Conversation> & { _id: string },
+            );
+          }
         } catch (error) {
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [conversationId]: {
-                ...state.messages[conversationId],
-                items: previousItems,
+          set((state) => {
+            // Reinsert only the removed message so concurrent incoming updates are preserved.
+            const currentBucket = state.messages[conversationId];
+            const currentItems = currentBucket?.items ?? [];
+
+            if (currentItems.some((messageItem) => messageItem._id === messageId)) {
+              return state;
+            }
+
+            return {
+              messages: {
+                ...state.messages,
+                [conversationId]: {
+                  ...currentBucket,
+                  items: sortMessagesChronologically([
+                    ...currentItems,
+                    removedMessage,
+                  ]),
+                },
               },
-            },
-          }));
+            };
+          });
           toast.error("Could not remove message. Restored.");
           console.error("Remove-for-me error:", error);
           throw error;
@@ -1263,6 +1280,10 @@ export const useChatStore = create<ChatState>()(
       },
       editMessage: async (conversationId, messageId, content) => {
         const mutationKey = `edit:${conversationId}:${messageId}`;
+        if (!acquireMessageMutationLock(mutationKey)) {
+          return;
+        }
+
         const mutationVersion = startMessageMutation(mutationKey);
         const normalizedContent = content.trim();
         const prevMessage =
@@ -1324,6 +1345,7 @@ export const useChatStore = create<ChatState>()(
           throw error;
         } finally {
           clearMessageMutation(mutationKey, mutationVersion);
+          releaseMessageMutationLock(mutationKey);
         }
       },
 
@@ -1359,6 +1381,15 @@ export const useChatStore = create<ChatState>()(
         });
       },
       markAsSeen: async () => {
+        let rollbackState: {
+          conversationId: string;
+          userId: string;
+          activeGroupChannelId: string | null;
+          previousUnreadCount: number;
+          previousActiveChannelUnreadCount: number;
+          optimisticUnreadCount: number;
+        } | null = null;
+
         try {
           const { user } = useAuthStore.getState();
           const { activeConversationId, conversations } = get();
@@ -1387,39 +1418,49 @@ export const useChatStore = create<ChatState>()(
             convo.type === "group"
               ? convo.group?.channelUnreadCounts?.[normalizedUserId] || {}
               : {};
+          const previousUnreadCount = Number(
+            convo.unreadCounts?.[normalizedUserId] || 0,
+          );
+          const previousActiveChannelUnreadCount =
+            convo.type === "group" && activeGroupChannelId
+              ? Number(myChannelUnreadMap?.[activeGroupChannelId] || 0)
+              : 0;
           const hasUnreadForActiveChannel =
             convo.type === "group" &&
             activeGroupChannelId &&
-            Number(myChannelUnreadMap?.[activeGroupChannelId] || 0) > 0;
+            previousActiveChannelUnreadCount > 0;
 
           if (
-            (convo.unreadCounts?.[normalizedUserId] ?? 0) === 0 &&
+            previousUnreadCount === 0 &&
             !hasUnreadForActiveChannel
           ) {
             return;
           }
 
+          const optimisticUnreadCount =
+            convo.type === "group"
+              ? Math.max(0, previousUnreadCount - previousActiveChannelUnreadCount)
+              : 0;
+
+          rollbackState = {
+            conversationId: normalizedActiveConversationId,
+            userId: normalizedUserId,
+            activeGroupChannelId,
+            previousUnreadCount,
+            previousActiveChannelUnreadCount,
+            optimisticUnreadCount,
+          };
+
           // Optimistic update
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              c._id !== activeConversationId || !c.lastMessage
+              String(c._id) !== normalizedActiveConversationId || !c.lastMessage
                 ? c
                 : {
                     ...c,
                     unreadCounts: {
                       ...c.unreadCounts,
-                      [normalizedUserId]:
-                        c.type === "group"
-                          ? Math.max(
-                              0,
-                              Number(c.unreadCounts?.[normalizedUserId] || 0) -
-                                Number(
-                                  c.group?.channelUnreadCounts?.[normalizedUserId]?.[
-                                    activeGroupChannelId || ""
-                                  ] || 0,
-                                ),
-                            )
-                          : 0,
+                      [normalizedUserId]: optimisticUnreadCount,
                     },
                     ...(c.type === "group"
                       ? {
@@ -1427,8 +1468,8 @@ export const useChatStore = create<ChatState>()(
                             ...c.group,
                             channelUnreadCounts: {
                               ...c.group?.channelUnreadCounts,
-                                [normalizedUserId]: {
-                                  ...c.group?.channelUnreadCounts?.[normalizedUserId],
+                              [normalizedUserId]: {
+                                ...c.group?.channelUnreadCounts?.[normalizedUserId],
                                 ...(activeGroupChannelId
                                   ? { [activeGroupChannelId]: 0 }
                                   : {}),
@@ -1446,6 +1487,101 @@ export const useChatStore = create<ChatState>()(
             activeGroupChannelId || undefined,
           );
         } catch (error) {
+          if (rollbackState) {
+            set((state) => {
+              const targetConversation = state.conversations.find(
+                (conversationItem) =>
+                  String(conversationItem._id) === rollbackState?.conversationId,
+              );
+
+              if (!targetConversation) {
+                return state;
+              }
+
+              const currentUnreadCount = Number(
+                targetConversation.unreadCounts?.[rollbackState.userId] || 0,
+              );
+              if (currentUnreadCount !== rollbackState.optimisticUnreadCount) {
+                return state;
+              }
+
+              if (
+                targetConversation.type === "group" &&
+                rollbackState.activeGroupChannelId
+              ) {
+                const currentChannelUnread = Number(
+                  targetConversation.group?.channelUnreadCounts?.[
+                    rollbackState.userId
+                  ]?.[rollbackState.activeGroupChannelId] || 0,
+                );
+
+                if (currentChannelUnread !== 0) {
+                  return state;
+                }
+              }
+
+              return {
+                conversations: state.conversations.map((conversationItem) => {
+                  if (
+                    String(conversationItem._id) !== rollbackState?.conversationId
+                  ) {
+                    return conversationItem;
+                  }
+
+                  const restoredUnreadCounts = {
+                    ...conversationItem.unreadCounts,
+                    [rollbackState.userId]: rollbackState.previousUnreadCount,
+                  };
+
+                  if (
+                    conversationItem.type !== "group" ||
+                    !rollbackState.activeGroupChannelId
+                  ) {
+                    return {
+                      ...conversationItem,
+                      unreadCounts: restoredUnreadCounts,
+                    };
+                  }
+
+                  const currentPerUserChannelUnread = {
+                    ...conversationItem.group?.channelUnreadCounts?.[
+                      rollbackState.userId
+                    ],
+                  };
+
+                  if (rollbackState.previousActiveChannelUnreadCount > 0) {
+                    currentPerUserChannelUnread[rollbackState.activeGroupChannelId] =
+                      rollbackState.previousActiveChannelUnreadCount;
+                  } else {
+                    delete currentPerUserChannelUnread[rollbackState.activeGroupChannelId];
+                  }
+
+                  const restoredChannelUnreadCounts = {
+                    ...conversationItem.group?.channelUnreadCounts,
+                  };
+
+                  if (Object.keys(currentPerUserChannelUnread).length > 0) {
+                    restoredChannelUnreadCounts[rollbackState.userId] =
+                      currentPerUserChannelUnread;
+                  } else {
+                    delete restoredChannelUnreadCounts[rollbackState.userId];
+                  }
+
+                  return {
+                    ...conversationItem,
+                    unreadCounts: restoredUnreadCounts,
+                    group: {
+                      ...conversationItem.group,
+                      channelUnreadCounts: restoredChannelUnreadCounts,
+                    },
+                  };
+                }),
+              };
+            });
+
+            toast.error("Could not sync read status. Restored.");
+          }
+
           console.error("Error calling markAsSeen in store", error);
         }
       },
@@ -2261,13 +2397,43 @@ export const useChatStore = create<ChatState>()(
         }
       },
       toggleMessageForwardable: async (messageId, isForwardable) => {
+        // Find the message across all loaded conversations to enable optimistic update.
+        const { messages: allMessages, activeConversationId } = get();
+        let targetConversationId: string | null = null;
+        let previousIsForwardable: boolean | undefined;
+
+        const conversationIds = activeConversationId
+          ? [activeConversationId, ...Object.keys(allMessages).filter((id) => id !== activeConversationId)]
+          : Object.keys(allMessages);
+
+        for (const convoId of conversationIds) {
+          const match = allMessages[convoId]?.items?.find(
+            (m) => m._id === messageId,
+          );
+          if (match) {
+            targetConversationId = convoId;
+            previousIsForwardable = match.isForwardable;
+            break;
+          }
+        }
+
+        // Optimistic update
+        if (targetConversationId) {
+          get().updateMessage(targetConversationId, messageId, {
+            isForwardable,
+          });
+        }
+
         try {
           await chatService.toggleMessageForwardable(messageId, isForwardable);
-          // Optional: Update local store for the message to reflect the new state instantly.
-          // Since we don't know the conversationId here easily, we could just rely on socket
-          // or user refresh. For a better UX, we could try to find and update it.
           return { ok: true };
         } catch (error) {
+          // Rollback on failure
+          if (targetConversationId && previousIsForwardable !== undefined) {
+            get().updateMessage(targetConversationId, messageId, {
+              isForwardable: previousIsForwardable,
+            });
+          }
           console.error("Failed to toggle forwardable state:", error);
           return { ok: false };
         }

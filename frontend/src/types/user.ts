@@ -16,6 +16,7 @@ export interface User {
       follow: boolean;
       like: boolean;
       comment: boolean;
+      mention: boolean;
       friendAccepted: boolean;
       system: boolean;
       mutedUserIds?: string[];

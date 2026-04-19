@@ -53,6 +53,12 @@ const MOTION_OPTIONS: Array<{ id: MotionPreference; label: string; icon: typeof 
   { id: "system", label: "System", icon: Monitor },
 ];
 
+const THEME_MODE_OPTIONS: Array<{ id: ThemeMode; label: string; icon: typeof Sun }> = [
+  { id: "light", label: "Light", icon: Sun },
+  { id: "dark", label: "Dark", icon: Moon },
+  { id: "system", label: "System", icon: Monitor },
+];
+
 const MESSAGE_SIZE_OPTIONS: Array<{ id: MessageTextSize; label: string }> = [
   { id: "sm", label: "Small" },
   { id: "md", label: "Medium" },
@@ -138,8 +144,8 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    globalThis.addEventListener("keydown", handler);
+    return () => globalThis.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
   // Trap focus inside panel
@@ -174,7 +180,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
       <div
         aria-hidden="true"
         className={cn(
-          "fixed inset-0 z-[998] bg-black/25 backdrop-blur-[2px] transition-all duration-300",
+          "fixed inset-0 z-[998] bg-black/25 backdrop-blur-[2px] transition-opacity duration-300",
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}
@@ -183,8 +189,6 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
       {/* ── Drawer panel ────────────────────────────────────────────────── */}
       <div
         ref={panelRef}
-        role="dialog"
-        aria-modal="true"
         aria-label="Appearance settings"
         tabIndex={-1}
         className={cn(
@@ -219,17 +223,15 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
               Color mode
             </p>
             <div className="grid grid-cols-3 gap-2">
-              {(["light", "dark", "system"] as ThemeMode[]).map((mode) => {
-                const Icon = mode === "light" ? Sun : mode === "dark" ? Moon : Monitor;
-                const labels = { light: "Light", dark: "Dark", system: "System" };
-                const active = themeMode === mode;
+              {THEME_MODE_OPTIONS.map(({ id, label, icon: Icon }) => {
+                const active = themeMode === id;
                 return (
                   <button
-                    key={mode}
+                    key={id}
                     type="button"
-                    onClick={() => setThemeMode(mode)}
+                    onClick={() => setThemeMode(id)}
                     className={cn(
-                      "appearance-drawer-btn flex flex-col items-center gap-2 rounded-xl border px-2 py-3 transition-all duration-200 text-center",
+                      "appearance-drawer-btn flex flex-col items-center gap-2 rounded-xl border px-2 py-3 transition-[background-color,border-color,color,box-shadow] duration-200 text-center",
                       active
                         ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/30 text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-border"
@@ -241,7 +243,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     )}>
                       <Icon className="size-4" />
                     </div>
-                    <span className="text-[12px] font-medium leading-none">{labels[mode]}</span>
+                    <span className="text-[12px] font-medium leading-none">{label}</span>
                   </button>
                 );
               })}
@@ -260,7 +262,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                   onClick={() => applyPreset(preset.id)}
                   aria-current={activePresetId === preset.id ? "true" : undefined}
                   className={cn(
-                    "appearance-drawer-btn appearance-preset-card w-full rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
+                    "appearance-drawer-btn appearance-preset-card w-full rounded-xl border px-3 py-2.5 text-left transition-[background-color,border-color,color,box-shadow] duration-200",
                     activePresetId === preset.id
                       ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
                       : "border-border/60 bg-muted/20 hover:bg-muted/50 hover:border-border",
@@ -296,7 +298,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setRememberMode(option.id)}
                     className={cn(
-                      "appearance-drawer-btn w-full rounded-xl border px-3 py-2.5 text-left transition-all duration-200",
+                      "appearance-drawer-btn w-full rounded-xl border px-3 py-2.5 text-left transition-[background-color,border-color,color,box-shadow] duration-200",
                       active
                         ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 hover:bg-muted/50",
@@ -328,11 +330,11 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                   >
                     <div
                       className={cn(
-                        "relative size-11 rounded-full transition-all duration-200",
+                        "relative size-11 rounded-full transition-[box-shadow,outline-color,opacity] duration-200",
                         color.swatchClass,
                         active
-                          ? "shadow-lg scale-110 outline outline-2 outline-offset-2 outline-primary"
-                          : "hover:scale-105 hover:shadow-md"
+                          ? "shadow-lg outline-2 outline-offset-2 outline-primary"
+                          : "hover:shadow-sm"
                       )}
                     >
                       {active && (
@@ -358,7 +360,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
               <div className="flex flex-col gap-1.5">
                 <div className="chat-message-row flex justify-end p-0">
                   <div className="chat-bubble-shell chat-bubble-sent chat-bubble-shape-sent max-w-[75%] text-[13px] font-medium">
-                    Hey! How are you? 😊
+                    Hey! How are you?
                   </div>
                 </div>
                 <div className="chat-message-row flex justify-start p-0">
@@ -386,7 +388,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setChatDensity(densityOption.id)}
                     className={cn(
-                      "appearance-drawer-btn flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 transition-all duration-200",
+                      "appearance-drawer-btn flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 transition-[background-color,border-color,color,box-shadow] duration-200",
                       active
                         ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -415,7 +417,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setMotionPreference(motionOption.id)}
                     className={cn(
-                      "appearance-drawer-btn flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 transition-all duration-200",
+                      "appearance-drawer-btn flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 transition-[background-color,border-color,color,box-shadow] duration-200",
                       active
                         ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -443,7 +445,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setMessageTextSize(sizeOption.id)}
                     className={cn(
-                      "appearance-drawer-btn rounded-xl border px-2 py-2.5 transition-all duration-200",
+                      "appearance-drawer-btn rounded-xl border px-2 py-2.5 transition-[background-color,border-color,color,box-shadow] duration-200",
                       active
                         ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -473,7 +475,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setBubbleStyle(styleOption.id)}
                     className={cn(
-                      "appearance-drawer-btn flex items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition-all duration-200",
+                      "appearance-drawer-btn flex items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,color,box-shadow] duration-200",
                       active
                         ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 hover:bg-muted/50"
@@ -554,7 +556,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                     type="button"
                     onClick={() => setSidebarLayout(layout.id)}
                     className={cn(
-                      "flex flex-col items-center gap-2.5 rounded-xl border p-3 transition-all duration-200",
+                      "flex flex-col items-center gap-2.5 rounded-xl border p-3 transition-[background-color,border-color,color,box-shadow] duration-200",
                       active
                         ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
                         : "border-border/60 bg-muted/20 hover:bg-muted/50 hover:border-border"

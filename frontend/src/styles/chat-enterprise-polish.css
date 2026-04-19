@@ -684,6 +684,14 @@
     color: hsl(var(--info));
   }
 
+  .notification-kind-mention-bg {
+    background: hsl(var(--warning));
+  }
+
+  .notification-kind-mention-text {
+    color: hsl(var(--warning));
+  }
+
   .notification-kind-follow-bg {
     background: hsl(var(--accent));
   }
@@ -962,7 +970,7 @@
       0 14px 28px -20px hsl(var(--primary) / 0.62),
       0 3px 8px hsl(0 0% 0% / 0.1);
     padding: 0.3rem 0.45rem;
-    z-index: 20;
+    z-index: var(--z-header);
     transform-origin: center bottom;
     transition:
       opacity var(--msg-motion-reaction-transition-duration) ease,
@@ -1250,7 +1258,7 @@
   .chat-context-menu-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 120;
+    z-index: var(--z-dropdown);
   }
 
   .chat-context-menu-dismiss {

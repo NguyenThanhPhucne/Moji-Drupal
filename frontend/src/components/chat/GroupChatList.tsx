@@ -2,8 +2,9 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import GroupChatCard from "./GroupChatCard";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Inbox } from "lucide-react";
 import { cn, getStaggerEnterClass } from "@/lib/utils";
+import ConversationSkeleton from "@/components/skeleton/ConversationSkeleton";
 
 const CATEGORY_ORDER = ["Team", "Projects", "Support", "Social", "General"];
 const COLLAPSE_STORAGE_PREFIX = "crm.channel.collapsed";
@@ -31,7 +32,8 @@ const inferCategory = (groupName: string) => {
 };
 
 const GroupChatList = () => {
-  const { conversations } = useChatStore();
+  const conversations = useChatStore((state) => state.conversations);
+  const convoLoading = useChatStore((state) => state.convoLoading);
   const { user } = useAuthStore();
   const [collapsedCategories, setCollapsedCategories] = useState<
     Record<string, boolean>
@@ -87,13 +89,18 @@ const GroupChatList = () => {
     localStorage.setItem(storageKey, JSON.stringify(collapsedCategories));
   }, [collapsedCategories, storageKey]);
 
+  // Show skeleton on first load (no data yet)
+  if (convoLoading && (!conversations || conversations.length === 0)) {
+    return <ConversationSkeleton />;
+  }
+
   if (!conversations || conversations.length === 0) return null;
 
   if (groupchats.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
         <div className="size-10 rounded-full bg-muted/40 flex items-center justify-center mb-2">
-          <span className="text-xl">📭</span>
+          <Inbox className="size-5 text-muted-foreground/75" />
         </div>
         <p className="text-[13px] font-medium text-foreground/70">No group chats</p>
         <p className="text-[11px] text-muted-foreground/60 mt-0.5">Your teams will appear here</p>

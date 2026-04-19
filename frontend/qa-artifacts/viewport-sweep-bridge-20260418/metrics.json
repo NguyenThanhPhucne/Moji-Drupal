@@ -1,0 +1,842 @@
+[
+  {
+    "route": "/explore",
+    "key": "explore",
+    "width": 600,
+    "screenshot": "explore-600.png",
+    "currentPath": "/explore",
+    "viewportWidth": 600,
+    "scrollWidth": 600,
+    "bodyHeight": 2105,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 169,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -600,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/profile",
+    "key": "profile",
+    "width": 600,
+    "screenshot": "profile-600.png",
+    "currentPath": "/profile",
+    "viewportWidth": 600,
+    "scrollWidth": 600,
+    "bodyHeight": 2340,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 170,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -600,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/settings/notifications",
+    "key": "settings",
+    "width": 600,
+    "screenshot": "settings-600.png",
+    "currentPath": "/settings/notifications",
+    "viewportWidth": 600,
+    "scrollWidth": 600,
+    "bodyHeight": 900,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 167,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -600,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -601,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -621,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/explore",
+    "key": "explore",
+    "width": 640,
+    "screenshot": "explore-640.png",
+    "currentPath": "/explore",
+    "viewportWidth": 640,
+    "scrollWidth": 640,
+    "bodyHeight": 2132,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 169,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -640,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/profile",
+    "key": "profile",
+    "width": 640,
+    "screenshot": "profile-640.png",
+    "currentPath": "/profile",
+    "viewportWidth": 640,
+    "scrollWidth": 640,
+    "bodyHeight": 2380,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 170,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -640,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/settings/notifications",
+    "key": "settings",
+    "width": 640,
+    "screenshot": "settings-640.png",
+    "currentPath": "/settings/notifications",
+    "viewportWidth": 640,
+    "scrollWidth": 640,
+    "bodyHeight": 900,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 167,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -640,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -641,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -661,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/explore",
+    "key": "explore",
+    "width": 680,
+    "screenshot": "explore-680.png",
+    "currentPath": "/explore",
+    "viewportWidth": 680,
+    "scrollWidth": 680,
+    "bodyHeight": 2158,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 167,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -680,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/profile",
+    "key": "profile",
+    "width": 680,
+    "screenshot": "profile-680.png",
+    "currentPath": "/profile",
+    "viewportWidth": 680,
+    "scrollWidth": 680,
+    "bodyHeight": 2420,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 168,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -680,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/settings/notifications",
+    "key": "settings",
+    "width": 680,
+    "screenshot": "settings-680.png",
+    "currentPath": "/settings/notifications",
+    "viewportWidth": 680,
+    "scrollWidth": 680,
+    "bodyHeight": 900,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 167,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -680,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -681,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -701,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/explore",
+    "key": "explore",
+    "width": 720,
+    "screenshot": "explore-720.png",
+    "currentPath": "/explore",
+    "viewportWidth": 720,
+    "scrollWidth": 720,
+    "bodyHeight": 2185,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 167,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -720,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/profile",
+    "key": "profile",
+    "width": 720,
+    "screenshot": "profile-720.png",
+    "currentPath": "/profile",
+    "viewportWidth": 720,
+    "scrollWidth": 720,
+    "bodyHeight": 2460,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 168,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -720,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      }
+    ]
+  },
+  {
+    "route": "/settings/notifications",
+    "key": "settings",
+    "width": 720,
+    "screenshot": "settings-720.png",
+    "currentPath": "/settings/notifications",
+    "viewportWidth": 720,
+    "scrollWidth": 720,
+    "bodyHeight": 900,
+    "hasHorizontalOverflow": false,
+    "offenderCount": 167,
+    "topOffenders": [
+      {
+        "tag": "div",
+        "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+        "overflowRight": 320,
+        "overflowLeft": -720,
+        "width": 320
+      },
+      {
+        "tag": "div",
+        "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "div",
+        "className": "px-5.py-3.border-t.border-border/60",
+        "overflowRight": 320,
+        "overflowLeft": -721,
+        "width": 319
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "p",
+        "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "div",
+        "className": "grid.grid-cols-3.gap-2",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      },
+      {
+        "tag": "section",
+        "className": "",
+        "overflowRight": 300,
+        "overflowLeft": -741,
+        "width": 279
+      }
+    ]
+  }
+]

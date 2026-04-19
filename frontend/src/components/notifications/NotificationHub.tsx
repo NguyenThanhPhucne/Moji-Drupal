@@ -74,24 +74,22 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [chatCreating, setChatCreating] = useState<string | null>(null);
 
-  const {
-    acceptanceNotifications,
-    socialNotifications,
-    resetUnreadCount,
-  } = useNotificationStore();
+  const acceptanceNotifications = useNotificationStore((s) => s.acceptanceNotifications);
+  const socialNotifications = useNotificationStore((s) => s.socialNotifications);
+  const resetUnreadCount = useNotificationStore((s) => s.resetUnreadCount);
 
-  const { markNotificationRead, markAllNotificationsRead } = useSocialStore();
+  const markNotificationRead = useSocialStore((s) => s.markNotificationRead);
+  const markAllNotificationsRead = useSocialStore((s) => s.markAllNotificationsRead);
+  
   const createConversation = useChatStore((s) => s.createConversation);
   const setIsHubOpen = useNotificationStore((s) => s.setIsHubOpen);
 
-  const {
-    receivedList: pendingRequests,
-    acceptRequest,
-    declineRequest,
-    removeReceivedRequest,
-    seenRequests,
-    markRequestSeen,
-  } = useFriendStore();
+  const pendingRequests = useFriendStore((s) => s.receivedList);
+  const acceptRequest = useFriendStore((s) => s.acceptRequest);
+  const declineRequest = useFriendStore((s) => s.declineRequest);
+  const removeReceivedRequest = useFriendStore((s) => s.removeReceivedRequest);
+  const seenRequests = useFriendStore((s) => s.seenRequests);
+  const markRequestSeen = useFriendStore((s) => s.markRequestSeen);
 
   // ── Build unified list ────────────────────────────────────────────────────
   const unified = useMemo<UnifiedNotification[]>(() => {
@@ -138,6 +136,7 @@ const NotificationHub = ({ loading = false }: NotificationHubProps) => {
         follow: "follow",
         like: "like",
         comment: "comment",
+        mention: "mention",
         friend_accepted: "friend_accepted",
         system: "system",
       };

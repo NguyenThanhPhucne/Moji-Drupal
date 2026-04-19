@@ -1,6 +1,15 @@
-import { Loader2, MessageCircle, Share2, ThumbsUp } from "lucide-react";
+import {
+  AlertCircle,
+  Frown,
+  Heart,
+  Loader2,
+  MessageCircle,
+  Share2,
+  Smile,
+  Sparkles,
+  ThumbsUp,
+} from "lucide-react";
 import ReactionPopover from "@/components/social/ReactionPopover";
-import { ReactionGlyph } from "@/components/social/FacebookReactionIcons";
 import { cn } from "@/lib/utils";
 import type { SocialReactionType } from "@/types/social";
 
@@ -31,6 +40,30 @@ interface PostCardActionsProps {
   onPrimaryLikeTouchEnd: () => void;
 }
 
+const getProfessionalReactionIcon = (reaction: SocialReactionType) => {
+  if (reaction === "like") {
+    return ThumbsUp;
+  }
+
+  if (reaction === "love") {
+    return Heart;
+  }
+
+  if (reaction === "haha") {
+    return Smile;
+  }
+
+  if (reaction === "wow") {
+    return Sparkles;
+  }
+
+  if (reaction === "sad") {
+    return Frown;
+  }
+
+  return AlertCircle;
+};
+
 const PostCardActions = ({
   hasReactions,
   topReactionTypes,
@@ -55,18 +88,17 @@ const PostCardActions = ({
   onPrimaryLikeTouchStart,
   onPrimaryLikeTouchEnd,
 }: PostCardActionsProps) => {
+  const ActiveReactionIcon = getProfessionalReactionIcon(displayedReaction);
+
   let reactionIcon = (
-    <ThumbsUp className="h-4.5 w-4.5 group-active:scale-95 transition-transform" />
+    <ThumbsUp className="h-4.5 w-4.5" />
   );
 
   if (likePending) {
     reactionIcon = <Loader2 className="h-4.5 w-4.5 animate-spin" />;
   } else if (activeReaction) {
     reactionIcon = (
-      <ReactionGlyph
-        reaction={displayedReaction}
-        className="h-5 w-5 like-bounce-burst group-active:scale-95"
-      />
+      <ActiveReactionIcon className="h-4.5 w-4.5" />
     );
   }
 
@@ -78,7 +110,7 @@ const PostCardActions = ({
   return (
     <>
       <div
-        className="social-text-muted social-post-stats mt-3 flex items-center justify-between text-sm"
+        className="social-text-muted social-post-stats mt-2.5 flex items-center justify-between text-sm"
         data-testid="post-card-stats"
       >
         {hasReactions ? (
@@ -92,14 +124,21 @@ const PostCardActions = ({
           >
             <span className="inline-flex -space-x-1">
               {topReactionTypes.length ? (
-                topReactionTypes.map((reactionType) => (
-                  <span key={reactionType} className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-white">
-                    <ReactionGlyph reaction={reactionType} className="h-5 w-5" />
-                  </span>
-                ))
+                topReactionTypes.map((reactionType) => {
+                  const ReactionIcon = getProfessionalReactionIcon(reactionType);
+
+                  return (
+                    <span
+                      key={reactionType}
+                      className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-border/40 bg-background"
+                    >
+                      <ReactionIcon className="h-3.5 w-3.5" />
+                    </span>
+                  );
+                })
               ) : (
-                <span className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full bg-white">
-                  <ReactionGlyph reaction="like" className="h-5 w-5" />
+                <span className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-border/40 bg-background">
+                  <ThumbsUp className="h-3.5 w-3.5" />
                 </span>
               )}
             </span>
@@ -125,7 +164,7 @@ const PostCardActions = ({
       </div>
 
       <div
-        className="social-divider social-post-action-row mt-2 grid grid-cols-3 border-t border-border/30 pt-1.5"
+        className="social-divider social-post-action-row mt-1.5 grid grid-cols-3 border-t border-border/20 pt-1"
         data-testid="post-card-actions"
       >
         <div className="group relative">
@@ -140,7 +179,7 @@ const PostCardActions = ({
           <button
             type="button"
             className={cn(
-              "post-action-btn-hover social-post-comment-action social-post-action-btn flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold",
+              "post-action-btn-hover social-post-comment-action social-post-action-btn flex flex-1 items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium",
               displayedReactionColorClass,
               likePending && "cursor-wait opacity-85",
             )}
@@ -179,7 +218,7 @@ const PostCardActions = ({
 
         <button
           type="button"
-          className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold"
+          className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium"
           onClick={onToggleComments}
           data-testid="post-comment-button"
           disabled={commentsPending}
@@ -195,7 +234,7 @@ const PostCardActions = ({
 
         <button
           type="button"
-          className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold"
+          className="post-action-btn-hover social-post-comment-action social-post-action-btn flex items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium"
           onClick={onSharePost}
           data-testid="post-share-button"
           disabled={sharePending}

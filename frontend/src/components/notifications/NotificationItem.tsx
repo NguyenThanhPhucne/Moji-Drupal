@@ -1,7 +1,8 @@
 import { formatDistanceToNow } from "date-fns";
 import { enUS } from "date-fns/locale";
 import {
-  Heart,
+  AtSign,
+  ThumbsUp,
   MessageCircle,
   MessageCircleMore,
   UserCheck,
@@ -31,6 +32,7 @@ export type NotificationKind =
   | "friend_accepted"
   | "like"
   | "comment"
+  | "mention"
   | "follow"
   | "system";
 
@@ -56,8 +58,9 @@ const KIND_META: Record<
 > = {
   friend_request:  { Icon: UserPlus,       bg: "notification-kind-friend-request-bg", text: "notification-kind-friend-request-text" },
   friend_accepted: { Icon: UserCheck,      bg: "notification-kind-friend-accepted-bg", text: "notification-kind-friend-accepted-text" },
-  like:            { Icon: Heart,          bg: "notification-kind-like-bg", text: "notification-kind-like-text" },
+  like:            { Icon: ThumbsUp,       bg: "notification-kind-like-bg", text: "notification-kind-like-text" },
   comment:         { Icon: MessageCircle,  bg: "notification-kind-comment-bg", text: "notification-kind-comment-text" },
+  mention:         { Icon: AtSign,         bg: "notification-kind-mention-bg", text: "notification-kind-mention-text" },
   follow:          { Icon: Users,          bg: "notification-kind-follow-bg", text: "notification-kind-follow-text" },
   system:          { Icon: Bell,           bg: "notification-kind-system-bg", text: "notification-kind-system-text" },
 };
@@ -86,6 +89,11 @@ const NotificationItem = ({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const meta = KIND_META[notification.kind];
   const isLoading = loadingId === notification.id;
+  const showFriendRequestActions =
+    notification.kind === "friend_request" &&
+    Boolean(notification.requestId) &&
+    Boolean(onAcceptFriend) &&
+    Boolean(onDeclineFriend);
 
   const handleClick = () => {
     if (notification.kind === "friend_accepted" && onOpenDirectChat) {
@@ -98,22 +106,12 @@ const NotificationItem = ({
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleClick();
-        }
-      }}
+    <article
       className={cn(
         // Base layout
-        "group relative flex items-start gap-3 rounded-xl px-3 py-3 cursor-pointer select-none",
+        "group relative flex items-start gap-3 rounded-xl px-3 py-3 select-none",
         // Smooth transition on all states
         "transition-colors duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2",
         // Unread: light blue tint + left accent stripe (Facebook-style)
         notification.isRead
           ? "bg-transparent hover:bg-muted/50 dark:hover:bg-muted/40"
@@ -153,87 +151,87 @@ const NotificationItem = ({
 
       {/* ── Content ── */}
       <div className="min-w-0 flex-1">
-        <p className="text-[13.5px] leading-snug text-foreground line-clamp-3 pr-1">
-          <span className="font-semibold">{notification.actor.displayName}</span>
-          {" "}
-          <span className="text-foreground/80">{notification.message}</span>
-        </p>
-
-        {/* Intro Message from Request */}
-        {notification.introMessage && (
-          <div className="mt-2.5 rounded-r-lg bg-muted/30 border-l-2 border-primary p-3 text-[13px] text-foreground/80 relative shadow-sm transition-colors hover:bg-muted/40">
-            <span className="italic leading-relaxed align-middle">" {notification.introMessage} "</span>
-          </div>
-        )}
-
-        {/* Timestamp */}
-        <p
-          className={cn(
-            "mt-1 text-[12px] font-semibold",
-            notification.isRead
-              ? "text-muted-foreground"
-              : meta.text,
-          )}
+        <button
+          type="button"
+          onClick={handleClick}
+          className="w-full rounded-lg bg-transparent p-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2"
         >
-          {formatDistanceToNow(new Date(notification.createdAt), {
-            addSuffix: true,
-            locale: enUS,
-          })}
-        </p>
+          <p className="line-clamp-3 pr-1 text-[13.5px] leading-snug text-foreground">
+            <span className="font-semibold">{notification.actor.displayName}</span>
+            {" "}
+            <span className="text-foreground/80">{notification.message}</span>
+          </p>
 
-        {/* ── "Chat now" pill for friend_accepted ── */}
-        {notification.kind === "friend_accepted" && onOpenDirectChat && (
-          <div className="mt-2.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/15">
-              <MessageCircleMore className="h-3.5 w-3.5" />
-              Chat now
-            </span>
-          </div>
-        )}
-
-        {/* ── Accept / Decline buttons for friend_request ── */}
-        {notification.kind === "friend_request" &&
-          notification.requestId &&
-          onAcceptFriend &&
-          onDeclineFriend && (
-            <div
-              className="mt-3 flex items-center gap-2"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Button
-                size="sm"
-                className="h-[34px] px-4 text-[13px] font-semibold rounded-[10px] shadow-sm transition-all active:scale-95"
-                onClick={() => {
-                  onAcceptFriend(notification.requestId!);
-                  onRead(notification.id);
-                }}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <Loader2 className="mr-1.5 h-[15px] w-[15px] animate-spin" />
-                ) : (
-                  <Check className="mr-1.5 h-[15px] w-[15px]" />
-                )}
-                Confirm
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-[34px] px-4 text-[13px] font-semibold rounded-[10px] text-foreground/80 hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95"
-                onClick={() => {
-                  onDeclineFriend(notification.requestId!);
-                  onRead(notification.id);
-                }}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <Loader2 className="mr-1.5 h-[15px] w-[15px] animate-spin text-muted-foreground mr-0" />
-                ) : (
-                  "Delete"
-                )}
-              </Button>
+          {/* Intro Message from Request */}
+          {notification.introMessage && (
+            <div className="relative mt-2.5 rounded-r-lg border-l-2 border-primary bg-muted/30 p-3 text-[13px] text-foreground/80 shadow-sm transition-colors hover:bg-muted/40">
+              <span className="align-middle italic">" {notification.introMessage} "</span>
             </div>
           )}
+
+          {/* Timestamp */}
+          <p
+            className={cn(
+              "mt-1 text-[12px] font-semibold",
+              notification.isRead
+                ? "text-muted-foreground"
+                : meta.text,
+            )}
+          >
+            {formatDistanceToNow(new Date(notification.createdAt), {
+              addSuffix: true,
+              locale: enUS,
+            })}
+          </p>
+
+          {/* ── "Chat now" pill for friend_accepted ── */}
+          {notification.kind === "friend_accepted" && onOpenDirectChat && (
+            <div className="mt-2.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/15">
+                <MessageCircleMore className="h-3.5 w-3.5" />
+                Chat now
+              </span>
+            </div>
+          )}
+        </button>
+
+        {/* ── Accept / Decline buttons for friend_request ── */}
+        {showFriendRequestActions && (
+          <div className="mt-3 flex items-center gap-2">
+            <Button
+              size="sm"
+              className="h-[34px] rounded-[10px] px-4 text-[13px] font-semibold shadow-sm transition-colors"
+              onClick={() => {
+                onAcceptFriend!(notification.requestId!);
+                onRead(notification.id);
+              }}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="mr-1.5 h-[15px] w-[15px] animate-spin" />
+              ) : (
+                <Check className="mr-1.5 h-[15px] w-[15px]" />
+              )}
+              Confirm
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-[34px] rounded-[10px] px-4 text-[13px] font-semibold text-foreground/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => {
+                onDeclineFriend!(notification.requestId!);
+                onRead(notification.id);
+              }}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <Loader2 className="h-[15px] w-[15px] animate-spin text-muted-foreground" />
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ── Right: unread dot + options menu ── */}
@@ -252,7 +250,7 @@ const NotificationItem = ({
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60",
-                "transition-all hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
+                "transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35",
                 dropdownOpen
                   ? "opacity-100 bg-muted text-foreground"
                   : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
@@ -297,7 +295,7 @@ const NotificationItem = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </div>
+    </article>
   );
 };
 

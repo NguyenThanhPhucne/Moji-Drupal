@@ -53,6 +53,7 @@ export const userService = {
       follow?: boolean;
       like?: boolean;
       comment?: boolean;
+      mention?: boolean;
       friendAccepted?: boolean;
       system?: boolean;
       mutedUserIds?: string[];

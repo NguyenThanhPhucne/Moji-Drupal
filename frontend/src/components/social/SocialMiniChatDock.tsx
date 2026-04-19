@@ -392,7 +392,7 @@ const MiniChatMessages = ({
       <div className="flex flex-col items-center justify-center gap-2.5 text-center my-auto py-6 px-3">
         <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-primary/8">
           <Sparkles className="h-5 w-5 text-primary" />
-          <span className="absolute inset-0 rounded-full border border-primary/20 animate-ping opacity-30" />
+          <span className="absolute inset-0 rounded-full border border-primary/20 opacity-40" />
         </div>
         <p className="social-mini-chat-state text-[13px] font-medium">
           Say hi to {displayName.split(" ")[0]}.

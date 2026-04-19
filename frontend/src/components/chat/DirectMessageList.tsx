@@ -2,11 +2,16 @@ import { useChatStore } from "@/stores/useChatStore";
 import DirectMessageCard from "./DirectMessageCard";
 import { getStaggerEnterClass } from "@/lib/utils";
 import { MessagesSquare } from "lucide-react";
+import ConversationSkeleton from "@/components/skeleton/ConversationSkeleton";
 
 const DirectMessageList = () => {
-  const { conversations } = useChatStore();
+  const conversations = useChatStore((state) => state.conversations);
+  const convoLoading = useChatStore((state) => state.convoLoading);
 
-  if (!conversations || conversations.length === 0) return null;
+  // Show skeleton on first load (no data yet)
+  if (convoLoading && conversations.length === 0) {
+    return <ConversationSkeleton />;
+  }
 
   const directConversations = conversations.filter(
     (convo) => convo.type === "direct",
@@ -50,3 +55,4 @@ const DirectMessageList = () => {
 };
 
 export default DirectMessageList;
+

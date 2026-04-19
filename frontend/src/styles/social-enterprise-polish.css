@@ -439,18 +439,18 @@
   }
 
   .social-topbar {
-    padding: 0.68rem 1rem;
-    border-radius: 1.25rem;
+    padding: 0.6rem 1rem;
+    border-radius: 0.85rem;
     display: grid;
     gap: 0.65rem;
     position: sticky;
-    top: 0.5rem;
+    top: 0.4rem;
     z-index: 9;
     backdrop-filter: blur(14px) saturate(170%);
     -webkit-backdrop-filter: blur(14px) saturate(170%);
     background: hsl(var(--se-surface) / 0.88);
     border: 1px solid hsl(var(--se-border) / 0.45);
-    box-shadow: 0 2px 12px -2px hsl(220 30% 8% / 0.08), 0 1px 3px -1px hsl(220 30% 8% / 0.04);
+    box-shadow: 0 1px 3px 0 hsl(220 30% 8% / 0.04), 0 1px 2px -1px hsl(220 30% 8% / 0.02);
     overflow: hidden;
   }
 
@@ -630,15 +630,15 @@
 
   .social-story-card {
     position: relative;
-    width: 7rem;
-    min-width: 7rem;
-    height: 11rem;
-    border-radius: 0.92rem;
+    width: 6.8rem;
+    min-width: 6.8rem;
+    height: 10.5rem;
+    border-radius: 0.75rem;
     overflow: hidden;
     border: 1px solid hsl(var(--se-border) / 0.84);
     background: hsl(var(--se-surface-soft));
     text-align: left;
-    box-shadow: 0 12px 24px -18px hsl(220 45% 12% / 0.42);
+    box-shadow: 0 4px 12px -8px hsl(220 45% 12% / 0.15);
     transition: transform 180ms ease, box-shadow 180ms ease;
   }
 
@@ -3283,7 +3283,11 @@
     border: 1px solid hsl(var(--border));
     background: hsl(var(--background));
     color: hsl(var(--muted-foreground));
-    transition: all 0.15s;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
     display: flex;
     align-items: center;
   }
@@ -3338,7 +3342,12 @@
     color: hsl(var(--muted-foreground));
     font-size: 0.78rem;
     font-weight: 600;
-    transition: all 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.15s ease;
   }
 
   .saved-preset-chip:hover {
@@ -3439,7 +3448,11 @@
     border-radius: 0.5rem;
     font-size: 0.78rem;
     color: hsl(var(--muted-foreground));
-    transition: all 0.12s;
+    transition:
+      background-color 0.12s ease,
+      color 0.12s ease,
+      border-color 0.12s ease,
+      box-shadow 0.12s ease;
   }
 
   .saved-select-all-btn:hover {
@@ -3605,7 +3618,12 @@
 
 /* ──── Enterprise Friends Manager Abstractions ──── */
 .enterprise-list-item {
-  @apply flex items-center justify-between p-3.5 rounded-2xl transition-all duration-200 border border-transparent;
+  @apply flex items-center justify-between p-3.5 rounded-2xl border border-transparent;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .enterprise-list-item:hover {
@@ -3634,7 +3652,7 @@
 }
 
 /* ───────────────────────────────────────────────────────── */
-/* 🚀 UI/UX Round 5: Social Feed Interactive Enhancements  */
+/* UI/UX Round 5: Social Feed Interactive Enhancements */
 /* ───────────────────────────────────────────────────────── */
 
 /* 1. iOS Sliding Pill for Tabs */
@@ -3712,7 +3730,11 @@
 
 /* 2. Glassmorphism & Composer Enhancements */
 .social-composer-trigger-glow {
-  transition: all 0.25s ease;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    color 0.25s ease;
 }
 .social-composer-trigger-glow:hover {
   background: hsl(var(--se-surface));
@@ -3828,7 +3850,7 @@
 }
 
 /* ───────────────────────────────────────────────────────── */
-/* 🧩 UI/UX Round 6: Advanced Layouts & Mini Chat           */
+/* UI/UX Round 6: Advanced Layouts & Mini Chat */
 /* ───────────────────────────────────────────────────────── */
 
 /* Scale Bounce for Right Rail */

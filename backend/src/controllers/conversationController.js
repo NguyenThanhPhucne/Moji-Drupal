@@ -16,6 +16,7 @@ import {
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
+const MESSAGE_CURSOR_SEPARATOR = "|";
 const JOIN_LINK_DEFAULT_EXPIRY_HOURS = 24;
 const JOIN_LINK_MIN_EXPIRY_HOURS = 1;
 const JOIN_LINK_MAX_EXPIRY_HOURS = 168;
@@ -28,6 +29,9 @@ const MIN_GROUP_CHANNEL_CATEGORY_NAME_LENGTH = 2;
 const MAX_GROUP_CHANNEL_CATEGORY_NAME_LENGTH = 40;
 const MAX_GROUP_CHANNEL_CATEGORIES_PER_CONVERSATION = 20;
 const GROUP_CHANNEL_ROLE_OPTIONS = ["owner", "admin", "member"];
+const MAX_GROUP_MEMBERS = 256;
+const MIN_GROUP_NAME_LENGTH = 1;
+const MAX_GROUP_NAME_LENGTH = 80;
 
 const toStringId = (value) => {
   if (value === null || value === undefined) {
@@ -67,6 +71,141 @@ const toStringId = (value) => {
   }
 
   return "";
+};
+
+const encodeMessagePaginationCursor = (message) => {
+  const cursorDate = message?.createdAt ? new Date(message.createdAt) : null;
+  const cursorId = toStringId(message?._id);
+
+  if (!cursorDate || Number.isNaN(cursorDate.getTime())) {
+    return null;
+  }
+
+  const cursorDateIso = cursorDate.toISOString();
+  if (!cursorId) {
+    return cursorDateIso;
+  }
+
+  return `${cursorDateIso}${MESSAGE_CURSOR_SEPARATOR}${cursorId}`;
+};
+
+const decodeMessagePaginationCursor = (rawCursor) => {
+  const normalizedCursor = String(rawCursor || "").trim();
+  if (!normalizedCursor) {
+    return {
+      error: null,
+      cursor: null,
+    };
+  }
+
+  const separatorIndex = normalizedCursor.lastIndexOf(MESSAGE_CURSOR_SEPARATOR);
+  const hasMessageId = separatorIndex > -1;
+  const rawCreatedAt = hasMessageId
+    ? normalizedCursor.slice(0, separatorIndex).trim()
+    : normalizedCursor;
+  const rawMessageId = hasMessageId
+    ? normalizedCursor.slice(separatorIndex + 1).trim()
+    : "";
+
+  const cursorDate = new Date(rawCreatedAt);
+  if (Number.isNaN(cursorDate.getTime())) {
+    return {
+      error: {
+        status: 400,
+        message: "Invalid cursor",
+      },
+      cursor: null,
+    };
+  }
+
+  if (!rawMessageId) {
+    return {
+      error: null,
+      cursor: {
+        createdAt: cursorDate,
+        messageId: null,
+      },
+    };
+  }
+
+  if (!mongoose.Types.ObjectId.isValid(rawMessageId)) {
+    return {
+      error: {
+        status: 400,
+        message: "Invalid cursor",
+      },
+      cursor: null,
+    };
+  }
+
+  return {
+    error: null,
+    cursor: {
+      createdAt: cursorDate,
+      messageId: rawMessageId,
+    },
+  };
+};
+
+const buildMessageCursorQueryFilter = (rawCursor) => {
+  const decodedCursor = decodeMessagePaginationCursor(rawCursor);
+  if (decodedCursor.error) {
+    return {
+      error: decodedCursor.error,
+      filter: null,
+    };
+  }
+
+  if (!decodedCursor.cursor) {
+    return {
+      error: null,
+      filter: null,
+    };
+  }
+
+  const { createdAt, messageId } = decodedCursor.cursor;
+  if (!messageId) {
+    return {
+      error: null,
+      // Backward-compatible fallback for legacy date-only cursors.
+      filter: { createdAt: { $lt: createdAt } },
+    };
+  }
+
+  return {
+    error: null,
+    filter: {
+      $or: [
+        { createdAt: { $lt: createdAt } },
+        {
+          createdAt,
+          _id: { $lt: mongoose.Types.ObjectId.createFromHexString(messageId) },
+        },
+      ],
+    },
+  };
+};
+
+const applyMessageQueryFilters = ({
+  query,
+  cursorFilter,
+  groupChannelFilter,
+}) => {
+  const filters = [];
+
+  if (cursorFilter) {
+    filters.push(cursorFilter);
+  }
+
+  if (groupChannelFilter) {
+    filters.push({ $or: groupChannelFilter });
+  }
+
+  if (filters.length === 1) {
+    Object.assign(query, filters[0]);
+  } else if (filters.length > 1) {
+    query.$and = filters;
+  }
 };
 
 const sanitizeGroupChannelName = (value) => {
@@ -442,6 +581,21 @@ const normalizeUnreadCounts = (unreadCounts) => {
   return unreadCounts instanceof Map
     ? Object.fromEntries(unreadCounts)
     : unreadCounts || {};
+};
+
+const resolveUserUnreadCount = (conversation, userId) => {
+  const normalizedUserId = toStringId(userId);
+  const unreadCounts = conversation?.unreadCounts;
+
+  if (unreadCounts instanceof Map) {
+    return toNonNegativeInt(unreadCounts.get(normalizedUserId), 0);
+  }
+
+  if (unreadCounts && typeof unreadCounts === "object") {
+    return toNonNegativeInt(unreadCounts[normalizedUserId], 0);
+  }
+
+  return 0;
 };
 
 const normalizeSeenBy = (seenBy) => {
@@ -950,6 +1104,13 @@ export const createConversation = async (req, res) => {
       return res.status(400).json({ message: "Tên nhóm là bắt buộc" });
     }
 
+    const normalizedGroupName = String(name || "").trim();
+    if (type === "group" && (normalizedGroupName.length < MIN_GROUP_NAME_LENGTH || normalizedGroupName.length > MAX_GROUP_NAME_LENGTH)) {
+      return res.status(400).json({
+        message: `Tên nhóm phải từ ${MIN_GROUP_NAME_LENGTH} đến ${MAX_GROUP_NAME_LENGTH} ký tự`,
+      });
+    }
+
     let conversation;
 
     if (type === "direct") {
@@ -1003,6 +1164,17 @@ export const createConversation = async (req, res) => {
       const uniqueMemberIds = [...new Set(mongoMemberIdsRaw.map(String))].filter(
         (id) => id !== String(userId),
       );
+
+      if (uniqueMemberIds.length === 0) {
+        return res.status(400).json({ message: "Nhóm phải có ít nhất 1 thành viên khác" });
+      }
+
+      // +1 for the creator
+      if (uniqueMemberIds.length + 1 > MAX_GROUP_MEMBERS) {
+        return res.status(400).json({
+          message: `Nhóm không thể có quá ${MAX_GROUP_MEMBERS} thành viên`,
+        });
+      }
 
       conversation = new Conversation({
         type: "group",
@@ -1103,7 +1275,7 @@ export const getConversations = async (req, res) => {
 
     const formatted = conversations.map((convo) => formatConversationForClient(convo));
 
-    await setCachedData(cacheKey, formatted, 600); // 10 minutes cache
+    await setCachedData(cacheKey, formatted, 120); // 2-minute cache: short enough for near-realtime freshness
 
     return res.status(200).json({ conversations: formatted });
   } catch (error) {
@@ -1226,7 +1398,11 @@ const buildGroupMessageChannelQueryFilter = (channelIds) => {
   return { $or: filters };
 };
 
-const syncGroupConversationLastMessage = async ({ conversation, channelIds }) => {
+const syncGroupConversationLastMessage = async ({
+  conversation,
+  channelIds,
+  session = null,
+}) => {
   const filter = buildGroupMessageChannelQueryFilter(channelIds);
 
   if (!filter) {
@@ -1236,14 +1412,19 @@ const syncGroupConversationLastMessage = async ({ conversation, channelIds }) =>
     return;
   }
 
-  const latestMessage = await Message.findOne({
+  const latestMessageQuery = Message.findOne({
     conversationId: conversation._id,
     isDeleted: { $ne: true },
     ...filter,
   })
     .select("_id content imgUrl senderId createdAt groupChannelId")
-    .sort({ createdAt: -1 })
-    .lean();
+    .sort({ createdAt: -1, _id: -1 });
+
+  if (session) {
+    latestMessageQuery.session(session);
+  }
+
+  const latestMessage = await latestMessageQuery.lean();
 
   if (!latestMessage) {
     conversation.lastMessage = null;
@@ -1281,6 +1462,10 @@ export const getMessages = async (req, res) => {
       ? Math.min(Math.max(parsedLimit, 1), MAX_MESSAGE_PAGE_LIMIT)
       : DEFAULT_MESSAGE_PAGE_LIMIT;
 
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
     const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
     const canAccessAll =
       roles.includes("administrator") || roles.includes("sales_manager");
@@ -1308,14 +1493,11 @@ export const getMessages = async (req, res) => {
       conversationId,
       hiddenFor: { $ne: userId },
     };
-
-    if (cursor) {
-      const cursorDate = new Date(cursor);
-      if (Number.isNaN(cursorDate.getTime())) {
-        return res.status(400).json({ message: "Invalid cursor" });
-      }
-
-      query.createdAt = { $lt: cursorDate };
+    const cursorFilterResult = buildMessageCursorQueryFilter(cursor);
+    if (cursorFilterResult.error) {
+      return res
+        .status(cursorFilterResult.error.status)
+        .json({ message: cursorFilterResult.error.message });
     }
 
     const groupChannelQuery = resolveGroupChannelMessageQuery({
@@ -1329,16 +1511,18 @@ export const getMessages = async (req, res) => {
     }
 
     const effectiveGroupChannelId = groupChannelQuery.effectiveGroupChannelId;
-    if (groupChannelQuery.filter) {
-      query.$or = groupChannelQuery.filter;
-    }
+    applyMessageQueryFilters({
+      query,
+      cursorFilter: cursorFilterResult.filter,
+      groupChannelFilter: groupChannelQuery.filter,
+    });
 
     let messages = await Message.find(query)
       .select(
         "_id conversationId groupChannelId senderId content imgUrl replyTo reactions isDeleted editedAt readBy createdAt updatedAt",
       )
       .populate("replyTo", "content senderId")
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(safeLimit + 1)
       .lean();
 
@@ -1346,7 +1530,7 @@ export const getMessages = async (req, res) => {
 
     if (messages.length > safeLimit) {
       const nextMessage = messages.at(-1);
-      nextCursor = nextMessage.createdAt.toISOString();
+      nextCursor = encodeMessagePaginationCursor(nextMessage);
       messages.pop();
     }
 
@@ -1505,91 +1689,321 @@ const applyGroupConversationSeenState = ({
   };
 };
 
+const loadConversationWithReadAccess = async ({
+  conversationId,
+  userId,
+  canAccessAll,
+}) => {
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) {
+    return {
+      conversation: null,
+      error: {
+        status: 404,
+        message: "Conversation không tồn tại",
+      },
+    };
+  }
+
+  const readAccessError = ensureConversationReadAccess({
+    conversation,
+    userId,
+    canAccessAll,
+  });
+  if (readAccessError) {
+    return {
+      conversation: null,
+      error: readAccessError,
+    };
+  }
+
+  return {
+    conversation,
+    error: null,
+  };
+};
+
+const getDirectMarkAsSeenNoopResponse = ({ conversation, userId }) => {
+  const last = conversation?.lastMessage;
+
+  if (!last) {
+    return {
+      status: 200,
+      payload: { message: "Không có tin nhắn để mark as seen" },
+    };
+  }
+
+  if (last.senderId?.toString?.() === userId) {
+    return {
+      status: 200,
+      payload: { message: "Sender không cần mark as seen" },
+    };
+  }
+
+  return null;
+};
+
+const executeAtomicGroupMarkAsSeen = async ({
+  conversation,
+  conversationId,
+  userId,
+  requestedChannelId,
+  requestUserId,
+  canAccessAll,
+  readAccessFilter,
+}) => {
+  let currentConversation = conversation;
+  let effectiveChannelId = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const conversationSnapshot = currentConversation?.toObject
+      ? currentConversation.toObject()
+      : { ...currentConversation };
+
+    const groupSeenState = applyGroupConversationSeenState({
+      conversation: conversationSnapshot,
+      userId,
+      requestedChannelId,
+      requestUserId,
+    });
+
+    if (groupSeenState.error) {
+      return {
+        kind: "response",
+        status: groupSeenState.error.status,
+        payload: { message: groupSeenState.error.message },
+      };
+    }
+
+    effectiveChannelId = groupSeenState.effectiveChannelId;
+
+    const nextSeenBy = Array.from(
+      new Set(
+        (conversationSnapshot?.seenBy || [])
+          .map((seenUserId) => toStringId(seenUserId))
+          .filter(Boolean),
+      ),
+    );
+
+    const updatedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: conversationId,
+        type: "group",
+        updatedAt: currentConversation.updatedAt,
+        ...readAccessFilter,
+      },
+      {
+        $set: {
+          unreadCounts: normalizeUnreadCounts(conversationSnapshot.unreadCounts),
+          "group.channelUnreadCounts":
+            conversationSnapshot?.group?.channelUnreadCounts || {},
+          "group.channels": conversationSnapshot?.group?.channels || [],
+          "group.channelCategories":
+            conversationSnapshot?.group?.channelCategories || [],
+          "group.activeChannelId":
+            conversationSnapshot?.group?.activeChannelId ||
+            DEFAULT_GROUP_CHANNEL_ID,
+          seenBy: nextSeenBy,
+        },
+      },
+      { new: true },
+    );
+
+    if (updatedConversation) {
+      return {
+        kind: "ok",
+        conversation: updatedConversation,
+        effectiveChannelId,
+      };
+    }
+
+    const reloadResult = await loadConversationWithReadAccess({
+      conversationId,
+      userId,
+      canAccessAll,
+    });
+    if (reloadResult.error) {
+      return {
+        kind: "response",
+        status: reloadResult.error.status,
+        payload: { message: reloadResult.error.message },
+      };
+    }
+
+    currentConversation = reloadResult.conversation;
+  }
+
+  return {
+    kind: "response",
+    status: 409,
+    payload: { message: "Conversation state changed. Please retry." },
+  };
+};
+
+const executeAtomicDirectMarkAsSeen = async ({
+  conversation,
+  conversationId,
+  userId,
+  requestUserId,
+  canAccessAll,
+  readAccessFilter,
+}) => {
+  const noopResponse = getDirectMarkAsSeenNoopResponse({
+    conversation,
+    userId,
+  });
+  if (noopResponse) {
+    return {
+      kind: "response",
+      status: noopResponse.status,
+      payload: noopResponse.payload,
+    };
+  }
+
+  const updatedConversation = await Conversation.findOneAndUpdate(
+    {
+      _id: conversationId,
+      type: "direct",
+      "lastMessage.senderId": { $ne: requestUserId },
+      ...readAccessFilter,
+    },
+    {
+      $set: {
+        [`unreadCounts.${userId}`]: 0,
+      },
+      $addToSet: {
+        seenBy: requestUserId,
+      },
+    },
+    { new: true },
+  );
+
+  if (updatedConversation) {
+    return {
+      kind: "ok",
+      conversation: updatedConversation,
+    };
+  }
+
+  const reloadResult = await loadConversationWithReadAccess({
+    conversationId,
+    userId,
+    canAccessAll,
+  });
+  if (reloadResult.error) {
+    return {
+      kind: "response",
+      status: reloadResult.error.status,
+      payload: { message: reloadResult.error.message },
+    };
+  }
+
+  const retryNoopResponse = getDirectMarkAsSeenNoopResponse({
+    conversation: reloadResult.conversation,
+    userId,
+  });
+  if (retryNoopResponse) {
+    return {
+      kind: "response",
+      status: retryNoopResponse.status,
+      payload: retryNoopResponse.payload,
+    };
+  }
+
+  return {
+    kind: "response",
+    status: 409,
+    payload: { message: "Conversation state changed. Please retry." },
+  };
+};
+
 export const markAsSeen = async (req, res) => {
   try {
     const { conversationId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
     const userId = req.user._id.toString();
     const requestedChannelId = String(
       req.query?.channelId || req.body?.channelId || "",
     ).trim();
 
-    const conversation = await Conversation.findById(conversationId);
-
-    if (!conversation) {
-      return res.status(404).json({ message: "Conversation không tồn tại" });
-    }
-
     const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
     const canAccessAll =
       roles.includes("administrator") || roles.includes("sales_manager");
-    const readAccessError = ensureConversationReadAccess({
-      conversation,
+    const readAccessFilter = canAccessAll
+      ? {}
+      : { "participants.userId": req.user._id };
+
+    const initialLoad = await loadConversationWithReadAccess({
+      conversationId,
       userId,
       canAccessAll,
     });
-    if (readAccessError) {
+
+    if (initialLoad.error) {
       return res
-        .status(readAccessError.status)
-        .json({ message: readAccessError.message });
+        .status(initialLoad.error.status)
+        .json({ message: initialLoad.error.message });
     }
 
+    const conversation = initialLoad.conversation;
+
     if (conversation.type === "group") {
-      const groupSeenState = applyGroupConversationSeenState({
+      const groupResult = await executeAtomicGroupMarkAsSeen({
         conversation,
+        conversationId,
         userId,
         requestedChannelId,
         requestUserId: req.user._id,
+        canAccessAll,
+        readAccessFilter,
       });
 
-      if (groupSeenState.error) {
-        return res
-          .status(groupSeenState.error.status)
-          .json({ message: groupSeenState.error.message });
+      if (groupResult.kind === "response") {
+        return res.status(groupResult.status).json(groupResult.payload);
       }
 
-      await conversation.save();
       emitReadMessageEvent({
-        conversation,
+        conversation: groupResult.conversation,
         conversationId,
         includeGroup: true,
       });
-      await invalidateConversationCacheForParticipants(conversation);
+      await invalidateConversationCacheForParticipants(groupResult.conversation);
 
       return res.status(200).json({
         message: "Marked as seen",
-        seenBy: conversation?.seenBy || [],
-        myUnreadCount: conversation.unreadCounts.get(userId) || 0,
-        channelId: groupSeenState.effectiveChannelId,
+        seenBy: groupResult.conversation?.seenBy || [],
+        myUnreadCount: resolveUserUnreadCount(groupResult.conversation, userId),
+        channelId: groupResult.effectiveChannelId,
       });
     }
 
-    const last = conversation.lastMessage;
+    const directResult = await executeAtomicDirectMarkAsSeen({
+      conversation,
+      conversationId,
+      userId,
+      requestUserId: req.user._id,
+      canAccessAll,
+      readAccessFilter,
+    });
 
-    if (!last) {
-      return res
-        .status(200)
-        .json({ message: "Không có tin nhắn để mark as seen" });
+    if (directResult.kind === "response") {
+      return res.status(directResult.status).json(directResult.payload);
     }
-
-    if (last.senderId?.toString?.() === userId) {
-      return res.status(200).json({ message: "Sender không cần mark as seen" });
-    }
-
-    addUserToSeenBy(conversation, userId);
-    conversation.unreadCounts.set(userId, 0);
-    await conversation.save();
 
     emitReadMessageEvent({
-      conversation,
+      conversation: directResult.conversation,
       conversationId,
       includeGroup: false,
     });
-    await invalidateConversationCacheForParticipants(conversation);
+    await invalidateConversationCacheForParticipants(directResult.conversation);
 
     return res.status(200).json({
       message: "Marked as seen",
-      seenBy: conversation?.seenBy || [],
-      myUnreadCount: conversation.unreadCounts.get(userId) || 0,
+      seenBy: directResult.conversation?.seenBy || [],
+      myUnreadCount: resolveUserUnreadCount(directResult.conversation, userId),
     });
   } catch (error) {
     console.error("Lỗi khi mark as seen", error);
@@ -2101,6 +2515,12 @@ export const deleteGroupChannel = async (req, res) => {
     const { conversationId, channelId } = req.params;
     const userId = req.user._id;
 
+    const createHttpError = (status, message) => {
+      const error = new Error(message);
+      error.status = status;
+      return error;
+    };
+
     if (!mongoose.Types.ObjectId.isValid(conversationId)) {
       return res.status(400).json({ message: "Invalid conversation id" });
     }
@@ -2114,83 +2534,172 @@ export const deleteGroupChannel = async (req, res) => {
       return res.status(400).json({ message: "Default #general channel cannot be deleted" });
     }
 
-    const conversation = await Conversation.findById(conversationId);
-    if (!conversation) {
-      return res.status(404).json({ message: "Conversation not found" });
-    }
-
-    if (conversation.type !== "group") {
-      return res.status(400).json({ message: "Only group conversations support channels" });
-    }
-
-    if (!isGroupParticipant(conversation, userId)) {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    if (!isGroupAdmin(conversation, userId)) {
-      return res.status(403).json({ message: "Only group admins can delete channels" });
-    }
-
-    const { channels, activeChannelId, channelUnreadCounts } =
-      ensureNormalizedGroupState(conversation, userId);
-
-    if (channels.length <= 1) {
-      return res.status(400).json({ message: "At least one channel must remain" });
-    }
-
-    const channelExists = channels.some(
-      (channel) => channel.channelId === normalizedChannelId,
-    );
-    if (!channelExists) {
-      return res.status(404).json({ message: "Group channel not found" });
-    }
-
-    const nextChannels = channels
-      .filter((channel) => channel.channelId !== normalizedChannelId)
-      .map((channel, index) => ({
-        ...channel,
-        position: index,
-      }));
-
-    const nextChannelUnreadCounts = {};
-    Object.entries(channelUnreadCounts || {}).forEach(([participantId, perChannel]) => {
-      const nextPerChannel = {
-        ...perChannel,
-      };
-      delete nextPerChannel[normalizedChannelId];
-
-      if (Object.keys(nextPerChannel).length > 0) {
-        nextChannelUnreadCounts[participantId] = nextPerChannel;
+    const assertDeleteContext = (conversation) => {
+      if (!conversation) {
+        throw createHttpError(404, "Conversation not found");
       }
-    });
 
-    conversation.group.channels = nextChannels;
-    conversation.group.activeChannelId =
-      activeChannelId === normalizedChannelId
-        ? nextChannels[0].channelId
-        : activeChannelId;
-    conversation.group.channelUnreadCounts = nextChannelUnreadCounts;
-    conversation.unreadCounts = buildConversationUnreadCountsMapForGroup({
+      if (conversation.type !== "group") {
+        throw createHttpError(400, "Only group conversations support channels");
+      }
+
+      if (!isGroupParticipant(conversation, userId)) {
+        throw createHttpError(403, "Access denied");
+      }
+
+      if (!isGroupAdmin(conversation, userId)) {
+        throw createHttpError(403, "Only group admins can delete channels");
+      }
+    };
+
+    const applyDeleteGroupChannelMutation = async ({
       conversation,
-      channelUnreadCounts: nextChannelUnreadCounts,
-    });
+      session = null,
+      dependentCleanupMode = "strict",
+    }) => {
+      const { channels, activeChannelId, channelUnreadCounts } =
+        ensureNormalizedGroupState(conversation, userId);
 
-    await Message.deleteMany({
-      conversationId,
-      groupChannelId: normalizedChannelId,
-    });
+      if (channels.length <= 1) {
+        throw createHttpError(400, "At least one channel must remain");
+      }
 
-    if (
-      normalizeGroupChannelId(conversation.lastMessage?.groupChannelId) ===
-      normalizedChannelId
-    ) {
-      await syncGroupConversationLastMessage({
+      const channelExists = channels.some(
+        (channel) => channel.channelId === normalizedChannelId,
+      );
+      if (!channelExists) {
+        throw createHttpError(404, "Group channel not found");
+      }
+
+      const nextChannels = channels
+        .filter((channel) => channel.channelId !== normalizedChannelId)
+        .map((channel, index) => ({
+          ...channel,
+          position: index,
+        }));
+
+      const nextChannelUnreadCounts = {};
+      Object.entries(channelUnreadCounts || {}).forEach(([participantId, perChannel]) => {
+        const nextPerChannel = {
+          ...perChannel,
+        };
+        delete nextPerChannel[normalizedChannelId];
+
+        if (Object.keys(nextPerChannel).length > 0) {
+          nextChannelUnreadCounts[participantId] = nextPerChannel;
+        }
+      });
+
+      conversation.group.channels = nextChannels;
+      conversation.group.activeChannelId =
+        activeChannelId === normalizedChannelId
+          ? nextChannels[0].channelId
+          : activeChannelId;
+      conversation.group.channelUnreadCounts = nextChannelUnreadCounts;
+      conversation.unreadCounts = buildConversationUnreadCountsMapForGroup({
         conversation,
-        channelIds: nextChannels.map((channel) => channel.channelId),
+        channelUnreadCounts: nextChannelUnreadCounts,
+      });
+
+      const deleteMessagesQuery = Message.deleteMany({
+        conversationId,
+        groupChannelId: normalizedChannelId,
+      }).setOptions({
+        ...(session ? { session } : {}),
+        dependentCleanupMode,
+        dependentCleanupContext: {
+          operation: "deleteGroupChannel",
+          conversationId,
+          channelId: normalizedChannelId,
+          actorId: toStringId(userId),
+        },
+      });
+
+      await deleteMessagesQuery;
+
+      const pinnedMessageId = toStringId(conversation?.pinnedMessage?._id);
+      if (pinnedMessageId) {
+        const pinnedMessageExistsQuery = Message.exists({
+          _id: pinnedMessageId,
+          conversationId,
+        });
+
+        if (session) {
+          pinnedMessageExistsQuery.session(session);
+        }
+
+        const pinnedMessageStillExists = await pinnedMessageExistsQuery;
+        if (!pinnedMessageStillExists) {
+          conversation.pinnedMessage = null;
+        }
+      }
+
+      if (
+        normalizeGroupChannelId(conversation.lastMessage?.groupChannelId) ===
+        normalizedChannelId
+      ) {
+        await syncGroupConversationLastMessage({
+          conversation,
+          channelIds: nextChannels.map((channel) => channel.channelId),
+          session,
+        });
+      }
+
+      await conversation.save(session ? { session } : undefined);
+    };
+
+    let conversation = null;
+    let deletedWithTransaction = false;
+    let transactionCapabilityError = null;
+
+    const session = await mongoose.startSession();
+
+    try {
+      await session.withTransaction(async () => {
+        conversation = await Conversation.findById(conversationId).session(session);
+        assertDeleteContext(conversation);
+
+        await applyDeleteGroupChannelMutation({
+          conversation,
+          session,
+          dependentCleanupMode: "strict",
+        });
+      });
+
+      deletedWithTransaction = true;
+    } catch (error) {
+      const message = String(error?.message || "").toLowerCase();
+      const shouldFallbackToNonTx =
+        message.includes("transaction numbers are only allowed") ||
+        message.includes("replica set") ||
+        message.includes("not supported");
+
+      if (!shouldFallbackToNonTx) {
+        throw error;
+      }
+
+      transactionCapabilityError = error;
+    } finally {
+      await session.endSession();
+    }
+
+    if (!deletedWithTransaction) {
+      if (transactionCapabilityError) {
+        console.warn(
+          "[deleteGroupChannel] Transactions unavailable, fallback to compensating mode.",
+          transactionCapabilityError,
+        );
+      }
+
+      conversation = await Conversation.findById(conversationId);
+      assertDeleteContext(conversation);
+
+      await applyDeleteGroupChannelMutation({
+        conversation,
+        dependentCleanupMode: "compensate",
       });
     }
 
-    await conversation.save();
     const payload = await broadcastGroupConversationUpdated(conversation);
 
     return res.status(200).json({
@@ -2198,6 +2707,11 @@ export const deleteGroupChannel = async (req, res) => {
       deletedChannelId: normalizedChannelId,
     });
   } catch (error) {
+    const status = Number(error?.status || 0);
+    if (status >= 400 && status < 500) {
+      return res.status(status).json({ message: error.message });
+    }
+
     console.error("Lỗi khi xoá group channel", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }

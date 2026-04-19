@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import FriendRequest from "../models/FriendRequest.js";
 import Notification from "../models/Notification.js";
 import { io } from "../socket/index.js";
+import mongoose from "mongoose";
 
 const shouldSendFriendAcceptedNotification = (rawSocialPreferences, actorId) => {
   const preferences = rawSocialPreferences || {};
@@ -26,9 +27,13 @@ export const sendFriendRequest = async (req, res) => {
   try {
     const { to, message } = req.body;
 
+    if (!to || !mongoose.isValidObjectId(to)) {
+      return res.status(400).json({ message: "Người nhận không hợp lệ" });
+    }
+
     const from = req.user._id;
 
-    if (from === to) {
+    if (from.toString() === to.toString()) {
       return res
         .status(400)
         .json({ message: "Không thể gửi lời mời kết bạn cho chính mình" });
@@ -98,6 +103,10 @@ export const acceptFriendRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user._id;
+
+    if (!mongoose.isValidObjectId(requestId)) {
+      return res.status(400).json({ message: "ID lời mời không hợp lệ" });
+    }
 
     const request = await FriendRequest.findById(requestId);
 
@@ -179,6 +188,10 @@ export const declineFriendRequest = async (req, res) => {
   try {
     const { requestId } = req.params;
     const userId = req.user._id;
+
+    if (!mongoose.isValidObjectId(requestId)) {
+      return res.status(400).json({ message: "ID lời mời không hợp lệ" });
+    }
 
     const request = await FriendRequest.findById(requestId);
 
@@ -269,8 +282,8 @@ export const removeFriend = async (req, res) => {
     const userId = req.user._id.toString();
     const friendId = String(req.params.friendId || "").trim();
 
-    if (!friendId) {
-      return res.status(400).json({ message: "Thiếu thông tin bạn bè" });
+    if (!friendId || !mongoose.isValidObjectId(friendId)) {
+      return res.status(400).json({ message: "Thiếu thông tin bạn bè hoặc ID không hợp lệ" });
     }
 
     if (userId === friendId) {
@@ -300,6 +313,11 @@ export const removeFriend = async (req, res) => {
         { recipientId: userId, actorId: friendId },
         { recipientId: friendId, actorId: userId },
       ],
+    });
+
+    // Notify the other user so their friend list updates in realtime
+    io.to(friendId).emit("friend-removed", {
+      removedBy: userId,
     });
 
     return res.status(200).json({ message: "Đã xoá bạn thành công" });

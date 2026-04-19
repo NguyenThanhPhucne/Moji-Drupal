@@ -30,7 +30,7 @@ const AvatarUploader = () => {
         size="icon"
         variant="secondary"
         onClick={handleClick}
-        className="absolute -bottom-2 -right-2 size-9 rounded-full shadow-md hover:scale-115 transition duration-300 hover:bg-background"
+        className="absolute -bottom-2 -right-2 size-9 rounded-full shadow-sm transition-colors duration-150 hover:bg-background"
       >
         <Camera className="size-4" />
       </Button>
