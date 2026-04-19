@@ -3490,6 +3490,55 @@
     box-shadow: 0 2px 8px hsl(0 0% 0% / 0.07);
   }
 
+  .saved-results-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.45rem 0.85rem;
+    font-size: 0.72rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .saved-results-hint {
+    color: hsl(var(--primary) / 0.85);
+    font-weight: 600;
+  }
+
+  .saved-bookmark-list-shell {
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--border) / 0.55);
+    background:
+      linear-gradient(180deg, hsl(var(--card) / 0.78), hsl(var(--card) / 0.94));
+    min-height: 18.5rem;
+    height: min(66vh, 45rem);
+    padding: 0.55rem;
+    box-shadow: inset 0 1px 0 hsl(var(--background) / 0.85);
+  }
+
+  .saved-bookmark-list-viewport {
+    height: 100%;
+    width: 100%;
+  }
+
+  .saved-bookmark-list-item {
+    margin-bottom: 0.55rem;
+  }
+
+  .saved-load-more-state {
+    display: flex;
+    justify-content: center;
+    padding-top: 0.2rem;
+  }
+
+  @media (max-width: 767px) {
+    .saved-bookmark-list-shell {
+      height: min(62vh, 36rem);
+      min-height: 17rem;
+      padding: 0.45rem;
+    }
+  }
+
   /* Bookmark Card */
   .saved-bookmark-card {
     border-radius: 1rem;
@@ -3535,6 +3584,16 @@
   .dark .saved-bookmark-card {
     background: hsl(var(--se-surface));
     border-color: hsl(var(--se-border) / 0.6);
+  }
+
+  .dark .saved-bookmark-list-shell {
+    border-color: hsl(var(--se-border) / 0.6);
+    background: linear-gradient(
+      180deg,
+      hsl(var(--se-surface-soft) / 0.75),
+      hsl(var(--se-surface) / 0.95)
+    );
+    box-shadow: inset 0 1px 0 hsl(var(--se-border) / 0.3);
   }
 
   .dark .saved-bookmark-card:hover {

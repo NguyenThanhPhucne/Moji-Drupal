@@ -37,6 +37,131 @@ const ensureConversationMembership = async (conversationId, userId) => {
 };
 
 const ORPHAN_BOOKMARK_CLEANUP_BATCH_SIZE = 1000;
+const BOOKMARK_TEXT_QUERY_MAX_LENGTH = 120;
+
+const populateBookmarkRelations = (query) => {
+  return query
+    .populate({
+      path: "messageId",
+      select: "_id conversationId senderId content imgUrl createdAt isDeleted",
+    })
+    .populate({
+      path: "conversationId",
+      select: "_id type group participants",
+      populate: {
+        path: "participants.userId",
+        select: "_id displayName avatarUrl",
+      },
+    });
+};
+
+const escapeRegex = (value) => {
+  return String(value || "").replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
+};
+
+const normalizeTextQuery = (value) => {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .slice(0, BOOKMARK_TEXT_QUERY_MAX_LENGTH);
+};
+
+const fetchBookmarkPageByTextQuery = async ({
+  query,
+  normalizedTextQuery,
+  page,
+  limit,
+  userId,
+}) => {
+  const skip = (page - 1) * limit;
+  const searchRegex = new RegExp(escapeRegex(normalizedTextQuery), "i");
+
+  const [aggregateResult] = await Bookmark.aggregate([
+    { $match: query },
+    {
+      $lookup: {
+        from: "messages",
+        localField: "messageId",
+        foreignField: "_id",
+        as: "_messageRef",
+      },
+    },
+    {
+      $lookup: {
+        from: "conversations",
+        localField: "conversationId",
+        foreignField: "_id",
+        as: "_conversationRef",
+      },
+    },
+    {
+      $match: {
+        $expr: {
+          $and: [
+            { $gt: [{ $size: "$_messageRef" }, 0] },
+            { $gt: [{ $size: "$_conversationRef" }, 0] },
+          ],
+        },
+      },
+    },
+    {
+      $match: {
+        $or: [
+          { note: { $regex: searchRegex } },
+          { tags: { $regex: searchRegex } },
+          { collections: { $regex: searchRegex } },
+          { "_messageRef.content": { $regex: searchRegex } },
+        ],
+      },
+    },
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        paged: [
+          { $skip: skip },
+          { $limit: limit },
+          { $project: { _id: 1 } },
+        ],
+        total: [{ $count: "count" }],
+      },
+    },
+  ]);
+
+  const pagedBookmarkIds = (aggregateResult?.paged || [])
+    .map((item) => item?._id)
+    .filter(Boolean);
+  const total = Number(aggregateResult?.total?.[0]?.count || 0);
+
+  if (pagedBookmarkIds.length === 0) {
+    return {
+      bookmarks: [],
+      total,
+    };
+  }
+
+  const rawBookmarks = await populateBookmarkRelations(
+    Bookmark.find({
+      _id: { $in: pagedBookmarkIds },
+      userId,
+    }),
+  ).lean();
+
+  const orderMap = new Map(
+    pagedBookmarkIds.map((bookmarkId, index) => [String(bookmarkId), index]),
+  );
+
+  rawBookmarks.sort((left, right) => {
+    const leftOrder = orderMap.get(String(left?._id || ""));
+    const rightOrder = orderMap.get(String(right?._id || ""));
+
+    return Number(leftOrder ?? 0) - Number(rightOrder ?? 0);
+  });
+
+  return {
+    bookmarks: rawBookmarks,
+    total,
+  };
+};
 
 const resolveBookmarkMatchQuery = (query) => {
   try {
@@ -181,6 +306,7 @@ export const getBookmarks = async (req, res) => {
     const {
       conversationId,
       collection,
+      q: queryTextRaw,
       from,
       to,
       page: pageRaw,
@@ -191,6 +317,7 @@ export const getBookmarks = async (req, res) => {
       100,
       Math.max(1, Number.parseInt(String(limitRaw || "30"), 10) || 30),
     );
+    const normalizedTextQuery = normalizeTextQuery(queryTextRaw);
 
     const query = { userId };
 
@@ -231,27 +358,34 @@ export const getBookmarks = async (req, res) => {
           }
         : matchQuery;
 
-    const [bookmarks, total] = await Promise.all([
-      Bookmark.find(sanitizedQuery)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .populate({
-          path: "messageId",
-          select:
-            "_id conversationId senderId content imgUrl createdAt isDeleted",
-        })
-        .populate({
-          path: "conversationId",
-          select: "_id type group participants",
-          populate: {
-            path: "participants.userId",
-            select: "_id displayName avatarUrl",
-          },
-        })
-        .lean(),
-      Bookmark.countDocuments(sanitizedQuery),
-    ]);
+    let bookmarks = [];
+    let total = 0;
+
+    if (normalizedTextQuery) {
+      const textQueryResult = await fetchBookmarkPageByTextQuery({
+        query: sanitizedQuery,
+        normalizedTextQuery,
+        page,
+        limit,
+        userId,
+      });
+
+      bookmarks = textQueryResult.bookmarks;
+      total = textQueryResult.total;
+    } else {
+      const [plainBookmarks, plainTotal] = await Promise.all([
+        populateBookmarkRelations(
+          Bookmark.find(sanitizedQuery)
+            .sort({ createdAt: -1 })
+            .skip((page - 1) * limit)
+            .limit(limit),
+        ).lean(),
+        Bookmark.countDocuments(sanitizedQuery),
+      ]);
+
+      bookmarks = plainBookmarks;
+      total = plainTotal;
+    }
 
     const filtered = bookmarks.filter(
       (item) => item.messageId && item.conversationId,

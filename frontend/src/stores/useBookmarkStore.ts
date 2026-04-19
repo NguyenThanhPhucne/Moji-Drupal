@@ -44,6 +44,36 @@ const removeCollectionFromSelectedBookmarks = (
   });
 };
 
+const mergeUniqueBookmarks = (
+  currentBookmarks: SavedBookmark[],
+  incomingBookmarks: SavedBookmark[],
+) => {
+  const merged: SavedBookmark[] = [];
+  const seenIds = new Set<string>();
+
+  for (const bookmark of [...currentBookmarks, ...incomingBookmarks]) {
+    const bookmarkId = String(bookmark?._id || "");
+    if (!bookmarkId || seenIds.has(bookmarkId)) {
+      continue;
+    }
+
+    seenIds.add(bookmarkId);
+    merged.push(bookmark);
+  }
+
+  return merged;
+};
+
+const collectBookmarkedMessageIds = (bookmarks: SavedBookmark[]) => {
+  return Array.from(
+    new Set(
+      bookmarks
+        .map((bookmark) => String(bookmark.messageId?._id || ""))
+        .filter(Boolean),
+    ),
+  );
+};
+
 interface BookmarkState {
   bookmarks: SavedBookmark[];
   bookmarkedMessageIds: string[];
@@ -52,6 +82,7 @@ interface BookmarkState {
   fetchBookmarks: (filters?: {
     conversationId?: string;
     collection?: string;
+    q?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -91,30 +122,28 @@ export const useBookmarkStore = create<BookmarkState>((set, get) => ({
       const result = await bookmarkService.getBookmarks(filters);
       const shouldAppend = Boolean(filters?.append);
 
-      const mergedBookmarks = shouldAppend
-        ? [...get().bookmarks, ...result.bookmarks]
-        : result.bookmarks;
+      if (shouldAppend) {
+        set((state) => {
+          const mergedBookmarks = mergeUniqueBookmarks(
+            state.bookmarks,
+            result.bookmarks,
+          );
 
-      set({
-        bookmarks: mergedBookmarks,
-        pagination: result.pagination,
-        bookmarkedMessageIds: mergedBookmarks.map(
-          (bookmark) => bookmark.messageId._id,
-        ),
-      });
+          return {
+            bookmarks: mergedBookmarks,
+            pagination: result.pagination,
+            bookmarkedMessageIds: collectBookmarkedMessageIds(mergedBookmarks),
+          };
+        });
+      } else {
+        set({
+          bookmarks: result.bookmarks,
+          pagination: result.pagination,
+          bookmarkedMessageIds: collectBookmarkedMessageIds(result.bookmarks),
+        });
+      }
     } catch (error) {
       console.error("Error loading bookmarks", error);
-      set({
-        bookmarks: [],
-        bookmarkedMessageIds: [],
-        pagination: {
-          page: 1,
-          limit: 30,
-          total: 0,
-          totalPages: 1,
-          hasNextPage: false,
-        },
-      });
     } finally {
       set({ loading: false });
     }

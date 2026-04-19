@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
+import { Virtuoso } from "react-virtuoso";
 import {
   Bookmark,
   Clock3,
@@ -35,6 +36,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { SavedBookmark } from "@/types/chat";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -54,6 +56,24 @@ type SavedPinnedQuery = {
 const RECENT_WINDOW_DAYS = 7;
 const RECENT_WINDOW_MS = RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const SAVED_PINNED_QUERY_KEY = "moji-saved-pinned-query-v2";
+const SAVED_SEARCH_DEBOUNCE_MS = 220;
+const SEARCH_AUTOLOAD_MAX_ATTEMPTS = 4;
+
+const useDebouncedValue = <T,>(value: T, delayMs: number) => {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = globalThis.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
+
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
+  }, [delayMs, value]);
+
+  return debouncedValue;
+};
 
 const isValidSavedPreset = (value: unknown): value is SavedPreset => {
   const normalized = typeof value === "string" ? value : "";
@@ -142,6 +162,9 @@ const SavedMessagesPage = () => { // NOSONAR
   const [bulkTagToRemove, setBulkTagToRemove] = useState("");
   const [bulkCollectionToRemove, setBulkCollectionToRemove] = useState("");
   const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const loadMoreInFlightRef = useRef(false);
+  const searchAutoloadAttemptsRef = useRef<Record<string, number>>({});
   const presetButtonRefs = useRef<Record<SavedPreset, HTMLButtonElement | null>>({
     all: null,
     recent: null,
@@ -151,6 +174,15 @@ const SavedMessagesPage = () => { // NOSONAR
     text: null,
   });
   const savedResultsRegionId = "saved-messages-results";
+  const debouncedSearchQuery = useDebouncedValue(
+    searchQuery,
+    SAVED_SEARCH_DEBOUNCE_MS,
+  );
+  const normalizedSearchQuery = debouncedSearchQuery.trim().toLowerCase();
+  const selectedBookmarkIdSet = useMemo(
+    () => new Set(selectedBookmarkIds),
+    [selectedBookmarkIds],
+  );
 
   useEffect(() => {
     fetchConversations();
@@ -184,6 +216,7 @@ const SavedMessagesPage = () => { // NOSONAR
     fetchBookmarks({
       conversationId: conversationFilter || undefined,
       collection: collectionFilter || undefined,
+      q: normalizedSearchQuery || undefined,
       from: fromDate || undefined,
       to: toDate || undefined,
       page: 1,
@@ -194,6 +227,7 @@ const SavedMessagesPage = () => { // NOSONAR
     fetchBookmarks,
     conversationFilter,
     collectionFilter,
+    normalizedSearchQuery,
     fromDate,
     toDate,
     pinnedQueryHydrated,
@@ -349,7 +383,6 @@ const SavedMessagesPage = () => { // NOSONAR
   }, [pinnedQuery]);
 
   const filteredBookmarks = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
     const now = Date.now();
     const normalizedCollectionFilter = collectionFilter.trim().toLowerCase();
 
@@ -362,11 +395,11 @@ const SavedMessagesPage = () => { // NOSONAR
         .join(" ");
 
       if (
-        normalizedQuery &&
-        !content.includes(normalizedQuery) &&
-        !note.includes(normalizedQuery) &&
-        !tags.includes(normalizedQuery) &&
-        !collections.includes(normalizedQuery)
+        normalizedSearchQuery &&
+        !content.includes(normalizedSearchQuery) &&
+        !note.includes(normalizedSearchQuery) &&
+        !tags.includes(normalizedSearchQuery) &&
+        !collections.includes(normalizedSearchQuery)
       ) {
         return false;
       }
@@ -394,7 +427,7 @@ const SavedMessagesPage = () => { // NOSONAR
 
       return true;
     });
-  }, [bookmarks, savedPreset, searchQuery, collectionFilter]);
+  }, [bookmarks, savedPreset, normalizedSearchQuery, collectionFilter]);
 
   const handlePresetKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const currentIndex = SAVED_PRESET_KEYS.indexOf(savedPreset);
@@ -435,42 +468,112 @@ const SavedMessagesPage = () => { // NOSONAR
     }
   };
 
-  const openConversation = useCallback(async (conversationId: string) => {
-    setActiveConversation(conversationId);
-    await fetchMessages(conversationId);
-    navigate("/");
+  const openConversation = useCallback((conversationId: string) => {
+    const normalizedConversationId = String(conversationId || "").trim();
+    if (!normalizedConversationId) {
+      return;
+    }
+
+    setActiveConversation(normalizedConversationId);
+    const nextParams = new URLSearchParams();
+    nextParams.set("conversationId", normalizedConversationId);
+    navigate({ pathname: "/", search: `?${nextParams.toString()}` });
+
+    void fetchMessages(normalizedConversationId).catch((error) => {
+      console.error("Failed to prefetch conversation messages from Saved page", error);
+    });
   }, [fetchMessages, navigate, setActiveConversation]);
 
-  const loadMoreBookmarks = async () => {
-    if (!pagination.hasNextPage || loading) return;
-    await fetchBookmarks({
-      conversationId: conversationFilter || undefined,
-      collection: collectionFilter || undefined,
-      from: fromDate || undefined,
-      to: toDate || undefined,
-      page: pagination.page + 1,
-      limit: pagination.limit,
-      append: true,
-    });
-  };
+  const loadMoreBookmarks = useCallback(async () => {
+    if (!pagination.hasNextPage || loading || loadMoreInFlightRef.current) {
+      return;
+    }
 
-  const toggleBookmarkSelection = (bookmarkId: string) => {
+    loadMoreInFlightRef.current = true;
+    setIsFetchingMore(true);
+    try {
+      await fetchBookmarks({
+        conversationId: conversationFilter || undefined,
+        collection: collectionFilter || undefined,
+        q: normalizedSearchQuery || undefined,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        page: pagination.page + 1,
+        limit: pagination.limit,
+        append: true,
+      });
+    } finally {
+      loadMoreInFlightRef.current = false;
+      setIsFetchingMore(false);
+    }
+  }, [
+    pagination.hasNextPage,
+    pagination.page,
+    pagination.limit,
+    loading,
+    fetchBookmarks,
+    conversationFilter,
+    collectionFilter,
+    normalizedSearchQuery,
+    fromDate,
+    toDate,
+  ]);
+
+  const toggleBookmarkSelection = useCallback((bookmarkId: string) => {
     setSelectedBookmarkIds((current) =>
       current.includes(bookmarkId)
         ? current.filter((id) => id !== bookmarkId)
         : [...current, bookmarkId],
     );
-  };
+  }, []);
 
-  const selectAllVisible = () => {
+  const selectAllVisible = useCallback(() => {
     const visibleIds = filteredBookmarks.map((b) => b._id);
     setSelectedBookmarkIds((current) => {
       const merged = new Set([...current, ...visibleIds]);
       return Array.from(merged);
     });
-  };
+  }, [filteredBookmarks]);
 
-  const clearSelection = () => setSelectedBookmarkIds([]);
+  const clearSelection = useCallback(() => setSelectedBookmarkIds([]), []);
+
+  useEffect(() => {
+    if (!normalizedSearchQuery) {
+      return;
+    }
+
+    if (!pagination.hasNextPage || loading || filteredBookmarks.length > 0) {
+      return;
+    }
+
+    const autoloadKey = [
+      normalizedSearchQuery,
+      conversationFilter,
+      collectionFilter,
+      fromDate,
+      toDate,
+      savedPreset,
+    ].join("|");
+
+    const currentAttempts = searchAutoloadAttemptsRef.current[autoloadKey] || 0;
+    if (currentAttempts >= SEARCH_AUTOLOAD_MAX_ATTEMPTS) {
+      return;
+    }
+
+    searchAutoloadAttemptsRef.current[autoloadKey] = currentAttempts + 1;
+    void loadMoreBookmarks();
+  }, [
+    normalizedSearchQuery,
+    pagination.hasNextPage,
+    loading,
+    filteredBookmarks.length,
+    conversationFilter,
+    collectionFilter,
+    fromDate,
+    toDate,
+    savedPreset,
+    loadMoreBookmarks,
+  ]);
 
   const exportSelectedCsv = () => {
     if (selectedBookmarkIds.length === 0) {
@@ -558,7 +661,7 @@ const SavedMessagesPage = () => { // NOSONAR
     setBulkCollectionToRemove("");
   };
 
-  const startEditing = (
+  const startEditing = useCallback((
     bookmarkId: string,
     note?: string,
     tags?: string[],
@@ -568,9 +671,9 @@ const SavedMessagesPage = () => { // NOSONAR
     setNoteDraft(note || "");
     setTagDraft((tags || []).join(", "));
     setCollectionDraft((collections || []).join(", "));
-  };
+  }, []);
 
-  const saveBookmarkMeta = async () => {
+  const saveBookmarkMeta = useCallback(async () => {
     if (!editingBookmarkId) return;
     const tags = tagDraft.split(",").map((item) => item.trim()).filter(Boolean);
     const collections = collectionDraft
@@ -588,14 +691,236 @@ const SavedMessagesPage = () => { // NOSONAR
     }
     toast.success("Bookmark updated");
     setEditingBookmarkId(null);
-  };
+  }, [
+    editingBookmarkId,
+    tagDraft,
+    collectionDraft,
+    noteDraft,
+    updateBookmarkMeta,
+  ]);
 
-  const unreadCount = selectedBookmarkIds.length;
+  let emptyStateTitle = "No saved messages yet";
+  let emptyStateDescription = "Long-press any message in chat to bookmark it here";
+
+  if (normalizedSearchQuery) {
+    emptyStateTitle = `No results for "${debouncedSearchQuery}"`;
+    emptyStateDescription = pagination.hasNextPage
+      ? "Searching older pages... keep scrolling to continue loading"
+      : "Try different keywords or clear your search";
+  }
+
+  const renderBookmarkItem = useCallback((index: number, bookmark: SavedBookmark) => {
+    const conversationName =
+      bookmark.conversationId?.type === "group"
+        ? bookmark.conversationId.group?.name || "Untitled group"
+        : bookmark.conversationId.participants?.find(
+            (participant) =>
+              String(participant._id) !== String(user?._id),
+          )?.displayName || "Direct message";
+
+    const isSelected = selectedBookmarkIdSet.has(bookmark._id);
+    const isEditing = editingBookmarkId === bookmark._id;
+    const isImage = Boolean(bookmark.messageId.imgUrl);
+
+    return (
+      <article
+        className={cn(
+          "saved-bookmark-card saved-bookmark-list-item saved-bookmark-card--command bookmark-card-hover",
+          isSelected && "saved-bookmark-card--selected",
+          index < 6 && "animate-in fade-in slide-in-from-bottom-2 duration-300",
+        )}
+        style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
+        aria-label={`Saved message from ${conversationName}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <button
+              type="button"
+              onClick={() => toggleBookmarkSelection(bookmark._id)}
+              className="saved-select-checkbox saved-select-checkbox--command micro-tap-chip mt-0.5 flex-shrink-0 transition-colors duration-150"
+              aria-label={isSelected ? "Deselect" : "Select"}
+              aria-pressed={isSelected}
+            >
+              {isSelected
+                ? <CheckSquare className="size-4 text-primary" />
+                : <Square className="size-4 text-muted-foreground/40 hover:text-muted-foreground" />
+              }
+            </button>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="saved-convo-badge">
+                  {bookmark.conversationId?.type === "group" ? (
+                    <Users className="size-3.5" />
+                  ) : (
+                    <MessageSquare className="size-3.5" />
+                  )}
+                  {conversationName}
+                </span>
+                {isImage && (
+                  <span className="saved-type-badge">
+                    <ImageIcon className="size-2.5" />
+                    Image
+                  </span>
+                )}
+                {!isImage && (
+                  <span className="saved-type-badge saved-type-badge--text">
+                    <MessageSquare className="size-2.5" />
+                    Text
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground/60 mt-1">
+                Saved {formatDistanceToNow(new Date(bookmark.createdAt), { addSuffix: true })}
+                {" | "}
+                {format(new Date(bookmark.createdAt), "MMM d, yyyy")}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => openConversation(bookmark.messageId.conversationId)}
+            className="flex-shrink-0 gap-1.5 text-xs h-7 px-2.5 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
+            aria-label={`Open ${conversationName} conversation`}
+          >
+            <ExternalLink className="size-3.5" />
+            Open
+          </Button>
+        </div>
+
+        <div className={cn(
+          "saved-message-content mt-3",
+          bookmark.messageId.isDeleted && "opacity-50 italic",
+        )}>
+          {bookmark.messageId.isDeleted
+            ? (
+              <span className="flex items-center gap-1.5 text-muted-foreground/70">
+                <X className="size-3.5" />
+                Message was removed
+              </span>
+            )
+            : bookmark.messageId.content || (
+              <span className="flex items-center gap-1.5 text-muted-foreground/70">
+                <ImageIcon className="size-3.5" />
+                Image message
+              </span>
+            )}
+        </div>
+
+        {(bookmark.collections?.length || bookmark.tags?.length || bookmark.note) && !isEditing && (
+          <div className="mt-3 flex flex-wrap gap-2 items-start">
+            {(bookmark.collections || []).map((collectionName) => (
+              <span key={`collection-${collectionName}`} className="saved-type-badge">
+                <Tags className="size-2.5" />
+                {collectionName}
+              </span>
+            ))}
+            {(bookmark.tags || []).map((tag) => (
+              <span key={tag} className="saved-tag-chip">
+                #{tag}
+              </span>
+            ))}
+            {bookmark.note && (
+              <div className="w-full mt-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground/80 leading-relaxed whitespace-pre-wrap">
+                {bookmark.note}
+              </div>
+            )}
+          </div>
+        )}
+
+        {isEditing ? (
+          <div className="mt-3 space-y-2 rounded-xl border border-primary/30 bg-primary/[0.03] p-3 animate-in fade-in duration-150">
+            <p className="text-[11px] font-semibold text-primary/80 mb-1">Edit metadata</p>
+            <Input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              placeholder="tags, separated, by comma"
+              className="h-8 text-sm"
+              aria-label="Edit bookmark tags"
+            />
+            <Input
+              value={collectionDraft}
+              onChange={(e) => setCollectionDraft(e.target.value)}
+              placeholder="collections, separated, by comma"
+              className="h-8 text-sm"
+              aria-label="Edit bookmark collections"
+            />
+            <textarea
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              className="min-h-[64px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
+              placeholder="Personal note…"
+              aria-label="Edit bookmark note"
+            />
+            <div className="flex items-center gap-2">
+              <Button type="button" size="sm" onClick={saveBookmarkMeta} className="h-7 px-3">
+                Save
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setEditingBookmarkId(null)}
+                className="h-7 px-3"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center justify-between">
+            {!(bookmark.collections?.length) && !(bookmark.tags?.length) && !bookmark.note && (
+              <span className="text-[11px] text-muted-foreground/40 italic">No metadata yet</span>
+            )}
+            <div className={cn("flex items-center gap-1", (bookmark.collections?.length || bookmark.tags?.length || bookmark.note) && "ml-auto")}>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  startEditing(
+                    bookmark._id,
+                    bookmark.note,
+                    bookmark.tags,
+                    bookmark.collections,
+                  )
+                }
+                className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground/70 hover:text-foreground rounded-lg"
+              >
+                <PencilLine className="size-3" />
+                Edit metadata
+              </Button>
+            </div>
+          </div>
+        )}
+      </article>
+    );
+  }, [
+    user?._id,
+    selectedBookmarkIdSet,
+    editingBookmarkId,
+    toggleBookmarkSelection,
+    openConversation,
+    tagDraft,
+    collectionDraft,
+    noteDraft,
+    saveBookmarkMeta,
+    startEditing,
+  ]);
+
+  const selectedCount = selectedBookmarkIds.length;
+  const allVisibleSelected =
+    selectedCount > 0 && selectedCount === filteredBookmarks.length;
   const savedItemsWord = bookmarks.length === 1 ? "item" : "items";
   const savedItemsSubtitle =
     bookmarks.length === 0
       ? "Your personal message archive"
       : `${bookmarks.length} saved ${savedItemsWord}`;
+  const visibleResultCountLabel = filteredBookmarks.length.toLocaleString();
+  const totalResultCountLabel = pagination.total.toLocaleString();
 
   return (
     <SidebarProvider>
@@ -884,28 +1209,28 @@ const SavedMessagesPage = () => { // NOSONAR
             {filteredBookmarks.length > 0 && (
               <div className="saved-select-toolbar">
                 <p className="sr-only" aria-live="polite">
-                  {unreadCount > 0
-                    ? `${unreadCount} bookmarks selected`
+                  {selectedCount > 0
+                    ? `${selectedCount} bookmarks selected`
                     : "No bookmarks selected"}
                 </p>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={unreadCount === filteredBookmarks.length ? clearSelection : selectAllVisible}
+                    onClick={allVisibleSelected ? clearSelection : selectAllVisible}
                     className="saved-select-all-btn saved-select-all-btn--command micro-tap-chip"
                     aria-label="Toggle select all"
-                    aria-pressed={unreadCount === filteredBookmarks.length && unreadCount > 0}
+                    aria-pressed={allVisibleSelected}
                   >
-                    {unreadCount === filteredBookmarks.length && unreadCount > 0
+                    {allVisibleSelected
                       ? <CheckSquare className="size-4 text-primary" />
                       : <Square className="size-4 text-muted-foreground" />
                     }
                     <span className="text-xs font-medium">
-                      {unreadCount > 0 ? `${unreadCount} selected` : "Select all"}
+                      {selectedCount > 0 ? `${selectedCount} selected` : "Select all"}
                     </span>
                   </button>
 
-                  {unreadCount > 0 && (
+                  {selectedCount > 0 && (
                     <>
                       <div className="w-px h-4 bg-border/60" />
                       <button
@@ -939,7 +1264,7 @@ const SavedMessagesPage = () => { // NOSONAR
                 </div>
 
                 {/* Bulk tag sub-panel */}
-                {showBulkPanel && unreadCount > 0 && (
+                {showBulkPanel && selectedCount > 0 && (
                   <section
                     id="saved-bulk-panel"
                     className="saved-bulk-panel animate-in fade-in slide-in-from-top-1 duration-150 space-y-3"
@@ -948,7 +1273,7 @@ const SavedMessagesPage = () => { // NOSONAR
                     <div>
                       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
                         <Tag className="size-3.5" />
-                        Remove tag from {unreadCount} selected
+                        Remove tag from {selectedCount} selected
                       </div>
                       <div className="flex gap-2">
                         <Input
@@ -968,7 +1293,7 @@ const SavedMessagesPage = () => { // NOSONAR
                     <div>
                       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
                         <Tags className="size-3.5" />
-                        Remove collection from {unreadCount} selected
+                        Remove collection from {selectedCount} selected
                       </div>
                       <div className="flex gap-2">
                         <Input
@@ -1016,229 +1341,57 @@ const SavedMessagesPage = () => { // NOSONAR
                     <span className="saved-empty-icon-ring absolute inset-0 rounded-full border border-muted-foreground/20 opacity-40" />
                   </div>
                   <p className="text-[15px] font-semibold text-foreground/80 mt-4">
-                    {searchQuery ? `No results for "${searchQuery}"` : "No saved messages yet"}
+                    {emptyStateTitle}
                   </p>
                   <p className="text-sm text-muted-foreground/60 mt-1 max-w-[240px] leading-relaxed">
-                    {searchQuery
-                      ? "Try different keywords or clear your search"
-                      : "Long-press any message in chat to bookmark it here"}
+                    {emptyStateDescription}
                   </p>
                 </div>
               )}
 
-              {filteredBookmarks.map((bookmark, index) => {
-                const conversationName =
-                  bookmark.conversationId?.type === "group"
-                    ? bookmark.conversationId.group?.name || "Untitled group"
-                    : bookmark.conversationId.participants?.find(
-                        (participant) =>
-                          String(participant._id) !== String(user?._id),
-                      )?.displayName || "Direct message";
-
-                const isSelected = selectedBookmarkIds.includes(bookmark._id);
-                const isEditing = editingBookmarkId === bookmark._id;
-                const isImage = Boolean(bookmark.messageId.imgUrl);
-
-                return (
-                  <article
-                    key={bookmark._id}
-                    className={cn(
-                      "saved-bookmark-card saved-bookmark-card--command bookmark-card-hover",
-                      isSelected && "saved-bookmark-card--selected",
-                      index < 6 && `animate-in fade-in slide-in-from-bottom-2 duration-300`,
+              {!loading && filteredBookmarks.length > 0 && (
+                <>
+                  <div className="saved-results-meta">
+                    <span>
+                      Showing {visibleResultCountLabel} of {totalResultCountLabel} saved messages
+                    </span>
+                    {normalizedSearchQuery && pagination.hasNextPage && (
+                      <span className="saved-results-hint">
+                        Scroll down to keep searching older pages
+                      </span>
                     )}
-                    style={{ animationDelay: `${Math.min(index, 5) * 40}ms` }}
-                    aria-label={`Saved message from ${conversationName}`}
-                  >
-                    {/* Card top row */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-start gap-3 min-w-0">
-                        {/* Checkbox */}
-                        <button
-                          type="button"
-                          onClick={() => toggleBookmarkSelection(bookmark._id)}
-                          className="saved-select-checkbox saved-select-checkbox--command micro-tap-chip mt-0.5 flex-shrink-0 transition-colors duration-150"
-                          aria-label={isSelected ? "Deselect" : "Select"}
-                          aria-pressed={isSelected}
-                        >
-                          {isSelected
-                            ? <CheckSquare className="size-4 text-primary" />
-                            : <Square className="size-4 text-muted-foreground/40 hover:text-muted-foreground" />
-                          }
-                        </button>
+                  </div>
 
-                        {/* Meta info */}
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="saved-convo-badge">
-                              {bookmark.conversationId?.type === "group" ? (
-                                <Users className="size-3.5" />
-                              ) : (
-                                <MessageSquare className="size-3.5" />
-                              )}
-                              {conversationName}
-                            </span>
-                            {isImage && (
-                              <span className="saved-type-badge">
-                                <ImageIcon className="size-2.5" />
-                                Image
-                              </span>
-                            )}
-                            {!isImage && (
-                              <span className="saved-type-badge saved-type-badge--text">
-                                <MessageSquare className="size-2.5" />
-                                Text
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[11px] text-muted-foreground/60 mt-1">
-                            Saved {formatDistanceToNow(new Date(bookmark.createdAt), { addSuffix: true })}
-                            {" | "}
-                            {format(new Date(bookmark.createdAt), "MMM d, yyyy")}
-                          </p>
-                        </div>
-                      </div>
+                  <div className="saved-bookmark-list-shell">
+                    <Virtuoso
+                      className="saved-bookmark-list-viewport"
+                      data={filteredBookmarks}
+                      computeItemKey={(_, bookmark) => bookmark._id}
+                      increaseViewportBy={{ top: 480, bottom: 960 }}
+                      endReached={() => {
+                        void loadMoreBookmarks();
+                      }}
+                      itemContent={renderBookmarkItem}
+                    />
+                  </div>
+                </>
+              )}
 
-                      {/* Actions */}
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => openConversation(bookmark.messageId.conversationId)}
-                        className="flex-shrink-0 gap-1.5 text-xs h-7 px-2.5 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
-                        aria-label={`Open ${conversationName} conversation`}
-                      >
-                        <ExternalLink className="size-3.5" />
-                        Open
-                      </Button>
-                    </div>
-
-                    {/* Message content */}
-                    <div className={cn(
-                      "saved-message-content mt-3",
-                      bookmark.messageId.isDeleted && "opacity-50 italic",
-                    )}>
-                      {bookmark.messageId.isDeleted
-                        ? (
-                          <span className="flex items-center gap-1.5 text-muted-foreground/70">
-                            <X className="size-3.5" />
-                            Message was removed
-                          </span>
-                        )
-                        : bookmark.messageId.content || (
-                          <span className="flex items-center gap-1.5 text-muted-foreground/70">
-                            <ImageIcon className="size-3.5" />
-                            Image message
-                          </span>
-                        )}
-                    </div>
-
-                    {/* Collections, Tags & Note */}
-                    {(bookmark.collections?.length || bookmark.tags?.length || bookmark.note) && !isEditing && (
-                      <div className="mt-3 flex flex-wrap gap-2 items-start">
-                        {(bookmark.collections || []).map((collectionName) => (
-                          <span key={`collection-${collectionName}`} className="saved-type-badge">
-                            <Tags className="size-2.5" />
-                            {collectionName}
-                          </span>
-                        ))}
-                        {(bookmark.tags || []).map((tag) => (
-                          <span key={tag} className="saved-tag-chip">
-                            #{tag}
-                          </span>
-                        ))}
-                        {bookmark.note && (
-                          <div className="w-full mt-1 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground/80 leading-relaxed whitespace-pre-wrap">
-                            {bookmark.note}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Edit mode */}
-                    {isEditing ? (
-                      <div className="mt-3 space-y-2 rounded-xl border border-primary/30 bg-primary/[0.03] p-3 animate-in fade-in duration-150">
-                        <p className="text-[11px] font-semibold text-primary/80 mb-1">Edit metadata</p>
-                        <Input
-                          value={tagDraft}
-                          onChange={(e) => setTagDraft(e.target.value)}
-                          placeholder="tags, separated, by comma"
-                          className="h-8 text-sm"
-                          aria-label="Edit bookmark tags"
-                        />
-                        <Input
-                          value={collectionDraft}
-                          onChange={(e) => setCollectionDraft(e.target.value)}
-                          placeholder="collections, separated, by comma"
-                          className="h-8 text-sm"
-                          aria-label="Edit bookmark collections"
-                        />
-                        <textarea
-                          value={noteDraft}
-                          onChange={(e) => setNoteDraft(e.target.value)}
-                          className="min-h-[64px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary/40"
-                          placeholder="Personal note…"
-                          aria-label="Edit bookmark note"
-                        />
-                        <div className="flex items-center gap-2">
-                          <Button type="button" size="sm" onClick={saveBookmarkMeta} className="h-7 px-3">
-                            Save
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setEditingBookmarkId(null)}
-                            className="h-7 px-3"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex items-center justify-between">
-                        {!(bookmark.collections?.length) && !(bookmark.tags?.length) && !bookmark.note && (
-                          <span className="text-[11px] text-muted-foreground/40 italic">No metadata yet</span>
-                        )}
-                        <div className={cn("flex items-center gap-1", (bookmark.collections?.length || bookmark.tags?.length || bookmark.note) && "ml-auto")}>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              startEditing(
-                                bookmark._id,
-                                bookmark.note,
-                                bookmark.tags,
-                                bookmark.collections,
-                              )
-                            }
-                            className="h-7 gap-1.5 px-2.5 text-xs text-muted-foreground/70 hover:text-foreground rounded-lg"
-                          >
-                            <PencilLine className="size-3" />
-                            Edit metadata
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </article>
-                );
-              })}
-
-              {/* Load more */}
-              {pagination.hasNextPage && (
-                <div className="flex justify-center pt-2">
-                  {loading ? (
+              {pagination.hasNextPage && filteredBookmarks.length > 0 && (
+                <div className="saved-load-more-state">
+                  {(loading || isFetchingMore) ? (
                     <LoadingMoreSkeleton />
                   ) : (
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={loadMoreBookmarks}
+                      onClick={() => {
+                        void loadMoreBookmarks();
+                      }}
                       className="h-9 rounded-xl px-6 text-sm border-border/60 hover:border-border hover:bg-muted/50"
                       aria-label="Load more saved messages"
                     >
-                      Load more
+                      Load next page
                     </Button>
                   )}
                 </div>

@@ -13,6 +13,7 @@ export const bookmarkService = {
   async getBookmarks(filters?: {
     conversationId?: string;
     collection?: string;
+    q?: string;
     from?: string;
     to?: string;
     page?: number;
@@ -26,6 +27,10 @@ export const bookmarkService = {
 
     if (filters?.collection) {
       params.set("collection", filters.collection);
+    }
+
+    if (filters?.q) {
+      params.set("q", filters.q);
     }
 
     if (filters?.from) {
