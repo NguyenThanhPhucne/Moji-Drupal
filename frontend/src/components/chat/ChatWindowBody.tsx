@@ -25,6 +25,11 @@ import {
   startChatThreadBench,
 } from "@/lib/chatThreadBenchmark";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+
+const SEARCH_JUMP_FETCH_MAX_ATTEMPTS = 20;
+const SEARCH_JUMP_HIGHLIGHT_MS = 1900;
 
 function isSameDay(a: string, b: string) {
   return (
@@ -73,6 +78,8 @@ const buildTypingSummary = (names: string[]) => {
 const EMPTY_MESSAGES: Message[] = [];
 
 const ChatWindowBody = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     activeConversationId,
     conversations,
@@ -92,6 +99,14 @@ const ChatWindowBody = () => {
   );
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
+    null,
+  );
+  const searchJumpFetchAttemptRef = useRef<Record<string, number>>({});
+  const searchJumpFallbackNotifiedRef = useRef<Record<string, true>>({});
+  const highlightResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const messages = useMemo(() => {
     if (!activeConversationId) {
@@ -100,6 +115,17 @@ const ChatWindowBody = () => {
 
     return allMessages[activeConversationId]?.items ?? EMPTY_MESSAGES;
   }, [allMessages, activeConversationId]);
+
+  const { searchConversationId, searchMessageId } = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    return {
+      searchConversationId: String(
+        searchParams.get("conversationId") || "",
+      ).trim(),
+      searchMessageId: String(searchParams.get("messageId") || "").trim(),
+    };
+  }, [location.search]);
+
   const hasMore = allMessages[activeConversationId!]?.hasMore ?? false;
   const selectedConvo = conversations.find(
     (c) => String(c._id) === String(activeConversationId || ""),
@@ -293,13 +319,14 @@ const ChatWindowBody = () => {
   useEffect(() => {
     if (
       activeConversationId &&
+      !messageLoading &&
       !allMessages[activeConversationId]?.items?.length
     ) {
       fetchMessages(activeConversationId).catch((err) =>
         console.error("Error fetching initial messages:", err),
       );
     }
-  }, [activeConversationId, fetchMessages, allMessages]);
+  }, [activeConversationId, fetchMessages, allMessages, messageLoading]);
 
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
 
@@ -435,6 +462,7 @@ const ChatWindowBody = () => {
       // This prevents every re-render of the last item (e.g. reaction updates)
       // from triggering the slide-in animation.
       const isNew = message._id === lastNewMessageIdRef.current;
+      const isSearchTarget = message._id === highlightedMessageId;
 
       return (
         <MessageItem
@@ -449,6 +477,7 @@ const ChatWindowBody = () => {
           seenUsers={groupSeenUsers}
           showDateDivider={showDateDivider}
           isNew={isNew}
+          isSearchTarget={isSearchTarget}
           onForward={() => setForwardMessageId(message._id)}
           canPinMessage={selectedConvo?.type === "group" && isGroupAdmin}
           isPinned={pinnedMessage?._id === message._id}
@@ -475,6 +504,7 @@ const ChatWindowBody = () => {
       isGroupAdmin,
       pinGroupMessage,
       pinnedMessage?._id,
+      highlightedMessageId,
     ],
   );
 
@@ -552,14 +582,123 @@ const ChatWindowBody = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId]);
 
-  const fetchMoreMessages = async () => {
-    if (!activeConversationId) return;
+  const fetchMoreMessages = useCallback(async () => {
+    if (!activeConversationId || messageLoading || !hasMore) {
+      return;
+    }
+
     try {
       await fetchMessages(activeConversationId);
     } catch (error) {
       console.error("Error loading more messages:", error);
     }
-  };
+  }, [activeConversationId, fetchMessages, hasMore, messageLoading]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightResetTimerRef.current) {
+        globalThis.clearTimeout(highlightResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clearSearchMessageParam = useCallback(() => {
+    const nextSearchParams = new URLSearchParams(location.search);
+    nextSearchParams.delete("messageId");
+
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearchParams.toString() ? `?${nextSearchParams.toString()}` : "",
+      },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
+
+  const notifySearchJumpFallback = useCallback((searchKey: string) => {
+    if (searchJumpFallbackNotifiedRef.current[searchKey]) {
+      return;
+    }
+
+    searchJumpFallbackNotifiedRef.current[searchKey] = true;
+    toast.info("Couldn't locate that message", {
+      description: "It may be too old to load right now, or it was already removed.",
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!activeConversationId || !searchMessageId) {
+      return;
+    }
+
+    if (
+      searchConversationId &&
+      String(searchConversationId) !== String(activeConversationId)
+    ) {
+      return;
+    }
+
+    const searchKey = `${String(activeConversationId)}:${searchMessageId}`;
+    const targetIndex = messages.findIndex(
+      (messageItem) => messageItem._id === searchMessageId,
+    );
+
+    if (targetIndex >= 0) {
+      virtuosoRef.current?.scrollToIndex({
+        index: targetIndex,
+        align: "center",
+        behavior: "smooth",
+      });
+
+      setHighlightedMessageId(searchMessageId);
+
+      if (highlightResetTimerRef.current) {
+        globalThis.clearTimeout(highlightResetTimerRef.current);
+      }
+
+      highlightResetTimerRef.current = globalThis.setTimeout(() => {
+        setHighlightedMessageId((currentMessageId) =>
+          currentMessageId === searchMessageId ? null : currentMessageId,
+        );
+      }, SEARCH_JUMP_HIGHLIGHT_MS);
+
+      searchJumpFetchAttemptRef.current[searchKey] = 0;
+
+      delete searchJumpFallbackNotifiedRef.current[searchKey];
+      clearSearchMessageParam();
+      return;
+    }
+
+    if (!hasMore) {
+      notifySearchJumpFallback(searchKey);
+      clearSearchMessageParam();
+      return;
+    }
+
+    if (messageLoading) {
+      return;
+    }
+
+    const currentAttempt = searchJumpFetchAttemptRef.current[searchKey] ?? 0;
+    if (currentAttempt >= SEARCH_JUMP_FETCH_MAX_ATTEMPTS) {
+      notifySearchJumpFallback(searchKey);
+      clearSearchMessageParam();
+      return;
+    }
+
+    searchJumpFetchAttemptRef.current[searchKey] = currentAttempt + 1;
+    void fetchMoreMessages();
+  }, [
+    activeConversationId,
+    clearSearchMessageParam,
+    fetchMoreMessages,
+    hasMore,
+    messageLoading,
+    messages,
+    notifySearchJumpFallback,
+    searchConversationId,
+    searchMessageId,
+  ]);
 
   if (!selectedConvo) return <ChatWelcomeScreen />;
 

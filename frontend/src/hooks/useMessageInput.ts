@@ -8,10 +8,60 @@ import { toast } from "sonner";
 export const MAX_FILE_SIZE_MB = 5;
 export const MAX_MESSAGE_LENGTH = 1200;
 const TYPING_EMIT_INTERVAL_MS = 350;
+const MESSAGE_DRAFT_STORAGE_PREFIX = "moji-message-drafts-v1";
 
 type MessageDraftState = {
   value: string;
   imagePreview: string | null;
+};
+
+type PersistedDraftMap = Record<string, string>;
+
+const readPersistedDraftMap = (storageKey: string): PersistedDraftMap => {
+  try {
+    const rawValue = globalThis.localStorage.getItem(storageKey);
+    if (!rawValue) {
+      return {};
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+    if (!parsedValue || typeof parsedValue !== "object") {
+      return {};
+    }
+
+    return Object.entries(parsedValue).reduce<PersistedDraftMap>(
+      (nextDraftMap, [conversationId, draftValue]) => {
+        if (
+          typeof conversationId === "string" &&
+          typeof draftValue === "string" &&
+          conversationId.trim()
+        ) {
+          nextDraftMap[conversationId] = draftValue;
+        }
+
+        return nextDraftMap;
+      },
+      {},
+    );
+  } catch {
+    return {};
+  }
+};
+
+const writePersistedDraftMap = (
+  storageKey: string,
+  draftMap: PersistedDraftMap,
+) => {
+  try {
+    if (Object.keys(draftMap).length === 0) {
+      globalThis.localStorage.removeItem(storageKey);
+      return;
+    }
+
+    globalThis.localStorage.setItem(storageKey, JSON.stringify(draftMap));
+  } catch {
+    // Ignore storage write failures (private mode, quota exceeded, etc.).
+  }
 };
 
 export function useMessageInput(selectedConvo: Conversation) {
@@ -30,7 +80,14 @@ export function useMessageInput(selectedConvo: Conversation) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isSendingRef = useRef(false);
   const draftByConversationRef = useRef<Record<string, MessageDraftState>>({});
+  const persistedDraftTextByConversationRef = useRef<PersistedDraftMap>({});
   const previousConversationIdRef = useRef(String(selectedConvo._id || ""));
+  const draftStorageKey = `${MESSAGE_DRAFT_STORAGE_PREFIX}:${String(user?._id || "guest")}`;
+
+  useEffect(() => {
+    persistedDraftTextByConversationRef.current =
+      readPersistedDraftMap(draftStorageKey);
+  }, [draftStorageKey]);
 
   const persistDraft = useCallback(
     (conversationId: string, nextValue: string, nextImagePreview: string | null) => {
@@ -47,6 +104,19 @@ export function useMessageInput(selectedConvo: Conversation) {
 
       if (!hasDraft) {
         delete draftByConversationRef.current[normalizedConversationId];
+
+        if (
+          persistedDraftTextByConversationRef.current[normalizedConversationId]
+        ) {
+          delete persistedDraftTextByConversationRef.current[
+            normalizedConversationId
+          ];
+          writePersistedDraftMap(
+            draftStorageKey,
+            persistedDraftTextByConversationRef.current,
+          );
+        }
+
         return;
       }
 
@@ -54,8 +124,22 @@ export function useMessageInput(selectedConvo: Conversation) {
         value: normalizedValue,
         imagePreview: normalizedImagePreview,
       };
+
+      if (normalizedValue.trim()) {
+        persistedDraftTextByConversationRef.current[normalizedConversationId] =
+          normalizedValue;
+      } else {
+        delete persistedDraftTextByConversationRef.current[
+          normalizedConversationId
+        ];
+      }
+
+      writePersistedDraftMap(
+        draftStorageKey,
+        persistedDraftTextByConversationRef.current,
+      );
     },
-    [],
+    [draftStorageKey],
   );
 
   const stopTyping = useCallback(() => {
@@ -138,8 +222,11 @@ export function useMessageInput(selectedConvo: Conversation) {
       setReplyingTo(null);
     }
 
+    const persistedDraftValue =
+      persistedDraftTextByConversationRef.current[nextConversationId] || "";
+
     const draft = draftByConversationRef.current[nextConversationId] || {
-      value: "",
+      value: persistedDraftValue,
       imagePreview: null,
     };
 
@@ -212,6 +299,16 @@ export function useMessageInput(selectedConvo: Conversation) {
       setReplyingTo(null);
       stopTyping();
     } catch {
+      setValue(currValue);
+      setImagePreview(currImage);
+      persistDraft(selectedConvo._id, currValue, currImage ?? null);
+
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        const nextHeight = Math.min(textareaRef.current.scrollHeight, 120);
+        textareaRef.current.style.height = `${Math.max(40, nextHeight)}px`;
+      }
+
       toast.error("An error occurred while sending the message.");
     } finally {
       isSendingRef.current = false;

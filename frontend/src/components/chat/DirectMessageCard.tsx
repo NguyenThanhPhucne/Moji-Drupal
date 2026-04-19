@@ -105,6 +105,25 @@ const DirectMessageCardInner = ({ convo }: { convo: Conversation }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const handleSelectConversation = useCallback((id: string) => {
+    setActiveConversation(id);
+
+    const nextSearchParams = new URLSearchParams(location.search);
+    nextSearchParams.set("conversationId", String(id));
+    nextSearchParams.delete("messageId");
+
+    navigate({
+      pathname: "/",
+      search: `?${nextSearchParams.toString()}`,
+    });
+
+    if (!messages[id]) {
+      void fetchMessages(id).catch((error) => {
+        console.error("Failed to fetch direct conversation messages", error);
+      });
+    }
+  }, [setActiveConversation, location.search, navigate, messages, fetchMessages]);
+
   if (!user) return null;
 
   const otherUser = convo.participants.find(
@@ -138,18 +157,6 @@ const DirectMessageCardInner = ({ convo }: { convo: Conversation }) => {
     unreadCount,
     normalizedCurrentUser,
   );
-
-  const handleSelectConversation = useCallback(async (id: string) => {
-    setActiveConversation(id);
-
-    if (location.pathname !== "/") {
-      navigate("/");
-    }
-
-    if (!messages[id]) {
-      await fetchMessages(id);
-    }
-  }, [setActiveConversation, location.pathname, navigate, messages, fetchMessages]);
 
   const userPresence = getUserPresence(otherUser?._id);
   const lastActiveAt = getLastActiveAt(otherUser?._id);

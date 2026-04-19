@@ -13,6 +13,7 @@
     "check:routes": "node ./scripts/check-route-coverage.mjs",
     "smoke:a11y-keyboard": "node ./scripts/keyboard_a11y_smoke.mjs",
     "smoke:chat-responsive": "node ./scripts/chat_sidebar_header_responsive_smoke.mjs",
+    "smoke:search-jump-refresh": "node ./scripts/global_search_jump_refresh_smoke.mjs",
     "smoke:slow3g-chat": "node ./scripts/slow3g_optimistic_realtime_stress.mjs",
     "smoke:slow3g-chat:loop": "node ./scripts/slow3g_optimistic_realtime_stress_loop.mjs",
     "smoke:slow3g-chat:phase-report": "node ./scripts/slow3g_phase_flake_report.mjs"

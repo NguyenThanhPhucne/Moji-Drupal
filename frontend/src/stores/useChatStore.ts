@@ -1488,10 +1488,11 @@ export const useChatStore = create<ChatState>()(
           );
         } catch (error) {
           if (rollbackState) {
+            const rollbackSnapshot = rollbackState;
             set((state) => {
               const targetConversation = state.conversations.find(
                 (conversationItem) =>
-                  String(conversationItem._id) === rollbackState?.conversationId,
+                  String(conversationItem._id) === rollbackSnapshot.conversationId,
               );
 
               if (!targetConversation) {
@@ -1499,20 +1500,20 @@ export const useChatStore = create<ChatState>()(
               }
 
               const currentUnreadCount = Number(
-                targetConversation.unreadCounts?.[rollbackState.userId] || 0,
+                targetConversation.unreadCounts?.[rollbackSnapshot.userId] || 0,
               );
-              if (currentUnreadCount !== rollbackState.optimisticUnreadCount) {
+              if (currentUnreadCount !== rollbackSnapshot.optimisticUnreadCount) {
                 return state;
               }
 
               if (
                 targetConversation.type === "group" &&
-                rollbackState.activeGroupChannelId
+                rollbackSnapshot.activeGroupChannelId
               ) {
                 const currentChannelUnread = Number(
                   targetConversation.group?.channelUnreadCounts?.[
-                    rollbackState.userId
-                  ]?.[rollbackState.activeGroupChannelId] || 0,
+                    rollbackSnapshot.userId
+                  ]?.[rollbackSnapshot.activeGroupChannelId] || 0,
                 );
 
                 if (currentChannelUnread !== 0) {
@@ -1523,19 +1524,19 @@ export const useChatStore = create<ChatState>()(
               return {
                 conversations: state.conversations.map((conversationItem) => {
                   if (
-                    String(conversationItem._id) !== rollbackState?.conversationId
+                    String(conversationItem._id) !== rollbackSnapshot.conversationId
                   ) {
                     return conversationItem;
                   }
 
                   const restoredUnreadCounts = {
                     ...conversationItem.unreadCounts,
-                    [rollbackState.userId]: rollbackState.previousUnreadCount,
+                    [rollbackSnapshot.userId]: rollbackSnapshot.previousUnreadCount,
                   };
 
                   if (
                     conversationItem.type !== "group" ||
-                    !rollbackState.activeGroupChannelId
+                    !rollbackSnapshot.activeGroupChannelId
                   ) {
                     return {
                       ...conversationItem,
@@ -1545,15 +1546,15 @@ export const useChatStore = create<ChatState>()(
 
                   const currentPerUserChannelUnread = {
                     ...conversationItem.group?.channelUnreadCounts?.[
-                      rollbackState.userId
+                      rollbackSnapshot.userId
                     ],
                   };
 
-                  if (rollbackState.previousActiveChannelUnreadCount > 0) {
-                    currentPerUserChannelUnread[rollbackState.activeGroupChannelId] =
-                      rollbackState.previousActiveChannelUnreadCount;
+                  if (rollbackSnapshot.previousActiveChannelUnreadCount > 0) {
+                    currentPerUserChannelUnread[rollbackSnapshot.activeGroupChannelId] =
+                      rollbackSnapshot.previousActiveChannelUnreadCount;
                   } else {
-                    delete currentPerUserChannelUnread[rollbackState.activeGroupChannelId];
+                    delete currentPerUserChannelUnread[rollbackSnapshot.activeGroupChannelId];
                   }
 
                   const restoredChannelUnreadCounts = {
@@ -1561,10 +1562,10 @@ export const useChatStore = create<ChatState>()(
                   };
 
                   if (Object.keys(currentPerUserChannelUnread).length > 0) {
-                    restoredChannelUnreadCounts[rollbackState.userId] =
+                    restoredChannelUnreadCounts[rollbackSnapshot.userId] =
                       currentPerUserChannelUnread;
                   } else {
-                    delete restoredChannelUnreadCounts[rollbackState.userId];
+                    delete restoredChannelUnreadCounts[rollbackSnapshot.userId];
                   }
 
                   return {

@@ -23,6 +23,25 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const handleSelectConversation = useCallback((id: string) => {
+    setActiveConversation(id);
+
+    const nextSearchParams = new URLSearchParams(location.search);
+    nextSearchParams.set("conversationId", String(id));
+    nextSearchParams.delete("messageId");
+
+    navigate({
+      pathname: "/",
+      search: `?${nextSearchParams.toString()}`,
+    });
+
+    if (!messages[id]) {
+      void fetchMessages(id).catch((error) => {
+        console.error("Failed to fetch group conversation messages", error);
+      });
+    }
+  }, [setActiveConversation, location.search, navigate, messages, fetchMessages]);
+
   if (!user) return null;
 
   // ── Null-safe unread count (Bug #1 fix) ────────────────────────────────
@@ -95,16 +114,6 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
   // Online member count
   const onlineSet = new Set(onlineUsers);
   const onlineMemberCount = convo.participants.filter(p => onlineSet.has(String(p._id))).length;
-
-  const handleSelectConversation = useCallback(async (id: string) => {
-    setActiveConversation(id);
-    if (location.pathname !== "/") {
-      navigate("/");
-    }
-    if (!messages[id]) {
-      await fetchMessages(id);
-    }
-  }, [setActiveConversation, location.pathname, navigate, messages, fetchMessages]);
 
   return (
     <ChatCard

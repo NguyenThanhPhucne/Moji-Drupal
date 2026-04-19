@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FileText,
   MessageSquareText,
@@ -163,6 +163,44 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
 
   const hasLoadedMetaRef = useRef(false);
   const resultRowRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  const openConversation = useCallback(
+    (conversationId: string, options?: { messageId?: string }) => {
+      const normalizedConversationId = String(conversationId || "").trim();
+      if (!normalizedConversationId) {
+        return;
+      }
+
+      const nextSearchParams = new URLSearchParams();
+      nextSearchParams.set("conversationId", normalizedConversationId);
+
+      if (options?.messageId) {
+        nextSearchParams.set("messageId", String(options.messageId));
+      }
+
+      setActiveConversation(normalizedConversationId);
+      navigate({
+        pathname: "/",
+        search: `?${nextSearchParams.toString()}`,
+      });
+      setOpen(false);
+    },
+    [navigate, setActiveConversation],
+  );
+
+  const ensureConversationMessagesLoaded = useCallback(
+    (conversationId: string) => {
+      const normalizedConversationId = String(conversationId || "").trim();
+      if (!normalizedConversationId || messages[normalizedConversationId]) {
+        return;
+      }
+
+      void fetchMessages(normalizedConversationId).catch((error) => {
+        console.error("Failed to preload conversation from global search", error);
+      });
+    },
+    [fetchMessages, messages],
+  );
 
   useEffect(() => {
     if (!open || hasLoadedMetaRef.current) {
@@ -443,24 +481,39 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
 
     if (item.type === "people") {
       if (item.conversationId) {
-        setActiveConversation(item.conversationId);
-        await fetchMessages(item.conversationId);
+        openConversation(item.conversationId);
+        ensureConversationMessagesLoaded(item.conversationId);
+        return;
       } else {
         const ok = await createConversation("direct", "", [item._id]);
         if (!ok) {
+          return;
+        }
+
+        const createdConversationId = String(
+          useChatStore.getState().activeConversationId || "",
+        ).trim();
+
+        if (createdConversationId) {
+          openConversation(createdConversationId);
+          ensureConversationMessagesLoaded(createdConversationId);
           return;
         }
       }
     }
 
     if (item.type === "groups") {
-      setActiveConversation(item.conversationId);
-      await fetchMessages(item.conversationId);
+      openConversation(item.conversationId);
+      ensureConversationMessagesLoaded(item.conversationId);
+      return;
     }
 
     if (item.type === "messages") {
-      setActiveConversation(item.conversationId);
-      await fetchMessages(item.conversationId);
+      openConversation(item.conversationId, {
+        messageId: item.messageId,
+      });
+      ensureConversationMessagesLoaded(item.conversationId);
+      return;
     }
 
     navigate("/");
@@ -624,9 +677,8 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                           className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
                           onClick={() => {
                             if (item.conversationId) {
-                              setActiveConversation(item.conversationId);
-                              navigate("/");
-                              setOpen(false);
+                              openConversation(item.conversationId);
+                              ensureConversationMessagesLoaded(item.conversationId);
                               return;
                             }
 

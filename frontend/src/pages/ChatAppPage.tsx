@@ -4,8 +4,11 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import GlobalSearchDialog from "@/components/chat/GlobalSearchDialog";
 import { useChatStore } from "@/stores/useChatStore";
 import { useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const ChatAppPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     activeConversationId,
     setActiveConversation,
@@ -15,6 +18,27 @@ const ChatAppPage = () => {
   } = useChatStore();
   const didBootstrapConversationsRef = useRef(false);
   const activeSyncAttemptRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const urlConversationId = String(
+      searchParams.get("conversationId") || "",
+    ).trim();
+
+    if (!urlConversationId) {
+      return;
+    }
+
+    const currentActiveConversationId = String(
+      useChatStore.getState().activeConversationId || "",
+    ).trim();
+
+    if (currentActiveConversationId === urlConversationId) {
+      return;
+    }
+
+    setActiveConversation(urlConversationId);
+  }, [location.search, setActiveConversation]);
 
   useEffect(() => {
     if (didBootstrapConversationsRef.current || convoLoading) {
@@ -109,13 +133,35 @@ const ChatAppPage = () => {
       }
 
       setActiveConversation(null);
+
+      const nextSearchParams = new URLSearchParams(location.search);
+      const hasConversationSearchState =
+        nextSearchParams.has("conversationId") ||
+        nextSearchParams.has("messageId");
+
+      if (!hasConversationSearchState) {
+        return;
+      }
+
+      nextSearchParams.delete("conversationId");
+      nextSearchParams.delete("messageId");
+
+      navigate(
+        {
+          pathname: location.pathname,
+          search: nextSearchParams.toString()
+            ? `?${nextSearchParams.toString()}`
+            : "",
+        },
+        { replace: true },
+      );
     };
 
     document.addEventListener("mousedown", handleOutsideCardClick);
     return () => {
       document.removeEventListener("mousedown", handleOutsideCardClick);
     };
-  }, [activeConversationId, setActiveConversation]);
+  }, [activeConversationId, location.pathname, location.search, navigate, setActiveConversation]);
 
   return (
     <SidebarProvider>
