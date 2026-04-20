@@ -13,6 +13,11 @@ interface SocialTopHeaderProps {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchValueChange?: (value: string) => void;
+  metaBadges?: Array<{
+    label: string;
+    value: string;
+  }>;
+  keyboardHint?: string;
 }
 
 const SocialTopHeader = ({
@@ -21,6 +26,8 @@ const SocialTopHeader = ({
   searchPlaceholder = "Search on Moji",
   searchValue,
   onSearchValueChange,
+  metaBadges = [],
+  keyboardHint = "Ctrl + Shift + K",
 }: SocialTopHeaderProps) => {
   const navigate = useNavigate();
   const [localSearchValue, setLocalSearchValue] = useState("");
@@ -182,6 +189,35 @@ const SocialTopHeader = ({
           ) : null}
         </Button>
       </div>
+
+      {(metaBadges.length > 0 || keyboardHint) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/55 pt-2">
+          {metaBadges.length > 0 ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {metaBadges.map((badge) => (
+                <span
+                  key={`${badge.label}-${badge.value}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground/85"
+                >
+                  <span className="text-foreground/80">{badge.label}</span>
+                  <span className="rounded-full border border-border/70 bg-background/85 px-1.5 py-[1px] text-[10px] font-bold text-foreground/85">
+                    {badge.value}
+                  </span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span />
+          )}
+
+          {keyboardHint ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/80">
+              <span className="font-semibold text-foreground/75">Quick chat</span>
+              <span>{keyboardHint}</span>
+            </span>
+          ) : null}
+        </div>
+      )}
     </header>
   );
 };

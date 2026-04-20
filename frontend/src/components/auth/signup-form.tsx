@@ -9,6 +9,7 @@ import { Label } from "../ui/label";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
 import { Link } from "react-router-dom";
+import { Lock, Sparkles, Users, Zap } from "lucide-react";
 
 const signUpSchema = z.object({
   firstname: z.string().min(1, "First name is required"),
@@ -19,6 +20,12 @@ const signUpSchema = z.object({
 });
 
 type SignUpFormValues = z.infer<typeof signUpSchema>;
+
+const SIGNUP_HIGHLIGHTS = [
+  { label: "Private by default", Icon: Lock },
+  { label: "Realtime channels", Icon: Zap },
+  { label: "Team-ready", Icon: Users },
+];
 
 export function SignupForm({
   className,
@@ -47,8 +54,8 @@ export function SignupForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="overflow-hidden rounded-3xl border-border/70 bg-card/90 p-0 shadow-soft backdrop-blur-xl">
+    <div className={cn("flex flex-col gap-5", className)} {...props}>
+      <Card className="overflow-hidden rounded-[1.7rem] border-border/70 bg-card/92 p-0 shadow-[0_26px_70px_-52px_hsl(222_38%_12%_/_0.55)] backdrop-blur-xl">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form
             className="p-6 md:p-8 lg:p-10"
@@ -57,19 +64,36 @@ export function SignupForm({
           >
             <div className="space-stack-lg">
               {/* header - logo */}
-              <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex flex-col items-center text-center gap-2.5">
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-primary/85">
+                  <Sparkles className="h-3 w-3" />
+                  New Workspace
+                </span>
+
                 <Link to="/" className="mx-auto block w-fit text-center">
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
-                <h1 className="text-title-1">Create your Coming account</h1>
-                <p className="text-body-sm text-muted-foreground text-balance">
-                  Create your workspace in less than a minute.
+                <h1 className="text-title-1 md:text-3xl">Create your account</h1>
+                <p className="max-w-[32ch] text-body-sm text-muted-foreground text-balance">
+                  Set up your profile and start collaborating in under a minute.
                 </p>
+
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+                  {SIGNUP_HIGHLIGHTS.map(({ label, Icon }) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground/85"
+                    >
+                      <Icon className="h-3 w-3" />
+                      {label}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* first and last name */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="lastname" className="block text-sm">
                     Last name
@@ -79,6 +103,7 @@ export function SignupForm({
                     id="lastname"
                     placeholder="Last name"
                     autoComplete="family-name"
+                    className="h-11 rounded-xl border-border/70 bg-background/80"
                     aria-invalid={Boolean(errors.lastname)}
                     aria-describedby={errors.lastname ? "signup-lastname-error" : undefined}
                     {...register("lastname")}
@@ -97,6 +122,7 @@ export function SignupForm({
                     id="firstname"
                     placeholder="First name"
                     autoComplete="given-name"
+                    className="h-11 rounded-xl border-border/70 bg-background/80"
                     aria-invalid={Boolean(errors.firstname)}
                     aria-describedby={errors.firstname ? "signup-firstname-error" : undefined}
                     {...register("firstname")}
@@ -117,6 +143,7 @@ export function SignupForm({
                   id="username"
                   placeholder="Username"
                   autoComplete="username"
+                  className="h-11 rounded-xl border-border/70 bg-background/80"
                   aria-invalid={Boolean(errors.username)}
                   aria-describedby={errors.username ? "signup-username-error" : undefined}
                   {...register("username")}
@@ -136,6 +163,7 @@ export function SignupForm({
                   id="email"
                   placeholder="name@company.com"
                   autoComplete="email"
+                  className="h-11 rounded-xl border-border/70 bg-background/80"
                   aria-invalid={Boolean(errors.email)}
                   aria-describedby={errors.email ? "signup-email-error" : undefined}
                   {...register("email")}
@@ -155,6 +183,7 @@ export function SignupForm({
                   id="password"
                   placeholder="Create a password"
                   autoComplete="new-password"
+                  className="h-11 rounded-xl border-border/70 bg-background/80"
                   aria-invalid={Boolean(errors.password)}
                   aria-describedby={errors.password ? "signup-password-error" : undefined}
                   {...register("password")}
@@ -167,7 +196,7 @@ export function SignupForm({
               {/* sign-up button */}
               <Button
                 type="submit"
-                className="w-full rounded-xl bg-gradient-chat text-white shadow-soft hover:opacity-95"
+                className="h-11 w-full rounded-xl bg-gradient-chat text-white shadow-soft transition hover:opacity-95"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Creating account..." : "Create account"}
@@ -175,13 +204,16 @@ export function SignupForm({
 
               <div className="text-center text-sm">
                 Already have an account?{" "}
-                <Link to="/signin" className="underline underline-offset-4">
+                <Link to="/signin" className="font-semibold text-primary underline underline-offset-4">
                   Sign in
                 </Link>
               </div>
             </div>
           </form>
           <div className="auth-hero-pane auth-hero-pane--signup relative hidden overflow-hidden md:block">
+            <div className="absolute left-6 top-6 rounded-full border border-white/35 bg-white/16 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">
+              Professional Chat
+            </div>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.24),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(255,255,255,0.18),transparent_34%)]" />
             <img
               src="/placeholderSignUp.png"
@@ -190,10 +222,13 @@ export function SignupForm({
             />
             <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
-                Professional Chat
+                Build your flow
               </p>
               <p className="mt-1 text-lg font-semibold leading-tight">
                 Collaborate with friends and teams in one focused inbox.
+              </p>
+              <p className="mt-2 text-[12px] text-white/82">
+                Start with direct chat, then scale to groups and channels when your team grows.
               </p>
             </div>
           </div>

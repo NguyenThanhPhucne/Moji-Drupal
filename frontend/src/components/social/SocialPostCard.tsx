@@ -29,6 +29,7 @@ import type {
 
 interface SocialPostCardProps {
   post: SocialPost;
+  density?: "comfortable" | "compact";
   comments?: SocialComment[];
   commentsPagination?: PaginationPayload;
   commentsLoading?: boolean;
@@ -647,6 +648,7 @@ const PostMediaBlock = ({
 
 const SocialPostCard = ({
   post,
+  density = "comfortable",
   comments,
   commentsPagination,
   commentsLoading,
@@ -1175,7 +1177,13 @@ const SocialPostCard = ({
   }
 
   return (
-    <article className="social-card social-post-card social-post-card--command social-post-card-hierarchy social-post-card--editorial p-3.5" aria-busy={interactionBusy}>
+    <article
+      className={cn(
+        "social-card social-post-card social-post-card--command social-post-card-hierarchy social-post-card--editorial",
+        density === "compact" ? "p-3" : "p-3.5",
+      )}
+      aria-busy={interactionBusy}
+    >
       <p className="sr-only" aria-live="polite">
         {interactionStatusLabel}
       </p>
@@ -1194,11 +1202,23 @@ const SocialPostCard = ({
       />
 
       {post.caption && (
-        <p className="social-post-plain-text social-post-caption social-post-caption--editorial mt-2.5 whitespace-pre-wrap text-sm">{post.caption}</p>
+        <p
+          className={cn(
+            "social-post-plain-text social-post-caption social-post-caption--editorial whitespace-pre-wrap text-sm",
+            density === "compact" ? "mt-1.5" : "mt-2.5",
+          )}
+        >
+          {post.caption}
+        </p>
       )}
 
       {post.tags.length > 0 && (
-        <div className="social-post-tags-wrap mt-1.5 flex flex-wrap gap-2">
+        <div
+          className={cn(
+            "social-post-tags-wrap flex flex-wrap gap-2",
+            density === "compact" ? "mt-1" : "mt-1.5",
+          )}
+        >
           {post.tags.map((tag) => (
             <button
               key={`${post._id}-${tag}`}

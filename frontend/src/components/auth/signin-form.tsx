@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useNavigate } from "react-router";
 import { GoogleLoginButton } from "./google-login-button";
 import { Link } from "react-router-dom";
+import { Lock, Search, Sparkles, Zap } from "lucide-react";
 
 const signInSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -17,6 +18,12 @@ const signInSchema = z.object({
 });
 
 type SignInFormValues = z.infer<typeof signInSchema>;
+
+const SIGNIN_HIGHLIGHTS = [
+  { label: "Realtime delivery", Icon: Zap },
+  { label: "Smart search", Icon: Search },
+  { label: "Secure sessions", Icon: Lock },
+];
 
 export function SigninForm({
   className,
@@ -46,8 +53,8 @@ export function SigninForm({
   };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card className="overflow-hidden rounded-3xl border-border/70 bg-card/90 p-0 shadow-soft backdrop-blur-xl">
+    <div className={cn("flex flex-col gap-5", className)} {...props}>
+      <Card className="overflow-hidden rounded-[1.7rem] border-border/70 bg-card/92 p-0 shadow-[0_26px_70px_-52px_hsl(222_38%_12%_/_0.55)] backdrop-blur-xl">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form
             className="p-6 md:p-8 lg:p-10"
@@ -56,15 +63,32 @@ export function SigninForm({
           >
             <div className="space-stack-lg">
               {/* header - logo */}
-              <div className="flex flex-col items-center text-center gap-2">
+              <div className="flex flex-col items-center text-center gap-2.5">
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-primary/85">
+                  <Sparkles className="h-3 w-3" />
+                  Moji Workspace
+                </span>
+
                 <Link to="/" className="mx-auto block w-fit text-center">
                   <img src="/logo.svg" alt="logo" />
                 </Link>
 
                 <h1 className="text-title-1 md:text-3xl">Welcome back</h1>
-                <p className="text-body-sm text-muted-foreground text-balance">
-                  Sign in to continue your conversations
+                <p className="max-w-[30ch] text-body-sm text-muted-foreground text-balance">
+                  Sign in to continue conversations, notifications, and your saved context.
                 </p>
+
+                <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+                  {SIGNIN_HIGHLIGHTS.map(({ label, Icon }) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground/85"
+                    >
+                      <Icon className="h-3 w-3" />
+                      {label}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* username */}
@@ -77,6 +101,7 @@ export function SigninForm({
                   id="username"
                   placeholder="Username or email"
                   autoComplete="username"
+                  className="h-11 rounded-xl border-border/70 bg-background/80"
                   aria-invalid={Boolean(errors.username)}
                   aria-describedby={errors.username ? "signin-username-error" : undefined}
                   {...register("username")}
@@ -98,6 +123,7 @@ export function SigninForm({
                   id="password"
                   placeholder="Password"
                   autoComplete="current-password"
+                  className="h-11 rounded-xl border-border/70 bg-background/80"
                   aria-invalid={Boolean(errors.password)}
                   aria-describedby={errors.password ? "signin-password-error" : undefined}
                   {...register("password")}
@@ -112,7 +138,7 @@ export function SigninForm({
               {/* sign-in button */}
               <Button
                 type="submit"
-                className="w-full rounded-xl bg-gradient-chat text-white shadow-soft hover:opacity-95"
+                className="h-11 w-full rounded-xl bg-gradient-chat text-white shadow-soft transition hover:opacity-95"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Signing in..." : "Sign in"}
@@ -124,7 +150,9 @@ export function SigninForm({
                   <span className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
+                  <span className="rounded-full border border-border/60 bg-card px-2 py-0.5 text-muted-foreground">
+                    or continue with
+                  </span>
                 </div>
               </div>
 
@@ -133,13 +161,16 @@ export function SigninForm({
 
               <div className="text-center text-sm">
                 Don't have an account?{" "}
-                <Link to="/signup" className="underline underline-offset-4">
+                <Link to="/signup" className="font-semibold text-primary underline underline-offset-4">
                   Sign up
                 </Link>
               </div>
             </div>
           </form>
           <div className="auth-hero-pane auth-hero-pane--signin relative hidden overflow-hidden md:block">
+            <div className="absolute left-6 top-6 rounded-full border border-white/35 bg-white/16 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/85">
+              Team Workspace
+            </div>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,255,255,0.28),transparent_36%),radial-gradient(circle_at_74%_28%,rgba(255,255,255,0.2),transparent_32%)]" />
             <img
               src="/placeholder.png"
@@ -148,10 +179,13 @@ export function SigninForm({
             />
             <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
-                Team Workspace
+                Sign-in faster
               </p>
               <p className="mt-1 text-lg font-semibold leading-tight">
-                Stay connected with faster messaging and smarter search.
+                Stay connected with focused messaging and faster handoff between teams.
+              </p>
+              <p className="mt-2 text-[12px] text-white/82">
+                Keep chat, feed, and notifications in one continuous workspace rhythm.
               </p>
             </div>
           </div>

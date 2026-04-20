@@ -1,0 +1,680 @@
+{
+  "outDir": "/Users/phucnguyen/Downloads/open_crm/new/Moji-Drupal/frontend/qa-artifacts/home-auth-responsive-smoke-20260419",
+  "totalChecks": 15,
+  "passedChecks": 15,
+  "failedChecks": 0,
+  "routes": [
+    "/signin",
+    "/signup",
+    "/feed"
+  ],
+  "viewports": [
+    360,
+    390,
+    430,
+    768,
+    1024
+  ],
+  "results": [
+    {
+      "route": "/signin",
+      "key": "signin",
+      "width": 360,
+      "screenshot": "signin-360.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 360,
+      "scrollWidth": 360,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-left-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": -152,
+          "overflowLeft": 80,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-right-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -184,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signin"
+    },
+    {
+      "route": "/signup",
+      "key": "signup",
+      "width": 360,
+      "screenshot": "signup-360.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 360,
+      "scrollWidth": 360,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-right-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -152,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-left-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": -184,
+          "overflowLeft": 80,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signup"
+    },
+    {
+      "route": "/feed",
+      "key": "feed",
+      "width": 360,
+      "screenshot": "feed-360.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 360,
+      "scrollWidth": 360,
+      "bodyHeight": 2323,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 204,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+          "overflowRight": 320,
+          "overflowLeft": -360,
+          "width": 320
+        },
+        {
+          "tag": "div",
+          "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -361,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+          "overflowRight": 320,
+          "overflowLeft": -361,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "px-5.py-3.border-t.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -361,
+          "width": 319
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -381,
+          "width": 279
+        },
+        {
+          "tag": "p",
+          "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+          "overflowRight": 300,
+          "overflowLeft": -381,
+          "width": 279
+        },
+        {
+          "tag": "div",
+          "className": "grid.grid-cols-3.gap-2",
+          "overflowRight": 300,
+          "overflowLeft": -381,
+          "width": 279
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -381,
+          "width": 279
+        }
+      ],
+      "currentPath": "/feed"
+    },
+    {
+      "route": "/signin",
+      "key": "signin",
+      "width": 390,
+      "screenshot": "signin-390.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-left-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": -182,
+          "overflowLeft": 80,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-right-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -214,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signin"
+    },
+    {
+      "route": "/signup",
+      "key": "signup",
+      "width": 390,
+      "screenshot": "signup-390.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-right-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -182,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-left-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": -214,
+          "overflowLeft": 80,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signup"
+    },
+    {
+      "route": "/feed",
+      "key": "feed",
+      "width": 390,
+      "screenshot": "feed-390.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 390,
+      "scrollWidth": 390,
+      "bodyHeight": 2463,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 204,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+          "overflowRight": 320,
+          "overflowLeft": -390,
+          "width": 320
+        },
+        {
+          "tag": "div",
+          "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -391,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+          "overflowRight": 320,
+          "overflowLeft": -391,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "px-5.py-3.border-t.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -391,
+          "width": 319
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -411,
+          "width": 279
+        },
+        {
+          "tag": "p",
+          "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+          "overflowRight": 300,
+          "overflowLeft": -411,
+          "width": 279
+        },
+        {
+          "tag": "div",
+          "className": "grid.grid-cols-3.gap-2",
+          "overflowRight": 300,
+          "overflowLeft": -411,
+          "width": 279
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -411,
+          "width": 279
+        }
+      ],
+      "currentPath": "/feed"
+    },
+    {
+      "route": "/signin",
+      "key": "signin",
+      "width": 430,
+      "screenshot": "signin-430.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 430,
+      "scrollWidth": 430,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-left-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": -222,
+          "overflowLeft": 80,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-right-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -254,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signin"
+    },
+    {
+      "route": "/signup",
+      "key": "signup",
+      "width": 430,
+      "screenshot": "signup-430.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 430,
+      "scrollWidth": 430,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-right-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -222,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-left-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": -254,
+          "overflowLeft": 80,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signup"
+    },
+    {
+      "route": "/feed",
+      "key": "feed",
+      "width": 430,
+      "screenshot": "feed-430.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 430,
+      "scrollWidth": 430,
+      "bodyHeight": 2453,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 204,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+          "overflowRight": 320,
+          "overflowLeft": -430,
+          "width": 320
+        },
+        {
+          "tag": "div",
+          "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -431,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+          "overflowRight": 320,
+          "overflowLeft": -431,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "px-5.py-3.border-t.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -431,
+          "width": 319
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -451,
+          "width": 279
+        },
+        {
+          "tag": "p",
+          "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+          "overflowRight": 300,
+          "overflowLeft": -451,
+          "width": 279
+        },
+        {
+          "tag": "div",
+          "className": "grid.grid-cols-3.gap-2",
+          "overflowRight": 300,
+          "overflowLeft": -451,
+          "width": 279
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -451,
+          "width": 279
+        }
+      ],
+      "currentPath": "/feed"
+    },
+    {
+      "route": "/signin",
+      "key": "signin",
+      "width": 768,
+      "screenshot": "signin-768.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 768,
+      "scrollWidth": 768,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-left-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": -560,
+          "overflowLeft": 80,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-right-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -592,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signin"
+    },
+    {
+      "route": "/signup",
+      "key": "signup",
+      "width": 768,
+      "screenshot": "signup-768.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 768,
+      "scrollWidth": 768,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-right-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -560,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-left-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": -592,
+          "overflowLeft": 80,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signup"
+    },
+    {
+      "route": "/feed",
+      "key": "feed",
+      "width": 768,
+      "screenshot": "feed-768.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 768,
+      "scrollWidth": 768,
+      "bodyHeight": 2508,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 196,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+          "overflowRight": 320,
+          "overflowLeft": -768,
+          "width": 320
+        },
+        {
+          "tag": "div",
+          "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -769,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+          "overflowRight": 320,
+          "overflowLeft": -769,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "px-5.py-3.border-t.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -769,
+          "width": 319
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -789,
+          "width": 279
+        },
+        {
+          "tag": "p",
+          "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+          "overflowRight": 300,
+          "overflowLeft": -789,
+          "width": 279
+        },
+        {
+          "tag": "div",
+          "className": "grid.grid-cols-3.gap-2",
+          "overflowRight": 300,
+          "overflowLeft": -789,
+          "width": 279
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -789,
+          "width": 279
+        }
+      ],
+      "currentPath": "/feed"
+    },
+    {
+      "route": "/signin",
+      "key": "signin",
+      "width": 1024,
+      "screenshot": "signin-1024.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 1024,
+      "scrollWidth": 1024,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-left-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": -816,
+          "overflowLeft": 80,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-right-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -848,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signin"
+    },
+    {
+      "route": "/signup",
+      "key": "signup",
+      "width": 1024,
+      "screenshot": "signup-1024.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 1024,
+      "scrollWidth": 1024,
+      "bodyHeight": 920,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 2,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-bottom-24.-right-20.h-72.w-72.rounded-full.bg-accent/[0.08].blur-3xl",
+          "overflowRight": 80,
+          "overflowLeft": -816,
+          "width": 288
+        },
+        {
+          "tag": "div",
+          "className": "pointer-events-none.absolute.-top-24.-left-20.h-64.w-64.rounded-full.bg-primary/[0.1].blur-3xl",
+          "overflowRight": -848,
+          "overflowLeft": 80,
+          "width": 256
+        }
+      ],
+      "currentPath": "/signup"
+    },
+    {
+      "route": "/feed",
+      "key": "feed",
+      "width": 1024,
+      "screenshot": "feed-1024.png",
+      "passPath": true,
+      "passOverflow": true,
+      "viewportWidth": 1024,
+      "scrollWidth": 1024,
+      "bodyHeight": 2551,
+      "hasHorizontalOverflow": false,
+      "offenderCount": 196,
+      "topOffenders": [
+        {
+          "tag": "div",
+          "className": "fixed.right-0.top-0.bottom-0.z-[999].w-80.bg-background.border-l.border-border/60.flex.flex-col.shadow-2xl.outline-none.transition-transform.duration-300.ease-[cubic-bezier(0.33,1,0.68,1)].translate-x-full",
+          "overflowRight": 320,
+          "overflowLeft": -1024,
+          "width": 320
+        },
+        {
+          "tag": "div",
+          "className": "flex.items-center.justify-between.px-5.py-4.border-b.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -1025,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "flex-1.overflow-y-auto.beautiful-scrollbar.px-5.py-5.space-y-7",
+          "overflowRight": 320,
+          "overflowLeft": -1025,
+          "width": 319
+        },
+        {
+          "tag": "div",
+          "className": "px-5.py-3.border-t.border-border/60",
+          "overflowRight": 320,
+          "overflowLeft": -1025,
+          "width": 319
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -1045,
+          "width": 279
+        },
+        {
+          "tag": "p",
+          "className": "text-[11px].font-semibold.uppercase.tracking-[0.1em].text-muted-foreground.mb-3",
+          "overflowRight": 300,
+          "overflowLeft": -1045,
+          "width": 279
+        },
+        {
+          "tag": "div",
+          "className": "grid.grid-cols-3.gap-2",
+          "overflowRight": 300,
+          "overflowLeft": -1045,
+          "width": 279
+        },
+        {
+          "tag": "section",
+          "className": "",
+          "overflowRight": 300,
+          "overflowLeft": -1045,
+          "width": 279
+        }
+      ],
+      "currentPath": "/feed"
+    }
+  ]
+}

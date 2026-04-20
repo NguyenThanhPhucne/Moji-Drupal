@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FileText, ImageOff, SearchX, Users } from "lucide-react";
+import {
+  FileText,
+  ImageOff,
+  LayoutGrid,
+  Rows3,
+  SearchX,
+  SlidersHorizontal,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
@@ -24,6 +33,7 @@ import type { SocialPost } from "@/types/social";
 
 // ── Feed scoring — defined outside component so it is referentially stable ──
 type FeedTab = "all" | "photos" | "text";
+type FeedDensity = "comfortable" | "compact";
 
 const FEED_TAB_LABELS: Record<FeedTab, string> = {
   all: "All posts",
@@ -38,6 +48,11 @@ const FEED_TAB_OFFSET: Record<FeedTab, number> = {
 };
 
 const FEED_TABS: FeedTab[] = ["all", "photos", "text"];
+
+const FEED_DENSITY_OPTIONS = [
+  { id: "comfortable" as const, label: "Comfort", Icon: LayoutGrid },
+  { id: "compact" as const, label: "Compact", Icon: Rows3 },
+];
 
 const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES = Object.freeze({
   muted: false,
@@ -103,6 +118,7 @@ const HomeFeedPage = () => {
   const [composerOpenKey, setComposerOpenKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [feedTab, setFeedTab] = useState<FeedTab>("all");
+  const [feedDensity, setFeedDensity] = useState<FeedDensity>("comfortable");
   const [savingNotificationPrefs, setSavingNotificationPrefs] = useState(false);
 
   const deliveryNotificationPreferences = useMemo(() => {
@@ -245,6 +261,26 @@ const HomeFeedPage = () => {
   const EmptyStateIcon = emptyStateConfig.icon;
   const hasActiveFeedFilters =
     feedTab !== "all" || searchQuery.trim().length > 0;
+  const activeFilterSummary = useMemo(() => {
+    const activeQuery = searchQuery.trim();
+    if (activeQuery) {
+      return `Showing ${filteredHomeFeed.length} results for "${activeQuery}"`;
+    }
+
+    return `Showing ${filteredHomeFeed.length} posts from ${FEED_TAB_LABELS[feedTab].toLowerCase()}`;
+  }, [feedTab, filteredHomeFeed.length, searchQuery]);
+  const homeTopbarBadges = useMemo(
+    () => [
+      { label: "Visible", value: String(filteredHomeFeed.length) },
+      { label: "Total", value: String(homeFeed.length) },
+      { label: "Alerts", value: String(notifications.length) },
+      {
+        label: "Density",
+        value: feedDensity === "compact" ? "Compact" : "Comfort",
+      },
+    ],
+    [feedDensity, filteredHomeFeed.length, homeFeed.length, notifications.length],
+  );
   const feedTabButtonRefs = useRef<Record<FeedTab, HTMLButtonElement | null>>({
     all: null,
     photos: null,
@@ -428,19 +464,80 @@ const HomeFeedPage = () => {
             >
               <div className={getStaggerEnterClass(0)}>
                 <SocialTopHeader
-                  title="Home"
-                  subtitle="Connect with friends and discover updates"
+                  title="Home Feed"
+                  subtitle={activeFilterSummary}
                   searchPlaceholder="Search people, posts, and groups"
                   searchValue={searchQuery}
                   onSearchValueChange={setSearchQuery}
+                  metaBadges={homeTopbarBadges}
+                  keyboardHint="Ctrl + Shift + K"
                 />
               </div>
 
-              <div className={cn("social-feed-back-chat-row", getStaggerEnterClass(1))}>
+              <div
+                className={cn(
+                  "social-card rounded-2xl border border-border/60 bg-card/86 px-3 py-2 backdrop-blur-md",
+                  getStaggerEnterClass(1),
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-2 py-0.5 text-[10.5px] font-semibold text-primary/85">
+                      <Sparkles className="h-3 w-3" />
+                      {filteredHomeFeed.length} visible
+                    </span>
+
+                    {feedTab !== "all" && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground/85">
+                        Scope: {FEED_TAB_LABELS[feedTab]}
+                      </span>
+                    )}
+
+                    {searchQuery.trim().length > 0 && (
+                      <span className="max-w-[18rem] truncate rounded-full border border-border/60 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground/85">
+                        Query: {searchQuery.trim()}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="inline-flex items-center gap-1 rounded-full border border-border/65 bg-background/85 p-1">
+                    <span className="inline-flex items-center gap-1 px-2 text-[10px] font-semibold text-muted-foreground/75">
+                      <SlidersHorizontal className="h-3 w-3" />
+                      Density
+                    </span>
+
+                    {FEED_DENSITY_OPTIONS.map((option) => {
+                      const isActive = feedDensity === option.id;
+                      const Icon = option.Icon;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setFeedDensity(option.id)}
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold transition-colors",
+                            isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                          )}
+                          aria-pressed={isActive}
+                          title={`${option.label} density`}
+                        >
+                          <Icon className="h-3 w-3" />
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className={cn("social-feed-back-chat-row", getStaggerEnterClass(2))}>
                 <BackToChatCard onClick={() => navigate("/")} />
               </div>
 
-              <div className={cn("social-feed-stories-slot", getStaggerEnterClass(2))}>
+              <div className={cn("social-feed-stories-slot", getStaggerEnterClass(3))}>
                 <SocialStoriesRow
                   currentUser={user}
                   posts={homeFeed}
@@ -450,7 +547,7 @@ const HomeFeedPage = () => {
               </div>
 
               {isInitialHomeLoading ? (
-                <div className={cn("social-feed-composer-slot", getStaggerEnterClass(3))}>
+                <div className={cn("social-feed-composer-slot", getStaggerEnterClass(4))}>
                   <div className="xl:hidden">
                     <PostComposerSkeleton compact staggerIndex={0} />
                   </div>
@@ -459,72 +556,105 @@ const HomeFeedPage = () => {
                   </div>
                 </div>
               ) : (
-                <div className={cn("social-feed-composer-slot", getStaggerEnterClass(3))}>
+                <div className={cn("social-feed-composer-slot", getStaggerEnterClass(4))}>
                   <PostComposer onCreate={createPost} openRequestKey={composerOpenKey} />
                 </div>
               )}
 
               {/* ── Filter bar with live count badges ────────────────────── */}
-              <div className={cn("social-feed-filter-wrap social-feed-filter-wrap--command social-feed-filter-wrap--editorial social-feed-filter-sticky", getStaggerEnterClass(4))}>
-                <div
-                  className="social-filter-tabs-container"
-                  data-testid="feed-filter-tabs"
-                  role="tablist"
-                  aria-label="Feed filters"
-                  tabIndex={0}
-                  onKeyDown={handleFeedFilterKeyDown}
-                >
-                  {FEED_TABS.map((tab) => (
-                    <button
-                      key={tab}
-                      type="button"
-                      className="social-filter-tab micro-tap-chip"
-                      data-active={feedTab === tab}
-                      ref={(element) => {
-                        feedTabButtonRefs.current[tab] = element;
+              <div className={cn("social-feed-filter-wrap social-feed-filter-wrap--command social-feed-filter-wrap--editorial social-feed-filter-sticky", getStaggerEnterClass(5))}>
+                <div className="w-full">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
+                        Filter timeline
+                      </p>
+                      <p className="truncate text-[11px] text-muted-foreground/75">
+                        Showing {filteredHomeFeed.length} of {homeFeed.length} posts
+                      </p>
+                    </div>
+
+                    {hasActiveFeedFilters && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 rounded-full border border-border/60 bg-background/70 px-2.5 text-[11px] font-semibold"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setFeedTab("all");
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    )}
+                  </div>
+
+                  <div
+                    className="social-filter-tabs-container"
+                    data-testid="feed-filter-tabs"
+                    role="tablist"
+                    aria-label="Feed filters"
+                    tabIndex={0}
+                    onKeyDown={handleFeedFilterKeyDown}
+                  >
+                    {FEED_TABS.map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        className="social-filter-tab micro-tap-chip"
+                        data-active={feedTab === tab}
+                        ref={(element) => {
+                          feedTabButtonRefs.current[tab] = element;
+                        }}
+                        role="tab"
+                        id={`feed-tab-${tab}`}
+                        data-testid={`feed-tab-${tab}`}
+                        aria-controls="home-feed-results"
+                        aria-selected={feedTab === tab}
+                        tabIndex={feedTab === tab ? 0 : -1}
+                        onClick={() => setFeedTab(tab)}
+                      >
+                        <span className="relative z-10 flex items-center">
+                          {FEED_TAB_LABELS[tab]}
+                          {homeFeed.length > 0 && (
+                            <span
+                              key={`${tab}-${tabCounts[tab]}`}
+                              className={cn(
+                                "ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors social-badge-pop",
+                                feedTab === tab
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {tabCounts[tab]}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+
+                    {/* Sliding Pill Indicator */}
+                    <div
+                      className="social-filter-pill-bg"
+                      style={{
+                        width: `${100 / 3}%`,
+                        transform: `translateX(${FEED_TAB_OFFSET[feedTab]}%)`,
                       }}
-                      role="tab"
-                      id={`feed-tab-${tab}`}
-                      data-testid={`feed-tab-${tab}`}
-                      aria-controls="home-feed-results"
-                      aria-selected={feedTab === tab}
-                      tabIndex={feedTab === tab ? 0 : -1}
-                      onClick={() => setFeedTab(tab)}
-                    >
-                      <span className="relative z-10 flex items-center">
-                        {FEED_TAB_LABELS[tab]}
-                        {homeFeed.length > 0 && (
-                          <span
-                            key={`${tab}-${tabCounts[tab]}`}
-                            className={cn(
-                              "ml-1.5 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums transition-colors social-badge-pop",
-                              feedTab === tab
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground",
-                            )}
-                          >
-                            {tabCounts[tab]}
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  ))}
-                  
-                  {/* Sliding Pill Indicator */}
-                  <div 
-                    className="social-filter-pill-bg"
-                    style={{
-                      width: `${100 / 3}%`,
-                      transform: `translateX(${FEED_TAB_OFFSET[feedTab]}%)`,
-                    }}
-                  />
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* ── Post list ─────────────────────────────────────────────── */}
               <section
                 id="home-feed-results"
-                className="social-feed-post-stack social-feed-post-stack--command social-feed-post-stack--editorial space-stack-md"
+                className={cn(
+                  "social-feed-post-stack social-feed-post-stack--command social-feed-post-stack--editorial space-stack-md",
+                  feedDensity === "compact"
+                    ? "social-feed-post-stack--compact-density"
+                    : "social-feed-post-stack--comfortable-density",
+                )}
                 aria-live="polite"
                 aria-label={`Feed results for ${FEED_TAB_LABELS[feedTab]}`}
               >
@@ -543,6 +673,7 @@ const HomeFeedPage = () => {
                       commentsLoading={loadingCommentsByPost[post._id]}
                       commentsSortBy={postCommentsSortBy[post._id]}
                       engagement={postEngagement[post._id]}
+                      density={feedDensity}
                       onLike={toggleLike}
                       onFetchComments={fetchComments}
                       onLoadMoreComments={loadMoreComments}
@@ -562,29 +693,65 @@ const HomeFeedPage = () => {
 
                 {/* ── Contextual empty state ──────────────────────────────── */}
                 {!loadingHome && filteredHomeFeed.length === 0 && (
-                  <div className="enterprise-empty-state enterprise-empty-state--feed px-6 text-center">
-                    <div className="size-14 rounded-full bg-muted/50 flex items-center justify-center mb-3 ring-4 ring-background shadow-sm">
-                      <EmptyStateIcon className="h-6 w-6 text-primary" />
+                  <div className="enterprise-empty-state enterprise-empty-state--feed px-4 text-center">
+                    <div className="relative mb-3">
+                      <span className="absolute inset-0 scale-125 rounded-full bg-primary/[0.08] blur-md" />
+                      <div className="relative size-14 rounded-full bg-muted/50 flex items-center justify-center ring-4 ring-background shadow-sm">
+                        <EmptyStateIcon className="h-6 w-6 text-primary" />
+                      </div>
                     </div>
-                    <p className="text-[14px] font-semibold text-foreground/80">
+
+                    <p className="text-[14px] font-semibold text-foreground/85">
                       {emptyStateConfig.title}
                     </p>
-                    <p className="text-[12px] text-muted-foreground/70 mt-1 max-w-[240px]">
+                    <p className="mt-1 max-w-[280px] text-[12px] text-muted-foreground/75">
                       {emptyStateConfig.subtitle}
                     </p>
-                    {hasActiveFeedFilters && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="mt-3"
-                        onClick={() => {
-                          setSearchQuery("");
-                          setFeedTab("all");
-                        }}
-                      >
-                        Reset filters
-                      </Button>
-                    )}
+
+                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                      {hasActiveFeedFilters && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() => {
+                            setSearchQuery("");
+                            setFeedTab("all");
+                          }}
+                        >
+                          Reset filters
+                        </Button>
+                      )}
+
+                      {!hasActiveFeedFilters && (
+                        <>
+                          <Button
+                            type="button"
+                            className="rounded-full bg-gradient-chat text-white"
+                            onClick={() =>
+                              setComposerOpenKey((current) => current + 1)
+                            }
+                          >
+                            Create your first post
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-full"
+                            onClick={() => navigate("/explore")}
+                          >
+                            Discover people
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!loadingHome && filteredHomeFeed.length === 0 && (
+                  <div className="mx-auto mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 px-2 py-1 text-[10.5px] font-medium text-muted-foreground/75">
+                    <Sparkles className="h-3 w-3" />
+                    Tip: keep it lightweight with {feedDensity === "compact" ? "Compact" : "Comfort"} density
                   </div>
                 )}
               </section>
