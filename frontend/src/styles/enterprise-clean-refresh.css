@@ -3560,3 +3560,42 @@
     border-width: 1.5px;
   }
 }
+
+/* --- Phase 5 Extended Polish --- */
+.global-search-trigger {
+  @apply group hidden lg:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1;
+  background-color: var(--enterprise-card-bg-alpha, rgba(23, 23, 23, 0.4));
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.global-search-trigger:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.global-search-trigger-mobile {
+  @apply group hidden md:inline-flex lg:hidden items-center justify-center size-8 rounded-xl border border-border/50 bg-muted/40 text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1;
+  background-color: var(--enterprise-card-bg-alpha, rgba(23, 23, 23, 0.4));
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+}
+
+.chat-sidebar-nav-tab--refined {
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              color 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.chat-sidebar-nav-tab--refined:active {
+  transform: scale(0.95) !important;
+}
+
+.chat-input-shell-polished {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+.chat-input-shell-polished:focus-within {
+  box-shadow: 0 -4px 20px -5px rgba(var(--primary), 0.15);
+  border-color: rgba(var(--primary), 0.3);
+}

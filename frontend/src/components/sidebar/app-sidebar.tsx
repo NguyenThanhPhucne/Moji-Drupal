@@ -194,7 +194,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           aria-current={item.isActive ? "page" : undefined}
                           onClick={() => navigate(item.to)}
                           className={cn(
-                            "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--rail relative flex size-10 items-center justify-center rounded-xl transition-[background-color,color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+                            "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--rail chat-sidebar-nav-tab--refined relative flex size-10 items-center justify-center rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
                             item.isActive
                               ? "bg-primary/10 text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
                               : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
@@ -233,7 +233,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         onClick={() => navigate(item.to)}
                         title={item.label}
                         className={cn(
-                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--full relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium transition-[background-color,color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+                          "chat-sidebar-nav-tab chat-sidebar-nav-tab--command chat-sidebar-nav-tab--full chat-sidebar-nav-tab--refined relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-[10px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                           item.isActive
                             ? "bg-primary/[0.09] text-primary sidebar-tab-active chat-sidebar-nav-tab--active"
                             : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80",

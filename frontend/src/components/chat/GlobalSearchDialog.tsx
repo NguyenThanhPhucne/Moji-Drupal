@@ -999,7 +999,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
             <button
               type="button"
               aria-label="Open global search"
-              className="group hidden md:inline-flex lg:hidden items-center justify-center size-8 rounded-xl border border-border/50 bg-muted/40 text-muted-foreground transition-[background-color,color,border-color,box-shadow] duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+              className="global-search-trigger-mobile"
             >
               <Search className="size-4 text-muted-foreground/70 group-hover:text-muted-foreground transition-colors" />
             </button>
@@ -1008,7 +1008,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
           <DialogTrigger asChild>
             <button
               type="button"
-              className="group hidden lg:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-[background-color,color,border-color,box-shadow] duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1"
+              className="global-search-trigger"
             >
               <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
               <span className="flex-1 text-left text-[12px] truncate">Search...</span>
