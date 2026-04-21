@@ -829,7 +829,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   isOwn,
   selectedConvoType,
   isFirstInGroup,
-  isLastInGroup,
+  isLastInGroup: _isLastInGroup,
   senderDisplayName,
   bubbleNode,
   previewUrl,
@@ -870,6 +870,9 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   metaNode: React.ReactNode;
 }) {
   const replyPreviewText = String(message.replyTo?.content || "").trim() || "Original message unavailable";
+
+  // reference possibly-unused destructured prop to avoid TS6133 (intentional no-op)
+  void _isLastInGroup;
 
   return (
     <div
@@ -1000,6 +1003,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   onTogglePin,
 }: MessageItemProps) {
   const { user } = useAuthStore();
+  // reference possibly-unused prop to avoid TS6133 (intentional no-op)
+  void index;
   const {
     reactToMessage,
     unsendMessage,

@@ -1,426 +1,14 @@
 import { chatService } from "@/services/chatService";
-import type { Conversation, Message, ConversationResponse } from "@/types/chat";
-import type { ChatState, OutgoingMessageQueueItem } from "@/types/store";
+import type { Conversation } from "@/types/chat";
+import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 import { toast } from "sonner";
-import { handleRateLimitError } from "@/lib/rateLimitFeedback";
-import {
-  clearRealtimeScopedCaches,
-  getCachedConversationList,
-  setCachedConversationList,
-  getPersistedConversationMeta,
-} from "@/lib/scopedCache";
 
 const buildTempDirectConversationId = (recipientId: string) => {
   return `temp-direct-${String(recipientId)}`;
-};
-
-const UNDO_SEND_WINDOW_SECONDS = 7;
-const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
-const DEFAULT_GROUP_CHANNEL_ID = "general";
-const MAX_OUTGOING_QUEUE_ITEMS = 120;
-
-const syncConversationListCacheForCurrentUser = () => {
-  const currentUserId = String(useAuthStore.getState().user?._id || "").trim();
-  if (!currentUserId) {
-    return;
-  }
-
-  setCachedConversationList(currentUserId, useChatStore.getState().conversations);
-};
-
-const buildTempMessageId = () => {
-  return `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-};
-
-const toSafeScalarString = (value: unknown) => {
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    typeof value === "bigint"
-  ) {
-    return String(value);
-  }
-
-  return "";
-};
-
-const isNavigatorOffline = () => {
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  return navigator.onLine === false;
-};
-
-const extractErrorCode = (error: unknown) => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof (error as { code?: unknown }).code === "string"
-  ) {
-    return (error as { code?: string }).code || "";
-  }
-
-  return "";
-};
-
-const isLikelyOfflineError = (error: unknown) => {
-  if (isNavigatorOffline()) {
-    return true;
-  }
-
-  const code = extractErrorCode(error);
-  if (code === "ERR_NETWORK") {
-    return true;
-  }
-
-  const message = [
-    extractApiErrorMessage(error),
-    typeof error === "object" && error !== null && "message" in error
-      ? toSafeScalarString((error as { message?: unknown }).message)
-      : "",
-  ]
-    .join(" ")
-    .trim();
-
-  return /(network error|offline|failed to fetch|network request failed|ecconn|enotfound)/i.test(
-    message,
-  );
-};
-
-const resolveDeliveryErrorMessage = (error: unknown) => {
-  return extractApiErrorMessage(error) || "Failed to send. Tap retry.";
-};
-
-const isTempMessageId = (value: unknown) => {
-  return typeof value === "string" && value.startsWith("temp-");
-};
-
-const upsertOutgoingQueueItem = (
-  queue: OutgoingMessageQueueItem[],
-  nextItem: OutgoingMessageQueueItem,
-) => {
-  const withoutCurrent = queue.filter((item) => item.tempId !== nextItem.tempId);
-  return [...withoutCurrent, nextItem].slice(-MAX_OUTGOING_QUEUE_ITEMS);
-};
-
-const removeOutgoingQueueItem = (
-  queue: OutgoingMessageQueueItem[],
-  tempId: string,
-) => {
-  return queue.filter((item) => item.tempId !== tempId);
-};
-
-const enqueueDirectOutgoingMessage = ({
-  set,
-  tempId,
-  conversationId,
-  recipientId,
-  content,
-  imgUrl,
-  replyTo,
-  queuedAt,
-  attemptCount,
-}: {
-  set: typeof useChatStore.setState;
-  tempId: string;
-  conversationId: string;
-  recipientId: string;
-  content: string;
-  imgUrl?: string;
-  replyTo?: string;
-  queuedAt: string;
-  attemptCount: number;
-}) => {
-  set((state) => ({
-    outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
-      tempId,
-      scope: "direct",
-      conversationId,
-      recipientId,
-      content,
-      imgUrl,
-      replyTo,
-      queuedAt,
-      attemptCount,
-    }),
-  }));
-};
-
-const finalizeDirectSendSuccess = ({
-  set,
-  get,
-  deliveredMessage,
-  tempId,
-  optimisticConversationId,
-  conversationIdOverride,
-  activeConversationId,
-  createdTempConversation,
-}: {
-  set: typeof useChatStore.setState;
-  get: typeof useChatStore.getState;
-  deliveredMessage: Message;
-  tempId: string;
-  optimisticConversationId: string;
-  conversationIdOverride?: string;
-  activeConversationId: string | null;
-  createdTempConversation: boolean;
-}) => {
-  unregisterPendingOwnTempMessage({
-    conversationId: optimisticConversationId,
-    tempId,
-  });
-
-  set((state) => ({
-    outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
-  }));
-
-  get().removeMessageFromConversation(optimisticConversationId, tempId);
-
-  const realConvoId = String(
-    deliveredMessage.conversationId || conversationIdOverride || activeConversationId || "",
-  ).trim();
-
-  if (realConvoId && optimisticConversationId !== realConvoId) {
-    pruneTempConversationState({
-      optimisticConversationId,
-      fallbackActiveConversationId: realConvoId,
-      setState: set,
-    });
-  }
-
-  get().addMessage(deliveredMessage);
-
-  if (realConvoId) {
-    set((state) => ({
-      conversations: state.conversations.map((conversationItem) =>
-        conversationItem._id === realConvoId
-          ? { ...conversationItem, seenBy: [] }
-          : conversationItem,
-      ),
-    }));
-  }
-
-  if (createdTempConversation) {
-    get().fetchConversations().catch((error) => {
-      console.error("Error refreshing conversations", error);
-    });
-  }
-
-  const undoConversationId = String(
-    realConvoId || deliveredMessage.conversationId || optimisticConversationId,
-  ).trim();
-  const undoMessageId = String(deliveredMessage._id || "").trim();
-
-  showUndoSendToast({
-    conversationId: undoConversationId,
-    messageId: undoMessageId,
-    onUndo: () => {
-      void get()
-        .unsendMessage(undoConversationId, undoMessageId, "undo")
-        .catch((undoError) => {
-          console.error("Undo send failed", undoError);
-        });
-    },
-  });
-};
-
-const applyDirectSendFailure = ({
-  set,
-  get,
-  error,
-  tempId,
-  optimisticConversationId,
-  optimisticMessage,
-  recipientId,
-  content,
-  imgUrl,
-  replyTo,
-  queuedAt,
-}: {
-  set: typeof useChatStore.setState;
-  get: typeof useChatStore.getState;
-  error: unknown;
-  tempId: string;
-  optimisticConversationId: string;
-  optimisticMessage: Message;
-  recipientId: string;
-  content: string;
-  imgUrl?: string;
-  replyTo?: string;
-  queuedAt: string;
-}) => {
-  const offlineFailure = isLikelyOfflineError(error);
-  const nextAttemptCount = Number(optimisticMessage.deliveryAttemptCount || 0) + 1;
-
-  get().updateMessage(optimisticConversationId, tempId, {
-    deliveryState: offlineFailure ? "queued" : "failed",
-    deliveryError: offlineFailure ? null : resolveDeliveryErrorMessage(error),
-    deliveryAttemptCount: nextAttemptCount,
-  });
-
-  if (offlineFailure) {
-    enqueueDirectOutgoingMessage({
-      set,
-      tempId,
-      conversationId: optimisticConversationId,
-      recipientId: String(recipientId || "").trim(),
-      content: String(content || ""),
-      imgUrl,
-      replyTo,
-      queuedAt,
-      attemptCount: nextAttemptCount,
-    });
-    toast.info("Connection lost. Message moved to queue.");
-  } else {
-    set((state) => ({
-      outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
-    }));
-
-    const rateLimit = handleRateLimitError(error, {
-      fallbackScope: "message:direct",
-      actionLabel: "Sending messages too fast",
-    });
-    if (!rateLimit.handled) {
-      toast.error(resolveDeliveryErrorMessage(error));
-    }
-  }
-
-  set({ replyingTo: null });
-};
-
-const normalizeGroupChannelId = (channelId?: string | null) => {
-  const normalized = String(channelId || "")
-    .trim()
-    .toLowerCase();
-
-  return normalized || DEFAULT_GROUP_CHANNEL_ID;
-};
-
-const resolveConversationActiveGroupChannelId = (
-  conversation?: Conversation | null,
-) => {
-  if (conversation?.type !== "group") {
-    return null;
-  }
-
-  const channels = Array.isArray(conversation.group?.channels)
-    ? conversation.group.channels
-    : [];
-
-  const activeCandidate = normalizeGroupChannelId(
-    conversation.group?.activeChannelId,
-  );
-
-  if (channels.some((channel) => normalizeGroupChannelId(channel.channelId) === activeCandidate)) {
-    return activeCandidate;
-  }
-
-  if (channels.length > 0) {
-    return normalizeGroupChannelId(channels[0].channelId);
-  }
-
-  return DEFAULT_GROUP_CHANNEL_ID;
-};
-
-const resolveMessageGroupChannelId = (message: { groupChannelId?: string | null }) => {
-  return normalizeGroupChannelId(message.groupChannelId);
-};
-
-const resolveDirectRecipientId = ({
-  conversations,
-  conversationId,
-  fallbackRecipientId,
-  currentUserId,
-}: {
-  conversations: Conversation[];
-  conversationId: string;
-  fallbackRecipientId?: string;
-  currentUserId: string;
-}) => {
-  const normalizedFallback = String(fallbackRecipientId || "").trim();
-  if (normalizedFallback) {
-    return normalizedFallback;
-  }
-
-  const normalizedConversationId = String(conversationId || "").trim();
-  if (!normalizedConversationId) {
-    return "";
-  }
-
-  if (normalizedConversationId.startsWith("temp-direct-")) {
-    return normalizedConversationId.replace("temp-direct-", "");
-  }
-
-  const conversation = conversations.find(
-    (conversationItem) => String(conversationItem._id) === normalizedConversationId,
-  );
-  if (!conversation) {
-    return "";
-  }
-
-  const recipient = conversation.participants.find(
-    (participant) => String(participant._id) !== String(currentUserId),
-  );
-
-  return String(recipient?._id || "").trim();
-};
-
-const extractApiErrorMessage = (error: unknown) => {
-  if (
-    typeof error === "object" &&
-    error !== null &&
-    "response" in error &&
-    typeof (error as { response?: { data?: { message?: unknown } } }).response
-      ?.data?.message === "string"
-  ) {
-    return (error as { response?: { data?: { message?: string } } }).response
-      ?.data?.message;
-  }
-
-  return null;
-};
-
-const notifyUnsendFailure = (mode: "standard" | "undo", error: unknown) => {
-  if (mode === "undo") {
-    toast.error(extractApiErrorMessage(error) || "Undo window expired.");
-    return;
-  }
-
-  toast.error("Could not remove message for everyone. Restored.");
-};
-
-const showUndoSendToast = ({
-  conversationId,
-  messageId,
-  onUndo,
-}: {
-  conversationId: string;
-  messageId: string;
-  onUndo: () => void;
-}) => {
-  const normalizedConversationId = String(conversationId || "").trim();
-  const normalizedMessageId = String(messageId || "").trim();
-
-  if (!normalizedConversationId || !normalizedMessageId) {
-    return;
-  }
-
-  toast.success("Message sent", {
-    id: `undo-send:${normalizedConversationId}:${normalizedMessageId}`,
-    duration: UNDO_SEND_WINDOW_MS,
-    description: `Undo available for ${UNDO_SEND_WINDOW_SECONDS}s.`,
-    action: {
-      label: "Undo",
-      onClick: onUndo,
-    },
-  });
 };
 
 const isPersistedConversationId = (value?: string | null) => {
@@ -595,156 +183,6 @@ const toTimestamp = (value?: string) => {
   return Number.isFinite(ts) ? ts : 0;
 };
 
-type PendingOwnTempMessageEntry = {
-  tempId: string;
-  content: string;
-  replyToId: string;
-  hasImage: boolean;
-};
-
-const pendingOwnTempMessagesByConversation = new Map<
-  string,
-  PendingOwnTempMessageEntry[]
->();
-
-const normalizePendingOwnMessageDescriptor = ({
-  content,
-  replyToId,
-  hasImage,
-}: {
-  content?: string | null;
-  replyToId?: string | null;
-  hasImage?: boolean;
-}) => {
-  return {
-    content: String(content || "").trim(),
-    replyToId: String(replyToId || "").trim(),
-    hasImage: Boolean(hasImage),
-  };
-};
-
-const resolveReplyToId = (replyTo: unknown) => {
-  if (!replyTo) {
-    return "";
-  }
-
-  if (typeof replyTo === "string") {
-    return String(replyTo).trim();
-  }
-
-  if (typeof replyTo === "object") {
-    const replyRecord = replyTo as { _id?: string | number };
-    return String(replyRecord._id || "").trim();
-  }
-
-  return "";
-};
-
-const registerPendingOwnTempMessage = ({
-  conversationId,
-  tempId,
-  content,
-  replyToId,
-  hasImage,
-}: {
-  conversationId: string;
-  tempId: string;
-  content?: string | null;
-  replyToId?: string | null;
-  hasImage?: boolean;
-}) => {
-  const normalizedConversationId = String(conversationId || "").trim();
-  const normalizedTempId = String(tempId || "").trim();
-  if (!normalizedConversationId || !normalizedTempId) {
-    return;
-  }
-
-  const queue = pendingOwnTempMessagesByConversation.get(normalizedConversationId) || [];
-  queue.push({
-    tempId: normalizedTempId,
-    ...normalizePendingOwnMessageDescriptor({
-      content,
-      replyToId,
-      hasImage,
-    }),
-  });
-  pendingOwnTempMessagesByConversation.set(normalizedConversationId, queue);
-};
-
-const unregisterPendingOwnTempMessage = ({
-  conversationId,
-  tempId,
-}: {
-  conversationId: string;
-  tempId: string;
-}) => {
-  const normalizedConversationId = String(conversationId || "").trim();
-  const normalizedTempId = String(tempId || "").trim();
-  if (!normalizedConversationId || !normalizedTempId) {
-    return;
-  }
-
-  const queue = pendingOwnTempMessagesByConversation.get(normalizedConversationId);
-  if (!queue?.length) {
-    return;
-  }
-
-  const nextQueue = queue.filter((entry) => entry.tempId !== normalizedTempId);
-  if (!nextQueue.length) {
-    pendingOwnTempMessagesByConversation.delete(normalizedConversationId);
-    return;
-  }
-
-  pendingOwnTempMessagesByConversation.set(normalizedConversationId, nextQueue);
-};
-
-const consumeMatchingPendingOwnTempMessage = ({
-  conversationId,
-  content,
-  replyToId,
-  hasImage,
-}: {
-  conversationId: string;
-  content?: string | null;
-  replyToId?: string | null;
-  hasImage?: boolean;
-}) => {
-  const normalizedConversationId = String(conversationId || "").trim();
-  if (!normalizedConversationId) {
-    return null;
-  }
-
-  const queue = pendingOwnTempMessagesByConversation.get(normalizedConversationId);
-  if (!queue?.length) {
-    return null;
-  }
-
-  const normalizedDescriptor = normalizePendingOwnMessageDescriptor({
-    content,
-    replyToId,
-    hasImage,
-  });
-
-  const matchedIndex = queue.findIndex((entry) => {
-    return (
-      entry.content === normalizedDescriptor.content &&
-      entry.replyToId === normalizedDescriptor.replyToId &&
-      entry.hasImage === normalizedDescriptor.hasImage
-    );
-  });
-
-  const entryIndex = Math.max(0, matchedIndex);
-  const [matchedEntry] = queue.splice(entryIndex, 1);
-
-  if (queue.length > 0) {
-    pendingOwnTempMessagesByConversation.set(normalizedConversationId, queue);
-  } else {
-    pendingOwnTempMessagesByConversation.delete(normalizedConversationId);
-  }
-
-  return matchedEntry?.tempId || null;
-};
-
 const sortMessagesChronologically = <
   T extends { createdAt?: string; _id?: string },
 >(
@@ -763,52 +201,6 @@ const sortMessagesChronologically = <
 };
 
 const messageMutationVersions = new Map<string, number>();
-const messageMutationLocks = new Set<string>();
-
-type ChatStoreDebugGlobal = typeof globalThis & {
-  __MOJI_CHAT_DEBUG__?: boolean;
-};
-
-const isChatStoreMutationDebugEnabled = () => {
-  if (!import.meta.env.DEV) {
-    return false;
-  }
-
-  if (globalThis.window === undefined) {
-    return false;
-  }
-
-  return (globalThis as ChatStoreDebugGlobal).__MOJI_CHAT_DEBUG__ === true;
-};
-
-export const __chatStoreMutationDebug = {
-  snapshot: () => {
-    if (!isChatStoreMutationDebugEnabled()) {
-      return {
-        locks: [],
-        versions: {},
-      };
-    }
-
-    return {
-      locks: Array.from(messageMutationLocks),
-      versions: Object.fromEntries(messageMutationVersions.entries()),
-    };
-  },
-};
-
-const acquireMessageMutationLock = (mutationKey: string) => {
-  if (messageMutationLocks.has(mutationKey)) {
-    return false;
-  }
-
-  messageMutationLocks.add(mutationKey);
-  return true;
-};
-
-const releaseMessageMutationLock = (mutationKey: string) => {
-  messageMutationLocks.delete(mutationKey);
-};
 
 const startMessageMutation = (mutationKey: string) => {
   const nextVersion = (messageMutationVersions.get(mutationKey) || 0) + 1;
@@ -840,193 +232,41 @@ export const useChatStore = create<ChatState>()(
       isFlushingOutgoingQueue: false,
 
       setReplyingTo: (message) => set({ replyingTo: message }),
-      setActiveConversation: (id) => {
-        set({ activeConversationId: id });
-
-        const conversationId = String(id || "").trim();
-        if (!conversationId) {
-          return;
-        }
-
-        const preloadMessagesForActiveConversation = () => {
-          const activeMessageBucket = get().messages?.[conversationId];
-          if (activeMessageBucket?.items?.length) {
-            return;
-          }
-
-          get()
-            .fetchMessages(conversationId)
-            .catch((error) => {
-              console.error(
-                "Error preloading messages for active conversation:",
-                error,
-              );
-            });
-        };
-
-        const hasTargetConversation = get().conversations.some(
-          (conversation) => String(conversation._id) === conversationId,
-        );
-
-        if (hasTargetConversation) {
-          preloadMessagesForActiveConversation();
-          return;
-        }
-
-        get()
-          .fetchConversations()
-          .then(() => {
-            const syncedConversation = get().conversations.some(
-              (conversation) => String(conversation._id) === conversationId,
-            );
-
-            if (!syncedConversation) {
-              return;
-            }
-
-            preloadMessagesForActiveConversation();
-          })
-          .catch((error) => {
-            console.error(
-              "Error syncing conversations for active selection:",
-              error,
-            );
-          });
-      },
+      setActiveConversation: (id) => set({ activeConversationId: id }),
       reset: () => {
-        pendingOwnTempMessagesByConversation.clear();
-        clearRealtimeScopedCaches();
-
         set({
           conversations: [],
           messages: {},
           activeConversationId: null,
           convoLoading: false,
           messageLoading: false,
-          loading: false,
           replyingTo: null,
           outgoingQueue: [],
           isFlushingOutgoingQueue: false,
         });
       },
       fetchConversations: async () => {
-        const currentUserId = String(useAuthStore.getState().user?._id || "").trim();
-        const cachedConversations = currentUserId
-          ? getCachedConversationList(currentUserId)
-          : null;
-
-        if (cachedConversations) {
-          set({ conversations: cachedConversations, convoLoading: false });
-
-          // background revalidation using persisted meta
-          (async () => {
-            try {
-              const persistedMeta = currentUserId ? getPersistedConversationMeta(currentUserId) : null;
-              const res = await chatService.fetchConversations({
-                ifNoneMatch: persistedMeta?.etag || null,
-                ifModifiedSince: persistedMeta?.lastModified || null,
-              });
-
-              if ((res as any).notModified) {
-                // nothing to do
-                return;
-              }
-
-              const payload = res as ConversationResponse & { _etag?: string | null; _lastModified?: string | null };
-              if (payload?.conversations) {
-                set({ conversations: payload.conversations });
-                if (currentUserId) {
-                  setCachedConversationList(currentUserId, payload.conversations, {
-                    etag: (payload as any)._etag || null,
-                    lastModified: (payload as any)._lastModified || null,
-                  });
-                }
-              }
-            } catch (err) {
-              // background revalidation failures are non-fatal
-              console.debug("Background conversation revalidation failed:", err);
-            }
-          })();
-
-          return;
-        }
-
-        set({ convoLoading: true });
-
         try {
-          const res = await chatService.fetchConversations();
-          const conversations = (res as ConversationResponse).conversations;
-          set({ conversations });
+          set({ convoLoading: true });
+          const { conversations } = await chatService.fetchConversations();
 
-          if (currentUserId) {
-            const meta = (res as any)?._etag || null;
-            const lastMod = (res as any)?._lastModified || null;
-            setCachedConversationList(currentUserId, conversations, {
-              etag: meta,
-              lastModified: lastMod,
-            });
-          }
-          return;
+          set({ conversations, convoLoading: false });
         } catch (error) {
-          const status =
-            typeof error === "object" &&
-            error !== null &&
-            "response" in error &&
-            typeof (error as { response?: { status?: unknown } }).response?.status ===
-              "number"
-              ? Number((error as { response?: { status?: number } }).response?.status)
-              : null;
-
-          if (status === 401 || status === 403) {
-            try {
-              const { conversations } =
-                await chatService.fetchConversationsWithCookieSession();
-              set({ conversations });
-
-              if (currentUserId) {
-                setCachedConversationList(currentUserId, conversations);
-              }
-              return;
-            } catch (cookieSessionError) {
-              console.error(
-                "Error fetching conversations with cookie session fallback:",
-                cookieSessionError,
-              );
-            }
-          }
-
           console.error("Error fetching conversations:", error);
-        } finally {
           set({ convoLoading: false });
         }
       },
-      fetchMessages: async (conversationId, channelId) => {
-        const { activeConversationId, messages, conversations } = get();
+      fetchMessages: async (conversationId) => {
+        const { activeConversationId, messages } = get();
         const { user } = useAuthStore.getState();
 
         const convoId = conversationId ?? activeConversationId;
 
         if (!convoId) return;
 
-        const targetConversation = conversations.find(
-          (conversationItem) => conversationItem._id === convoId,
-        );
-
-        const resolvedGroupChannelId =
-          targetConversation?.type === "group"
-            ? normalizeGroupChannelId(
-                channelId || resolveConversationActiveGroupChannelId(targetConversation),
-              )
-            : null;
-
         const current = messages?.[convoId];
-        const sameChannelBucket =
-          (current?.channelId || null) === (resolvedGroupChannelId || null);
-        let nextCursor: string | null = "";
-        if (sameChannelBucket) {
-          nextCursor =
-            current?.nextCursor === undefined ? "" : current?.nextCursor;
-        }
+        const nextCursor =
+          current?.nextCursor === undefined ? "" : current?.nextCursor;
 
         if (nextCursor === null) return;
 
@@ -1036,7 +276,6 @@ export const useChatStore = create<ChatState>()(
           const { messages: fetched, cursor } = await chatService.fetchMessages(
             convoId,
             nextCursor,
-            resolvedGroupChannelId || undefined,
           );
 
           const processed = fetched.map((m) => ({
@@ -1045,9 +284,7 @@ export const useChatStore = create<ChatState>()(
           }));
 
           set((state) => {
-            const prev = sameChannelBucket
-              ? state.messages[convoId]?.items ?? []
-              : [];
+            const prev = state.messages[convoId]?.items ?? [];
             const merged =
               prev.length > 0 ? [...processed, ...prev] : processed;
               
@@ -1063,7 +300,6 @@ export const useChatStore = create<ChatState>()(
                   items: normalized,
                   hasMore: !!cursor,
                   nextCursor: cursor ?? null,
-                  channelId: resolvedGroupChannelId || null,
                 },
               },
             };
@@ -1074,7 +310,6 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-      // NOSONAR
       sendDirectMessage: async (
         recipientId,
         content,
@@ -1095,7 +330,7 @@ export const useChatStore = create<ChatState>()(
           : null;
         const nowIso = new Date().toISOString();
         const optimisticPreviewContent =
-          String(content || "").trim() || (imgUrl ? "Photo attachment" : "New message");
+          String(content || "").trim() || (imgUrl ? "📷 Photo" : "New message");
 
         const {
           optimisticConversationId,
@@ -1113,25 +348,15 @@ export const useChatStore = create<ChatState>()(
           setState: set,
         });
 
-        const normalizedOptimisticConversationId = String(
-          optimisticConversationId || "",
-        ).trim();
-        if (!normalizedOptimisticConversationId) {
-          return;
-        }
-
         // Build an optimistic message to show immediately
-        const tempId = buildTempMessageId();
-        const shouldQueueImmediately = isNavigatorOffline();
-        const optimisticMessage: Message = {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const optimisticMessage = {
           _id: tempId,
-          conversationId: normalizedOptimisticConversationId,
+          conversationId: optimisticConversationId ?? "",
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
-          replyTo: replyTo
-            ? { _id: replyTo, content: "", senderId: "" }
-            : null,
+          replyTo: replyTo ? { _id: replyTo } : null,
           reactions: [],
           isDeleted: false,
           editedAt: null,
@@ -1140,38 +365,15 @@ export const useChatStore = create<ChatState>()(
           createdAt: nowIso,
           updatedAt: nowIso,
           isOwn: true,
-          deliveryState: shouldQueueImmediately ? "queued" : "sending",
-          deliveryError: null,
-          deliveryAttemptCount: shouldQueueImmediately ? 0 : 1,
         };
 
-        get().addMessage(optimisticMessage);
-        registerPendingOwnTempMessage({
-          conversationId: normalizedOptimisticConversationId,
-          tempId,
-          content: optimisticMessage.content,
-          replyToId: resolveReplyToId(optimisticMessage.replyTo),
-          hasImage: Boolean(optimisticMessage.imgUrl),
-        });
-
-        if (shouldQueueImmediately) {
-          enqueueDirectOutgoingMessage({
-            set,
-            tempId,
-            conversationId: normalizedOptimisticConversationId,
-            recipientId: String(recipientId || "").trim(),
-            content: String(content || ""),
-            imgUrl: imgUrl || undefined,
-            replyTo: String(replyTo || "").trim() || undefined,
-            queuedAt: nowIso,
-            attemptCount: 0,
-          });
-          toast.info("You're offline. Message queued.");
-          return;
+        if (optimisticConversationId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          get().addMessage(optimisticMessage as any);
         }
 
         try {
-          const deliveredMessage = await chatService.sendDirectMessage(
+          const message = await chatService.sendDirectMessage(
             recipientId,
             content,
             imgUrl,
@@ -1179,103 +381,82 @@ export const useChatStore = create<ChatState>()(
             replyTo,
           );
 
-          finalizeDirectSendSuccess({
-            set,
-            get,
-            deliveredMessage,
-            tempId,
-            optimisticConversationId: normalizedOptimisticConversationId,
-            conversationIdOverride,
-            activeConversationId,
-            createdTempConversation,
-          });
-        } catch (error) {
-          applyDirectSendFailure({
-            set,
-            get,
-            error,
-            tempId,
-            optimisticConversationId: normalizedOptimisticConversationId,
-            optimisticMessage,
-            recipientId,
-            content: String(content || ""),
-            imgUrl: imgUrl || undefined,
-            replyTo: String(replyTo || "").trim() || undefined,
-            queuedAt: nowIso,
-          });
+          // Replace temp message with real one from server
+          if (optimisticConversationId) {
+            get().removeMessageFromConversation(optimisticConversationId, tempId);
+          }
 
+          const realConvoId =
+            conversationIdOverride ?? message.conversationId ?? activeConversationId;
+
+          if (
+            optimisticConversationId &&
+            realConvoId &&
+            optimisticConversationId !== realConvoId
+          ) {
+            pruneTempConversationState({
+              optimisticConversationId,
+              fallbackActiveConversationId: realConvoId,
+              setState: set,
+            });
+          }
+
+          get().addMessage(message);
+
+          set((state) => ({
+            conversations: state.conversations.map((c) =>
+              c._id === realConvoId ? { ...c, seenBy: [] } : c,
+            ),
+          }));
+
+          if (createdTempConversation) {
+            void get().fetchConversations();
+          }
+        } catch (error) {
+          // Rollback: remove the optimistic message
+          if (optimisticConversationId) {
+            get().removeMessageFromConversation(optimisticConversationId, tempId);
+          }
+
+          if (createdTempConversation && optimisticConversationId) {
+            pruneTempConversationState({
+              optimisticConversationId,
+              fallbackActiveConversationId: null,
+              setState: set,
+            });
+          }
+
+          // Reset reply context so user doesn't get stuck with stale reply preview
+          set({ replyingTo: null });
+
+          toast.error("Failed to send message. Please try again.");
           console.error("Error sending direct message", error);
         }
       },
-      sendGroupMessage: async (
-        conversationId,
-        content,
-        imgUrl,
-        replyTo,
-        groupChannelId,
-      ) => {
+      sendGroupMessage: async (conversationId, content, imgUrl, replyTo) => {
         const user = useAuthStore.getState().user;
-        const conversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-        const effectiveGroupChannelId =
-          groupChannelId ||
-          resolveConversationActiveGroupChannelId(conversation) ||
-          DEFAULT_GROUP_CHANNEL_ID;
-        const nowIso = new Date().toISOString();
-        const shouldQueueImmediately = isNavigatorOffline();
 
         // Optimistic message
-        const tempId = buildTempMessageId();
-        const optimisticMessage: Message = {
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const optimisticMessage = {
           _id: tempId,
           conversationId,
-          groupChannelId: effectiveGroupChannelId,
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
-          replyTo: replyTo
-            ? { _id: replyTo, content: "", senderId: "" }
-            : null,
+          replyTo: replyTo ? { _id: replyTo } : null,
           reactions: [],
           isDeleted: false,
           editedAt: null,
           readBy: [],
           hiddenFor: [],
-          createdAt: nowIso,
-          updatedAt: nowIso,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           isOwn: true,
-          deliveryState: shouldQueueImmediately ? "queued" : "sending",
-          deliveryError: null,
-          deliveryAttemptCount: shouldQueueImmediately ? 0 : 1,
         };
 
-        get().addMessage(optimisticMessage);
-        registerPendingOwnTempMessage({
-          conversationId,
-          tempId,
-          content: optimisticMessage.content,
-          replyToId: resolveReplyToId(optimisticMessage.replyTo),
-          hasImage: Boolean(optimisticMessage.imgUrl),
-        });
-
-        if (shouldQueueImmediately) {
-          set((state) => ({
-            outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
-              tempId,
-              scope: "group",
-              conversationId,
-              groupChannelId: effectiveGroupChannelId,
-              content: String(content || ""),
-              imgUrl: imgUrl || undefined,
-              replyTo: String(replyTo || "").trim() || undefined,
-              queuedAt: nowIso,
-              attemptCount: 0,
-            }),
-          }));
-          toast.info("You're offline. Message queued.");
-          return;
-        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        get().addMessage(optimisticMessage as any);
 
         try {
           const { addMessage } = get();
@@ -1284,17 +465,9 @@ export const useChatStore = create<ChatState>()(
             content,
             imgUrl,
             replyTo,
-            effectiveGroupChannelId,
           );
 
           // Replace temp with real
-          unregisterPendingOwnTempMessage({
-            conversationId,
-            tempId,
-          });
-          set((state) => ({
-            outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
-          }));
           get().removeMessageFromConversation(conversationId, tempId);
           addMessage(message);
 
@@ -1303,62 +476,12 @@ export const useChatStore = create<ChatState>()(
               c._id === conversationId ? { ...c, seenBy: [] } : c,
             ),
           }));
-
-          const undoMessageId = String(message._id || "").trim();
-          showUndoSendToast({
-            conversationId,
-            messageId: undoMessageId,
-            onUndo: () => {
-              void get()
-                .unsendMessage(conversationId, undoMessageId, "undo")
-                .catch((undoError) => {
-                  console.error("Undo send failed", undoError);
-                });
-            },
-          });
         } catch (error) {
-          const offlineFailure = isLikelyOfflineError(error);
-          const nextAttemptCount =
-            Number(optimisticMessage.deliveryAttemptCount || 0) + 1;
-
-          get().updateMessage(conversationId, tempId, {
-            deliveryState: offlineFailure ? "queued" : "failed",
-            deliveryError: offlineFailure ? null : resolveDeliveryErrorMessage(error),
-            deliveryAttemptCount: nextAttemptCount,
-          });
-
-          if (offlineFailure) {
-            set((state) => ({
-              outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
-                tempId,
-                scope: "group",
-                conversationId,
-                groupChannelId: effectiveGroupChannelId,
-                content: String(content || ""),
-                imgUrl: imgUrl || undefined,
-                replyTo: String(replyTo || "").trim() || undefined,
-                queuedAt: nowIso,
-                attemptCount: nextAttemptCount,
-              }),
-            }));
-            toast.info("Connection lost. Message moved to queue.");
-          } else {
-            set((state) => ({
-              outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
-            }));
-
-            const rateLimit = handleRateLimitError(error, {
-              fallbackScope: "message:group",
-              actionLabel: "Sending messages too fast",
-            });
-            if (!rateLimit.handled) {
-              toast.error(resolveDeliveryErrorMessage(error));
-            }
-          }
-
+          // Rollback
+          get().removeMessageFromConversation(conversationId, tempId);
           // Reset reply context so user doesn't get stuck with stale reply preview
           set({ replyingTo: null });
-
+          toast.error("Failed to send message. Please try again.");
           console.error("Error sending group message", error);
         }
       },
@@ -1369,40 +492,24 @@ export const useChatStore = create<ChatState>()(
           const convoId = message.conversationId;
 
           set((state) => {
-            const conversation = state.conversations.find(
-              (conversationItem) => conversationItem._id === convoId,
-            );
-            const loadedChannelId = state.messages[convoId]?.channelId || null;
-
-            if (conversation?.type === "group" && loadedChannelId) {
-              const incomingChannelId = resolveMessageGroupChannelId(message);
-              if (incomingChannelId !== normalizeGroupChannelId(loadedChannelId)) {
-                return state;
-              }
-            }
-
             let currentItems = state.messages[convoId]?.items ?? [];
             if (currentItems.some((m) => m._id === message._id)) {
               return state;
             }
 
-            let matchedTempId: string | null = null;
-
             // Defend against Socket/API race condition where socket broadcasts the real message
             // before our local API call resolves and tears down the optimistic (temp-) message.
-            if (message.isOwn && !String(message._id).startsWith("temp-")) {
-              matchedTempId = consumeMatchingPendingOwnTempMessage({
-                conversationId: convoId,
-                content: String(message.content || ""),
-                replyToId: resolveReplyToId(message.replyTo),
-                hasImage: Boolean(message.imgUrl),
-              });
+            if (message.isOwn && !message._id.startsWith("temp-")) {
+              const matchedTempIndex = currentItems.findIndex(
+                (m) =>
+                  m.isOwn &&
+                  String(m._id).startsWith("temp-") &&
+                  m.content === message.content
+              );
 
-              if (matchedTempId) {
-                currentItems = currentItems.filter(
-                  (existingMessage) =>
-                    String(existingMessage._id) !== String(matchedTempId),
-                );
+              if (matchedTempIndex !== -1) {
+                // If we found the phantom optimistic message, destroy it early
+                currentItems = currentItems.filter((_, idx) => idx !== matchedTempIndex);
               }
             }
 
@@ -1422,9 +529,6 @@ export const useChatStore = create<ChatState>()(
                   nextCursor: state.messages[convoId]?.nextCursor ?? undefined,
                 },
               },
-              outgoingQueue: matchedTempId
-                ? removeOutgoingQueueItem(state.outgoingQueue, matchedTempId)
-                : state.outgoingQueue,
             };
           });
         } catch (error) {
@@ -1465,327 +569,13 @@ export const useChatStore = create<ChatState>()(
           };
         });
       },
-      retryMessageDelivery: async (conversationId, messageId) => { // NOSONAR
-        const normalizedConversationId = String(conversationId || "").trim();
-        const normalizedMessageId = String(messageId || "").trim();
-
-        if (
-          !normalizedConversationId ||
-          !normalizedMessageId ||
-          !isTempMessageId(normalizedMessageId)
-        ) {
-          return;
-        }
-
-        const stateSnapshot = get();
-        const queuedItem = stateSnapshot.outgoingQueue.find(
-          (item) => item.tempId === normalizedMessageId,
-        );
-        const queuedConversationId = String(
-          queuedItem?.conversationId || normalizedConversationId,
-        ).trim();
-        const effectiveConversationId = queuedConversationId || normalizedConversationId;
-
-        const messageBucket =
-          stateSnapshot.messages[effectiveConversationId]?.items ||
-          stateSnapshot.messages[normalizedConversationId]?.items ||
-          [];
-        const pendingMessage = messageBucket.find(
-          (messageItem) => String(messageItem._id) === normalizedMessageId,
-        );
-
-        if (!pendingMessage) {
-          set((state) => ({
-            outgoingQueue: removeOutgoingQueueItem(
-              state.outgoingQueue,
-              normalizedMessageId,
-            ),
-          }));
-          return;
-        }
-
-        const user = useAuthStore.getState().user;
-        const currentUserId = String(user?._id || "").trim();
-        const conversation = stateSnapshot.conversations.find(
-          (conversationItem) =>
-            String(conversationItem._id) === String(effectiveConversationId),
-        );
-
-        const inferredScope: OutgoingMessageQueueItem["scope"] =
-          conversation?.type === "group" ? "group" : "direct";
-        const scope = queuedItem?.scope || inferredScope;
-
-        const payloadContent = String(
-          pendingMessage.content ?? queuedItem?.content ?? "",
-        );
-        const payloadImgUrl = pendingMessage.imgUrl || queuedItem?.imgUrl || undefined;
-        const payloadReplyTo =
-          resolveReplyToId(pendingMessage.replyTo) || queuedItem?.replyTo || "";
-        const nextAttemptCount =
-          Number(
-            pendingMessage.deliveryAttemptCount || queuedItem?.attemptCount || 0,
-          ) + 1;
-        const nowIso = new Date().toISOString();
-
-        if (!payloadContent.trim() && !payloadImgUrl) {
-          get().updateMessage(effectiveConversationId, normalizedMessageId, {
-            deliveryState: "failed",
-            deliveryError: "Message content is empty.",
-            deliveryAttemptCount: nextAttemptCount,
-          });
-          set((state) => ({
-            outgoingQueue: removeOutgoingQueueItem(
-              state.outgoingQueue,
-              normalizedMessageId,
-            ),
-          }));
-          return;
-        }
-
-        const recipientId =
-          scope === "direct"
-            ? resolveDirectRecipientId({
-                conversations: stateSnapshot.conversations,
-                conversationId: effectiveConversationId,
-                fallbackRecipientId: queuedItem?.recipientId,
-                currentUserId,
-              })
-            : "";
-
-        const targetGroupChannelId =
-          scope === "group"
-            ? normalizeGroupChannelId(
-                queuedItem?.groupChannelId || pendingMessage.groupChannelId,
-              )
-            : null;
-
-        if (scope === "direct" && !recipientId) {
-          get().updateMessage(effectiveConversationId, normalizedMessageId, {
-            deliveryState: "failed",
-            deliveryError: "Recipient is no longer available.",
-            deliveryAttemptCount: nextAttemptCount,
-          });
-          set((state) => ({
-            outgoingQueue: removeOutgoingQueueItem(
-              state.outgoingQueue,
-              normalizedMessageId,
-            ),
-          }));
-          return;
-        }
-
-        if (isNavigatorOffline()) {
-          get().updateMessage(effectiveConversationId, normalizedMessageId, {
-            deliveryState: "queued",
-            deliveryError: null,
-            deliveryAttemptCount: nextAttemptCount,
-          });
-          set((state) => ({
-            outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
-              tempId: normalizedMessageId,
-              scope,
-              conversationId: effectiveConversationId,
-              recipientId: scope === "direct" ? recipientId : undefined,
-              groupChannelId: scope === "group" ? targetGroupChannelId || undefined : undefined,
-              content: payloadContent,
-              imgUrl: payloadImgUrl,
-              replyTo: payloadReplyTo || undefined,
-              queuedAt: nowIso,
-              attemptCount: nextAttemptCount,
-            }),
-          }));
-          return;
-        }
-
-        registerPendingOwnTempMessage({
-          conversationId: effectiveConversationId,
-          tempId: normalizedMessageId,
-          content: payloadContent,
-          replyToId: payloadReplyTo,
-          hasImage: Boolean(payloadImgUrl),
-        });
-
-        get().updateMessage(effectiveConversationId, normalizedMessageId, {
-          deliveryState: "sending",
-          deliveryError: null,
-          deliveryAttemptCount: nextAttemptCount,
-        });
-
-        set((state) => ({
-          outgoingQueue: removeOutgoingQueueItem(
-            state.outgoingQueue,
-            normalizedMessageId,
-          ),
-        }));
-
-        try {
-          if (scope === "direct") {
-            const resolvedConversationId = isPersistedConversationId(
-              effectiveConversationId,
-            )
-              ? effectiveConversationId
-              : undefined;
-
-            const deliveredMessage = await chatService.sendDirectMessage(
-              recipientId,
-              payloadContent,
-              payloadImgUrl,
-              resolvedConversationId,
-              payloadReplyTo || undefined,
-            );
-
-            unregisterPendingOwnTempMessage({
-              conversationId: effectiveConversationId,
-              tempId: normalizedMessageId,
-            });
-            get().removeMessageFromConversation(
-              effectiveConversationId,
-              normalizedMessageId,
-            );
-
-            const realConvoId = String(
-              deliveredMessage.conversationId || effectiveConversationId,
-            ).trim();
-
-            if (realConvoId && realConvoId !== effectiveConversationId) {
-              pruneTempConversationState({
-                optimisticConversationId: effectiveConversationId,
-                fallbackActiveConversationId: realConvoId,
-                setState: set,
-              });
-            }
-
-            get().addMessage(deliveredMessage);
-
-            if (realConvoId) {
-              set((state) => ({
-                conversations: state.conversations.map((conversationItem) =>
-                  conversationItem._id === realConvoId
-                    ? { ...conversationItem, seenBy: [] }
-                    : conversationItem,
-                ),
-              }));
-            }
-          } else {
-            const deliveredMessage = await chatService.sendGroupMessage(
-              effectiveConversationId,
-              payloadContent,
-              payloadImgUrl,
-              payloadReplyTo || undefined,
-              targetGroupChannelId || undefined,
-            );
-
-            unregisterPendingOwnTempMessage({
-              conversationId: effectiveConversationId,
-              tempId: normalizedMessageId,
-            });
-            get().removeMessageFromConversation(
-              effectiveConversationId,
-              normalizedMessageId,
-            );
-            get().addMessage(deliveredMessage);
-
-            set((state) => ({
-              conversations: state.conversations.map((conversationItem) =>
-                conversationItem._id === effectiveConversationId
-                  ? { ...conversationItem, seenBy: [] }
-                  : conversationItem,
-              ),
-            }));
-          }
-        } catch (error) {
-          const offlineFailure = isLikelyOfflineError(error);
-
-          get().updateMessage(effectiveConversationId, normalizedMessageId, {
-            deliveryState: offlineFailure ? "queued" : "failed",
-            deliveryError: offlineFailure ? null : resolveDeliveryErrorMessage(error),
-            deliveryAttemptCount: nextAttemptCount,
-          });
-
-          if (offlineFailure) {
-            set((state) => ({
-              outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
-                tempId: normalizedMessageId,
-                scope,
-                conversationId: effectiveConversationId,
-                recipientId: scope === "direct" ? recipientId : undefined,
-                groupChannelId:
-                  scope === "group" ? targetGroupChannelId || undefined : undefined,
-                content: payloadContent,
-                imgUrl: payloadImgUrl,
-                replyTo: payloadReplyTo || undefined,
-                queuedAt: nowIso,
-                attemptCount: nextAttemptCount,
-              }),
-            }));
-            return;
-          }
-
-          const rateLimit = handleRateLimitError(error, {
-            fallbackScope: scope === "direct" ? "message:direct" : "message:group",
-            actionLabel: "Sending messages too fast",
-          });
-          if (!rateLimit.handled) {
-            toast.error(resolveDeliveryErrorMessage(error));
-          }
-
-          console.error("Error retrying message delivery", error);
-        }
-      },
-      flushOutgoingQueue: async () => {
-        if (get().isFlushingOutgoingQueue || isNavigatorOffline()) {
-          return;
-        }
-
-        const queueSnapshot = [...get().outgoingQueue];
-        if (!queueSnapshot.length) {
-          return;
-        }
-
-        set({ isFlushingOutgoingQueue: true });
-
-        try {
-          for (const queuedItem of queueSnapshot) {
-            if (isNavigatorOffline()) {
-              break;
-            }
-
-            const targetConversationId = String(
-              queuedItem.conversationId || "",
-            ).trim();
-            const targetMessageId = String(queuedItem.tempId || "").trim();
-
-            if (!targetConversationId || !targetMessageId) {
-              continue;
-            }
-
-            await get().retryMessageDelivery(targetConversationId, targetMessageId);
-          }
-        } finally {
-          set({ isFlushingOutgoingQueue: false });
-        }
-      },
       reactToMessage: async (conversationId, messageId, emoji) => {
-        const mutationKey = `react:${conversationId}:${messageId}`;
-        if (!acquireMessageMutationLock(mutationKey)) {
-          return;
-        }
-
-        const mutationVersion = startMessageMutation(mutationKey);
         const { user } = useAuthStore.getState();
         const currentUserId = user?._id ?? "";
 
         // Optimistic update: toggle the reaction immediately
         const prevItems = get().messages[conversationId]?.items ?? [];
         const prevMessage = prevItems.find((m) => m._id === messageId);
-        if (!prevMessage || prevMessage.isDeleted) {
-          clearMessageMutation(mutationKey, mutationVersion);
-          releaseMessageMutationLock(mutationKey);
-          return;
-        }
-
-        const previousReactions = prevMessage.reactions ?? [];
-
         if (prevMessage) {
           const existingIdx = (prevMessage.reactions ?? []).findIndex(
             (r) => r.userId === currentUserId && r.emoji === emoji,
@@ -1817,39 +607,20 @@ export const useChatStore = create<ChatState>()(
             throw new TypeError("Invalid reactToMessage response payload");
           }
 
-          if (!isLatestMessageMutation(mutationKey, mutationVersion)) {
-            return;
-          }
-
           // Reconcile with server canonical state
           get().updateMessage(conversationId, messageId, { reactions });
         } catch (error) {
-          if (!isLatestMessageMutation(mutationKey, mutationVersion)) {
-            return;
-          }
-
           // Rollback to previous reactions on failure
-          get().updateMessage(conversationId, messageId, {
-            reactions: previousReactions,
-          });
-
-          handleRateLimitError(error, {
-            fallbackScope: "message:reaction",
-            actionLabel: "Reacting too fast",
-          });
-
+          if (prevMessage) {
+            get().updateMessage(conversationId, messageId, {
+              reactions: prevMessage.reactions ?? [],
+            });
+          }
           console.error("Reaction error:", error);
-        } finally {
-          clearMessageMutation(mutationKey, mutationVersion);
-          releaseMessageMutationLock(mutationKey);
         }
       },
-      unsendMessage: async (conversationId, messageId, mode = "standard") => {
+      unsendMessage: async (conversationId, messageId) => {
         const mutationKey = `unsend:${conversationId}:${messageId}`;
-        if (!acquireMessageMutationLock(mutationKey)) {
-          return;
-        }
-
         const mutationVersion = startMessageMutation(mutationKey);
         const previousMessage =
           get().messages[conversationId]?.items.find(
@@ -1857,12 +628,8 @@ export const useChatStore = create<ChatState>()(
           ) ?? null;
 
         if (!previousMessage) {
-          clearMessageMutation(mutationKey, mutationVersion);
-          releaseMessageMutationLock(mutationKey);
           return;
         }
-
-        const optimisticDeletedAt = new Date().toISOString();
 
         get().updateMessage(conversationId, messageId, {
           isDeleted: true,
@@ -1871,14 +638,11 @@ export const useChatStore = create<ChatState>()(
           replyTo: null,
           reactions: [],
           readBy: [],
-          editedAt: optimisticDeletedAt,
+          editedAt: new Date().toISOString(),
         });
 
         try {
-          const result =
-            mode === "undo"
-              ? await chatService.undoSendMessage(messageId)
-              : await chatService.unsendMessage(messageId);
+          const result = await chatService.unsendMessage(messageId);
 
           if (result?.message?._id) {
             get().updateMessage(conversationId, messageId, {
@@ -1894,10 +658,7 @@ export const useChatStore = create<ChatState>()(
 
           if (result?.conversation?._id) {
             get().updateConversation(
-              {
-                ...result.conversation,
-                _id: result.conversation._id,
-              },
+              result.conversation as Partial<Conversation> & { _id: string },
             );
           }
         } catch (error) {
@@ -1912,16 +673,12 @@ export const useChatStore = create<ChatState>()(
 
           // If another canonical update already marked this message deleted,
           // do not rollback to stale content.
-          const latestEditedTs = toTimestamp(latestMessage?.editedAt || undefined);
-          const optimisticDeletedTs = toTimestamp(optimisticDeletedAt);
-
           const alreadyCanonicallyDeleted = Boolean(
             latestMessage?.isDeleted &&
               latestMessage?.imgUrl == null &&
               String(latestMessage?.content ?? "")
                 .toLowerCase()
-                .includes("removed") &&
-              latestEditedTs > optimisticDeletedTs,
+                .includes("removed"),
           );
 
           if (alreadyCanonicallyDeleted) {
@@ -1937,65 +694,44 @@ export const useChatStore = create<ChatState>()(
             readBy: previousMessage.readBy ?? [],
             editedAt: previousMessage.editedAt ?? null,
           });
-
+          toast.error("Could not remove message for everyone. Restored.");
           console.error("Unsend error:", error);
           throw error;
         } finally {
           clearMessageMutation(mutationKey, mutationVersion);
-          releaseMessageMutationLock(mutationKey);
         }
       },
       removeMessageForMe: async (conversationId, messageId) => {
         const previousItems = get().messages[conversationId]?.items ?? [];
-        const removedMessage =
-          previousItems.find((messageItem) => messageItem._id === messageId) ?? null;
+        const hasTargetMessage = previousItems.some(
+          (messageItem) => messageItem._id === messageId,
+        );
 
-        if (!removedMessage) {
+        if (!hasTargetMessage) {
           return;
         }
 
         get().removeMessageFromConversation(conversationId, messageId);
 
         try {
-          const removeResult = await chatService.removeMessageForMe(messageId);
-          if (removeResult?.conversation?._id) {
-            get().updateConversation(
-              removeResult.conversation as Partial<Conversation> & { _id: string },
-            );
-          }
+          await chatService.removeMessageForMe(messageId);
         } catch (error) {
-          set((state) => {
-            // Reinsert only the removed message so concurrent incoming updates are preserved.
-            const currentBucket = state.messages[conversationId];
-            const currentItems = currentBucket?.items ?? [];
-
-            if (currentItems.some((messageItem) => messageItem._id === messageId)) {
-              return state;
-            }
-
-            return {
-              messages: {
-                ...state.messages,
-                [conversationId]: {
-                  ...currentBucket,
-                  items: sortMessagesChronologically([
-                    ...currentItems,
-                    removedMessage,
-                  ]),
-                },
+          set((state) => ({
+            messages: {
+              ...state.messages,
+              [conversationId]: {
+                ...state.messages[conversationId],
+                items: previousItems,
               },
-            };
-          });
+            },
+          }));
+          toast.error("Could not remove message. Restored.");
           console.error("Remove-for-me error:", error);
           throw error;
         }
       },
       editMessage: async (conversationId, messageId, content) => {
         const mutationKey = `edit:${conversationId}:${messageId}`;
-        if (!acquireMessageMutationLock(mutationKey)) {
-          return;
-        }
-
         const mutationVersion = startMessageMutation(mutationKey);
         const normalizedContent = content.trim();
         const prevMessage =
@@ -2024,10 +760,7 @@ export const useChatStore = create<ChatState>()(
 
           if (result?.conversation?._id) {
             get().updateConversation(
-              {
-                ...result.conversation,
-                _id: result.conversation._id,
-              },
+              result.conversation as Partial<Conversation> & { _id: string },
             );
           }
         } catch (error) {
@@ -2057,30 +790,14 @@ export const useChatStore = create<ChatState>()(
           throw error;
         } finally {
           clearMessageMutation(mutationKey, mutationVersion);
-          releaseMessageMutationLock(mutationKey);
         }
       },
 
       updateConversation: (conversation) => {
         set((state) => {
-          const nextList = state.conversations.map((c) => {
-            if (c._id !== conversation._id) {
-              return c;
-            }
-
-            return {
-              ...c,
-              ...conversation,
-              ...(conversation.group
-                ? {
-                    group: {
-                      ...c.group,
-                      ...conversation.group,
-                    },
-                  }
-                : {}),
-            };
-          });
+          const nextList = state.conversations.map((c) =>
+            c._id === conversation._id ? { ...c, ...conversation } : c,
+          );
 
           // Sort conversations chronologically so the latest updated conversation bubbles to the top
           nextList.sort((a, b) => {
@@ -2091,208 +808,45 @@ export const useChatStore = create<ChatState>()(
 
           return { conversations: nextList };
         });
-
-        syncConversationListCacheForCurrentUser();
       },
       markAsSeen: async () => {
-        let rollbackState: {
-          conversationId: string;
-          userId: string;
-          activeGroupChannelId: string | null;
-          previousUnreadCount: number;
-          previousActiveChannelUnreadCount: number;
-          optimisticUnreadCount: number;
-        } | null = null;
-
         try {
           const { user } = useAuthStore.getState();
           const { activeConversationId, conversations } = get();
-          const normalizedUserId = String(user?._id || "");
-          const normalizedActiveConversationId = String(
-            activeConversationId || "",
-          );
 
-          if (!normalizedActiveConversationId || !normalizedUserId) {
+          if (!activeConversationId || !user) {
             return;
           }
 
           const convo = conversations.find(
-            (c) => String(c._id) === normalizedActiveConversationId,
+            (c) => c._id === activeConversationId,
           );
 
           if (!convo) {
             return;
           }
 
-          const activeGroupChannelId =
-            convo.type === "group"
-              ? resolveConversationActiveGroupChannelId(convo)
-              : null;
-          const myChannelUnreadMap =
-            convo.type === "group"
-              ? convo.group?.channelUnreadCounts?.[normalizedUserId] || {}
-              : {};
-          const previousUnreadCount = Number(
-            convo.unreadCounts?.[normalizedUserId] || 0,
-          );
-          const previousActiveChannelUnreadCount =
-            convo.type === "group" && activeGroupChannelId
-              ? Number(myChannelUnreadMap?.[activeGroupChannelId] || 0)
-              : 0;
-          const hasUnreadForActiveChannel =
-            convo.type === "group" &&
-            activeGroupChannelId &&
-            previousActiveChannelUnreadCount > 0;
-
-          if (
-            previousUnreadCount === 0 &&
-            !hasUnreadForActiveChannel
-          ) {
+          if ((convo.unreadCounts?.[user._id] ?? 0) === 0) {
             return;
           }
-
-          const optimisticUnreadCount =
-            convo.type === "group"
-              ? Math.max(0, previousUnreadCount - previousActiveChannelUnreadCount)
-              : 0;
-
-          rollbackState = {
-            conversationId: normalizedActiveConversationId,
-            userId: normalizedUserId,
-            activeGroupChannelId,
-            previousUnreadCount,
-            previousActiveChannelUnreadCount,
-            optimisticUnreadCount,
-          };
 
           // Optimistic update
           set((state) => ({
             conversations: state.conversations.map((c) =>
-              String(c._id) !== normalizedActiveConversationId || !c.lastMessage
-                ? c
-                : {
+              c._id === activeConversationId && c.lastMessage
+                ? {
                     ...c,
                     unreadCounts: {
                       ...c.unreadCounts,
-                      [normalizedUserId]: optimisticUnreadCount,
+                      [user._id]: 0,
                     },
-                    ...(c.type === "group"
-                      ? {
-                          group: {
-                            ...c.group,
-                            channelUnreadCounts: {
-                              ...c.group?.channelUnreadCounts,
-                              [normalizedUserId]: {
-                                ...c.group?.channelUnreadCounts?.[normalizedUserId],
-                                ...(activeGroupChannelId
-                                  ? { [activeGroupChannelId]: 0 }
-                                  : {}),
-                              },
-                            },
-                          },
-                        }
-                      : {}),
-                  },
+                  }
+                : c,
             ),
           }));
 
-          await chatService.markAsSeen(
-            normalizedActiveConversationId,
-            activeGroupChannelId || undefined,
-          );
+          await chatService.markAsSeen(activeConversationId);
         } catch (error) {
-          if (rollbackState) {
-            const rollbackSnapshot = rollbackState;
-            set((state) => {
-              const targetConversation = state.conversations.find(
-                (conversationItem) =>
-                  String(conversationItem._id) === rollbackSnapshot.conversationId,
-              );
-
-              if (!targetConversation) {
-                return state;
-              }
-
-              const currentUnreadCount = Number(
-                targetConversation.unreadCounts?.[rollbackSnapshot.userId] || 0,
-              );
-              if (currentUnreadCount !== rollbackSnapshot.optimisticUnreadCount) {
-                return state;
-              }
-
-              if (
-                targetConversation.type === "group" &&
-                rollbackSnapshot.activeGroupChannelId
-              ) {
-                const currentChannelUnread = Number(
-                  targetConversation.group?.channelUnreadCounts?.[
-                    rollbackSnapshot.userId
-                  ]?.[rollbackSnapshot.activeGroupChannelId] || 0,
-                );
-
-                if (currentChannelUnread !== 0) {
-                  return state;
-                }
-              }
-
-              return {
-                conversations: state.conversations.map((conversationItem) => {
-                  if (
-                    String(conversationItem._id) !== rollbackSnapshot.conversationId
-                  ) {
-                    return conversationItem;
-                  }
-
-                  const restoredUnreadCounts = {
-                    ...conversationItem.unreadCounts,
-                    [rollbackSnapshot.userId]: rollbackSnapshot.previousUnreadCount,
-                  };
-
-                  if (
-                    conversationItem.type !== "group" ||
-                    !rollbackSnapshot.activeGroupChannelId
-                  ) {
-                    return {
-                      ...conversationItem,
-                      unreadCounts: restoredUnreadCounts,
-                    };
-                  }
-
-                  const currentPerUserChannelUnread = {
-                    ...conversationItem.group?.channelUnreadCounts?.[
-                      rollbackSnapshot.userId
-                    ],
-                  };
-
-                  if (rollbackSnapshot.previousActiveChannelUnreadCount > 0) {
-                    currentPerUserChannelUnread[rollbackSnapshot.activeGroupChannelId] =
-                      rollbackSnapshot.previousActiveChannelUnreadCount;
-                  } else {
-                    delete currentPerUserChannelUnread[rollbackSnapshot.activeGroupChannelId];
-                  }
-
-                  const restoredChannelUnreadCounts = {
-                    ...conversationItem.group?.channelUnreadCounts,
-                  };
-
-                  if (Object.keys(currentPerUserChannelUnread).length > 0) {
-                    restoredChannelUnreadCounts[rollbackSnapshot.userId] =
-                      currentPerUserChannelUnread;
-                  } else {
-                    delete restoredChannelUnreadCounts[rollbackSnapshot.userId];
-                  }
-
-                  return {
-                    ...conversationItem,
-                    unreadCounts: restoredUnreadCounts,
-                    group: {
-                      ...conversationItem.group,
-                      channelUnreadCounts: restoredChannelUnreadCounts,
-                    },
-              };
-            });
-          }
-
           console.error("Error calling markAsSeen in store", error);
         }
       },
@@ -2312,8 +866,6 @@ export const useChatStore = create<ChatState>()(
               : state.activeConversationId,
           };
         });
-
-        syncConversationListCacheForCurrentUser();
       },
       createConversation: async (type, name, memberIds) => {
         try {
@@ -2347,711 +899,6 @@ export const useChatStore = create<ChatState>()(
           return false;
         } finally {
           set({ loading: false });
-        }
-      },
-      setGroupAnnouncementMode: async (conversationId, enabled) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return false;
-        }
-
-        get().updateConversation({
-          _id: conversationId,
-          group: {
-            ...previousConversation.group,
-            announcementOnly: enabled,
-          },
-        });
-
-        try {
-          const updatedConversation = await chatService.updateGroupAnnouncementMode(
-            conversationId,
-            enabled,
-          );
-
-          if (updatedConversation?._id) {
-            get().updateConversation(
-              {
-                ...updatedConversation,
-                _id: updatedConversation._id,
-              },
-            );
-          }
-
-          return true;
-        } catch (error) {
-          get().updateConversation(previousConversation);
-          console.error("Failed to update announcement mode", error);
-          return false;
-        }
-      },
-      setGroupAdminRole: async (conversationId, memberId, makeAdmin) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return false;
-        }
-
-        const adminIds = new Set(
-          (previousConversation.group.adminIds || []).map(String),
-        );
-
-        if (makeAdmin) {
-          adminIds.add(String(memberId));
-        } else {
-          adminIds.delete(String(memberId));
-        }
-
-        get().updateConversation({
-          _id: conversationId,
-          group: {
-            ...previousConversation.group,
-            adminIds: Array.from(adminIds),
-          },
-        });
-
-        try {
-          const updatedConversation = await chatService.updateGroupAdminRole(
-            conversationId,
-            memberId,
-            makeAdmin,
-          );
-
-          if (updatedConversation?._id) {
-            get().updateConversation(
-              {
-                ...updatedConversation,
-                _id: updatedConversation._id,
-              },
-            );
-          }
-
-          return true;
-        } catch (error) {
-          get().updateConversation(previousConversation);
-          console.error("Failed to update group admin role", error);
-          return false;
-        }
-      },
-      createGroupChannel: async (
-        conversationId,
-        name,
-        description,
-        options,
-      ) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return {
-            ok: false,
-            message: "Only group conversations support channels",
-          };
-        }
-
-        const normalizedName = String(name || "")
-          .replaceAll(/\s+/g, " ")
-          .trim();
-
-        if (normalizedName.length < 2 || normalizedName.length > 40) {
-          return {
-            ok: false,
-            message: "Channel name must be 2-40 characters",
-          };
-        }
-
-        try {
-          const result = await chatService.createGroupChannel(conversationId, {
-            name: normalizedName,
-            description: String(description || "").trim(),
-            categoryId: options?.categoryId ?? null,
-            sendRoles: options?.sendRoles,
-            position: options?.position,
-          });
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [conversationId]: {
-                items: [],
-                hasMore: false,
-                nextCursor: undefined,
-                channelId:
-                  result?.channel?.channelId ||
-                  normalizeGroupChannelId(
-                    result?.conversation?.group?.activeChannelId,
-                  ),
-              },
-            },
-          }));
-
-          await get().fetchMessages(conversationId);
-
-          return {
-            ok: true,
-          };
-        } catch (error: unknown) {
-          console.error("Failed to create group channel", error);
-
-          const apiMessage =
-            typeof error === "object" &&
-            error !== null &&
-            "response" in error &&
-            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
-              "string"
-              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-              : null;
-
-          return {
-            ok: false,
-            message: apiMessage || "Failed to create group channel",
-          };
-        }
-      },
-      updateGroupChannel: async (conversationId, channelId, payload) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return {
-            ok: false,
-            message: "Only group conversations support channels",
-          };
-        }
-
-        try {
-          const result = await chatService.updateGroupChannel(
-            conversationId,
-            channelId,
-            payload,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          return { ok: true };
-        } catch (error: unknown) {
-          const apiMessage = extractApiErrorMessage(error);
-
-          return {
-            ok: false,
-            message: apiMessage || "Failed to update group channel",
-          };
-        }
-      },
-      deleteGroupChannel: async (conversationId, channelId) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return {
-            ok: false,
-            message: "Only group conversations support channels",
-          };
-        }
-
-        try {
-          const result = await chatService.deleteGroupChannel(
-            conversationId,
-            channelId,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          const refreshedConversation = get().conversations.find(
-            (conversationItem) => conversationItem._id === conversationId,
-          );
-          const activeChannelId =
-            resolveConversationActiveGroupChannelId(refreshedConversation) ||
-            DEFAULT_GROUP_CHANNEL_ID;
-
-          set((state) => ({
-            messages: {
-              ...state.messages,
-              [conversationId]: {
-                items: [],
-                hasMore: false,
-                nextCursor: undefined,
-                channelId: activeChannelId,
-              },
-            },
-          }));
-
-          await get().fetchMessages(conversationId, activeChannelId);
-
-          return { ok: true };
-        } catch (error: unknown) {
-          const apiMessage = extractApiErrorMessage(error);
-
-          return {
-            ok: false,
-            message: apiMessage || "Failed to delete group channel",
-          };
-        }
-      },
-      reorderGroupChannels: async (conversationId, channelIds) => {
-        try {
-          const result = await chatService.reorderGroupChannels(
-            conversationId,
-            channelIds,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          return true;
-        } catch (error) {
-          console.error("Failed to reorder group channels", error);
-          return false;
-        }
-      },
-      createGroupChannelCategory: async (conversationId, name, position) => {
-        const normalizedName = String(name || "")
-          .replaceAll(/\s+/g, " ")
-          .trim();
-
-        if (normalizedName.length < 2 || normalizedName.length > 40) {
-          return {
-            ok: false,
-            message: "Category name must be 2-40 characters",
-          };
-        }
-
-        try {
-          const result = await chatService.createGroupChannelCategory(
-            conversationId,
-            {
-              name: normalizedName,
-              position,
-            },
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          return { ok: true };
-        } catch (error: unknown) {
-          const apiMessage = extractApiErrorMessage(error);
-          return {
-            ok: false,
-            message: apiMessage || "Failed to create category",
-          };
-        }
-      },
-      updateGroupChannelCategory: async (conversationId, categoryId, payload) => {
-        try {
-          const result = await chatService.updateGroupChannelCategory(
-            conversationId,
-            categoryId,
-            payload,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          return { ok: true };
-        } catch (error: unknown) {
-          const apiMessage = extractApiErrorMessage(error);
-          return {
-            ok: false,
-            message: apiMessage || "Failed to update category",
-          };
-        }
-      },
-      deleteGroupChannelCategory: async (conversationId, categoryId) => {
-        try {
-          const result = await chatService.deleteGroupChannelCategory(
-            conversationId,
-            categoryId,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          return { ok: true };
-        } catch (error: unknown) {
-          const apiMessage = extractApiErrorMessage(error);
-          return {
-            ok: false,
-            message: apiMessage || "Failed to delete category",
-          };
-        }
-      },
-      reorderGroupChannelCategories: async (conversationId, categoryIds) => {
-        try {
-          const result = await chatService.reorderGroupChannelCategories(
-            conversationId,
-            categoryIds,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          return true;
-        } catch (error) {
-          console.error("Failed to reorder channel categories", error);
-          return false;
-        }
-      },
-      fetchGroupChannelAnalytics: async (conversationId, days = 7) => {
-        try {
-          const result = await chatService.fetchGroupChannelAnalytics(
-            conversationId,
-            days,
-          );
-
-          return {
-            ok: true,
-            analytics: result.analytics,
-          };
-        } catch (error: unknown) {
-          const apiMessage = extractApiErrorMessage(error);
-
-          return {
-            ok: false,
-            message: apiMessage || "Failed to fetch channel analytics",
-          };
-        }
-      },
-      setGroupActiveChannel: async (conversationId, channelId) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return false;
-        }
-
-        const normalizedChannelId = normalizeGroupChannelId(channelId);
-        const previousBucket = get().messages[conversationId];
-
-        get().updateConversation({
-          _id: conversationId,
-          group: {
-            ...previousConversation.group,
-            activeChannelId: normalizedChannelId,
-          },
-        });
-
-        set((state) => ({
-          messages: {
-            ...state.messages,
-            [conversationId]: {
-              items: [],
-              hasMore: false,
-              nextCursor: undefined,
-              channelId: normalizedChannelId,
-            },
-          },
-        }));
-
-        try {
-          const result = await chatService.setGroupActiveChannel(
-            conversationId,
-            normalizedChannelId,
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation({
-              ...result.conversation,
-              _id: result.conversation._id,
-            });
-          }
-
-          await get().fetchMessages(conversationId, normalizedChannelId);
-          return true;
-        } catch (error) {
-          get().updateConversation(previousConversation);
-
-          set((state) => {
-            const nextMessages = { ...state.messages };
-
-            if (previousBucket) {
-              nextMessages[conversationId] = previousBucket;
-            } else {
-              delete nextMessages[conversationId];
-            }
-
-            return {
-              messages: nextMessages,
-            };
-          });
-
-          console.error("Failed to switch group channel", error);
-          return false;
-        }
-      },
-      createGroupJoinLink: async (conversationId, options) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return {
-            ok: false,
-            message: "Join link is available for group conversations only",
-          };
-        }
-
-        try {
-          const expiresInHours =
-            typeof options?.expiresInHours === "number"
-              ? options.expiresInHours
-              : 24;
-
-          const result = await chatService.createGroupJoinLink(
-            conversationId,
-            {
-              expiresInHours,
-              maxUses: options?.maxUses ?? null,
-              oneTime: Boolean(options?.oneTime),
-            },
-          );
-
-          if (result?.conversation?._id) {
-            get().updateConversation(
-              {
-                ...result.conversation,
-                _id: result.conversation._id,
-              },
-            );
-          }
-
-          return {
-            ok: true,
-            joinLinkUrl: result.joinLink?.url,
-            expiresAt: result.joinLink?.expiresAt,
-            maxUses: result.joinLink?.maxUses ?? null,
-            oneTime: Boolean(result.joinLink?.oneTime),
-            remainingUses: result.joinLink?.remainingUses ?? null,
-          };
-        } catch (error: unknown) {
-          console.error("Failed to create group join link", error);
-          const rateLimit = handleRateLimitError(error, {
-            fallbackScope: "chat:join-link",
-            actionLabel: "Join link actions are cooling down",
-          });
-
-          const apiMessage =
-            typeof error === "object" &&
-            error !== null &&
-            "response" in error &&
-            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
-              "string"
-              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-              : null;
-
-          if (rateLimit.handled) {
-            return {
-              ok: false,
-              message:
-                apiMessage ||
-                `Please retry in ${rateLimit.info?.retryAfterSeconds || 1}s`,
-              retryAfterSeconds: rateLimit.info?.retryAfterSeconds,
-            };
-          }
-
-          return {
-            ok: false,
-            message: apiMessage || "Failed to create join link",
-          };
-        }
-      },
-      revokeGroupJoinLink: async (conversationId) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return false;
-        }
-
-        get().updateConversation({
-          _id: conversationId,
-          group: {
-            ...previousConversation.group,
-            joinLink: null,
-          },
-        });
-
-        try {
-          const updatedConversation = await chatService.revokeGroupJoinLink(
-            conversationId,
-          );
-
-          if (updatedConversation?._id) {
-            get().updateConversation(
-              {
-                ...updatedConversation,
-                _id: updatedConversation._id,
-              },
-            );
-          }
-
-          return true;
-        } catch (error) {
-          get().updateConversation(previousConversation);
-          console.error("Failed to revoke group join link", error);
-          return false;
-        }
-      },
-      joinGroupByLink: async (conversationId, token) => {
-        try {
-          const result = await chatService.joinGroupByLink(conversationId, token);
-          const joinedConversation = result?.conversation;
-
-          if (joinedConversation?._id) {
-            const conversationExists = get().conversations.some(
-              (conversationItem) =>
-                conversationItem._id === joinedConversation._id,
-            );
-
-            if (conversationExists) {
-              get().updateConversation(joinedConversation);
-            } else {
-              get().addConvo(joinedConversation, { setActive: false });
-            }
-
-            get().setActiveConversation(joinedConversation._id);
-
-            const socket = useSocketStore.getState().socket;
-            if (socket?.connected) {
-              socket.emit("join-conversation", joinedConversation._id);
-            }
-          }
-
-          return {
-            ok: true,
-            alreadyJoined: Boolean(result?.alreadyJoined),
-          };
-        } catch (error: unknown) {
-          console.error("Failed to join group by link", error);
-          const rateLimit = handleRateLimitError(error, {
-            fallbackScope: "chat:join-link",
-            actionLabel: "Joining groups too fast",
-          });
-
-          const apiMessage =
-            typeof error === "object" &&
-            error !== null &&
-            "response" in error &&
-            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message ===
-              "string"
-              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-              : null;
-
-          if (rateLimit.handled) {
-            return {
-              ok: false,
-              message:
-                apiMessage ||
-                `Please retry in ${rateLimit.info?.retryAfterSeconds || 1}s`,
-              retryAfterSeconds: rateLimit.info?.retryAfterSeconds,
-            };
-          }
-
-          return {
-            ok: false,
-            message: apiMessage || "Failed to join group",
-          };
-        }
-      },
-      pinGroupMessage: async (conversationId, messageId) => {
-        const previousConversation = get().conversations.find(
-          (conversationItem) => conversationItem._id === conversationId,
-        );
-
-        if (previousConversation?.type !== "group") {
-          return false;
-        }
-
-        const targetMessage = messageId
-          ? get().messages[conversationId]?.items.find(
-              (messageItem) => messageItem._id === messageId,
-            )
-          : null;
-
-        const currentUserId = String(useAuthStore.getState().user?._id || "");
-
-        get().updateConversation({
-          _id: conversationId,
-          pinnedMessage: targetMessage
-            ? {
-                _id: targetMessage._id,
-                content: targetMessage.content || null,
-                imgUrl: targetMessage.imgUrl || null,
-                senderId: String(targetMessage.senderId),
-                createdAt: targetMessage.createdAt,
-                pinnedAt: new Date().toISOString(),
-                pinnedBy: currentUserId || null,
-              }
-            : null,
-        });
-
-        try {
-          const updatedConversation = await chatService.pinGroupMessage(
-            conversationId,
-            messageId,
-          );
-
-          if (updatedConversation?._id) {
-            get().updateConversation(
-              {
-                ...updatedConversation,
-                _id: updatedConversation._id,
-              },
-            );
-          }
-
-          return true;
-        } catch (error) {
-          get().updateConversation(previousConversation);
-          console.error("Failed to update pinned message", error);
-          return false;
         }
       },
       deleteConversation: async (conversationId) => {
@@ -3094,85 +941,353 @@ export const useChatStore = create<ChatState>()(
             groupIds,
           );
           return { ok: true, message: result.message };
-        } catch (error: unknown) {
-          const apiMessage =
-            typeof error === "object" &&
-            error !== null &&
-            "response" in error &&
-            typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === "string"
-              ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
-              : null;
-
+        } catch (error: any) {
           return {
             ok: false,
-            message: apiMessage || "Failed to forward message",
+            message: error.response?.data?.message || "Failed to forward message",
           };
         }
       },
       toggleMessageForwardable: async (messageId, isForwardable) => {
-        // Find the message across all loaded conversations to enable optimistic update.
-        const { messages: allMessages, activeConversationId } = get();
-        let targetConversationId: string | null = null;
-        let previousIsForwardable: boolean | undefined;
-
-        const conversationIds = activeConversationId
-          ? [activeConversationId, ...Object.keys(allMessages).filter((id) => id !== activeConversationId)]
-          : Object.keys(allMessages);
-
-        for (const convoId of conversationIds) {
-          const match = allMessages[convoId]?.items?.find(
-            (m) => m._id === messageId,
-          );
-          if (match) {
-            targetConversationId = convoId;
-            previousIsForwardable = match.isForwardable;
-            break;
-          }
-        }
-
-        // Optimistic update
-        if (targetConversationId) {
-          get().updateMessage(targetConversationId, messageId, {
-            isForwardable,
-          });
-        }
-
         try {
           await chatService.toggleMessageForwardable(messageId, isForwardable);
+          // Optional: Update local store for the message to reflect the new state instantly.
+          // Since we don't know the conversationId here easily, we could just rely on socket
+          // or user refresh. For a better UX, we could try to find and update it.
           return { ok: true };
         } catch (error) {
-          // Rollback on failure
-          if (targetConversationId && previousIsForwardable !== undefined) {
-            get().updateMessage(targetConversationId, messageId, {
-              isForwardable: previousIsForwardable,
-            });
-          }
           console.error("Failed to toggle forwardable state:", error);
           return { ok: false };
+        }
+      },
+      retryMessageDelivery: async (conversationId, messageId) => {
+        try {
+          const message = get().messages[conversationId]?.items?.find((m) => m._id === messageId);
+          const conversation = get().conversations.find((c) => c._id === conversationId);
+          const user = useAuthStore.getState().user;
+          if (!message || !conversation || !user) return;
+
+          // If this looks like a group message, use group send
+          if (message.groupChannelId || conversation.type === "group") {
+            const sent = await chatService.sendGroupMessage(
+              conversationId,
+              message.content ?? "",
+              message.imgUrl ?? undefined,
+              message.replyTo?._id ?? undefined,
+              message.groupChannelId ?? undefined,
+            );
+
+            // Replace optimistic message with canonical one
+            get().removeMessageFromConversation(conversationId, messageId);
+            get().addMessage(sent);
+            return;
+          }
+
+          // Otherwise, attempt direct send to the other participant
+          const recipient = conversation.participants.find(
+            (p) => String(p._id) !== String(user._id),
+          );
+          if (!recipient) {
+            console.warn("retryMessageDelivery: recipient not found");
+            return;
+          }
+
+          const sent = await chatService.sendDirectMessage(
+            recipient._id,
+            message.content ?? "",
+            message.imgUrl ?? undefined,
+            conversationId,
+            message.replyTo?._id ?? undefined,
+          );
+
+          get().removeMessageFromConversation(conversationId, messageId);
+          get().addMessage(sent);
+        } catch (error) {
+          console.error("retryMessageDelivery error:", error);
+          // mark as failed if possible
+          try {
+            get().updateMessage(conversationId, messageId, {
+              deliveryState: "failed",
+              deliveryError: String((error as any)?.message || "Retry failed"),
+            });
+          } catch (e) {
+            // ignore
+          }
+          throw error;
+        }
+      },
+      flushOutgoingQueue: async () => {
+        if (get().isFlushingOutgoingQueue) return;
+        set({ isFlushingOutgoingQueue: true });
+        const queue = [...get().outgoingQueue];
+
+        for (const item of queue) {
+          try {
+            if (item.scope === "direct") {
+              const recipientId = String(item.recipientId || "");
+              if (!recipientId) continue;
+
+              const sent = await chatService.sendDirectMessage(
+                recipientId,
+                item.content,
+                item.imgUrl ?? undefined,
+                item.conversationId || undefined,
+                item.replyTo ?? undefined,
+              );
+
+              set((state) => ({
+                outgoingQueue: state.outgoingQueue.filter((q) => q.tempId !== item.tempId),
+              }));
+              get().addMessage(sent);
+            } else {
+              const sent = await chatService.sendGroupMessage(
+                item.conversationId,
+                item.content,
+                item.imgUrl ?? undefined,
+                item.replyTo ?? undefined,
+                item.groupChannelId ?? undefined,
+              );
+
+              set((state) => ({
+                outgoingQueue: state.outgoingQueue.filter((q) => q.tempId !== item.tempId),
+              }));
+              get().addMessage(sent);
+            }
+          } catch (error) {
+            console.error("flushOutgoingQueue item failed:", error);
+            // increase attempt count and keep in queue
+            set((state) => ({
+              outgoingQueue: state.outgoingQueue.map((q) =>
+                q.tempId === item.tempId ? { ...q, attemptCount: (q.attemptCount || 0) + 1 } : q,
+              ),
+            }));
+          }
+        }
+
+        set({ isFlushingOutgoingQueue: false });
+      },
+      setGroupAnnouncementMode: async (conversationId, enabled) => {
+        try {
+          const conv = await chatService.updateGroupAnnouncementMode(conversationId, enabled);
+          if (conv?._id) {
+            get().updateConversation(conv as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("setGroupAnnouncementMode error:", error);
+          return false;
+        }
+      },
+      setGroupAdminRole: async (conversationId, memberId, makeAdmin) => {
+        try {
+          const conv = await chatService.updateGroupAdminRole(conversationId, memberId, makeAdmin);
+          if (conv?._id) {
+            get().updateConversation(conv as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("setGroupAdminRole error:", error);
+          return false;
+        }
+      },
+      createGroupChannel: async (conversationId, name, description, options) => {
+        try {
+          const res = await chatService.createGroupChannel(conversationId, {
+            name,
+            description,
+            categoryId: options?.categoryId ?? null,
+            sendRoles: options?.sendRoles,
+            position: options?.position,
+          });
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return { ok: true };
+          }
+          return { ok: false, message: "Failed to create channel" };
+        } catch (error: any) {
+          console.error("createGroupChannel error:", error);
+          return { ok: false, message: error?.message || "Failed to create channel" };
+        }
+      },
+      updateGroupChannel: async (conversationId, channelId, payload) => {
+        try {
+          const res = await chatService.updateGroupChannel(conversationId, channelId, payload);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return { ok: true };
+          }
+          return { ok: false, message: "Failed to update channel" };
+        } catch (error: any) {
+          console.error("updateGroupChannel error:", error);
+          return { ok: false, message: error?.message || "Failed to update channel" };
+        }
+      },
+      deleteGroupChannel: async (conversationId, channelId) => {
+        try {
+          const res = await chatService.deleteGroupChannel(conversationId, channelId);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return { ok: true };
+          }
+          return { ok: false, message: "Failed to delete channel" };
+        } catch (error: any) {
+          console.error("deleteGroupChannel error:", error);
+          return { ok: false, message: error?.message || "Failed to delete channel" };
+        }
+      },
+      reorderGroupChannels: async (conversationId, channelIds) => {
+        try {
+          const res = await chatService.reorderGroupChannels(conversationId, channelIds);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("reorderGroupChannels error:", error);
+          return false;
+        }
+      },
+      createGroupChannelCategory: async (conversationId, name, position) => {
+        try {
+          const res = await chatService.createGroupChannelCategory(conversationId, { name, position });
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return { ok: true };
+          }
+          return { ok: false, message: "Failed to create category" };
+        } catch (error: any) {
+          console.error("createGroupChannelCategory error:", error);
+          return { ok: false, message: error?.message || "Failed to create category" };
+        }
+      },
+      updateGroupChannelCategory: async (conversationId, categoryId, payload) => {
+        try {
+          const res = await chatService.updateGroupChannelCategory(conversationId, categoryId, payload);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return { ok: true };
+          }
+          return { ok: false, message: "Failed to update category" };
+        } catch (error: any) {
+          console.error("updateGroupChannelCategory error:", error);
+          return { ok: false, message: error?.message || "Failed to update category" };
+        }
+      },
+      deleteGroupChannelCategory: async (conversationId, categoryId) => {
+        try {
+          const res = await chatService.deleteGroupChannelCategory(conversationId, categoryId);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return { ok: true };
+          }
+          return { ok: false, message: "Failed to delete category" };
+        } catch (error: any) {
+          console.error("deleteGroupChannelCategory error:", error);
+          return { ok: false, message: error?.message || "Failed to delete category" };
+        }
+      },
+      reorderGroupChannelCategories: async (conversationId, categoryIds) => {
+        try {
+          const res = await chatService.reorderGroupChannelCategories(conversationId, categoryIds);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("reorderGroupChannelCategories error:", error);
+          return false;
+        }
+      },
+      fetchGroupChannelAnalytics: async (conversationId, days = 7) => {
+        try {
+          const res = await chatService.fetchGroupChannelAnalytics(conversationId, days);
+          return { ok: true, analytics: res.analytics } as any;
+        } catch (error: any) {
+          console.error("fetchGroupChannelAnalytics error:", error);
+          return { ok: false, message: error?.message || "Failed to fetch analytics" } as any;
+        }
+      },
+      setGroupActiveChannel: async (conversationId, channelId) => {
+        try {
+          const res = await chatService.setGroupActiveChannel(conversationId, channelId);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("setGroupActiveChannel error:", error);
+          return false;
+        }
+      },
+      createGroupJoinLink: async (conversationId, options) => {
+        try {
+          const res = await chatService.createGroupJoinLink(conversationId, options as any);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+          }
+          const link = res?.joinLink;
+          return {
+            ok: true,
+            joinLinkUrl: link?.url,
+            expiresAt: link?.expiresAt,
+            maxUses: link?.maxUses ?? null,
+            oneTime: link?.oneTime,
+            remainingUses: link?.remainingUses ?? null,
+          } as any;
+        } catch (error: any) {
+          console.error("createGroupJoinLink error:", error);
+          return { ok: false, message: error?.message || "Failed to create join link" } as any;
+        }
+      },
+      revokeGroupJoinLink: async (conversationId) => {
+        try {
+          const conv = await chatService.revokeGroupJoinLink(conversationId);
+          if (conv?._id) {
+            get().updateConversation(conv as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("revokeGroupJoinLink error:", error);
+          return false;
+        }
+      },
+      joinGroupByLink: async (conversationId, token) => {
+        try {
+          const res = await chatService.joinGroupByLink(conversationId, token);
+          if (res?.conversation?._id) {
+            get().updateConversation(res.conversation as Partial<Conversation> & { _id: string });
+          }
+          return { ok: true, alreadyJoined: res.alreadyJoined } as any;
+        } catch (error: any) {
+          console.error("joinGroupByLink error:", error);
+          return { ok: false, message: error?.message || "Failed to join by link" } as any;
+        }
+      },
+      pinGroupMessage: async (conversationId, messageId) => {
+        try {
+          const conv = await chatService.pinGroupMessage(conversationId, messageId ?? null);
+          if (conv?._id) {
+            get().updateConversation(conv as Partial<Conversation> & { _id: string });
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("pinGroupMessage error:", error);
+          return false;
         }
       },
     }),
     {
       name: "chat-storage",
-      // Persist lightweight client state only; conversation/message bodies remain server-driven.
-      partialize: (state) => ({
-        activeConversationId: state.activeConversationId,
-        outgoingQueue: state.outgoingQueue.slice(-MAX_OUTGOING_QUEUE_ITEMS),
-      }),
-      merge: (persistedState, currentState) => {
-        const persisted = (persistedState as Partial<ChatState> | undefined) || {};
-
-        return {
-          ...currentState,
-          ...persisted,
-          // Keep a runtime-selected conversation when hydration finishes later.
-          activeConversationId:
-            currentState.activeConversationId || persisted.activeConversationId || null,
-          outgoingQueue: Array.isArray(persisted.outgoingQueue)
-            ? persisted.outgoingQueue
-            : currentState.outgoingQueue,
-        };
-      },
+      // Only persist the active conversation ID to restore focus on reload.
+      // Conversations list is always fetched fresh from the server to avoid stale data.
+      partialize: (state) => ({ activeConversationId: state.activeConversationId }),
     },
   ),
 );
