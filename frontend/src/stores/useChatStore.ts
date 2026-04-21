@@ -387,14 +387,7 @@ const extractApiErrorMessage = (error: unknown) => {
   return null;
 };
 
-const notifyUnsendFailure = (mode: "standard" | "undo", error: unknown) => {
-  if (mode === "undo") {
-    toast.error(extractApiErrorMessage(error) || "Undo window expired.");
-    return;
-  }
 
-  toast.error("Could not remove message for everyone. Restored.");
-};
 
 const showUndoSendToast = ({
   conversationId,
@@ -2289,6 +2282,8 @@ export const useChatStore = create<ChatState>()(
                       ...conversationItem.group,
                       channelUnreadCounts: restoredChannelUnreadCounts,
                     },
+                  };
+                }),
               };
             });
           }

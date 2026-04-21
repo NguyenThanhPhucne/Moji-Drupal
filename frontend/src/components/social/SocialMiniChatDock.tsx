@@ -849,11 +849,11 @@ const MiniChatWindow = ({
 const SocialMiniChatDock = () => {
   const windows = useMiniChatDockStore((state) => state.windows);
   const minimizeAll = useMiniChatDockStore((state) => state.minimizeAll);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const focusNextWindow = useMiniChatDockStore((state) => state.focusNextWindow);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const focusPreviousWindow = useMiniChatDockStore((state) => state.focusPreviousWindow);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   const closeFocusedWindow = useMiniChatDockStore((state) => state.closeFocusedWindow);
   const reorderWindows = useMiniChatDockStore((state) => state.reorderWindows);
   const focusWindow = useMiniChatDockStore((state) => state.focusWindow);

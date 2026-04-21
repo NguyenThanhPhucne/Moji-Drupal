@@ -1279,7 +1279,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   isFeatureEnabled: (flagKey: AppFeatureFlagKey) => {
     return isFeatureFlagEnabled(get().featureFlags, flagKey);
   },
-  // eslint-disable-next-line sonarjs/no-nested-functions
+
   connectSocket: () => {
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;

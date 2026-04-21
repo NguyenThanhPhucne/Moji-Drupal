@@ -829,7 +829,6 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   isOwn,
   selectedConvoType,
   isFirstInGroup,
-  isLastInGroup,
   senderDisplayName,
   bubbleNode,
   previewUrl,
@@ -851,7 +850,6 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   isOwn: boolean;
   selectedConvoType: Conversation["type"];
   isFirstInGroup?: boolean;
-  isLastInGroup?: boolean;
   senderDisplayName?: string;
   bubbleNode: React.ReactNode;
   previewUrl: string | null;
@@ -983,7 +981,6 @@ interface MessageItemProps {
 
 const MessageItem = memo(function MessageItem({ // NOSONAR
   message,
-  index,
   isFirstInGroup,
   isLastInGroup,
   selectedConvo,
@@ -1702,7 +1699,6 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
           isOwn={isOwn}
           selectedConvoType={selectedConvo.type}
           isFirstInGroup={isFirstInGroup}
-          isLastInGroup={isLastInGroup}
           senderDisplayName={senderParticipant?.displayName}
           bubbleNode={bubbleNode}
           previewUrl={previewUrl}
