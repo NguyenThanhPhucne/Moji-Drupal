@@ -114,7 +114,7 @@ const GroupChatList = () => {
         <p className="chat-sidebar-section-title text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
           Channels
         </p>
-        <span className="chat-sidebar-section-count inline-flex items-center rounded-full border border-border/65 bg-muted/35 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground/70">
+        <span className="chat-sidebar-section-count inline-flex items-center text-[10.5px] font-medium text-muted-foreground/60">
           {groupchats.length}
         </span>
       </div>

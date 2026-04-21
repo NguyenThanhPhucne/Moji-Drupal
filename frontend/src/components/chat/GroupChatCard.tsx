@@ -137,10 +137,10 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
         <div className="chat-sidebar-card-subtitle-wrap mt-[1px]">
           <p
             className={cn(
-              "chat-sidebar-card-preview text-[13px] truncate leading-snug",
+              "chat-sidebar-card-preview text-[12.5px] truncate leading-snug tracking-[-0.01em]",
               unreadCount > 0
                 ? "font-semibold text-foreground"
-                : "font-normal text-muted-foreground/80",
+                : "font-normal text-muted-foreground/70",
             )}
           >
             {lastMessagePreview || "\u00A0"}
@@ -156,14 +156,14 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
               </>
             )}
             {myRole === "owner" && (
-              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-warning/45 bg-warning/15 px-1 py-[1px] text-[10px] font-semibold text-warning">
-                <Crown className="size-2.5" />
+              <span className="ml-1 inline-flex items-center gap-0.5 px-0.5 py-[1px] text-[10px] font-semibold text-warning/90">
+                <Crown className="size-[11px]" />
                 Owner
               </span>
             )}
             {myRole === "admin" && (
-              <span className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-primary/40 bg-primary/12 px-1 py-[1px] text-[10px] font-semibold text-primary">
-                <Shield className="size-2.5" />
+              <span className="ml-1 inline-flex items-center gap-0.5 px-0.5 py-[1px] text-[10px] font-semibold text-primary/80">
+                <Shield className="size-[11px]" />
                 Admin
               </span>
             )}
@@ -173,11 +173,11 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
               {channelUnreadBadges.map((channel) => (
                 <span
                   key={channel.channelId}
-                  className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                  className="inline-flex items-center gap-1 text-[10.5px] font-medium text-muted-foreground/90"
                   title={`#${channel.name}: ${channel.unread} unread`}
                 >
                   <span>#{channel.name}</span>
-                  <span className="rounded-full bg-primary/20 px-1 py-[1px] leading-none">
+                  <span className="font-bold text-primary">
                     {channel.unread > 99 ? "99+" : channel.unread}
                   </span>
                 </span>
