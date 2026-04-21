@@ -999,7 +999,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
             <button
               type="button"
               aria-label="Open global search"
-              className="global-search-trigger-mobile"
+              className="global-search-trigger-mobile group"
             >
               <Search className="size-4 text-muted-foreground/70 group-hover:text-muted-foreground transition-colors" />
             </button>
@@ -1008,7 +1008,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
           <DialogTrigger asChild>
             <button
               type="button"
-              className="global-search-trigger"
+              className="global-search-trigger group"
             >
               <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
               <span className="flex-1 text-left text-[12px] truncate">Search...</span>
