@@ -4,6 +4,7 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import type { Conversation } from "@/types/chat";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 
 export const MAX_FILE_SIZE_MB = 5;
 export const MAX_MESSAGE_LENGTH = 1200;
@@ -65,6 +66,7 @@ const writePersistedDraftMap = (
 };
 
 export function useMessageInput(selectedConvo: Conversation) {
+  const { t } = useI18n();
   const { user } = useAuthStore();
   const { sendDirectMessage, sendGroupMessage, replyingTo, setReplyingTo } = useChatStore();
   const { socket } = useSocketStore();
@@ -250,7 +252,9 @@ export function useMessageInput(selectedConvo: Conversation) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      toast.error(`Image is too large. Max ${MAX_FILE_SIZE_MB}MB`);
+      toast.error(
+        t("chatComposer.error.image_too_large", { size: MAX_FILE_SIZE_MB }),
+      );
       return;
     }
     const reader = new FileReader();
@@ -309,7 +313,7 @@ export function useMessageInput(selectedConvo: Conversation) {
         textareaRef.current.style.height = `${Math.max(40, nextHeight)}px`;
       }
 
-      toast.error("An error occurred while sending the message.");
+      toast.error(t("chatComposer.error.send_failed"));
     } finally {
       isSendingRef.current = false;
     }

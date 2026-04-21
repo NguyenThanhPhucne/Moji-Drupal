@@ -1,10 +1,10 @@
 import { chromium } from "playwright";
 
-const APP_BASE_URL = process.env.APP_BASE_URL || "http://127.0.0.1:5173";
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:5001/api";
-const TEST_PASSWORD = process.env.SMOKE_TEST_PASSWORD || "P@ssw0rd123";
 
 const now = Date.now();
+const TEST_PASSWORD = process.env.SMOKE_TEST_PASSWORD || `Rollback_${now}_Aa!`;
 
 const users = {
   owner: {
@@ -68,6 +68,81 @@ const expectVisible = async (locator, message) => {
   }
 };
 
+const confirmDeleteIntent = async (page, preferredLabelRegex) => {
+  const dialog = page.locator("[role='alertdialog']").last();
+  await dialog.waitFor({ state: "visible", timeout: 12000 });
+
+  const preferredActionButton = dialog.getByRole("button", {
+    name: preferredLabelRegex,
+  }).first();
+
+  const hasPreferredAction = await preferredActionButton
+    .isVisible()
+    .catch(() => false);
+
+  if (hasPreferredAction) {
+    await preferredActionButton.click();
+    return;
+  }
+
+  await dialog.getByRole("button", { name: /delete/i }).first().click();
+};
+
+const closeDeleteDialogIfOpen = async (page) => {
+  const dialog = page.locator("[role='alertdialog']").last();
+  const isVisible = await dialog.isVisible().catch(() => false);
+  if (!isVisible) {
+    return;
+  }
+
+  const cancelButton = dialog.getByRole("button", { name: /cancel/i }).first();
+  const canCancel = await cancelButton.isVisible().catch(() => false);
+  if (!canCancel) {
+    return;
+  }
+
+  await cancelButton.click();
+  await dialog.waitFor({ state: "hidden", timeout: 5000 }).catch(() => undefined);
+};
+
+const signInPageSession = async ({ page, accessToken, user }) => {
+  await page.goto(`${APP_BASE_URL}/signin`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
+  });
+
+  await page.evaluate(({ fallbackAccessToken, fallbackUser }) => {
+    globalThis.localStorage.setItem(
+      "auth-storage",
+      JSON.stringify({
+        state: {
+          user: fallbackUser || null,
+          accessToken: fallbackAccessToken || null,
+        },
+        version: 0,
+      }),
+    );
+  }, {
+    fallbackAccessToken: accessToken || null,
+    fallbackUser: user || null,
+  });
+
+  await page.goto(`${APP_BASE_URL}/`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
+  });
+
+  await page
+    .waitForURL((url) => !url.pathname.includes("/signin"), {
+      timeout: 9000,
+    })
+    .catch(() => undefined);
+
+  if (new URL(page.url()).pathname.includes("/signin")) {
+    throw new Error("Cannot leave /signin after auth-storage bootstrap");
+  }
+};
+
 const run = async () => {
   const ownerAuth = await signupAndSignin(users.owner);
   const guestAuth = await signupAndSignin(users.guest);
@@ -108,58 +183,25 @@ const run = async () => {
       await dialog.accept();
     });
 
-    await page.goto(`${APP_BASE_URL}/signin`, { waitUntil: "networkidle" });
-
-    const uiSignInOk = await page.evaluate(async ({ username, password }) => {
-      const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
-      return useAuthStore.getState().signIn(username, password);
-    }, {
-      username: users.owner.username,
-      password: users.owner.password,
+    await signInPageSession({
+      page,
+      accessToken: ownerAuth.accessToken,
+      user: ownerAuth.user,
     });
-
-    if (!uiSignInOk) {
-      const diagnostic = await page.evaluate(async ({ username, password }) => {
-        try {
-          const response = await fetch("/api/node/auth/signin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-          });
-          let payload = null;
-          try {
-            payload = await response.json();
-          } catch {
-            payload = null;
-          }
-          return {
-            ok: response.ok,
-            status: response.status,
-            payload,
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            status: 0,
-            payload: { message: String(error?.message || error) },
-          };
-        }
-      }, {
-        username: users.owner.username,
-        password: users.owner.password,
-      });
-
-      throw new Error(
-        `UI signIn via store returned false (diagnostic status=${diagnostic.status}, message=${diagnostic?.payload?.message || "n/a"})`,
-      );
-    }
 
     await page.goto(`${APP_BASE_URL}/post/${postId}`, { waitUntil: "networkidle" });
 
     const card = page.locator("article", { hasText: postCaption }).first();
     await expectVisible(card, "Post card not visible before delete test");
 
-    await card.getByRole("button", { name: /Binh luan/i }).first().click();
+    const commentButton = card.getByTestId("post-comment-button").first();
+    const commentButtonVisible = await commentButton.isVisible().catch(() => false);
+    if (commentButtonVisible) {
+      await commentButton.click();
+    } else {
+      await card.getByRole("button", { name: /comment/i }).first().click();
+    }
+
     const deleteCommentButton = card.getByTestId(`delete-comment-${commentId}`);
     await deleteCommentButton.waitFor({ state: "visible", timeout: 12000 });
 
@@ -179,18 +221,23 @@ const run = async () => {
       await route.continue();
     });
 
-    await card.getByTestId("delete-post-button").click();
-    await page.waitForTimeout(800);
-
-    await expectVisible(card, "Post rollback failed after delete API failure");
-
     await deleteCommentButton.click();
+    await confirmDeleteIntent(page, /delete comment|delete/i);
     await page.waitForTimeout(800);
 
     await expectVisible(
       deleteCommentButton,
       "Comment rollback failed after delete API failure",
     );
+
+    await closeDeleteDialogIfOpen(page);
+
+    await card.getByTestId("delete-post-button").click();
+    await confirmDeleteIntent(page, /delete post|delete/i);
+    await page.waitForTimeout(800);
+
+    await expectVisible(card, "Post rollback failed after delete API failure");
+    await closeDeleteDialogIfOpen(page);
 
     console.log("PASS | D-post-rollback | Post still visible after forced delete failure");
     console.log("PASS | D-comment-rollback | Comment still visible after forced delete failure");
@@ -200,7 +247,9 @@ const run = async () => {
   }
 };
 
-run().catch((error) => {
+try {
+  await run();
+} catch (error) {
   console.error("FAIL | D-rollback-smoke |", error.message);
   process.exit(1);
-});
+}

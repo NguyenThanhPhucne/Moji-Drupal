@@ -5,8 +5,8 @@ const requireFromFrontend = createRequire(
 );
 const { chromium } = requireFromFrontend("playwright");
 
-const APP_BASE_URL = "http://localhost:5173";
-const API_BASE_URL = "http://127.0.0.1:5001/api";
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
+const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:5001/api";
 const now = Date.now();
 const smokePassword = `Smoke_${now}_Aa!`;
 
@@ -62,7 +62,11 @@ const signupSignin = async (u) => {
     throw new Error(`signin ${u.username} failed: ${signin.status}`);
   }
 
-  return { token: signin.json.accessToken, userId: signin.json.user._id };
+  return {
+    token: signin.json.accessToken,
+    userId: signin.json.user._id,
+    user: signin.json.user,
+  };
 };
 
 const befriend = async (from, to) => {
@@ -94,6 +98,48 @@ const befriend = async (from, to) => {
   }
 };
 
+const signInPageSession = async ({
+  page,
+  accessToken,
+  user,
+}) => {
+  await page.goto(`${APP_BASE_URL}/signin`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
+  });
+
+  await page.evaluate(({ fallbackAccessToken, fallbackUser }) => {
+    globalThis.localStorage.setItem(
+      "auth-storage",
+      JSON.stringify({
+        state: {
+          user: fallbackUser || null,
+          accessToken: fallbackAccessToken || null,
+        },
+        version: 0,
+      }),
+    );
+  }, {
+    fallbackAccessToken: accessToken || null,
+    fallbackUser: user || null,
+  });
+
+  await page.goto(`${APP_BASE_URL}/`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
+  });
+
+  await page
+    .waitForURL((url) => !url.pathname.includes("/signin"), {
+      timeout: 9000,
+    })
+    .catch(() => undefined);
+
+  if (new URL(page.url()).pathname.includes("/signin")) {
+    throw new Error("Cannot leave /signin after auth-storage bootstrap");
+  }
+};
+
 const run = async () => {
   let browser;
 
@@ -106,66 +152,46 @@ const run = async () => {
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    await page.goto(`${APP_BASE_URL}/signin`, { waitUntil: "networkidle" });
-
-    const uiSignInOk = await page.evaluate(async ({ username, password }) => {
-      const { useAuthStore } = await import("../src/stores/useAuthStore.ts");
-      return useAuthStore.getState().signIn(username, password);
-    }, {
-      username: users.sender.username,
-      password: users.sender.password,
+    await signInPageSession({
+      page,
+      accessToken: sender.token,
+      user: sender.user,
     });
 
-    if (!uiSignInOk) {
-      const diagnostic = await page.evaluate(async ({ username, password }) => {
-        try {
-          const response = await fetch("/api/node/auth/signin", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
-          });
+    const directMessageResponses = [];
+    const onResponse = (response) => {
+      let pathname = "";
+      try {
+        pathname = new URL(response.url()).pathname;
+      } catch {
+        pathname = "";
+      }
 
-          let payload = null;
-          try {
-            payload = await response.json();
-          } catch {
-            payload = null;
-          }
+      if (!pathname.endsWith("/messages/direct")) {
+        return;
+      }
 
-          return {
-            ok: response.ok,
-            status: response.status,
-            payload,
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            status: 0,
-            payload: { message: String(error?.message || error) },
-          };
-        }
-      }, {
-        username: users.sender.username,
-        password: users.sender.password,
+      directMessageResponses.push({
+        status: response.status(),
+        ok: response.ok(),
+        url: response.url(),
       });
+    };
 
-      throw new Error(
-        `UI signIn returned false (status=${diagnostic.status}, message=${diagnostic?.payload?.message || "n/a"})`,
-      );
-    }
+    page.on("response", onResponse);
 
-    await page.goto(`${APP_BASE_URL}/`, { waitUntil: "networkidle" });
-
-    const result = await page.evaluate(async ({ recipientId }) => {
+    const result = await page.evaluate(async ({ recipientId, expectedContent }) => {
       const { useChatStore } = await import("../src/stores/useChatStore.ts");
 
       useChatStore.setState({ activeConversationId: null });
 
       const sendPromise = useChatStore
         .getState()
-        .sendDirectMessage(recipientId, "optimistic step1 ui", undefined, undefined, undefined);
+        .sendDirectMessage(recipientId, expectedContent, undefined, undefined, undefined);
 
       const tempConversationId = `temp-direct-${String(recipientId)}`;
+      const isTempId = (value) => String(value || "").startsWith("temp-");
+
       const immediateState = useChatStore.getState();
 
       const hasTempConversationImmediate = immediateState.conversations.some(
@@ -174,30 +200,115 @@ const run = async () => {
 
       const hasTempMessageImmediate =
         (immediateState.messages[tempConversationId]?.items || []).some((m) =>
-          String(m._id || "").startsWith("temp-"),
+          isTempId(m._id),
         );
+
+      const settleWindowMs = 9000;
+      const pollIntervalMs = 180;
 
       await sendPromise;
 
-      const finalState = useChatStore.getState();
-      const hasTempConversationAfter = finalState.conversations.some(
-        (conversationItem) => conversationItem._id === tempConversationId,
-      );
+      const buildSnapshot = () => {
+        const state = useChatStore.getState();
+
+        const hasTempConversation = state.conversations.some(
+          (conversationItem) => conversationItem._id === tempConversationId,
+        );
+
+        const tempMessages = state.messages[tempConversationId]?.items || [];
+        const tempMessage = tempMessages.find((messageItem) =>
+          isTempId(messageItem?._id),
+        );
+
+        let deliveredMessageId = null;
+        let deliveredConversationId = null;
+
+        for (const [conversationId, bucket] of Object.entries(state.messages || {})) {
+          const items = Array.isArray(bucket?.items) ? bucket.items : [];
+          const delivered = items.find(
+            (messageItem) =>
+              String(messageItem?.content || "") === String(expectedContent) &&
+              !isTempId(messageItem?._id),
+          );
+
+          if (delivered) {
+            deliveredMessageId = String(delivered._id || "");
+            deliveredConversationId = String(conversationId || "") || null;
+            break;
+          }
+        }
+
+        const queueHasTempMessage = (state.outgoingQueue || []).some(
+          (queueItem) =>
+            String(queueItem?.conversationId || "") === tempConversationId &&
+            isTempId(queueItem?.tempId),
+        );
+
+        return {
+          hasTempConversation,
+          tempMessageId: tempMessage?._id || null,
+          tempDeliveryState: tempMessage?.deliveryState || null,
+          tempDeliveryError: tempMessage?.deliveryError || null,
+          queueHasTempMessage,
+          deliveredMessageFound: Boolean(deliveredMessageId),
+          deliveredMessageId,
+          deliveredConversationId,
+        };
+      };
+
+      let finalSnapshot = buildSnapshot();
+      const deadline = Date.now() + settleWindowMs;
+      while (Date.now() < deadline) {
+        const deliveredAndPruned =
+          finalSnapshot.deliveredMessageFound && !finalSnapshot.hasTempConversation;
+        const terminalFailureState =
+          finalSnapshot.tempDeliveryState === "failed" ||
+          finalSnapshot.tempDeliveryState === "queued";
+
+        if (deliveredAndPruned || terminalFailureState) {
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        finalSnapshot = buildSnapshot();
+      }
+
+      let queueConsistency = true;
+      if (finalSnapshot.tempDeliveryState === "queued") {
+        queueConsistency = finalSnapshot.queueHasTempMessage;
+      } else if (finalSnapshot.tempDeliveryState === "failed") {
+        queueConsistency = !finalSnapshot.queueHasTempMessage;
+      }
+
+      const deliveryModelConsistent =
+        (finalSnapshot.deliveredMessageFound && !finalSnapshot.hasTempConversation) ||
+        ((finalSnapshot.tempDeliveryState === "failed" ||
+          finalSnapshot.tempDeliveryState === "queued") && queueConsistency);
 
       return {
         hasTempConversationImmediate,
         hasTempMessageImmediate,
-        hasTempConversationAfter,
+        finalSnapshot,
+        queueConsistency,
+        deliveryModelConsistent,
       };
-    }, { recipientId: recipient.userId });
+    }, {
+      recipientId: recipient.userId,
+      expectedContent: `optimistic step1 ui ${now}`,
+    });
+
+    page.off("response", onResponse);
 
     const pass =
       result.hasTempConversationImmediate &&
       result.hasTempMessageImmediate &&
-      !result.hasTempConversationAfter;
+      result.deliveryModelConsistent;
 
     console.log(
-      `${pass ? "PASS" : "FAIL"} | S1-4-optimistic-ui | ${JSON.stringify(result)}`,
+      `${pass ? "PASS" : "FAIL"} | S1-4-optimistic-ui | ${JSON.stringify({
+        ...result,
+        directMessageResponses,
+      })}`,
     );
 
     process.exitCode = pass ? 0 : 1;

@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-04-20T05:06:30.621Z",
+  "appBaseUrl": "http://127.0.0.1:5173",
+  "outDir": "/Users/phucnguyen/Downloads/open_crm/new/Moji-Drupal/frontend/qa-artifacts/mini-chat-viewport-smoke-20260420-final",
+  "totalChecks": 3,
+  "passedChecks": 3,
+  "failedChecks": 0,
+  "checks": [
+    {
+      "viewport": "1280x800",
+      "route": "/feed",
+      "actualPath": "/feed",
+      "pageShellVisible": true,
+      "windowsCount": 1,
+      "screenshotPath": "mini-chat-1280x800.png",
+      "screenshotCaptured": true,
+      "found": true,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 304,
+      "windowHeight": 336.63,
+      "signInStatus": 200,
+      "error": null
+    },
+    {
+      "viewport": "1366x768",
+      "route": "/feed",
+      "actualPath": "/feed",
+      "pageShellVisible": true,
+      "windowsCount": 1,
+      "screenshotPath": "mini-chat-1366x768.png",
+      "screenshotCaptured": true,
+      "found": true,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 320,
+      "windowHeight": 355.81,
+      "signInStatus": 200,
+      "error": null
+    },
+    {
+      "viewport": "1440x900",
+      "route": "/feed",
+      "actualPath": "/feed",
+      "pageShellVisible": true,
+      "windowsCount": 1,
+      "screenshotPath": "mini-chat-1440x900.png",
+      "screenshotCaptured": true,
+      "found": true,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 320,
+      "windowHeight": 355.81,
+      "signInStatus": 200,
+      "error": null
+    }
+  ]
+}

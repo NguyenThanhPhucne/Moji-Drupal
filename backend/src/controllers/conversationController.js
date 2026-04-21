@@ -9,6 +9,7 @@ import mongoose from "mongoose";
 import { createHash, randomBytes } from "node:crypto";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
+import { withSocketEventMeta } from "../utils/socketEventMeta.js";
 import {
   applyRateLimitHeaders,
   registerRateLimitHit,
@@ -745,6 +746,138 @@ const formatConversationForClient = (conversation) => {
   };
 };
 
+const buildConversationPreviewContent = (message) => {
+  const normalizedContent = String(message?.content || "").trim();
+  if (normalizedContent) {
+    return normalizedContent;
+  }
+
+  if (message?.imgUrl) {
+    return "📷 Photo";
+  }
+
+  return "";
+};
+
+const toMongoObjectId = (value) => {
+  if (value instanceof mongoose.Types.ObjectId) {
+    return value;
+  }
+
+  const normalized = String(value || "").trim();
+  if (!mongoose.Types.ObjectId.isValid(normalized)) {
+    return null;
+  }
+
+  return mongoose.Types.ObjectId.createFromHexString(normalized);
+};
+
+const buildLastVisibleMessageByConversationMap = async ({
+  conversationIds,
+  userId,
+}) => {
+  const objectIds = (Array.isArray(conversationIds) ? conversationIds : [])
+    .map((conversationId) => toMongoObjectId(conversationId))
+    .filter(Boolean);
+
+  if (objectIds.length === 0) {
+    return new Map();
+  }
+
+  const normalizedUserId = toMongoObjectId(userId);
+
+  const matchFilter = {
+    conversationId: {
+      $in: objectIds,
+    },
+  };
+
+  if (normalizedUserId) {
+    matchFilter.hiddenFor = { $ne: normalizedUserId };
+  }
+
+  const latestVisibleRows = await Message.aggregate([
+    {
+      $match: matchFilter,
+    },
+    {
+      $sort: {
+        createdAt: -1,
+        _id: -1,
+      },
+    },
+    {
+      $group: {
+        _id: "$conversationId",
+        messageId: { $first: "$_id" },
+        content: { $first: "$content" },
+        imgUrl: { $first: "$imgUrl" },
+        senderId: { $first: "$senderId" },
+        createdAt: { $first: "$createdAt" },
+        groupChannelId: { $first: "$groupChannelId" },
+      },
+    },
+  ]);
+
+  const previewMap = new Map();
+  latestVisibleRows.forEach((row) => {
+    const conversationId = toStringId(row?._id);
+    if (!conversationId) {
+      return;
+    }
+
+    const senderId = toStringId(row?.senderId);
+    previewMap.set(conversationId, {
+      messageId: toStringId(row?.messageId),
+      content: buildConversationPreviewContent(row),
+      createdAt: row?.createdAt || null,
+      senderId,
+      groupChannelId: row?.groupChannelId || null,
+    });
+  });
+
+  return previewMap;
+};
+
+const applyUserScopedLastMessagePreview = ({
+  conversation,
+  previewMap,
+}) => {
+  const conversationId = toStringId(conversation?._id);
+  const preview = previewMap.get(conversationId);
+
+  if (!preview) {
+    return {
+      ...conversation,
+      lastMessage: null,
+      lastMessageAt: null,
+    };
+  }
+
+  const participantSender = (conversation?.participants || []).find(
+    (participant) => toStringId(participant?._id) === preview.senderId,
+  );
+  const previousSender = conversation?.lastMessage?.sender || {};
+
+  return {
+    ...conversation,
+    lastMessageAt: preview.createdAt,
+    lastMessage: {
+      _id: preview.messageId,
+      content: preview.content,
+      createdAt: preview.createdAt,
+      groupChannelId: preview.groupChannelId,
+      sender: {
+        _id: preview.senderId,
+        displayName:
+          participantSender?.displayName || previousSender?.displayName || "",
+        avatarUrl:
+          participantSender?.avatarUrl ?? previousSender?.avatarUrl ?? null,
+      },
+    },
+  };
+};
+
 const hashJoinLinkToken = (token) => {
   return createHash("sha256").update(String(token || "")).digest("hex");
 };
@@ -1061,9 +1194,20 @@ const toGroupConversationPayload = (conversation) => {
 const broadcastGroupConversationUpdated = async (conversation) => {
   const payload = toGroupConversationPayload(conversation);
 
-  io.to(toStringId(conversation?._id)).emit("group-conversation-updated", {
-    conversation: payload,
-  });
+  io.to(toStringId(conversation?._id)).emit(
+    "group-conversation-updated",
+    withSocketEventMeta(
+      {
+        conversation: payload,
+      },
+      {
+        eventName: "group-conversation-updated",
+        conversationId: payload?._id,
+        entityId: payload?._id,
+        scope: payload?._id,
+      },
+    ),
+  );
 
   await Promise.all(
     (conversation?.participants || []).map(async (participant) => {
@@ -1252,6 +1396,29 @@ export const getConversations = async (req, res) => {
     const cached = await getCachedData(cacheKey);
 
     if (cached) {
+      try {
+        const etag = createHash("sha1").update(JSON.stringify(cached)).digest("hex");
+        const lastTs = (cached || [])
+          .map((c) => {
+            const lm = c?.updatedAt || c?.lastMessageAt || null;
+            return lm ? new Date(lm).getTime() : 0;
+          })
+          .reduce((a, b) => Math.max(a, b), 0);
+        const lastModified = lastTs ? new Date(lastTs).toUTCString() : new Date().toUTCString();
+
+        // Revalidation: If client has up-to-date data, respond 304
+        if (req.headers["if-none-match"] && String(req.headers["if-none-match"]) === etag) {
+          res.setHeader("ETag", etag);
+          res.setHeader("Last-Modified", lastModified);
+          return res.status(304).end();
+        }
+
+        res.setHeader("ETag", etag);
+        res.setHeader("Last-Modified", lastModified);
+      } catch (e) {
+        // ignore header computation failures
+      }
+
       return res.status(200).json({ conversations: cached });
     }
 
@@ -1275,9 +1442,68 @@ export const getConversations = async (req, res) => {
 
     const formatted = conversations.map((convo) => formatConversationForClient(convo));
 
-    await setCachedData(cacheKey, formatted, 120); // 2-minute cache: short enough for near-realtime freshness
+    const lastVisiblePreviewMap = await buildLastVisibleMessageByConversationMap({
+      conversationIds: conversations.map((conversation) => conversation?._id),
+      userId,
+    });
 
-    return res.status(200).json({ conversations: formatted });
+    const userScopedConversations = formatted
+      .map((conversation) =>
+        applyUserScopedLastMessagePreview({
+          conversation,
+          previewMap: lastVisiblePreviewMap,
+        }),
+      )
+      .sort((leftConversation, rightConversation) => {
+        const leftLastMessageAt = leftConversation?.lastMessageAt
+          ? new Date(leftConversation.lastMessageAt).getTime()
+          : 0;
+        const rightLastMessageAt = rightConversation?.lastMessageAt
+          ? new Date(rightConversation.lastMessageAt).getTime()
+          : 0;
+
+        if (leftLastMessageAt !== rightLastMessageAt) {
+          return rightLastMessageAt - leftLastMessageAt;
+        }
+
+        const leftUpdatedAt = leftConversation?.updatedAt
+          ? new Date(leftConversation.updatedAt).getTime()
+          : 0;
+        const rightUpdatedAt = rightConversation?.updatedAt
+          ? new Date(rightConversation.updatedAt).getTime()
+          : 0;
+
+        return rightUpdatedAt - leftUpdatedAt;
+      });
+
+    // compute ETag / Last-Modified for revalidation
+    try {
+      const etag = createHash("sha1").update(JSON.stringify(userScopedConversations)).digest("hex");
+      const lastTs = (userScopedConversations || [])
+        .map((c) => {
+          const lm = c?.updatedAt || c?.lastMessageAt || null;
+          return lm ? new Date(lm).getTime() : 0;
+        })
+        .reduce((a, b) => Math.max(a, b), 0);
+      const lastModified = lastTs ? new Date(lastTs).toUTCString() : new Date().toUTCString();
+
+      if (req.headers["if-none-match"] && String(req.headers["if-none-match"]) === etag) {
+        // store cache but respond 304 as client is up-to-date
+        await setCachedData(cacheKey, userScopedConversations, 120);
+        res.setHeader("ETag", etag);
+        res.setHeader("Last-Modified", lastModified);
+        return res.status(304).end();
+      }
+
+      res.setHeader("ETag", etag);
+      res.setHeader("Last-Modified", lastModified);
+    } catch (e) {
+      // ignore
+    }
+
+    await setCachedData(cacheKey, userScopedConversations, 120); // 2-minute cache: short enough for near-realtime freshness
+
+    return res.status(200).json({ conversations: userScopedConversations });
   } catch (error) {
     console.error("Lỗi xảy ra khi lấy conversations", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -3742,15 +3968,37 @@ export const joinGroupByLink = async (req, res) => {
     );
 
     if (joinedInThisRequest) {
-      io.to(String(userId)).emit("new-group", formattedConversation);
-      io.to(String(conversationForResponse._id)).emit("group-conversation-updated", {
-        conversation: {
-          _id: formattedConversation._id,
-          group: formattedConversation.group,
-          participants: formattedConversation.participants,
-          updatedAt: formattedConversation.updatedAt,
-        },
-      });
+      io.to(String(userId)).emit(
+        "new-group",
+        withSocketEventMeta(
+          formattedConversation,
+          {
+            eventName: "new-group",
+            conversationId: formattedConversation?._id,
+            entityId: formattedConversation?._id,
+            scope: userId,
+          },
+        ),
+      );
+      io.to(String(conversationForResponse._id)).emit(
+        "group-conversation-updated",
+        withSocketEventMeta(
+          {
+            conversation: {
+              _id: formattedConversation._id,
+              group: formattedConversation.group,
+              participants: formattedConversation.participants,
+              updatedAt: formattedConversation.updatedAt,
+            },
+          },
+          {
+            eventName: "group-conversation-updated",
+            conversationId: formattedConversation?._id,
+            entityId: formattedConversation?._id,
+            scope: formattedConversation?._id,
+          },
+        ),
+      );
     }
 
     return res.status(200).json({
@@ -3763,10 +4011,152 @@ export const joinGroupByLink = async (req, res) => {
   }
 };
 
+const DELETE_CONVERSATION_REPORT_BATCH_SIZE = 500;
+const DELETE_CONVERSATION_TX_MAX_RETRIES = 2;
+
+const applySessionIfProvided = (query, session = null) => {
+  if (session) {
+    query.session(session);
+  }
+
+  return query;
+};
+
+const shouldRetryDeleteConversationTransaction = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  const codeName = String(error?.codeName || "").toLowerCase();
+  const labels = Array.isArray(error?.errorLabels)
+    ? error.errorLabels.map((label) => String(label || "").toLowerCase())
+    : [];
+
+  if (
+    labels.includes("transienttransactionerror") ||
+    labels.includes("unknowntransactioncommitresult")
+  ) {
+    return true;
+  }
+
+  if (codeName === "writeconflict") {
+    return true;
+  }
+
+  return [
+    "write conflict",
+    "temporarily unavailable",
+    "timed out while waiting for lock",
+    "cannot serialize access",
+  ].some((indicator) => message.includes(indicator));
+};
+
+const shouldFallbackDeleteConversationTransaction = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  const codeName = String(error?.codeName || "").toLowerCase();
+
+  if (codeName === "illegaloperation") {
+    return true;
+  }
+
+  return [
+    "transaction numbers are only allowed",
+    "replica set",
+    "transactions are not supported",
+    "transaction is not supported",
+    "transaction too large",
+    "transaction exceeded lifetime limit",
+    "transaction exceeded memory limit",
+    "not supported",
+  ].some((indicator) => message.includes(indicator));
+};
+
+const deleteConversationDependentsInBatches = async ({
+  conversationId,
+  userId,
+  session = null,
+}) => {
+  const imageUrlsToDestroy = new Set();
+  const messageReportBatch = [];
+
+  const flushMessageReportBatch = async () => {
+    if (messageReportBatch.length === 0) {
+      return;
+    }
+
+    const deleteReportsByMessageQuery = ContentReport.deleteMany({
+      targetType: "message",
+      targetId: { $in: [...messageReportBatch] },
+    });
+
+    await applySessionIfProvided(deleteReportsByMessageQuery, session);
+    messageReportBatch.length = 0;
+  };
+
+  const messageCursor = applySessionIfProvided(
+    Message.find({ conversationId }).select("_id imgUrl").lean(),
+    session,
+  ).cursor();
+
+  for await (const messageDoc of messageCursor) {
+    if (messageDoc?.imgUrl) {
+      imageUrlsToDestroy.add(messageDoc.imgUrl);
+    }
+
+    if (messageDoc?._id) {
+      messageReportBatch.push(messageDoc._id);
+
+      if (messageReportBatch.length >= DELETE_CONVERSATION_REPORT_BATCH_SIZE) {
+        await flushMessageReportBatch();
+      }
+    }
+  }
+
+  await flushMessageReportBatch();
+
+  const deleteMessagesQuery = Message.deleteMany({ conversationId }).setOptions({
+    ...(session ? { session } : {}),
+    skipDependentCleanup: true,
+    skipCounterSync: true,
+    dependentCleanupMode: "strict",
+    dependentCleanupContext: {
+      operation: "deleteConversation",
+      conversationId: toStringId(conversationId),
+      actorId: toStringId(userId),
+    },
+  });
+
+  const deleteBookmarksQuery = applySessionIfProvided(
+    Bookmark.deleteMany({ conversationId }),
+    session,
+  );
+  const deleteNotificationsQuery = applySessionIfProvided(
+    Notification.deleteMany({ conversationId }),
+    session,
+  );
+  const deleteContextReportsQuery = applySessionIfProvided(
+    ContentReport.deleteMany({
+      "context.conversationId": conversationId,
+    }),
+    session,
+  );
+
+  await Promise.all([
+    deleteMessagesQuery,
+    deleteBookmarksQuery,
+    deleteNotificationsQuery,
+    deleteContextReportsQuery,
+  ]);
+
+  return [...imageUrlsToDestroy];
+};
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export const deleteConversation = async (req, res) => {
   try {
     const { conversationId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Conversation id không hợp lệ" });
+    }
+
     const userId = req.user._id;
     const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
     const canDeleteAnyConversation =
@@ -3792,92 +4182,92 @@ export const deleteConversation = async (req, res) => {
     let conversation;
     let deletedWithTransaction = false;
     let imageUrlsToDestroy = [];
+    let transactionFallbackError = null;
 
     if (canUseTransactions) {
-      const session = await mongoose.connection.startSession();
+      const maxAttempts = DELETE_CONVERSATION_TX_MAX_RETRIES + 1;
 
-      try {
-        await session.withTransaction(async () => {
-          const scopedConversation = await Conversation.findById(
-            conversationId,
-          ).session(session);
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const session = await mongoose.connection.startSession();
+        let shouldRetryTransaction = false;
 
-          if (!scopedConversation) {
-            throw new Error("NOT_FOUND");
-          }
-
-          if (!verifyPermission(scopedConversation)) {
-            throw new Error("FORBIDDEN");
-          }
-
-          const [messagesWithImages, messageIdDocs] = await Promise.all([
-            Message.find({
+        try {
+          await session.withTransaction(async () => {
+            const scopedConversation = await Conversation.findById(
               conversationId,
-              imgUrl: { $ne: null },
-            }).select("imgUrl").session(session),
-            Message.find({ conversationId }).select("_id").session(session),
-          ]);
+            ).session(session);
 
-          imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
-          const messageIds = messageIdDocs.map((msg) => msg._id).filter(Boolean);
+            if (!scopedConversation) {
+              throw new Error("NOT_FOUND");
+            }
 
-          await Promise.all([
-            Message.deleteMany({ conversationId })
-              .setOptions({
-                skipDependentCleanup: true,
-                skipCounterSync: true,
-              })
-              .session(session),
-            Bookmark.deleteMany({ conversationId }).session(session),
-            Notification.deleteMany({ conversationId }).session(session),
-            ContentReport.deleteMany({
-              $or: [
-                {
-                  targetType: "message",
-                  targetId: { $in: messageIds },
-                },
-                {
-                  "context.conversationId": conversationId,
-                },
-              ],
-            }).session(session),
-          ]);
-          await Conversation.findOneAndDelete(
-            { _id: scopedConversation._id },
-          )
-            .setOptions({ skipCascadeCleanup: true })
-            .session(session);
+            if (!verifyPermission(scopedConversation)) {
+              throw new Error("FORBIDDEN");
+            }
 
-          conversation = scopedConversation;
-        });
+            imageUrlsToDestroy = await deleteConversationDependentsInBatches({
+              conversationId,
+              userId,
+              session,
+            });
 
-        deletedWithTransaction = true;
-      } catch (transactionError) {
-        if (transactionError?.message === "NOT_FOUND") {
-          return res.status(404).json({ message: "Conversation không tồn tại" });
+            await Conversation.findOneAndDelete(
+              { _id: scopedConversation._id },
+            )
+              .setOptions({ skipCascadeCleanup: true })
+              .session(session);
+
+            conversation = scopedConversation;
+          });
+
+          deletedWithTransaction = true;
+        } catch (transactionError) {
+          if (transactionError?.message === "NOT_FOUND") {
+            return res.status(404).json({ message: "Conversation không tồn tại" });
+          }
+
+          if (transactionError?.message === "FORBIDDEN") {
+            return res
+              .status(403)
+              .json({ message: "Bạn không có quyền xoá conversation này" });
+          }
+
+          const isRetryableTransactionError =
+            shouldRetryDeleteConversationTransaction(transactionError);
+          const hasMoreAttempts = attempt < maxAttempts;
+
+          if (isRetryableTransactionError && hasMoreAttempts) {
+            shouldRetryTransaction = true;
+            console.warn(
+              `[deleteConversation] Transaction transient error, retrying (${attempt}/${maxAttempts}).`,
+              transactionError,
+            );
+          } else if (
+            shouldFallbackDeleteConversationTransaction(transactionError) ||
+            (!hasMoreAttempts && isRetryableTransactionError)
+          ) {
+            transactionFallbackError = transactionError;
+          } else {
+            throw transactionError;
+          }
+        } finally {
+          await session.endSession();
         }
 
-        if (transactionError?.message === "FORBIDDEN") {
-          return res
-            .status(403)
-            .json({ message: "Bạn không có quyền xoá conversation này" });
+        if (deletedWithTransaction || transactionFallbackError || !shouldRetryTransaction) {
+          break;
         }
-
-        const message = String(transactionError?.message || "").toLowerCase();
-        const shouldFallbackToNonTx =
-          message.includes("transaction numbers are only allowed") ||
-          message.includes("replica set") ||
-          message.includes("not supported");
-
-        if (!shouldFallbackToNonTx) {
-          throw transactionError;
-        }
-      } finally {
-        await session.endSession();
       }
     }
 
     if (!deletedWithTransaction) {
+      if (transactionFallbackError) {
+        console.warn(
+          "[deleteConversation] Transactions unavailable or unsuitable, fallback to non-transaction cleanup.",
+          transactionFallbackError,
+        );
+      }
+
       conversation = await Conversation.findById(conversationId);
 
       if (!conversation) {
@@ -3891,36 +4281,10 @@ export const deleteConversation = async (req, res) => {
       }
 
       try {
-        const [messagesWithImages, messageIdDocs] = await Promise.all([
-          Message.find({
-            conversationId,
-            imgUrl: { $ne: null },
-          }).select("imgUrl"),
-          Message.find({ conversationId }).select("_id"),
-        ]);
-        imageUrlsToDestroy = messagesWithImages.map(msg => msg.imgUrl).filter(Boolean);
-        const messageIds = messageIdDocs.map((msg) => msg._id).filter(Boolean);
-
-        // Cleanup dependent collections before deleting the conversation document.
-        await Promise.all([
-          Message.deleteMany({ conversationId }).setOptions({
-            skipDependentCleanup: true,
-            skipCounterSync: true,
-          }),
-          Bookmark.deleteMany({ conversationId }),
-          Notification.deleteMany({ conversationId }),
-          ContentReport.deleteMany({
-            $or: [
-              {
-                targetType: "message",
-                targetId: { $in: messageIds },
-              },
-              {
-                "context.conversationId": conversationId,
-              },
-            ],
-          }),
-        ]);
+        imageUrlsToDestroy = await deleteConversationDependentsInBatches({
+          conversationId,
+          userId,
+        });
       } catch (messageDeleteError) {
         console.error("[deleteConversation] Related cleanup failed — aborting to prevent orphan data", messageDeleteError);
         throw messageDeleteError;
@@ -3936,13 +4300,33 @@ export const deleteConversation = async (req, res) => {
     } // end if (!deletedWithTransaction)
 
     // 4. Emit to all participants that conversation was deleted
-    await Promise.all(conversation.participants.map(async (p) => {
-      const participantIdStr = p.userId.toString();
-      await invalidateCache(`conversations:${participantIdStr}`);
-      io.in(participantIdStr).socketsLeave(conversationId);
-      io.to(participantIdStr).emit("conversation-deleted", {
-        conversationId,
-      });
+    const participantUserIds = [...new Set(
+      (Array.isArray(conversation?.participants) ? conversation.participants : [])
+        .map((participant) => toStringId(participant?.userId))
+        .filter(Boolean),
+    )];
+
+    await Promise.allSettled(participantUserIds.map(async (participantIdStr) => {
+      try {
+        await invalidateCache(`conversations:${participantIdStr}`);
+      } catch (cacheError) {
+        console.error(
+          "[deleteConversation] Failed to invalidate participant cache",
+          { participantId: participantIdStr, cacheError },
+        );
+      }
+
+      try {
+        io.in(participantIdStr).socketsLeave(conversationId);
+        io.to(participantIdStr).emit("conversation-deleted", {
+          conversationId,
+        });
+      } catch (socketError) {
+        console.error(
+          "[deleteConversation] Failed to emit socket cleanup events",
+          { participantId: participantIdStr, socketError },
+        );
+      }
     }));
 
     // 5. Enterprise Fire-and-Forget: Dọn rác Cloudinary chạy nền

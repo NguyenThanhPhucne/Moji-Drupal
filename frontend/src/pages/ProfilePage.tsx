@@ -22,8 +22,10 @@ import {
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { getStaggerEnterClass } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 
 const ProfilePage = () => { // NOSONAR
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const { userId: userIdFromRoute } = useParams<{ userId: string }>();
   const { accessToken, user } = useAuthStore();
@@ -84,6 +86,10 @@ const ProfilePage = () => { // NOSONAR
   const isLoadingMoreProfile = loadingProfile && profilePosts.length > 0;
   const [photosDialogOpen, setPhotosDialogOpen] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const numberFormatter = useMemo(
+    () => new Intl.NumberFormat(locale === "vi" ? "vi-VN" : "en-US"),
+    [locale],
+  );
 
   const profilePhotos = useMemo(
     () =>
@@ -188,14 +194,14 @@ const ProfilePage = () => { // NOSONAR
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <section
             className="social-profile-layout social-profile-layout--command social-profile-frame min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
-            aria-label="Profile content"
+            aria-label={t("profile.aria.content")}
           >
             {loadingProfile && !profile ? (
               <ProfileHeaderSkeleton />
             ) : (
               <section
                 className={`social-surface-card social-profile-hero social-profile-hero-card social-profile-hero-card--command overflow-hidden ${getStaggerEnterClass(0)}`}
-                aria-label="Profile header"
+                aria-label={t("profile.aria.header")}
               >
                 <div className="social-profile-cover-gradient social-profile-cover social-profile-cover--command relative h-[350px] w-full">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.7),transparent_55%)]" />
@@ -210,7 +216,7 @@ const ProfilePage = () => { // NOSONAR
                   <div className="social-profile-avatar-wrap social-profile-avatar-wrap--command absolute left-6 top-0 h-40 w-40 overflow-hidden rounded-full border-4 border-white shadow-sm">
                     <UserAvatar
                       type="profile"
-                      name={profile?.displayName || "Profile"}
+                      name={profile?.displayName || t("profile.default_name")}
                       avatarUrl={profile?.avatarUrl ?? undefined}
                       previewable
                       className="size-full rounded-full"
@@ -221,29 +227,49 @@ const ProfilePage = () => { // NOSONAR
                     <div className="social-profile-identity space-y-1.5">
                       <div className="social-profile-meta-row">
                         <span className="social-profile-meta-pill">
-                          {profile?._id === user?._id ? "Your profile" : "Community profile"}
+                          {profile?._id === user?._id
+                            ? t("profile.meta.your_profile")
+                            : t("profile.meta.community_profile")}
                         </span>
                         <span className="social-profile-meta-pill social-profile-meta-pill--soft">
-                          {profilePhotos.length} photos
+                          {t("profile.meta.photos_count", {
+                            count: numberFormatter.format(profilePhotos.length),
+                          })}
                         </span>
                       </div>
 
                       <h1 className="social-text-main social-profile-name text-3xl font-bold tracking-tight">
-                        {profile?.displayName || "Profile"}
+                        {profile?.displayName || t("profile.default_name")}
                       </h1>
-                      <p className="social-text-muted social-profile-username text-sm">@{profile?.username || "user"}</p>
+                      <p className="social-text-muted social-profile-username text-sm">
+                        @{profile?.username || t("profile.username_fallback")}
+                      </p>
                       {profile?.bio && <p className="social-text-main social-profile-bio text-sm leading-relaxed">{profile.bio}</p>}
 
                       {/* Premium stat chips */}
                       <div className="social-profile-stat-grid social-profile-stat-grid--command pt-1">
                         {[
-                          { value: profile?.postCount ?? 0, label: "Posts" },
-                          { value: profile?.friendCount ?? 0, label: "Friends" },
-                          { value: profile?.followerCount ?? 0, label: "Followers" },
-                          { value: profile?.followingCount ?? 0, label: "Following" },
+                          {
+                            value: profile?.postCount ?? 0,
+                            label: t("profile.stats.posts"),
+                          },
+                          {
+                            value: profile?.friendCount ?? 0,
+                            label: t("profile.stats.friends"),
+                          },
+                          {
+                            value: profile?.followerCount ?? 0,
+                            label: t("profile.stats.followers"),
+                          },
+                          {
+                            value: profile?.followingCount ?? 0,
+                            label: t("profile.stats.following"),
+                          },
                         ].map(({ value, label }) => (
                           <div key={label} className="profile-stat-chip">
-                            <span className="profile-stat-chip-value">{value.toLocaleString()}</span>
+                            <span className="profile-stat-chip-value">
+                              {numberFormatter.format(value)}
+                            </span>
                             <span className="profile-stat-chip-label">{label}</span>
                           </div>
                         ))}
@@ -253,7 +279,7 @@ const ProfilePage = () => { // NOSONAR
                     <div className="social-profile-actions social-profile-actions--command flex items-center gap-2 flex-wrap">
                       {profile?._id === user?._id ? (
                         <Button type="button" variant="secondary" className="social-profile-action-btn social-avatar-badge social-text-main transition-colors hover:opacity-90">
-                          Edit profile
+                          {t("profile.action.edit_profile")}
                         </Button>
                       ) : null}
 
@@ -264,7 +290,9 @@ const ProfilePage = () => { // NOSONAR
                           className={profile.isFollowing ? "social-profile-action-btn follow-btn-following" : "social-profile-action-btn profile-action-gradient"}
                           onClick={() => toggleFollow(profile._id)}
                         >
-                          {profile.isFollowing ? "Following" : "Follow"}
+                          {profile.isFollowing
+                            ? t("profile.action.following")
+                            : t("profile.action.follow")}
                         </Button>
                       )}
 
@@ -283,32 +311,40 @@ const ProfilePage = () => { // NOSONAR
                   <Lock className="size-7" />
                 </div>
                 <h2 className="text-title-2 text-foreground">
-                  Private profile
+                  {t("profile.private.title")}
                 </h2>
                 <p className="mt-2 text-body-sm text-muted-foreground/80 max-w-[280px] mx-auto leading-relaxed">
-                  Only friends can view this profile. Send a friend request to unlock their posts and photos.
+                  {t("profile.private.subtitle")}
                 </p>
               </div>
             ) : (
               <div className={`social-profile-columns social-profile-columns--command grid gap-4 lg:grid-cols-[4fr_6fr] ${getStaggerEnterClass(1)}`}>
                 <aside
                   className="social-profile-sidebar social-profile-sidebar--command lg:sticky lg:top-20 lg:self-start"
-                  aria-label="Profile highlights"
+                  aria-label={t("profile.aria.highlights")}
                 >
                   <div className="social-card social-profile-panel social-profile-panel--command p-4">
-                    <h3 className="social-text-main text-base font-semibold">About</h3>
-                    <p className="social-text-muted mt-2 text-sm">{profile?.bio || "No bio yet"}</p>
+                    <h3 className="social-text-main text-base font-semibold">
+                      {t("profile.about")}
+                    </h3>
+                    <p className="social-text-muted mt-2 text-sm">
+                      {profile?.bio || t("profile.no_bio")}
+                    </p>
                   </div>
                   <div className="social-card social-profile-panel social-profile-panel--command p-4">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="social-text-main text-base font-semibold">Photos</h3>
+                      <h3 className="social-text-main text-base font-semibold">
+                        {t("profile.photos")}
+                      </h3>
                       {profilePhotos.length > 0 ? (
                         <button
                           type="button"
                           className="social-profile-photos-link"
                           onClick={() => openPhotoViewer(profilePhotos[0])}
                         >
-                          View all ({profilePhotos.length})
+                          {t("profile.photos.view_all", {
+                            count: numberFormatter.format(profilePhotos.length),
+                          })}
                         </button>
                       ) : null}
                     </div>
@@ -328,24 +364,36 @@ const ProfilePage = () => { // NOSONAR
                             >
                               <img
                                 src={photoUrl}
-                                alt={`Profile ${index + 1}`}
+                                alt={t("profile.photos.alt", { index: index + 1 })}
                                 className="social-profile-photo-image"
                                 loading="lazy"
                               />
                               {showMore ? (
-                                <span className="social-profile-photo-more">+{remaining}</span>
+                                <span className="social-profile-photo-more">
+                                  {t("profile.photos.remaining", {
+                                    count: numberFormatter.format(remaining),
+                                  })}
+                                </span>
                               ) : null}
                             </button>
                           );
                         })}
                       </div>
                     ) : (
-                      <p className="social-text-muted mt-2 text-sm">No photos yet.</p>
+                      <p className="social-text-muted mt-2 text-sm">
+                        {t("profile.photos.empty")}
+                      </p>
                     )}
                   </div>
                   <div className="social-card social-profile-panel social-profile-panel--command p-4">
-                    <h3 className="social-text-main text-base font-semibold">Friends</h3>
-                    <p className="social-text-muted mt-1 text-sm">{profile?.friendCount || 0} friends</p>
+                    <h3 className="social-text-main text-base font-semibold">
+                      {t("profile.friends")}
+                    </h3>
+                    <p className="social-text-muted mt-1 text-sm">
+                      {t("profile.friends.count", {
+                        count: numberFormatter.format(profile?.friendCount || 0),
+                      })}
+                    </p>
 
                     {profile?.friendsPreview?.length ? (
                       <div className="social-friends-preview-grid mt-3">
@@ -367,12 +415,17 @@ const ProfilePage = () => { // NOSONAR
                         ))}
                       </div>
                     ) : (
-                      <p className="social-text-muted mt-2 text-sm">No friends to show yet.</p>
+                      <p className="social-text-muted mt-2 text-sm">
+                        {t("profile.friends.empty")}
+                      </p>
                     )}
                   </div>
                 </aside>
 
-                <section className="social-profile-main social-profile-main--command" aria-label="Profile posts timeline">
+                <section
+                  className="social-profile-main social-profile-main--command"
+                  aria-label={t("profile.aria.timeline")}
+                >
                   {profile?._id === user?._id && (
                     <PostComposer onCreate={createPost} />
                   )}
@@ -408,7 +461,7 @@ const ProfilePage = () => { // NOSONAR
                   )}
                   {!loadingProfile && profilePosts.length === 0 && (
                     <div className="social-card-empty p-8 text-center">
-                      No posts yet.
+                      {t("profile.posts.empty")}
                     </div>
                   )}
                 </section>
@@ -421,7 +474,7 @@ const ProfilePage = () => { // NOSONAR
                   <LoadingMoreSkeleton />
                 ) : (
                   <Button type="button" variant="outline" onClick={loadMore}>
-                    Load more
+                    {t("profile.load_more")}
                   </Button>
                 )}
               </div>
@@ -436,18 +489,26 @@ const ProfilePage = () => { // NOSONAR
             >
               <DialogHeader className="social-profile-photo-dialog-head">
                 <div className="social-profile-photo-dialog-title-row">
-                  <DialogTitle className="social-profile-photo-dialog-title">Photos</DialogTitle>
+                  <DialogTitle className="social-profile-photo-dialog-title">
+                    {t("profile.dialog.photos_title")}
+                  </DialogTitle>
                   {hasPhotoDialogContent ? (
                     <span className="social-profile-photo-counter">
-                      {activePhotoIndex + 1}/{profilePhotos.length}
+                      {t("profile.dialog.counter", {
+                        current: numberFormatter.format(activePhotoIndex + 1),
+                        total: numberFormatter.format(profilePhotos.length),
+                      })}
                     </span>
                   ) : null}
                 </div>
 
                 <DialogDescription className="social-profile-photo-dialog-description">
                   {profilePhotos.length
-                    ? `${activePhotoIndex + 1}/${profilePhotos.length} | Browse photos from this profile's posts.`
-                    : "No photos available."}
+                    ? t("profile.dialog.description", {
+                        current: numberFormatter.format(activePhotoIndex + 1),
+                        total: numberFormatter.format(profilePhotos.length),
+                      })
+                    : t("profile.dialog.no_photos")}
                 </DialogDescription>
 
                 {hasPhotoDialogContent ? (
@@ -459,14 +520,14 @@ const ProfilePage = () => { // NOSONAR
 
               <div
                 className="social-lightbox-stage social-profile-photo-stage relative mt-2 flex h-[75vh] items-center justify-center overflow-hidden rounded-xl"
-                aria-label="Photo viewer"
+                aria-label={t("profile.dialog.viewer_aria")}
               >
                 <div className="social-profile-photo-stage-glow" aria-hidden="true" />
 
                 {activePhotoUrl ? (
                   <img
                     src={activePhotoUrl}
-                    alt={`Profile ${activePhotoIndex + 1}`}
+                    alt={t("profile.photos.alt", { index: activePhotoIndex + 1 })}
                     className="social-profile-photo-active max-h-full max-w-full object-contain"
                   />
                 ) : null}
@@ -479,7 +540,7 @@ const ProfilePage = () => { // NOSONAR
                       variant="secondary"
                       className="social-profile-photo-nav social-profile-photo-nav--prev absolute left-3 top-1/2 -translate-y-1/2"
                       onClick={goPrevPhoto}
-                      aria-label="Previous photo"
+                      aria-label={t("profile.dialog.prev_photo")}
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </Button>
@@ -489,7 +550,7 @@ const ProfilePage = () => { // NOSONAR
                       variant="secondary"
                       className="social-profile-photo-nav social-profile-photo-nav--next absolute right-3 top-1/2 -translate-y-1/2"
                       onClick={goNextPhoto}
-                      aria-label="Next photo"
+                      aria-label={t("profile.dialog.next_photo")}
                     >
                       <ChevronRight className="h-5 w-5" />
                     </Button>
@@ -498,7 +559,10 @@ const ProfilePage = () => { // NOSONAR
               </div>
 
               {dialogPhotoStrip.length > 1 ? (
-                <div className="social-profile-photo-strip beautiful-scrollbar" aria-label="Photo thumbnails">
+                <div
+                  className="social-profile-photo-strip beautiful-scrollbar"
+                  aria-label={t("profile.dialog.thumbnails_aria")}
+                >
                   {dialogPhotoStrip.map(({ url, index }) => (
                     <button
                       key={`${url}-${index}`}
@@ -506,7 +570,13 @@ const ProfilePage = () => { // NOSONAR
                       className={`social-profile-photo-thumb ${index === activePhotoIndex ? "is-active" : ""}`}
                       onClick={() => setActivePhotoIndex(index)}
                     >
-                      <img src={url} alt={`Gallery item ${index + 1}`} loading="lazy" />
+                      <img
+                        src={url}
+                        alt={t("profile.dialog.gallery_item_alt", {
+                          index: index + 1,
+                        })}
+                        loading="lazy"
+                      />
                     </button>
                   ))}
                 </div>

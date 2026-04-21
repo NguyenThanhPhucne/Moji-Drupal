@@ -69,9 +69,26 @@ interface GroupChannelAnalyticsResponse {
 const pageLimit = 50;
 
 export const chatService = {
-  async fetchConversations(): Promise<ConversationResponse> {
-    const res = await api.get("/conversations");
-    return res.data;
+  async fetchConversations(opts?: { ifNoneMatch?: string | null; ifModifiedSince?: string | null }): Promise<ConversationResponse | { notModified: true; status: number } & Partial<ConversationResponse>> {
+    const headers: Record<string, string> = {};
+    if (opts?.ifNoneMatch) headers["If-None-Match"] = String(opts.ifNoneMatch);
+    if (opts?.ifModifiedSince) headers["If-Modified-Since"] = String(opts.ifModifiedSince);
+
+    const res = await api.get("/conversations", {
+      headers,
+      validateStatus: (status) => status === 304 || (status >= 200 && status < 300),
+    });
+
+    if (res.status === 304) {
+      return { notModified: true, status: 304 } as any;
+    }
+
+    const payload: ConversationResponse = res.data;
+    // attach revalidation metadata
+    (payload as any)._etag = res.headers?.etag || null;
+    (payload as any)._lastModified = res.headers?.["last-modified"] || null;
+
+    return payload;
   },
 
   async fetchConversationsWithCookieSession(): Promise<ConversationResponse> {

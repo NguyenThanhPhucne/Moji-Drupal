@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - backend/src/**
+      - backend/scripts/e2e-message-actions-ci-smoke.mjs
+      - backend/scripts/e2e-message-hardening-smoke.mjs
       - backend/package.json
       - backend/package-lock.json
       - backend/.env.example
@@ -14,6 +16,8 @@ on:
       - main
     paths:
       - backend/src/**
+      - backend/scripts/e2e-message-actions-ci-smoke.mjs
+      - backend/scripts/e2e-message-hardening-smoke.mjs
       - backend/package.json
       - backend/package-lock.json
       - backend/.env.example
@@ -100,6 +104,12 @@ jobs:
         env:
           SMOKE_API_BASE_URL: http://127.0.0.1:5001/api
         run: node scripts/chat_pagination_remove_for_me_smoke.mjs
+
+      - name: Run message actions CI smoke
+        env:
+          BASE_URL: http://127.0.0.1:5001/api
+          MONGODB_CONNECTIONSTRING: mongodb://127.0.0.1:27017/moji_ci_smoke
+        run: npm --prefix backend run test:message-actions-ci
 
       - name: Show backend logs on failure
         if: failure()

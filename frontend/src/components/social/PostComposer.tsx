@@ -11,6 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface PostComposerProps {
@@ -24,6 +25,7 @@ interface PostComposerProps {
 }
 
 const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
+  const { t } = useI18n();
   const IMAGE_LIMIT = 10;
   const DRAFT_STORAGE_KEY = "social-post-composer-draft-v1";
   const { user } = useAuthStore();
@@ -97,9 +99,9 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
           return;
         }
 
-        reject(new Error("Failed to parse image file"));
+        reject(new Error(t("socialComposer.error.parse_image")));
       };
-      reader.onerror = () => reject(new Error("Failed to read image file"));
+      reader.onerror = () => reject(new Error(t("socialComposer.error.read_image")));
       reader.readAsDataURL(file);
     });
 
@@ -236,7 +238,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
     setDragOverIndex(null);
   };
 
-  const displayName = user?.displayName || "You";
+  const displayName = user?.displayName || t("socialComposer.you");
   const avatarUrl = user?.avatarUrl || "";
 
   return (
@@ -255,22 +257,22 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
             className="social-composer-prompt social-composer-prompt--command social-composer-trigger social-composer-trigger-glow h-11 flex-1 rounded-full px-4 text-left text-sm transition-[border-color,background-color,box-shadow,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             onClick={() => setIsOpen(true)}
           >
-            What's on your mind?
+            {t("socialComposer.prompt")}
           </button>
         </div>
 
         <div className="social-divider social-composer-action-row mt-3 grid grid-cols-3 gap-2 border-t border-border/30 pt-2.5">
           <button type="button" className="post-action-btn-hover social-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium">
             <Video className="social-icon-live h-4 w-4" />
-            Live Video
+            {t("socialComposer.action.live_video")}
           </button>
           <button type="button" className="post-action-btn-hover social-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
             <ImagePlus className="social-icon-media h-4 w-4" />
-            Photo/Video
+            {t("socialComposer.action.photo_video")}
           </button>
           <button type="button" className="post-action-btn-hover social-action-btn flex items-center justify-center gap-2 rounded-lg py-2 text-sm font-medium" onClick={() => setIsOpen(true)}>
             <Smile className="social-icon-feeling h-4 w-4" />
-            Feeling/Activity
+            {t("socialComposer.action.feeling_activity")}
           </button>
         </div>
       </div>
@@ -282,10 +284,10 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
         >
           <DialogHeader className="social-composer-modal__header social-divider border-b px-5 py-4">
             <DialogTitle className="social-text-main text-center text-lg font-bold">
-              Create post
+              {t("socialComposer.dialog.create_post")}
             </DialogTitle>
             <DialogDescription className="sr-only">
-              Create a new social post
+              {t("socialComposer.dialog.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -305,8 +307,8 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
                   onChange={(event) => setPrivacy(event.target.value as "public" | "followers")}
                   className="social-select-chip mt-1 rounded-md border px-2 py-1 text-xs font-medium"
                 >
-                  <option value="public">Public</option>
-                  <option value="followers">Friends</option>
+                  <option value="public">{t("socialComposer.privacy.public")}</option>
+                  <option value="followers">{t("socialComposer.privacy.friends")}</option>
                 </select>
               </div>
             </div>
@@ -314,13 +316,15 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
             <Textarea
               value={caption}
               onChange={(event) => setCaption(event.target.value)}
-              placeholder="What's on your mind?"
+              placeholder={t("socialComposer.caption_placeholder")}
               className="social-textarea min-h-32 resize-none border-0 bg-transparent px-0 text-lg shadow-none focus-visible:ring-0"
             />
 
             <div className="social-divider rounded-xl border p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="social-text-main text-sm font-semibold">Add to your post</p>
+                <p className="social-text-main text-sm font-semibold">
+                  {t("socialComposer.add_to_post")}
+                </p>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -335,26 +339,29 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Camera className="social-icon-media h-4 w-4" />
-                  Photo
+                  {t("socialComposer.button.photo")}
                 </button>
               </div>
 
               {mediaUrls.length > 0 && (
                 <div className="mt-3 space-y-2">
                   <p className="social-text-muted text-xs font-medium">
-                    {mediaUrls.length}/{IMAGE_LIMIT} photos selected
+                    {t("socialComposer.selected_photos", {
+                      count: mediaUrls.length,
+                      limit: IMAGE_LIMIT,
+                    })}
                   </p>
                   <div className="social-composer-stage group relative overflow-hidden rounded-xl border">
                     <img
                       src={mediaUrls[Math.min(activeMediaIndex, Math.max(0, mediaUrls.length - 1))]}
-                      alt="selected preview"
+                      alt={t("socialComposer.preview_alt")}
                       className="social-composer-stage-image"
                     />
                     <button
                       type="button"
                       className="social-media-remove-btn absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full opacity-90 transition-opacity group-hover:opacity-100"
                       onClick={() => removeMediaAt(activeMediaIndex)}
-                      aria-label="Remove selected image"
+                      aria-label={t("socialComposer.remove_selected_image")}
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -384,7 +391,9 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
                           <button
                             type="button"
                             draggable
-                            aria-label={`Selected photo ${index + 1}. Press Delete to remove.`}
+                            aria-label={t("socialComposer.selected_photo_aria", {
+                              index: index + 1,
+                            })}
                             onDragStart={() => handleDragStart(index)}
                             onDragOver={(event) => handleDragOver(event, index)}
                             onDrop={() => handleDrop(index)}
@@ -398,7 +407,13 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
                             }}
                             className="flex h-full w-full cursor-grab items-center justify-center active:cursor-grabbing"
                           >
-                            <img src={media} alt={`preview ${index + 1}`} className="h-full w-full object-cover" />
+                            <img
+                              src={media}
+                              alt={t("socialComposer.preview_item_alt", {
+                                index: index + 1,
+                              })}
+                              className="h-full w-full object-cover"
+                            />
                           </button>
                         </div>
                       );
@@ -411,7 +426,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
                         onClick={() => fileInputRef.current?.click()}
                       >
                         <Camera className="h-4 w-4" />
-                        Add
+                        {t("socialComposer.add_more")}
                       </button>
                     ) : null}
                   </div>
@@ -422,7 +437,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
             <Input
               value={tags}
               onChange={(event) => setTags(event.target.value)}
-              placeholder="Add tags, separated by commas"
+              placeholder={t("socialComposer.tags_placeholder")}
               className="social-input-surface h-10 border"
             />
           </div>
@@ -435,7 +450,7 @@ const PostComposer = ({ onCreate, openRequestKey = 0 }: PostComposerProps) => {
               disabled={submitting}
             >
               <SendHorizontal className="mr-2 h-4 w-4" />
-              {submitting ? "Posting..." : "Post"}
+              {submitting ? t("socialComposer.posting") : t("socialComposer.post")}
             </Button>
           </div>
         </DialogContent>

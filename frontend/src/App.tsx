@@ -7,7 +7,7 @@ import {
   useNavigate,
 } from "react-router";
 import { Toaster } from "sonner";
-import { useEffect, lazy, Suspense, useRef } from "react";
+import { useCallback, useEffect, lazy, Suspense, useRef, useMemo } from "react";
 import { useThemeStore } from "./stores/useThemeStore";
 import { useAuthStore } from "./stores/useAuthStore";
 import { useSocketStore } from "./stores/useSocketStore";
@@ -15,9 +15,22 @@ import { useFriendStore } from "./stores/useFriendStore";
 import { useBookmarkStore } from "./stores/useBookmarkStore";
 import { useSocialStore } from "./stores/useSocialStore";
 import { useChatStore } from "./stores/useChatStore";
+import { useNotificationStore } from "./stores/useNotificationStore";
 import { useSocialMotionStore } from "./stores/useSocialMotionStore";
+import {
+  usePersonalizationStore,
+  type StartPagePreference,
+  type PersonalizationSnapshot,
+  normalizePersonalizationSnapshot,
+  arePersonalizationSnapshotsEqual,
+} from "./stores/usePersonalizationStore";
+import { useA11yAnnouncerStore } from "./stores/useA11yAnnouncerStore";
+import { useI18n } from "./lib/i18n";
+import { userService } from "./services/userService";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import WorkspaceLoadingSkeleton from "./components/skeleton/WorkspaceLoadingSkeleton";
+import GlobalSearchDialog from "./components/chat/GlobalSearchDialog";
+import AccessibilityAnnouncer from "./components/a11y/AccessibilityAnnouncer";
 import ChatAppPage from "./pages/ChatAppPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
@@ -38,6 +51,27 @@ const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage.tsx"));
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+const START_PAGE_PATH_BY_PREFERENCE: Record<
+  Exclude<StartPagePreference, "chat">,
+  string
+> = {
+  feed: "/feed",
+  explore: "/explore",
+  saved: "/saved",
+};
+
+const StartPageRoute = () => {
+  const startPagePreference = usePersonalizationStore(
+    (state) => state.startPagePreference,
+  );
+
+  if (startPagePreference === "chat") {
+    return <ChatAppPage />;
+  }
+
+  return <Navigate to={START_PAGE_PATH_BY_PREFERENCE[startPagePreference]} replace />;
+};
 
 const scheduleAfterFirstPaint = (callback: () => void) => {
   let frameOne = 0;
@@ -66,10 +100,63 @@ const runDeferredTasks = (tasks: Array<Promise<unknown>>) => {
 };
 
 function AppRoutes() {
+  const { t } = useI18n();
+  const announcePolite = useA11yAnnouncerStore((state) => state.announcePolite);
   const location = useLocation();
   const navigate = useNavigate();
+  const isAuthenticated = useAuthStore(
+    (state) => Boolean(state.accessToken && state.user),
+  );
   const routeSceneKey = `${location.pathname}${location.search}`;
   const mainRef = useRef<HTMLElement | null>(null);
+  const didInitialRouteAnnouncement = useRef(false);
+
+  const resolveRouteLabel = useCallback(
+    (pathname: string) => {
+      if (pathname === "/" || pathname.startsWith("/chat")) {
+        return t("route.chat");
+      }
+
+      if (pathname.startsWith("/feed")) {
+        return t("route.feed");
+      }
+
+      if (pathname.startsWith("/explore")) {
+        return t("route.explore");
+      }
+
+      if (pathname.startsWith("/profile")) {
+        return t("route.profile");
+      }
+
+      if (pathname.startsWith("/saved")) {
+        return t("route.saved");
+      }
+
+      if (pathname.startsWith("/settings/notifications")) {
+        return t("route.notifications");
+      }
+
+      if (pathname.startsWith("/signin")) {
+        return t("route.signin");
+      }
+
+      if (pathname.startsWith("/signup")) {
+        return t("route.signup");
+      }
+
+      if (pathname.startsWith("/terms")) {
+        return t("route.terms");
+      }
+
+      if (pathname.startsWith("/privacy")) {
+        return t("route.privacy");
+      }
+
+      return t("route.unknown");
+    },
+    [t],
+  );
 
   const moveFocusToMain = () => {
     const mainElement =
@@ -116,12 +203,22 @@ function AppRoutes() {
     };
   }, [routeSceneKey]);
 
+  useEffect(() => {
+    if (!didInitialRouteAnnouncement.current) {
+      didInitialRouteAnnouncement.current = true;
+      return;
+    }
+
+    const routeLabel = resolveRouteLabel(location.pathname);
+    announcePolite(t("a11y.navigation_to", { route: routeLabel }));
+  }, [announcePolite, location.pathname, resolveRouteLabel, t]);
+
   return (
     <>
       <a
         href="#primary-main"
         className="app-skip-link"
-        aria-label="Skip to main content"
+        aria-label={t("app.skip_to_main")}
         data-testid="skip-to-main-link"
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -134,16 +231,18 @@ function AppRoutes() {
           moveFocusToMain();
         }}
       >
-        Skip to main content
+        {t("app.skip_to_main")}
       </a>
       <main
         id="primary-main"
         ref={mainRef}
         tabIndex={-1}
-        aria-label="Main content"
+        aria-label={t("app.main_content")}
         className="route-scene-enter"
         key={routeSceneKey}
       >
+        {isAuthenticated ? <GlobalSearchDialog globalOnly /> : null}
+
         <Routes location={location}>
           {/* public routes */}
           <Route path="/signin" element={<SignInPage />} />
@@ -156,11 +255,11 @@ function AppRoutes() {
 
           {/* protectect routes */}
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<ChatAppPage />} />
+            <Route path="/" element={<StartPageRoute />} />
             <Route path="/home" element={<Navigate to="/feed" replace />} />
             <Route path="/feed/home" element={<Navigate to="/feed" replace />} />
             <Route path="/feed" element={<HomeFeedPage />} />
-            <Route path="/chat" element={<Navigate to="/" replace />} />
+            <Route path="/chat" element={<ChatAppPage />} />
             <Route path="/explore" element={<ExplorePage />} />
             <Route path="/post/:postId" element={<PostDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
@@ -192,11 +291,61 @@ function AppRoutes() {
 function AppContent() {
   const { applyTheme, bindProfileUser } = useThemeStore();
   const { applyMotionPreset } = useSocialMotionStore();
-  const { accessToken, user } = useAuthStore();
+  const applyDocumentSettings = usePersonalizationStore(
+    (state) => state.applyDocumentSettings,
+  );
+  const hydrateFromProfile = usePersonalizationStore(
+    (state) => state.hydrateFromProfile,
+  );
+  const locale = usePersonalizationStore((state) => state.locale);
+  const startPagePreference = usePersonalizationStore(
+    (state) => state.startPagePreference,
+  );
+  const timestampStylePreference = usePersonalizationStore(
+    (state) => state.timestampStylePreference,
+  );
+  const notificationGroupingPreference = usePersonalizationStore(
+    (state) => state.notificationGroupingPreference,
+  );
+  const notificationDensityPreference = usePersonalizationStore(
+    (state) => state.notificationDensityPreference,
+  );
+  const { accessToken, user, setUser } = useAuthStore();
   const { connectSocket, disconnectSocket } = useSocketStore();
+  const keyboardPowerShortcutsEnabled = useSocketStore(
+    (state) => state.featureFlags.keyboard_power_shortcuts,
+  );
   const { getAllFriendRequests, getFriends } = useFriendStore();
   const { fetchBookmarks } = useBookmarkStore();
   const { fetchNotifications } = useSocialStore();
+  const setIsHubOpen = useNotificationStore((state) => state.setIsHubOpen);
+  const setActiveConversation = useChatStore((state) => state.setActiveConversation);
+  const conversations = useChatStore((state) => state.conversations);
+  const flushOutgoingQueue = useChatStore((state) => state.flushOutgoingQueue);
+  const outgoingQueueLength = useChatStore((state) => state.outgoingQueue.length);
+  const personalizationSyncTimeoutRef = useRef<number | null>(null);
+
+  const localPersonalizationSnapshot = useMemo<PersonalizationSnapshot>(
+    () => ({
+      locale,
+      startPagePreference,
+      timestampStylePreference,
+      notificationGroupingPreference,
+      notificationDensityPreference,
+    }),
+    [
+      locale,
+      notificationDensityPreference,
+      notificationGroupingPreference,
+      startPagePreference,
+      timestampStylePreference,
+    ],
+  );
+
+  const profilePersonalizationSnapshot = useMemo(
+    () => normalizePersonalizationSnapshot(user?.personalizationPreferences),
+    [user?.personalizationPreferences],
+  );
 
   useEffect(() => {
     if (!import.meta.env.DEV) {
@@ -209,12 +358,16 @@ function AppContent() {
           useAuthStore: typeof useAuthStore;
           useSocketStore: typeof useSocketStore;
           useChatStore: typeof useChatStore;
+          useNotificationStore: typeof useNotificationStore;
+          usePersonalizationStore: typeof usePersonalizationStore;
         };
       }
     ).__MOJI_SMOKE_BRIDGE__ = {
       useAuthStore,
       useSocketStore,
       useChatStore,
+      useNotificationStore,
+      usePersonalizationStore,
     };
 
     return () => {
@@ -233,6 +386,103 @@ function AppContent() {
   useEffect(() => {
     applyMotionPreset();
   }, [applyMotionPreset]);
+
+  useEffect(() => {
+    applyDocumentSettings();
+  }, [applyDocumentSettings]);
+
+  useEffect(() => {
+    if (!user?._id) {
+      return;
+    }
+
+    if (
+      arePersonalizationSnapshotsEqual(
+        localPersonalizationSnapshot,
+        profilePersonalizationSnapshot,
+      )
+    ) {
+      return;
+    }
+
+    hydrateFromProfile(profilePersonalizationSnapshot);
+  }, [
+    hydrateFromProfile,
+    localPersonalizationSnapshot,
+    profilePersonalizationSnapshot,
+    user?._id,
+  ]);
+
+  useEffect(() => {
+    const userId = String(user?._id || "").trim();
+    if (!userId) {
+      if (personalizationSyncTimeoutRef.current !== null) {
+        globalThis.clearTimeout(personalizationSyncTimeoutRef.current);
+        personalizationSyncTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (
+      arePersonalizationSnapshotsEqual(
+        localPersonalizationSnapshot,
+        profilePersonalizationSnapshot,
+      )
+    ) {
+      if (personalizationSyncTimeoutRef.current !== null) {
+        globalThis.clearTimeout(personalizationSyncTimeoutRef.current);
+        personalizationSyncTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    if (personalizationSyncTimeoutRef.current !== null) {
+      globalThis.clearTimeout(personalizationSyncTimeoutRef.current);
+      personalizationSyncTimeoutRef.current = null;
+    }
+
+    const snapshotToSync = localPersonalizationSnapshot;
+
+    personalizationSyncTimeoutRef.current = globalThis.setTimeout(() => {
+      void userService
+        .updatePersonalizationPreferences(snapshotToSync)
+        .then((response) => {
+          if (response?.user) {
+            const activeUser = useAuthStore.getState().user;
+            if (activeUser && String(activeUser._id) === userId) {
+              setUser(response.user);
+            }
+            return;
+          }
+
+          const activeUser = useAuthStore.getState().user;
+          if (activeUser && String(activeUser._id) === userId) {
+            setUser({
+              ...activeUser,
+              personalizationPreferences: snapshotToSync,
+            });
+          }
+        })
+        .catch((error) => {
+          console.error(
+            "Failed to sync personalization preferences to backend profile",
+            error,
+          );
+        });
+    }, 700);
+
+    return () => {
+      if (personalizationSyncTimeoutRef.current !== null) {
+        globalThis.clearTimeout(personalizationSyncTimeoutRef.current);
+        personalizationSyncTimeoutRef.current = null;
+      }
+    };
+  }, [
+    localPersonalizationSnapshot,
+    profilePersonalizationSnapshot,
+    setUser,
+    user?._id,
+  ]);
 
   useEffect(() => {
     bindProfileUser(user?._id ? String(user._id) : null);
@@ -270,6 +520,116 @@ function AppContent() {
     fetchNotifications,
   ]);
 
+  useEffect(() => {
+    if (!accessToken || !user || outgoingQueueLength <= 0) {
+      return;
+    }
+
+    void flushOutgoingQueue();
+  }, [accessToken, flushOutgoingQueue, outgoingQueueLength, user]);
+
+  useEffect(() => {
+    if (!accessToken || !user) {
+      return;
+    }
+
+    const handleOnline = () => {
+      void flushOutgoingQueue();
+    };
+
+    globalThis.addEventListener("online", handleOnline);
+    return () => {
+      globalThis.removeEventListener("online", handleOnline);
+    };
+  }, [accessToken, flushOutgoingQueue, user]);
+
+  useEffect(() => {
+    if (!accessToken || !user || !keyboardPowerShortcutsEnabled) {
+      return;
+    }
+
+    const isEditableElement = (target: EventTarget | null) => {
+      const element = target as HTMLElement | null;
+      if (!element) {
+        return false;
+      }
+
+      if (element.closest("[contenteditable='true']")) {
+        return true;
+      }
+
+      const tagName = element.tagName?.toLowerCase();
+      return ["input", "textarea", "select"].includes(tagName);
+    };
+
+    const cycleConversation = (direction: "next" | "prev") => {
+      const activeConversationId = String(
+        useChatStore.getState().activeConversationId || "",
+      ).trim();
+
+      if (conversations.length === 0) {
+        return;
+      }
+
+      const currentIndex = conversations.findIndex(
+        (conversationItem) => String(conversationItem._id) === activeConversationId,
+      );
+
+      const offset = direction === "next" ? 1 : -1;
+      const nextIndex =
+        currentIndex === -1
+          ? 0
+          : (currentIndex + offset + conversations.length) % conversations.length;
+      const targetConversationId = String(conversations[nextIndex]?._id || "").trim();
+
+      if (targetConversationId) {
+        setActiveConversation(targetConversationId);
+      }
+    };
+
+    const handleGlobalShortcuts = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      const hasCommandModifier = event.metaKey || event.ctrlKey;
+
+      if (hasCommandModifier && event.shiftKey && key === "n") {
+        event.preventDefault();
+        setIsHubOpen(true);
+        return;
+      }
+
+      if (isEditableElement(event.target)) {
+        return;
+      }
+
+      if (event.altKey && key === "arrowdown") {
+        event.preventDefault();
+        cycleConversation("next");
+        return;
+      }
+
+      if (event.altKey && key === "arrowup") {
+        event.preventDefault();
+        cycleConversation("prev");
+      }
+    };
+
+    globalThis.addEventListener("keydown", handleGlobalShortcuts);
+    return () => {
+      globalThis.removeEventListener("keydown", handleGlobalShortcuts);
+    };
+  }, [
+    accessToken,
+    conversations,
+    keyboardPowerShortcutsEnabled,
+    setActiveConversation,
+    setIsHubOpen,
+    user,
+  ]);
+
   // Only clean up when App unmounts.
   useEffect(() => {
     return () => disconnectSocket();
@@ -277,6 +637,7 @@ function AppContent() {
 
   return (
     <>
+      <AccessibilityAnnouncer />
       <Toaster richColors />
       <BrowserRouter>
         <Suspense fallback={<WorkspaceLoadingSkeleton />}>

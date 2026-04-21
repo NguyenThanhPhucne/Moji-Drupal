@@ -13,8 +13,10 @@ import {
   applyRateLimitHeaders,
   registerRateLimitHit,
 } from "../utils/antiSpam.js";
+import { invalidateCache } from "../libs/redis.js";
 import { lookup as dnsLookup } from "node:dns/promises";
 import net from "node:net";
+import { withSocketEventMeta } from "../utils/socketEventMeta.js";
 
 import { buildDirectConversationKey } from "../services/conversationService.js";
 
@@ -23,6 +25,8 @@ const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
 const DEFAULT_GROUP_CHANNEL_ID = "general";
 const GROUP_CHANNEL_ROLE_OPTIONS = ["owner", "admin", "member"];
 const MAX_MESSAGE_CONTENT_LENGTH = 5000;
+const MAX_REACTION_EMOJI_LENGTH = 16;
+const MAX_FORWARD_TARGETS_PER_REQUEST = 30;
 
 const assertValidMessageId = (messageId, res) => {
   if (!mongoose.isValidObjectId(messageId)) {
@@ -30,6 +34,108 @@ const assertValidMessageId = (messageId, res) => {
     return false;
   }
   return true;
+};
+
+const assertValidAuthUserId = (req, res) => {
+  const userId = req?.user?._id;
+  if (!mongoose.isValidObjectId(userId)) {
+    res.status(401).json({ message: "Phiên đăng nhập không hợp lệ" });
+    return null;
+  }
+
+  return userId;
+};
+
+const normalizeEditedMessageContentInput = (rawContent) => {
+  if (typeof rawContent !== "string") {
+    return {
+      normalizedContent: null,
+      validationError: "Nội dung tin nhắn phải là chuỗi ký tự",
+    };
+  }
+
+  const normalizedContent = rawContent.trim();
+  if (!normalizedContent) {
+    return {
+      normalizedContent: null,
+      validationError: "Nội dung không được trống",
+    };
+  }
+
+  if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
+    return {
+      normalizedContent: null,
+      validationError: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+    };
+  }
+
+  return {
+    normalizedContent,
+    validationError: null,
+  };
+};
+
+const normalizeReactionEmojiInput = (rawEmoji) => {
+  if (typeof rawEmoji !== "string") {
+    return {
+      normalizedEmoji: null,
+      validationError: "Biểu cảm không hợp lệ",
+    };
+  }
+
+  const normalizedEmoji = rawEmoji.trim();
+  if (!normalizedEmoji) {
+    return {
+      normalizedEmoji: null,
+      validationError: "Biểu cảm không hợp lệ",
+    };
+  }
+
+  if (normalizedEmoji.length > MAX_REACTION_EMOJI_LENGTH) {
+    return {
+      normalizedEmoji: null,
+      validationError: "Biểu cảm không hợp lệ",
+    };
+  }
+
+  if (/[\r\n\t]/.test(normalizedEmoji)) {
+    return {
+      normalizedEmoji: null,
+      validationError: "Biểu cảm không hợp lệ",
+    };
+  }
+
+  return {
+    normalizedEmoji,
+    validationError: null,
+  };
+};
+
+const emitToRoomSafely = ({
+  roomId,
+  event,
+  payload,
+  logContext,
+  eventMetaContext,
+}) => {
+  try {
+    const payloadWithMeta = withSocketEventMeta(payload, {
+      eventName: event,
+      conversationId:
+        eventMetaContext?.conversationId || payload?.conversationId || roomId,
+      entityId:
+        eventMetaContext?.entityId || payload?.messageId || payload?.conversationId,
+      scope:
+        eventMetaContext?.scope || payload?.conversationId || roomId || event,
+    });
+
+    io.to(String(roomId)).emit(event, payloadWithMeta);
+  } catch (socketError) {
+    console.error(
+      `[${logContext}] Failed to emit socket event '${event}'`,
+      socketError,
+    );
+  }
 };
 
 const createHttpError = (status, message) => {
@@ -225,7 +331,15 @@ const emitDirectConversationCreated = async ({
   conversation.participants.forEach((participant) => {
     const participantId = participant.userId?._id || participant.userId;
     if (participantId && participantId.toString() !== senderId.toString()) {
-      io.to(participantId.toString()).emit("new-conversation", formattedConversation);
+      io.to(participantId.toString()).emit(
+        "new-conversation",
+        withSocketEventMeta(formattedConversation, {
+          eventName: "new-conversation",
+          conversationId: formattedConversation?._id,
+          entityId: formattedConversation?._id,
+          scope: participantId,
+        }),
+      );
     }
   });
 };
@@ -1180,16 +1294,18 @@ export const reactToMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
     if (!assertValidMessageId(messageId, res)) return;
-    const { emoji } = req.body;
-    const userId = req.user._id;
-    const normalizedEmoji = String(emoji || "").trim();
+    const userId = assertValidAuthUserId(req, res);
+    if (!userId) return;
 
-    if (!normalizedEmoji || normalizedEmoji.length > 16) {
-      return res.status(400).json({ message: "Biểu cảm không hợp lệ" });
+    const { normalizedEmoji, validationError } =
+      normalizeReactionEmojiInput(req.body?.emoji);
+
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
     }
 
     const message = await Message.findById(messageId).select(
-      "_id conversationId isDeleted",
+      "_id conversationId isDeleted hiddenFor",
     );
     if (!message)
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
@@ -1198,6 +1314,15 @@ export const reactToMessage = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Không thể thả cảm xúc cho tin nhắn đã gỡ" });
+    }
+
+    const isHiddenForUser = (message.hiddenFor || []).some(
+      (hiddenUserId) => String(hiddenUserId) === String(userId),
+    );
+    if (isHiddenForUser) {
+      return res
+        .status(400)
+        .json({ message: "Không thể thả cảm xúc cho tin nhắn đã ẩn" });
     }
 
     const isMember = await ensureConversationMembership(
@@ -1265,11 +1390,16 @@ export const reactToMessage = async (req, res) => {
         .json({ message: "Tin nhắn đã bị gỡ trong lúc cập nhật biểu cảm" });
     }
 
-    io.to(updatedMessage.conversationId.toString()).emit("message-reacted", {
-      conversationId: updatedMessage.conversationId,
-      messageId: updatedMessage._id,
-      reactions: updatedMessage.reactions,
-      updatedAt: updatedMessage.updatedAt,
+    emitToRoomSafely({
+      roomId: updatedMessage.conversationId,
+      event: "message-reacted",
+      payload: {
+        conversationId: updatedMessage.conversationId,
+        messageId: updatedMessage._id,
+        reactions: updatedMessage.reactions,
+        updatedAt: updatedMessage.updatedAt,
+      },
+      logContext: "reactToMessage",
     });
 
     return res.status(200).json(updatedMessage);
@@ -1283,7 +1413,8 @@ export const unsendMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
     if (!assertValidMessageId(messageId, res)) return;
-    const userId = req.user._id;
+    const userId = assertValidAuthUserId(req, res);
+    if (!userId) return;
 
     const message = await Message.findById(messageId);
     if (!message)
@@ -1393,8 +1524,13 @@ export const unsendMessage = async (req, res) => {
       );
 
       if (clearedPinnedConversation) {
-        io.to(deletedMessage.conversationId.toString()).emit("group-conversation-updated", {
-          conversation: toGroupConversationUpdatePayload(clearedPinnedConversation),
+        emitToRoomSafely({
+          roomId: deletedMessage.conversationId,
+          event: "group-conversation-updated",
+          payload: {
+            conversation: toGroupConversationUpdatePayload(clearedPinnedConversation),
+          },
+          logContext: "unsendMessage",
         });
       }
     } catch (convUpdateError) {
@@ -1405,23 +1541,44 @@ export const unsendMessage = async (req, res) => {
       );
     }
 
-    io.to(deletedMessage.conversationId.toString()).emit("message-deleted", {
-      conversationId: deletedMessage.conversationId,
-      messageId: deletedMessage._id,
-      content: deletedMessage.content,
-      editedAt: deletedMessage.editedAt,
-      reactions: deletedMessage.reactions,
-      readBy: deletedMessage.readBy,
-      replyTo: deletedMessage.replyTo,
-      conversation: formatConversationSyncPayload(updatedConversation),
+    const conversationSyncPayload = formatConversationSyncPayload(updatedConversation);
+
+    emitToRoomSafely({
+      roomId: deletedMessage.conversationId,
+      event: "message-deleted",
+      payload: {
+        conversationId: deletedMessage.conversationId,
+        messageId: deletedMessage._id,
+        content: deletedMessage.content,
+        editedAt: deletedMessage.editedAt,
+        reactions: deletedMessage.reactions,
+        readBy: deletedMessage.readBy,
+        replyTo: deletedMessage.replyTo,
+        conversation: conversationSyncPayload,
+      },
+      logContext: "unsendMessage",
     });
 
-    const conversationToInvalidate = await Conversation.findById(deletedMessage.conversationId).select("participants");
-    invalidateConversationParticipantsCache(conversationToInvalidate).catch(console.error);
+    try {
+      const conversationToInvalidate = await Conversation.findById(
+        deletedMessage.conversationId,
+      ).select("participants");
+      invalidateConversationParticipantsCache(conversationToInvalidate).catch((cacheError) => {
+        console.error(
+          "[unsendMessage] Failed to invalidate participant conversation cache",
+          cacheError,
+        );
+      });
+    } catch (conversationLookupError) {
+      console.error(
+        "[unsendMessage] Failed to load conversation for cache invalidation",
+        conversationLookupError,
+      );
+    }
 
     return res.status(200).json({
       message: deletedMessage,
-      conversation: formatConversationSyncPayload(updatedConversation),
+      conversation: conversationSyncPayload,
     });
   } catch (error) {
     console.error("Lỗi khi gỡ tin nhắn:", error);
@@ -1485,7 +1642,8 @@ export const removeMessageForMe = async (req, res) => {
   try {
     const { messageId } = req.params;
     if (!assertValidMessageId(messageId, res)) return;
-    const userId = req.user._id;
+    const userId = assertValidAuthUserId(req, res);
+    if (!userId) return;
 
     const message = await Message.findById(messageId);
     if (!message) {
@@ -1527,10 +1685,24 @@ export const removeMessageForMe = async (req, res) => {
         );
       }
 
-      io.to(userIdStr).emit("message-hidden-for-user", {
-        conversationId: message.conversationId,
-        messageId: message._id,
-        conversation: userScopedConversation,
+      try {
+        await invalidateCache(`conversations:${userIdStr}`);
+      } catch (cacheError) {
+        console.error(
+          "[removeMessageForMe] Failed to invalidate user conversation cache",
+          cacheError,
+        );
+      }
+
+      emitToRoomSafely({
+        roomId: userIdStr,
+        event: "message-hidden-for-user",
+        payload: {
+          conversationId: message.conversationId,
+          messageId: message._id,
+          conversation: userScopedConversation,
+        },
+        logContext: "removeMessageForMe",
       });
     }
 
@@ -1550,17 +1722,13 @@ export const editMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
     if (!assertValidMessageId(messageId, res)) return;
-    const { content } = req.body;
-    const userId = req.user._id;
+    const userId = assertValidAuthUserId(req, res);
+    if (!userId) return;
 
-    if (!content?.trim()) {
-      return res.status(400).json({ message: "Nội dung không được trống" });
-    }
-
-    if (content.trim().length > MAX_MESSAGE_CONTENT_LENGTH) {
-      return res.status(400).json({
-        message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
-      });
+    const { normalizedContent, validationError } =
+      normalizeEditedMessageContentInput(req.body?.content);
+    if (validationError) {
+      return res.status(400).json({ message: validationError });
     }
 
     const message = await Message.findById(messageId);
@@ -1586,10 +1754,11 @@ export const editMessage = async (req, res) => {
         .json({ message: "Không thể sửa tin nhắn đã bị gỡ" });
     }
 
-    const normalizedContent = content.trim();
-
     if (normalizedContent === message.content) {
-      return res.status(200).json(message);
+      return res.status(200).json({
+        message,
+        conversation: null,
+      });
     }
 
     const editedAt = new Date();
@@ -1614,32 +1783,64 @@ export const editMessage = async (req, res) => {
       });
     }
 
-    const updatedConversation = await Conversation.findOneAndUpdate(
-      {
-        _id: updatedMessage.conversationId,
-        "lastMessage._id": updatedMessage._id.toString(),
-      },
-      {
-        $set: {
-          "lastMessage.content": updatedMessage.content,
-          "lastMessage.createdAt": updatedMessage.createdAt,
-          "lastMessage.editedAt": updatedMessage.editedAt,
+    let updatedConversation = null;
+    try {
+      updatedConversation = await Conversation.findOneAndUpdate(
+        {
+          _id: updatedMessage.conversationId,
+          "lastMessage._id": updatedMessage._id.toString(),
         },
-      },
-      { new: true },
-    );
+        {
+          $set: {
+            "lastMessage.content": updatedMessage.content,
+            "lastMessage.createdAt": updatedMessage.createdAt,
+            "lastMessage.editedAt": updatedMessage.editedAt,
+          },
+        },
+        { new: true },
+      );
+    } catch (conversationSyncError) {
+      console.error(
+        "[editMessage] Conversation preview update failed after successful message edit",
+        conversationSyncError,
+      );
+    }
 
-    io.to(updatedMessage.conversationId.toString()).emit("message-edited", {
-      conversationId: updatedMessage.conversationId,
-      messageId: updatedMessage._id,
-      content: updatedMessage.content,
-      editedAt: updatedMessage.editedAt,
-      conversation: formatConversationSyncPayload(updatedConversation),
+    const conversationSyncPayload = formatConversationSyncPayload(updatedConversation);
+
+    emitToRoomSafely({
+      roomId: updatedMessage.conversationId,
+      event: "message-edited",
+      payload: {
+        conversationId: updatedMessage.conversationId,
+        messageId: updatedMessage._id,
+        content: updatedMessage.content,
+        editedAt: updatedMessage.editedAt,
+        conversation: conversationSyncPayload,
+      },
+      logContext: "editMessage",
     });
+
+    try {
+      const conversationToInvalidate = await Conversation.findById(
+        updatedMessage.conversationId,
+      ).select("participants");
+      invalidateConversationParticipantsCache(conversationToInvalidate).catch((cacheError) => {
+        console.error(
+          "[editMessage] Failed to invalidate participant conversation cache",
+          cacheError,
+        );
+      });
+    } catch (conversationLookupError) {
+      console.error(
+        "[editMessage] Failed to load conversation for cache invalidation",
+        conversationLookupError,
+      );
+    }
 
     return res.status(200).json({
       message: updatedMessage,
-      conversation: formatConversationSyncPayload(updatedConversation),
+      conversation: conversationSyncPayload,
     });
   } catch (error) {
     console.error("Lỗi khi sửa tin nhắn:", error);
@@ -1652,10 +1853,11 @@ export const markMessageRead = async (req, res) => {
   try {
     const { messageId } = req.params;
     if (!assertValidMessageId(messageId, res)) return;
-    const userId = req.user._id;
+    const userId = assertValidAuthUserId(req, res);
+    if (!userId) return;
 
     const existingMessage =
-      await Message.findById(messageId).select("conversationId isDeleted");
+      await Message.findById(messageId).select("conversationId isDeleted hiddenFor");
 
     if (!existingMessage)
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
@@ -1664,6 +1866,15 @@ export const markMessageRead = async (req, res) => {
       return res
         .status(400)
         .json({ message: "Không thể đánh dấu đã đọc cho tin nhắn đã gỡ" });
+    }
+
+    const isHiddenForUser = (existingMessage.hiddenFor || []).some(
+      (hiddenUserId) => String(hiddenUserId) === String(userId),
+    );
+    if (isHiddenForUser) {
+      return res
+        .status(400)
+        .json({ message: "Không thể đánh dấu đã đọc cho tin nhắn đã ẩn" });
     }
 
     const isMember = await ensureConversationMembership(
@@ -1695,10 +1906,15 @@ export const markMessageRead = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
     }
 
-    io.to(message.conversationId.toString()).emit("message-read", {
-      conversationId: message.conversationId,
-      messageId: message._id,
-      readBy: message.readBy,
+    emitToRoomSafely({
+      roomId: message.conversationId,
+      event: "message-read",
+      payload: {
+        conversationId: message.conversationId,
+        messageId: message._id,
+        readBy: message.readBy,
+      },
+      logContext: "markMessageRead",
     });
 
     return res.status(200).json({ ok: true });
@@ -1738,9 +1954,17 @@ export const getLinkPreview = async (req, res) => {
 };
 
 const normalizeForwardTargets = ({ recipientIds, groupIds } = {}) => {
+  const normalizeList = (values) => {
+    return [...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    )];
+  };
+
   return {
-    recipientIds: Array.isArray(recipientIds) ? recipientIds : [],
-    groupIds: Array.isArray(groupIds) ? groupIds : [],
+    recipientIds: normalizeList(recipientIds),
+    groupIds: normalizeList(groupIds),
   };
 };
 
@@ -1797,10 +2021,20 @@ const forwardToDirectRecipient = async ({ recipientId, senderId, originalMessage
     }
 
     emitNewMessage(io, syncedConversation, message);
-    return message;
+    return {
+      ok: true,
+      targetType: "recipient",
+      targetId: String(recipientId),
+      message,
+    };
   } catch (error) {
     console.error(`Error forwarding to user ${recipientId}:`, error);
-    return null;
+    return {
+      ok: false,
+      targetType: "recipient",
+      targetId: String(recipientId),
+      reason: error?.status === 403 ? "FORBIDDEN" : "FORWARD_FAILED",
+    };
   }
 };
 
@@ -1808,18 +2042,77 @@ const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }
   try {
     const conversation = await Conversation.findById(groupId);
     if (!conversation) {
-      return null;
+      return {
+        ok: false,
+        targetType: "group",
+        targetId: String(groupId),
+        reason: "NOT_FOUND",
+      };
+    }
+
+    if (conversation.type !== "group") {
+      return {
+        ok: false,
+        targetType: "group",
+        targetId: String(groupId),
+        reason: "NOT_GROUP",
+      };
     }
 
     const isMember = conversation.participants.some(
       (participant) => String(participant.userId) === String(senderId),
     );
     if (!isMember) {
-      return null;
+      return {
+        ok: false,
+        targetType: "group",
+        targetId: String(groupId),
+        reason: "FORBIDDEN",
+      };
+    }
+
+    const { channels, activeChannelId } = resolveGroupChannelState(conversation);
+    const effectiveGroupChannelId = normalizeGroupChannelId(activeChannelId);
+    const targetChannel = channels.find(
+      (channel) => channel.channelId === effectiveGroupChannelId,
+    );
+
+    if (!targetChannel) {
+      return {
+        ok: false,
+        targetType: "group",
+        targetId: String(groupId),
+        reason: "INVALID_CHANNEL",
+      };
+    }
+
+    const senderRole = getGroupConversationMemberRole(conversation, senderId);
+    const sendRoles = normalizeGroupChannelSendRoles(
+      targetChannel?.permissions?.sendRoles,
+    );
+
+    if (!sendRoles.includes(senderRole)) {
+      return {
+        ok: false,
+        targetType: "group",
+        targetId: String(groupId),
+        reason: "FORBIDDEN",
+      };
+    }
+
+    const isAnnouncementOnly = Boolean(conversation?.group?.announcementOnly);
+    if (isAnnouncementOnly && !isGroupConversationAdmin(conversation, senderId)) {
+      return {
+        ok: false,
+        targetType: "group",
+        targetId: String(groupId),
+        reason: "FORBIDDEN",
+      };
     }
 
     let message = await Message.create({
       conversationId: conversation._id,
+      groupChannelId: effectiveGroupChannelId,
       senderId,
       content: originalMessage.content,
       imgUrl: originalMessage.imgUrl,
@@ -1835,10 +2128,21 @@ const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }
     });
 
     emitNewMessage(io, syncedConversation, message);
-    return message;
+
+    return {
+      ok: true,
+      targetType: "group",
+      targetId: String(groupId),
+      message,
+    };
   } catch (error) {
     console.error(`Error forwarding to group ${groupId}:`, error);
-    return null;
+    return {
+      ok: false,
+      targetType: "group",
+      targetId: String(groupId),
+      reason: error?.status === 403 ? "FORBIDDEN" : "FORWARD_FAILED",
+    };
   }
 };
 
@@ -1846,11 +2150,65 @@ export const forwardMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
     if (!assertValidMessageId(messageId, res)) return;
+    const senderId = assertValidAuthUserId(req, res);
+    if (!senderId) return;
+
     const { recipientIds, groupIds } = normalizeForwardTargets(req.body || {});
-    const senderId = req.user._id;
 
     if (!recipientIds.length && !groupIds.length) {
       return res.status(400).json({ message: "Thiếu danh sách người nhận đích" });
+    }
+
+    const invalidTargets = [];
+
+    const validRecipientIds = recipientIds.filter((recipientId) => {
+      if (!mongoose.isValidObjectId(recipientId)) {
+        invalidTargets.push({
+          targetType: "recipient",
+          targetId: recipientId,
+          reason: "INVALID_ID",
+        });
+        return false;
+      }
+
+      if (String(recipientId) === String(senderId)) {
+        invalidTargets.push({
+          targetType: "recipient",
+          targetId: recipientId,
+          reason: "SELF_NOT_ALLOWED",
+        });
+        return false;
+      }
+
+      return true;
+    });
+
+    const validGroupIds = groupIds.filter((groupId) => {
+      if (!mongoose.isValidObjectId(groupId)) {
+        invalidTargets.push({
+          targetType: "group",
+          targetId: groupId,
+          reason: "INVALID_ID",
+        });
+        return false;
+      }
+
+      return true;
+    });
+
+    const totalValidTargets = validRecipientIds.length + validGroupIds.length;
+
+    if (totalValidTargets > MAX_FORWARD_TARGETS_PER_REQUEST) {
+      return res.status(400).json({
+        message: `Số lượng đích forward vượt quá giới hạn ${MAX_FORWARD_TARGETS_PER_REQUEST}`,
+      });
+    }
+
+    if (totalValidTargets === 0) {
+      return res.status(400).json({
+        message: "Không có đích hợp lệ để forward",
+        failedTargets: invalidTargets,
+      });
     }
 
     const originalMessage = await Message.findById(messageId);
@@ -1874,22 +2232,51 @@ export const forwardMessage = async (req, res) => {
       return res.status(deniedResponse.status).json({ message: deniedResponse.message });
     }
 
-    const [directMessages, groupMessages] = await Promise.all([
+    const [directResults, groupResults] = await Promise.all([
       Promise.all(
-        recipientIds.map((recipientId) =>
+        validRecipientIds.map((recipientId) =>
           forwardToDirectRecipient({ recipientId, senderId, originalMessage }),
         ),
       ),
       Promise.all(
-        groupIds.map((groupId) =>
+        validGroupIds.map((groupId) =>
           forwardToGroupConversation({ groupId, senderId, originalMessage }),
         ),
       ),
     ]);
 
-    const forwardedCount = [...directMessages, ...groupMessages].filter(Boolean).length;
+    const forwardResults = [...directResults, ...groupResults];
+    const successfulTargets = forwardResults.filter((result) => result?.ok);
+    const failedTargets = [
+      ...invalidTargets,
+      ...forwardResults
+        .filter((result) => !result?.ok)
+        .map((result) => ({
+          targetType: result?.targetType || "unknown",
+          targetId: result?.targetId || "",
+          reason: result?.reason || "FORWARD_FAILED",
+        })),
+    ];
 
-    return res.status(201).json({ message: "Chuyển tiếp thành công", count: forwardedCount });
+    const forwardedCount = successfulTargets.length;
+
+    if (forwardedCount === 0) {
+      return res.status(403).json({
+        message: "Không thể chuyển tiếp tới bất kỳ đích nào",
+        count: 0,
+        failedTargets,
+      });
+    }
+
+    return res.status(201).json({
+      message:
+        failedTargets.length > 0
+          ? "Chuyển tiếp thành công một phần"
+          : "Chuyển tiếp thành công",
+      count: forwardedCount,
+      partial: failedTargets.length > 0,
+      failedTargets,
+    });
   } catch (error) {
     console.error("Lỗi khi forward tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống khi forward" });
@@ -1916,10 +2303,21 @@ export const toggleForwardable = async (req, res) => {
     await message.save();
 
     // Inform clients via socket that the message was updated (optional, or just rely on state)
-    io.to(message.conversationId.toString()).emit("message-updated", {
-      conversationId: message.conversationId,
-      message,
-    });
+    io.to(message.conversationId.toString()).emit(
+      "message-updated",
+      withSocketEventMeta(
+        {
+          conversationId: message.conversationId,
+          message,
+        },
+        {
+          eventName: "message-updated",
+          conversationId: message.conversationId,
+          entityId: message._id,
+          scope: message.conversationId,
+        },
+      ),
+    );
 
     return res.status(200).json({ message: "Đã cập nhật quyền privacy của tin nhắn", isForwardable: message.isForwardable });
   } catch (error) {

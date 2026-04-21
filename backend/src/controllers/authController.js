@@ -44,17 +44,100 @@ const REFRESH_TOKEN_FORMAT_REGEX = /^[a-f0-9]{128}$/i;
 const DRUPAL_AUTH_TIMEOUT_MS = 2500;
 const IS_PRODUCTION =
   String(process.env.NODE_ENV || "").toLowerCase() === "production";
-const REFRESH_COOKIE_SECURE_FORCED = ["1", "true", "yes"].includes(
-  String(process.env.REFRESH_COOKIE_SECURE || "").toLowerCase(),
-);
-const REFRESH_COOKIE_SECURE = REFRESH_COOKIE_SECURE_FORCED || IS_PRODUCTION;
-const REFRESH_COOKIE_SAME_SITE = REFRESH_COOKIE_SECURE ? "none" : "lax";
+const parseBooleanEnv = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
 
-const REFRESH_COOKIE_BASE_OPTIONS = {
-  httpOnly: true,
-  secure: REFRESH_COOKIE_SECURE,
-  sameSite: REFRESH_COOKIE_SAME_SITE,
-  path: "/",
+  return null;
+};
+const REFRESH_COOKIE_SECURE_EXPLICIT = parseBooleanEnv(
+  process.env.REFRESH_COOKIE_SECURE,
+);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+const getOriginProtocol = (originHeader) => {
+  const raw = String(originHeader || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    return String(new URL(raw).protocol || "").toLowerCase();
+  } catch {
+    return "";
+  }
+};
+
+const isLoopbackRequest = (req) => {
+  const origin = String(req.headers.origin || "").trim();
+  if (origin) {
+    try {
+      const hostname = String(new URL(origin).hostname || "").toLowerCase();
+      if (LOOPBACK_HOSTS.has(hostname)) {
+        return true;
+      }
+    } catch {
+      // Ignore malformed origin headers.
+    }
+  }
+
+  const hostHeader = String(
+    req.headers["x-forwarded-host"] || req.headers.host || "",
+  )
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  const host = hostHeader.split(":")[0];
+
+  return LOOPBACK_HOSTS.has(host);
+};
+
+const isSecureTransport = (req) => {
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "")
+    .split(",")[0]
+    .trim()
+    .toLowerCase();
+  if (forwardedProto) {
+    return forwardedProto === "https";
+  }
+
+  if (req.secure) {
+    return true;
+  }
+
+  const originProtocol = getOriginProtocol(req.headers.origin);
+  if (originProtocol) {
+    return originProtocol === "https:";
+  }
+
+  return false;
+};
+
+const shouldUseSecureRefreshCookie = (req) => {
+  if (REFRESH_COOKIE_SECURE_EXPLICIT !== null) {
+    return REFRESH_COOKIE_SECURE_EXPLICIT;
+  }
+
+  if (isLoopbackRequest(req)) {
+    return false;
+  }
+
+  return IS_PRODUCTION && isSecureTransport(req);
+};
+
+const getRefreshCookieOptions = (req) => {
+  const secure = shouldUseSecureRefreshCookie(req);
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: secure ? "none" : "lax",
+    path: "/",
+  };
 };
 
 const issueAccessToken = (user, payload = {}) =>
@@ -138,16 +221,16 @@ const logAuthSecurityEvent = (eventName, payload = {}) => {
   );
 };
 
-const setRefreshCookie = (res, refreshToken, expiresAt) => {
+const setRefreshCookie = (req, res, refreshToken, expiresAt) => {
   const maxAge = Math.max(0, new Date(expiresAt).getTime() - Date.now());
   res.cookie("refreshToken", refreshToken, {
-    ...REFRESH_COOKIE_BASE_OPTIONS,
+    ...getRefreshCookieOptions(req),
     maxAge,
   });
 };
 
-const clearRefreshCookie = (res) => {
-  res.clearCookie("refreshToken", REFRESH_COOKIE_BASE_OPTIONS);
+const clearRefreshCookie = (req, res) => {
+  res.clearCookie("refreshToken", getRefreshCookieOptions(req));
 };
 
 const computeSlidingExpiry = ({
@@ -276,7 +359,7 @@ const issueSessionTokens = async (req, res, user, payload = {}) => {
 
   await pruneActiveSessions(user._id);
 
-  setRefreshCookie(res, refreshToken, expiresAt);
+  setRefreshCookie(req, res, refreshToken, expiresAt);
 
   return accessToken;
 };
@@ -497,7 +580,7 @@ export const signOut = async (req, res) => {
     }
 
     // xoá cookie
-    clearRefreshCookie(res);
+    clearRefreshCookie(req, res);
 
     return res.sendStatus(204);
   } catch (error) {
@@ -534,7 +617,7 @@ export const refreshToken = async (req, res) => {
         ip: getClientIp(req),
         tokenFingerprint: tokenFingerprint(token),
       });
-      clearRefreshCookie(res);
+      clearRefreshCookie(req, res);
       return res
         .status(403)
         .json({ message: "Token không hợp lệ hoặc đã hết hạn" });
@@ -551,14 +634,14 @@ export const refreshToken = async (req, res) => {
         userAgentHash: hashValue(getClientUserAgent(req)),
         tokenFingerprint: tokenFingerprint(token),
       });
-      clearRefreshCookie(res);
+      clearRefreshCookie(req, res);
       return res
         .status(403)
         .json({ message: "Token không hợp lệ hoặc đã hết hạn" });
     }
 
     if (session.revokedAt) {
-      clearRefreshCookie(res);
+      clearRefreshCookie(req, res);
       return res
         .status(403)
         .json({ message: "Token không hợp lệ hoặc đã hết hạn" });
@@ -569,7 +652,7 @@ export const refreshToken = async (req, res) => {
     // kiểm tra hết hạn chưa
     if (session.expiresAt < now || effectiveAbsoluteExpiresAt < now) {
       await Session.deleteOne({ _id: session._id });
-      clearRefreshCookie(res);
+      clearRefreshCookie(req, res);
       return res.status(403).json({ message: "Token đã hết hạn." });
     }
 
@@ -604,7 +687,7 @@ export const refreshToken = async (req, res) => {
             },
           },
         );
-        clearRefreshCookie(res);
+        clearRefreshCookie(req, res);
         return res
           .status(403)
           .json({ message: "Phiên đăng nhập không còn hợp lệ." });
@@ -647,7 +730,7 @@ export const refreshToken = async (req, res) => {
         userId: String(session.userId),
         ip: getClientIp(req),
       });
-      clearRefreshCookie(res);
+      clearRefreshCookie(req, res);
       return res
         .status(403)
         .json({ message: "Token không hợp lệ hoặc đã hết hạn" });
@@ -655,7 +738,7 @@ export const refreshToken = async (req, res) => {
 
     // tạo access token mới
     const accessToken = issueAccessToken({ _id: session.userId });
-    setRefreshCookie(res, rotatedRefreshToken, nextExpiresAt);
+    setRefreshCookie(req, res, rotatedRefreshToken, nextExpiresAt);
 
     // return
     return res.status(200).json({ accessToken });

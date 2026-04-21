@@ -8,6 +8,9 @@
     "start": "node src/server.js",
     "db:health": "node scripts/db-health-check.mjs",
     "db:health:fix": "node scripts/db-health-check.mjs --fix",
+    "test:delete-conversation-scale": "node scripts/e2e-delete-conversation-scale-smoke.mjs",
+    "test:message-actions-ci": "node scripts/e2e-message-actions-ci-smoke.mjs",
+    "test:message-hardening-smoke": "node scripts/e2e-message-hardening-smoke.mjs",
     "test:join-link-concurrency": "node scripts/e2e-join-group-link-concurrency-test.mjs",
     "security:regression": "node scripts/security-regression-check.mjs",
     "security:regression:ci": "CI=1 node scripts/security-regression-check.mjs"

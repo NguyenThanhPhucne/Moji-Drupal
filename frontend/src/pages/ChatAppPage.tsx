@@ -1,7 +1,6 @@
 import ChatWindowLayout from "@/components/chat/ChatWindowLayout";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import GlobalSearchDialog from "@/components/chat/GlobalSearchDialog";
 import { useChatStore } from "@/stores/useChatStore";
 import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -166,8 +165,6 @@ const ChatAppPage = () => {
   return (
     <SidebarProvider>
       <AppSidebar />
-      {/* GlobalSearchDialog mounted at page level — always handles Ctrl+K */}
-      <GlobalSearchDialog globalOnly />
 
       <div className="app-shell-bg">
         <div className="relative z-10 flex h-full w-full">

@@ -1,5 +1,6 @@
 import { MAX_MESSAGE_LENGTH } from "@/hooks/useMessageInput";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import { ImagePlus, Send, ThumbsUp } from "lucide-react";
 import type {
   ChangeEvent,
@@ -127,6 +128,8 @@ const MessageComposerActions = ({
   sendButtonToneClass,
   onSend,
 }: MessageComposerActionsProps) => {
+  const { t } = useI18n();
+
   return (
     <div className="chat-composer-actions-row chat-composer-actions-row--command">
       <Button
@@ -139,8 +142,8 @@ const MessageComposerActions = ({
           !canSendInCurrentMode && "chat-composer-action-btn--disabled",
         )}
         onClick={() => fileInputRef.current?.click()}
-        title="Send image"
-        aria-label="Attach image"
+        title={t("chatComposer.send_image")}
+        aria-label={t("chatComposer.attach_image")}
       >
         <ImagePlus className="chat-composer-action-icon chat-composer-action-icon--attach" />
       </Button>
@@ -171,7 +174,7 @@ const MessageComposerActions = ({
           onFocus={() => onFocusedChange(true)}
           onBlur={() => onFocusedChange(false)}
           placeholder={composerPlaceholder}
-          aria-label="Message input"
+          aria-label={t("chatComposer.message_input")}
           disabled={!canSendInCurrentMode}
           className={cn(
             "chat-composer-textarea chat-composer-textarea--command",
@@ -203,13 +206,21 @@ const MessageComposerActions = ({
         onClick={onSend}
         size="icon"
         disabled={sendDisabled}
-        aria-label={hasSendableMessage ? "Send message" : "Like"}
+        aria-label={
+          hasSendableMessage
+            ? t("chatComposer.send_message")
+            : t("chatComposer.like")
+        }
         className={cn(
           "chat-composer-action-btn chat-composer-action-btn--command chat-composer-action-btn--send",
           isSendBursting && hasSendableMessage && "send-burst",
           sendButtonToneClass,
         )}
-        title={hasSendableMessage ? "Send (Enter)" : "Like"}
+        title={
+          hasSendableMessage
+            ? t("chatComposer.send_enter")
+            : t("chatComposer.like")
+        }
       >
         {hasSendableMessage ? (
           <Send className="chat-composer-action-icon chat-composer-action-icon--send" />

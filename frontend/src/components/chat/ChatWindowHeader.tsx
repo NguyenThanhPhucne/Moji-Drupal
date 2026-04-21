@@ -37,6 +37,9 @@ import {
   ArrowDown,
   BarChart3,
   Settings2,
+  Rows3,
+  Grid2x2,
+  AlignJustify,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -62,6 +65,7 @@ import { useFriendStore } from "@/stores/useFriendStore";
 import { Switch } from "../ui/switch";
 import NotificationPreferencesDialog from "./NotificationPreferencesDialog";
 import { Input } from "../ui/input";
+import { useThemeStore, type PanelStyle } from "@/stores/useThemeStore";
 
 function resolveDirectPeer(chat: Conversation, userId?: string) {
   if (chat.type !== "direct") {
@@ -142,6 +146,32 @@ const buildChannelSelectLabel = (channelName: string, unreadCount: number) => {
   return `#${channelName}`;
 };
 
+const PANEL_STYLE_TOGGLE_OPTIONS: Array<{
+  id: PanelStyle;
+  label: string;
+  title: string;
+  icon: typeof Rows3;
+}> = [
+  {
+    id: "soft-glass",
+    label: "Glass",
+    title: "Switch to Soft Glass panel",
+    icon: Rows3,
+  },
+  {
+    id: "flat-enterprise",
+    label: "Flat",
+    title: "Switch to Flat Enterprise panel",
+    icon: Grid2x2,
+  },
+  {
+    id: "flat-enterprise-ultra",
+    label: "Ultra",
+    title: "Switch to Flat Enterprise Ultra panel",
+    icon: AlignJustify,
+  },
+];
+
 const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
   if (role === "owner") {
     return (
@@ -171,8 +201,11 @@ const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
+  const { panelStyle, setPanelStyle } = useThemeStore();
   const { getUserPresence, getLastActiveAt, onlineUsers } = useSocketStore();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showNotificationPreferencesDialog, setShowNotificationPreferencesDialog] =
+    useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
   const [showManageAdminsDialog, setShowManageAdminsDialog] = useState(false);
@@ -516,7 +549,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   if (!chat) {
     return (
       <header className="chat-header-shell chat-header-shell--command chat-header-shell--elevated sticky top-0 flex w-full items-center gap-2 px-4 py-2 md:hidden">
-        <SidebarTrigger className="-ml-1 text-foreground" />
+        <SidebarTrigger className="-ml-1 h-9 w-9 rounded-xl text-foreground" />
       </header>
     );
   }
@@ -1142,7 +1175,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
         <div className="chat-header-row chat-header-row--command">
           <div className="chat-header-left min-w-0">
             {/* Sidebar toggle — only on mobile */}
-            <SidebarTrigger className="-ml-0.5 text-foreground md:hidden" />
+            <SidebarTrigger className="-ml-0.5 h-9 w-9 rounded-xl text-foreground md:hidden" />
 
             {/* Avatar + name */}
             <div
@@ -1277,11 +1310,41 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
           {/* Right actions */}
           <div className="chat-header-actions chat-header-actions--command flex flex-shrink-0 items-center">
+            <div
+              className="chat-header-panel-toggle hidden lg:inline-flex items-center rounded-full p-0.5"
+            >
+              {PANEL_STYLE_TOGGLE_OPTIONS.map((option) => {
+                const active = panelStyle === option.id;
+                const Icon = option.icon;
+
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onClick={() => setPanelStyle(option.id)}
+                    className={cn(
+                      "chat-header-panel-toggle-btn inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-semibold",
+                      active && "chat-header-panel-toggle-btn--active",
+                    )}
+                    aria-pressed={active}
+                    title={option.title}
+                  >
+                    <Icon className="size-3.5" />
+                    <span className="hidden xl:inline">{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             <GlobalSearchDialog />
-            <NotificationPreferencesDialog />
+            <NotificationPreferencesDialog
+              open={showNotificationPreferencesDialog}
+              onOpenChange={setShowNotificationPreferencesDialog}
+              triggerClassName="chat-header-action-btn chat-header-action-btn--command chat-header-action-btn--mobile-density rounded-full hidden lg:inline-flex h-8 w-8"
+            />
 
             {chat.type === "group" && (
-              <div className="hidden md:flex items-center gap-1.5">
+              <div className="hidden lg:flex items-center gap-1.5">
                 <span id="group-channel-shortcut-hint" className="sr-only">
                   Use Alt plus Arrow Up or Arrow Down to switch channels quickly.
                 </span>
@@ -1353,7 +1416,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   size="icon"
                   disabled={isDeleting}
                   aria-label="Open conversation actions"
-                  className="chat-header-action-btn chat-header-action-btn--command rounded-full"
+                  className="chat-header-action-btn chat-header-action-btn--command chat-header-action-btn--mobile-density rounded-full h-9 w-9 md:h-8 md:w-8"
                 >
                   <MoreVertical className="h-[18px] w-[18px]" />
                 </Button>
@@ -1447,11 +1510,13 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 )}
 
                 <DropdownMenuItem
-                  onSelect={() => navigate("/settings/notifications")}
+                  onSelect={() =>
+                    setTimeout(() => setShowNotificationPreferencesDialog(true), 100)
+                  }
                   className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                 >
                   <Bell className="h-[18px] w-[18px] text-muted-foreground" />
-                  Notification settings
+                  Notification preferences
                 </DropdownMenuItem>
 
                 <DropdownMenuSeparator className="bg-border/60 mx-1" />

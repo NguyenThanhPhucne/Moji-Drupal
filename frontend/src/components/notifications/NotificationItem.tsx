@@ -1,5 +1,4 @@
 import { formatDistanceToNow } from "date-fns";
-import { enUS } from "date-fns/locale";
 import {
   AtSign,
   ThumbsUp,
@@ -25,6 +24,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { usePersonalizationStore } from "@/stores/usePersonalizationStore";
+import {
+  formatAbsoluteDateTime,
+  getDateFnsLocale,
+  useI18n,
+} from "@/lib/i18n";
 
 // ─── Unified notification type ────────────────────────────────────────────────
 export type NotificationKind =
@@ -39,6 +44,7 @@ export type NotificationKind =
 export interface UnifiedNotification {
   id: string;
   kind: NotificationKind;
+  priority?: "high" | "normal" | "low";
   actor: {
     _id: string;
     displayName: string;
@@ -47,6 +53,9 @@ export interface UnifiedNotification {
   message: string;
   isRead: boolean;
   createdAt: string;
+  conversationId?: string | null;
+  aggregatedCount?: number;
+  aggregatedNotificationIds?: string[];
   requestId?: string;
   introMessage?: string;
 }
@@ -87,8 +96,30 @@ const NotificationItem = ({
   onOpenDirectChat,
 }: NotificationItemProps) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { locale, t } = useI18n();
+  const notificationDensityPreference = usePersonalizationStore(
+    (state) => state.notificationDensityPreference,
+  );
+  const timestampStylePreference = usePersonalizationStore(
+    (state) => state.timestampStylePreference,
+  );
   const meta = KIND_META[notification.kind];
   const isLoading = loadingId === notification.id;
+  const isCompact = notificationDensityPreference === "compact";
+  const createdAtDate = new Date(notification.createdAt);
+  const hasValidCreatedAt = !Number.isNaN(createdAtDate.getTime());
+  let timestampLabel = notification.createdAt;
+
+  if (hasValidCreatedAt) {
+    if (timestampStylePreference === "absolute") {
+      timestampLabel = formatAbsoluteDateTime(createdAtDate, locale);
+    } else {
+      timestampLabel = formatDistanceToNow(createdAtDate, {
+        addSuffix: true,
+        locale: getDateFnsLocale(locale),
+      });
+    }
+  }
   const showFriendRequestActions =
     notification.kind === "friend_request" &&
     Boolean(notification.requestId) &&
@@ -107,9 +138,16 @@ const NotificationItem = ({
 
   return (
     <article
+      aria-label={
+        t("notifications.item_aria", {
+          actor: notification.actor.displayName,
+          message: notification.message,
+        })
+      }
       className={cn(
         // Base layout
-        "group relative flex items-start gap-3 rounded-xl px-3 py-3 select-none",
+        "group relative flex items-start rounded-xl select-none",
+        isCompact ? "gap-2.5 px-2.5 py-2.5" : "gap-3 px-3 py-3",
         // Smooth transition on all states
         "transition-colors duration-150",
         // Unread: light blue tint + left accent stripe (Facebook-style)
@@ -127,7 +165,7 @@ const NotificationItem = ({
 
       {/* ── Avatar ── */}
       <div className="relative flex-shrink-0 mt-0.5">
-        <Avatar className="h-11 w-11">
+        <Avatar className={cn("h-11 w-11", isCompact && "h-10 w-10")}>
           <AvatarImage
             src={notification.actor.avatarUrl ?? undefined}
             alt={notification.actor.displayName}
@@ -156,7 +194,12 @@ const NotificationItem = ({
           onClick={handleClick}
           className="w-full rounded-lg bg-transparent p-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2"
         >
-          <p className="line-clamp-3 pr-1 text-[13.5px] leading-snug text-foreground">
+          <p
+            className={cn(
+              "line-clamp-3 pr-1 leading-snug text-foreground",
+              isCompact ? "text-[13px]" : "text-[13.5px]",
+            )}
+          >
             <span className="font-semibold">{notification.actor.displayName}</span>
             {" "}
             <span className="text-foreground/80">{notification.message}</span>
@@ -177,11 +220,9 @@ const NotificationItem = ({
                 ? "text-muted-foreground"
                 : meta.text,
             )}
+            data-testid="notification-timestamp"
           >
-            {formatDistanceToNow(new Date(notification.createdAt), {
-              addSuffix: true,
-              locale: enUS,
-            })}
+            {timestampLabel}
           </p>
 
           {/* ── "Chat now" pill for friend_accepted ── */}
@@ -189,7 +230,7 @@ const NotificationItem = ({
             <div className="mt-2.5">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-[12px] font-semibold text-primary transition-colors group-hover:bg-primary/15">
                 <MessageCircleMore className="h-3.5 w-3.5" />
-                Chat now
+                {t("notifications.chat_now")}
               </span>
             </div>
           )}
@@ -212,7 +253,7 @@ const NotificationItem = ({
               ) : (
                 <Check className="mr-1.5 h-[15px] w-[15px]" />
               )}
-              Confirm
+              {t("notifications.confirm")}
             </Button>
             <Button
               size="sm"
@@ -227,7 +268,7 @@ const NotificationItem = ({
               {isLoading ? (
                 <Loader2 className="h-[15px] w-[15px] animate-spin text-muted-foreground" />
               ) : (
-                "Delete"
+                t("notifications.delete")
               )}
             </Button>
           </div>
@@ -246,7 +287,7 @@ const NotificationItem = ({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Notification options"
+              aria-label={t("notifications.options")}
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground/60",
@@ -275,7 +316,7 @@ const NotificationItem = ({
                 className="cursor-pointer gap-2 text-[13px]"
               >
                 <Check className="h-4 w-4 text-muted-foreground" />
-                Mark as read
+                {t("notifications.mark_as_read")}
               </DropdownMenuItem>
             )}
             {!notification.isRead && onDismiss && <DropdownMenuSeparator />}
@@ -289,7 +330,7 @@ const NotificationItem = ({
                 className="cursor-pointer gap-2 text-[13px] text-destructive focus:text-destructive focus:bg-destructive/10"
               >
                 <Trash2 className="h-4 w-4" />
-                Remove this notification
+                {t("notifications.remove_this")}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>

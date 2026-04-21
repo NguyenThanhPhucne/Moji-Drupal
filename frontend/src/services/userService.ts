@@ -1,5 +1,10 @@
 import api from "@/lib/axios";
 import type { ProfileLite } from "@/types/chat";
+import type { PersonalizationPreferences } from "@/types/user";
+import {
+  getCachedProfileLite,
+  setCachedProfileLite,
+} from "@/lib/scopedCache";
 
 export const userService = {
   uploadAvatar: async (formData: FormData) => {
@@ -25,7 +30,13 @@ export const userService = {
   },
 
   getProfileLite: async (userId: string): Promise<ProfileLite> => {
+    const cachedProfile = getCachedProfileLite(userId);
+    if (cachedProfile) {
+      return cachedProfile;
+    }
+
     const res = await api.get(`/users/${userId}/profile-lite`);
+    setCachedProfileLite(userId, res.data.profile);
     return res.data.profile;
   },
 
@@ -63,6 +74,15 @@ export const userService = {
     };
   }) => {
     const res = await api.patch("/users/notification-preferences", payload);
+    return res.data;
+  },
+
+  updatePersonalizationPreferences: async (
+    payload: PersonalizationPreferences,
+  ) => {
+    const res = await api.patch("/users/personalization-preferences", {
+      personalizationPreferences: payload,
+    });
     return res.data;
   },
 };

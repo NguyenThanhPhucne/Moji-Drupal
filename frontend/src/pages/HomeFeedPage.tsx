@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Virtuoso } from "react-virtuoso";
 import {
   FileText,
   ImageOff,
@@ -28,18 +29,13 @@ import { Button } from "@/components/ui/button";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { cn, getStaggerEnterClass } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import { userService } from "@/services/userService";
 import type { SocialPost } from "@/types/social";
 
 // ── Feed scoring — defined outside component so it is referentially stable ──
 type FeedTab = "all" | "photos" | "text";
 type FeedDensity = "comfortable" | "compact";
-
-const FEED_TAB_LABELS: Record<FeedTab, string> = {
-  all: "All posts",
-  photos: "Photos",
-  text: "Text",
-};
 
 const FEED_TAB_OFFSET: Record<FeedTab, number> = {
   all: 0,
@@ -50,8 +46,16 @@ const FEED_TAB_OFFSET: Record<FeedTab, number> = {
 const FEED_TABS: FeedTab[] = ["all", "photos", "text"];
 
 const FEED_DENSITY_OPTIONS = [
-  { id: "comfortable" as const, label: "Comfort", Icon: LayoutGrid },
-  { id: "compact" as const, label: "Compact", Icon: Rows3 },
+  {
+    id: "comfortable" as const,
+    labelKey: "feed.density.comfort" as const,
+    Icon: LayoutGrid,
+  },
+  {
+    id: "compact" as const,
+    labelKey: "feed.density.compact" as const,
+    Icon: Rows3,
+  },
 ];
 
 const DEFAULT_SOCIAL_NOTIFICATION_PREFERENCES = Object.freeze({
@@ -87,6 +91,7 @@ const computeFeedScore = (
 };
 
 const HomeFeedPage = () => {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { accessToken, user, setUser } = useAuthStore();
   const {
@@ -120,6 +125,15 @@ const HomeFeedPage = () => {
   const [feedTab, setFeedTab] = useState<FeedTab>("all");
   const [feedDensity, setFeedDensity] = useState<FeedDensity>("comfortable");
   const [savingNotificationPrefs, setSavingNotificationPrefs] = useState(false);
+  const [feedScrollParent, setFeedScrollParent] = useState<HTMLElement | null>(null);
+  const feedTabLabels = useMemo<Record<FeedTab, string>>(
+    () => ({
+      all: t("feed.tab.all"),
+      photos: t("feed.tab.photos"),
+      text: t("feed.tab.text"),
+    }),
+    [t],
+  );
 
   const deliveryNotificationPreferences = useMemo(() => {
     return {
@@ -171,6 +185,24 @@ const HomeFeedPage = () => {
     await fetchHomeFeed(homePagination.page + 1, true);
     loadMoreInFlight.current = false;
   }, [homePagination.hasNextPage, homePagination.page, loadingHome, fetchHomeFeed]);
+
+  useEffect(() => {
+    const handleOpenComposer = () => {
+      setComposerOpenKey((current) => current + 1);
+    };
+
+    globalThis.addEventListener(
+      "moji:open-post-composer",
+      handleOpenComposer,
+    );
+
+    return () => {
+      globalThis.removeEventListener(
+        "moji:open-post-composer",
+        handleOpenComposer,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -228,58 +260,75 @@ const HomeFeedPage = () => {
     if (searchQuery) {
       return {
         icon: SearchX,
-        title: `No results for "${searchQuery}"`,
-        subtitle: "Try adjusting your search terms",
+        title: t("feed.empty.search_title", { query: searchQuery }),
+        subtitle: t("feed.empty.search_subtitle"),
       };
     }
 
     if (feedTab === "photos") {
       return {
         icon: ImageOff,
-        title: "No photo posts yet",
-        subtitle: "Follow people or share something to get started",
+        title: t("feed.empty.photos_title"),
+        subtitle: t("feed.empty.photos_subtitle"),
       };
     }
 
     if (feedTab === "text") {
       return {
         icon: FileText,
-        title: "No text-only posts yet",
-        subtitle: "Follow people or share something to get started",
+        title: t("feed.empty.text_title"),
+        subtitle: t("feed.empty.text_subtitle"),
       };
     }
 
     return {
       icon: Users,
-      title: "Your feed is empty",
-      subtitle: "Follow people or share something to get started",
+      title: t("feed.empty.default_title"),
+      subtitle: t("feed.empty.default_subtitle"),
     };
-  }, [feedTab, searchQuery]);
+  }, [feedTab, searchQuery, t]);
 
   const isInitialHomeLoading = loadingHome && homeFeed.length === 0;
   const isLoadingMore = loadingHome && homeFeed.length > 0;
+  const shouldVirtualizeFeed =
+    filteredHomeFeed.length > 24 && Boolean(feedScrollParent);
   const EmptyStateIcon = emptyStateConfig.icon;
   const hasActiveFeedFilters =
     feedTab !== "all" || searchQuery.trim().length > 0;
   const activeFilterSummary = useMemo(() => {
     const activeQuery = searchQuery.trim();
     if (activeQuery) {
-      return `Showing ${filteredHomeFeed.length} results for "${activeQuery}"`;
+      return t("feed.summary.search_results", {
+        count: filteredHomeFeed.length,
+        query: activeQuery,
+      });
     }
 
-    return `Showing ${filteredHomeFeed.length} posts from ${FEED_TAB_LABELS[feedTab].toLowerCase()}`;
-  }, [feedTab, filteredHomeFeed.length, searchQuery]);
+    return t("feed.summary.posts_from_tab", {
+      count: filteredHomeFeed.length,
+      tab: feedTabLabels[feedTab],
+    });
+  }, [feedTab, feedTabLabels, filteredHomeFeed.length, searchQuery, t]);
   const homeTopbarBadges = useMemo(
     () => [
-      { label: "Visible", value: String(filteredHomeFeed.length) },
-      { label: "Total", value: String(homeFeed.length) },
-      { label: "Alerts", value: String(notifications.length) },
+      { label: t("feed.badge.visible"), value: String(filteredHomeFeed.length) },
+      { label: t("feed.badge.total"), value: String(homeFeed.length) },
+      { label: t("feed.badge.alerts"), value: String(notifications.length) },
       {
-        label: "Density",
-        value: feedDensity === "compact" ? "Compact" : "Comfort",
+        label: t("feed.badge.density"),
+        value:
+          feedDensity === "compact"
+            ? t("feed.density.compact")
+            : t("feed.density.comfort"),
       },
     ],
-    [feedDensity, filteredHomeFeed.length, homeFeed.length, notifications.length],
+    [
+      feedDensity,
+      filteredHomeFeed.length,
+      homeFeed.length,
+      notifications.length,
+      t,
+    ],
   );
   const feedTabButtonRefs = useRef<Record<FeedTab, HTMLButtonElement | null>>({
     all: null,
@@ -382,7 +431,7 @@ const HomeFeedPage = () => {
       } catch (error) {
         console.error("[home-feed] update social preferences error", error);
         setUser(previousUser);
-        toast.error("Could not update notification preferences");
+        toast.error(t("feed.toast.notification_prefs_error"));
       } finally {
         setSavingNotificationPrefs(false);
       }
@@ -394,6 +443,7 @@ const HomeFeedPage = () => {
       fetchNotifications,
       setUser,
       socialNotificationPreferences,
+      t,
       user,
     ],
   );
@@ -436,7 +486,7 @@ const HomeFeedPage = () => {
       } catch (error) {
         console.error("[home-feed] update delivery preferences error", error);
         setUser(previousUser);
-        toast.error("Could not update notification delivery settings");
+        toast.error(t("feed.toast.delivery_prefs_error"));
       } finally {
         setSavingNotificationPrefs(false);
       }
@@ -447,8 +497,60 @@ const HomeFeedPage = () => {
       deliveryNotificationPreferences.sound,
       setUser,
       socialNotificationPreferences,
+      t,
       user,
     ],
+  );
+
+  const renderFeedPostCard = useCallback(
+    (post: SocialPost, index: number) => (
+      <div
+        key={post._id}
+        className="feed-card-stagger"
+        style={{ animationDelay: `${Math.min(index, 10) * 48}ms` }}
+      >
+        <SocialPostCard
+          post={post}
+          comments={postComments[post._id]}
+          commentsPagination={postCommentsPagination[post._id]}
+          commentsLoading={loadingCommentsByPost[post._id]}
+          commentsSortBy={postCommentsSortBy[post._id]}
+          engagement={postEngagement[post._id]}
+          density={feedDensity}
+          onLike={toggleLike}
+          onFetchComments={fetchComments}
+          onLoadMoreComments={loadMoreComments}
+          onSetCommentsSortBy={setCommentsSortBy}
+          onFetchEngagement={fetchPostEngagement}
+          onComment={addComment}
+          onDeletePost={deletePost}
+          onDeleteComment={deleteComment}
+          onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
+        />
+      </div>
+    ),
+    [
+      addComment,
+      deleteComment,
+      deletePost,
+      feedDensity,
+      fetchComments,
+      fetchPostEngagement,
+      loadMoreComments,
+      loadingCommentsByPost,
+      navigate,
+      postComments,
+      postCommentsPagination,
+      postCommentsSortBy,
+      postEngagement,
+      setCommentsSortBy,
+      toggleLike,
+    ],
+  );
+
+  const renderVirtualizedFeedItem = useCallback(
+    (index: number, post: SocialPost) => renderFeedPostCard(post, index),
+    [renderFeedPostCard],
   );
 
   return (
@@ -459,18 +561,21 @@ const HomeFeedPage = () => {
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">
           <div className="social-two-column-frame grid min-h-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
             <section
+              ref={(node) => {
+                setFeedScrollParent(node);
+              }}
               className="social-feed-column social-feed-column--command social-feed-column--editorial min-h-0 overflow-y-auto beautiful-scrollbar space-stack-lg"
-              aria-label="Home feed timeline"
+              aria-label={t("feed.aria.timeline")}
             >
               <div className={getStaggerEnterClass(0)}>
                 <SocialTopHeader
-                  title="Home Feed"
+                  title={t("feed.title")}
                   subtitle={activeFilterSummary}
-                  searchPlaceholder="Search people, posts, and groups"
+                  searchPlaceholder={t("feed.search_placeholder")}
                   searchValue={searchQuery}
                   onSearchValueChange={setSearchQuery}
                   metaBadges={homeTopbarBadges}
-                  keyboardHint="Ctrl + Shift + K"
+                  keyboardHint={t("feed.keyboard_hint")}
                 />
               </div>
 
@@ -484,18 +589,18 @@ const HomeFeedPage = () => {
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/[0.08] px-2 py-0.5 text-[10.5px] font-semibold text-primary/85">
                       <Sparkles className="h-3 w-3" />
-                      {filteredHomeFeed.length} visible
+                      {t("feed.visible_chip", { count: filteredHomeFeed.length })}
                     </span>
 
                     {feedTab !== "all" && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground/85">
-                        Scope: {FEED_TAB_LABELS[feedTab]}
+                        {t("feed.scope", { scope: feedTabLabels[feedTab] })}
                       </span>
                     )}
 
                     {searchQuery.trim().length > 0 && (
                       <span className="max-w-[18rem] truncate rounded-full border border-border/60 bg-background/80 px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground/85">
-                        Query: {searchQuery.trim()}
+                        {t("feed.query", { query: searchQuery.trim() })}
                       </span>
                     )}
                   </div>
@@ -503,12 +608,13 @@ const HomeFeedPage = () => {
                   <div className="inline-flex items-center gap-1 rounded-full border border-border/65 bg-background/85 p-1">
                     <span className="inline-flex items-center gap-1 px-2 text-[10px] font-semibold text-muted-foreground/75">
                       <SlidersHorizontal className="h-3 w-3" />
-                      Density
+                      {t("feed.density.label")}
                     </span>
 
                     {FEED_DENSITY_OPTIONS.map((option) => {
                       const isActive = feedDensity === option.id;
                       const Icon = option.Icon;
+                      const optionLabel = t(option.labelKey);
 
                       return (
                         <button
@@ -522,10 +628,12 @@ const HomeFeedPage = () => {
                               : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                           )}
                           aria-pressed={isActive}
-                          title={`${option.label} density`}
+                          title={t("feed.density.option_title", {
+                            label: optionLabel,
+                          })}
                         >
                           <Icon className="h-3 w-3" />
-                          {option.label}
+                          {optionLabel}
                         </button>
                       );
                     })}
@@ -567,10 +675,13 @@ const HomeFeedPage = () => {
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/80">
-                        Filter timeline
+                        {t("feed.filter.timeline")}
                       </p>
                       <p className="truncate text-[11px] text-muted-foreground/75">
-                        Showing {filteredHomeFeed.length} of {homeFeed.length} posts
+                        {t("feed.filter.showing", {
+                          visible: filteredHomeFeed.length,
+                          total: homeFeed.length,
+                        })}
                       </p>
                     </div>
 
@@ -585,7 +696,7 @@ const HomeFeedPage = () => {
                           setFeedTab("all");
                         }}
                       >
-                        Clear filters
+                        {t("feed.filter.clear")}
                       </Button>
                     )}
                   </div>
@@ -594,7 +705,7 @@ const HomeFeedPage = () => {
                     className="social-filter-tabs-container"
                     data-testid="feed-filter-tabs"
                     role="tablist"
-                    aria-label="Feed filters"
+                    aria-label={t("feed.filter.aria")}
                     tabIndex={0}
                     onKeyDown={handleFeedFilterKeyDown}
                   >
@@ -616,7 +727,7 @@ const HomeFeedPage = () => {
                         onClick={() => setFeedTab(tab)}
                       >
                         <span className="relative z-10 flex items-center">
-                          {FEED_TAB_LABELS[tab]}
+                          {feedTabLabels[tab]}
                           {homeFeed.length > 0 && (
                             <span
                               key={`${tab}-${tabCounts[tab]}`}
@@ -656,36 +767,29 @@ const HomeFeedPage = () => {
                     : "social-feed-post-stack--comfortable-density",
                 )}
                 aria-live="polite"
-                aria-label={`Feed results for ${FEED_TAB_LABELS[feedTab]}`}
+                aria-label={t("feed.results_aria", {
+                  tab: feedTabLabels[feedTab],
+                })}
               >
                 {isInitialHomeLoading && <SocialPostSkeleton count={3} />}
 
-                {filteredHomeFeed.map((post, index) => (
-                  <div
-                    key={post._id}
-                    className="feed-card-stagger"
-                    style={{ animationDelay: `${Math.min(index, 10) * 48}ms` }}
-                  >
-                    <SocialPostCard
-                      post={post}
-                      comments={postComments[post._id]}
-                      commentsPagination={postCommentsPagination[post._id]}
-                      commentsLoading={loadingCommentsByPost[post._id]}
-                      commentsSortBy={postCommentsSortBy[post._id]}
-                      engagement={postEngagement[post._id]}
-                      density={feedDensity}
-                      onLike={toggleLike}
-                      onFetchComments={fetchComments}
-                      onLoadMoreComments={loadMoreComments}
-                      onSetCommentsSortBy={setCommentsSortBy}
-                      onFetchEngagement={fetchPostEngagement}
-                      onComment={addComment}
-                      onDeletePost={deletePost}
-                      onDeleteComment={deleteComment}
-                      onOpenProfile={(userId) => navigate(`/profile/${userId}`)}
-                    />
-                  </div>
-                ))}
+                {shouldVirtualizeFeed ? (
+                  <Virtuoso
+                    data={filteredHomeFeed}
+                    className="social-feed-virtualized"
+                    customScrollParent={feedScrollParent || undefined}
+                    computeItemKey={(_, post) => post._id}
+                    increaseViewportBy={{ top: 620, bottom: 920 }}
+                    endReached={() => {
+                      void loadMore();
+                    }}
+                    itemContent={renderVirtualizedFeedItem}
+                  />
+                ) : (
+                  filteredHomeFeed.map((post, index) =>
+                    renderFeedPostCard(post, index),
+                  )
+                )}
 
                 {isLoadingMore && (
                   <SocialPostSkeleton count={2} staggerFrom={homeFeed.length} />
@@ -719,7 +823,7 @@ const HomeFeedPage = () => {
                             setFeedTab("all");
                           }}
                         >
-                          Reset filters
+                          {t("feed.empty.reset_filters")}
                         </Button>
                       )}
 
@@ -732,7 +836,7 @@ const HomeFeedPage = () => {
                               setComposerOpenKey((current) => current + 1)
                             }
                           >
-                            Create your first post
+                            {t("feed.empty.create_first_post")}
                           </Button>
                           <Button
                             type="button"
@@ -740,7 +844,7 @@ const HomeFeedPage = () => {
                             className="rounded-full"
                             onClick={() => navigate("/explore")}
                           >
-                            Discover people
+                            {t("feed.empty.discover_people")}
                           </Button>
                         </>
                       )}
@@ -751,24 +855,33 @@ const HomeFeedPage = () => {
                 {!loadingHome && filteredHomeFeed.length === 0 && (
                   <div className="mx-auto mt-2 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 px-2 py-1 text-[10.5px] font-medium text-muted-foreground/75">
                     <Sparkles className="h-3 w-3" />
-                    Tip: keep it lightweight with {feedDensity === "compact" ? "Compact" : "Comfort"} density
+                    {t("feed.tip_density", {
+                      density:
+                        feedDensity === "compact"
+                          ? t("feed.density.compact")
+                          : t("feed.density.comfort"),
+                    })}
                   </div>
                 )}
               </section>
 
               {/* ── Infinite scroll sentinel ──────────────────────────────── */}
-              <div ref={sentinelRef} className="h-4" aria-hidden="true" />
-              {isLoadingMore && (
-                <div className="flex justify-center pb-4">
-                  <LoadingMoreSkeleton />
-                </div>
+              {!shouldVirtualizeFeed && (
+                <>
+                  <div ref={sentinelRef} className="h-4" aria-hidden="true" />
+                  {isLoadingMore && (
+                    <div className="flex justify-center pb-4">
+                      <LoadingMoreSkeleton />
+                    </div>
+                  )}
+                </>
               )}
             </section>
 
             {/* ── Right rail ──────────────────────────────────────────────── */}
             <div
               className="social-feed-right-column social-feed-right-column--command social-feed-right-column--enterprise social-feed-right-column--editorial order-last space-y-3 xl:sticky xl:top-4 xl:max-h-[calc(100svh-2.5rem)] xl:self-start xl:overflow-y-auto xl:beautiful-scrollbar xl:space-y-4 xl:pr-0.5"
-              aria-label="Feed insights and quick actions"
+              aria-label={t("feed.aria.right_rail")}
             >
               {/* Notifications first — always visible above the fold */}
               <SocialNotificationsPanel

@@ -14,6 +14,7 @@ import {
 } from "../utils/antiSpam.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 import { io } from "../socket/index.js";
+import { withSocketEventMeta } from "../utils/socketEventMeta.js";
 
 const SUPPORTED_REACTION_TYPES = ["like", "love", "haha", "wow", "sad", "angry"];
 
@@ -609,9 +610,20 @@ const createAndEmitNotification = async ({
   );
 
   if (populated) {
-    io.to(String(recipientId)).emit("social-notification", {
-      notification: populated,
-    });
+    io.to(String(recipientId)).emit(
+      "social-notification",
+      withSocketEventMeta(
+        {
+          notification: populated,
+        },
+        {
+          eventName: "social-notification",
+          conversationId,
+          entityId: populated?._id,
+          scope: recipientId,
+        },
+      ),
+    );
   }
 
   return populated;
@@ -680,22 +692,42 @@ const emitSocialLikeUpdated = ({
   actor,
   reactionSummary,
 }) => {
-  io.emit("social-post-like-updated", {
-    postId: String(postId),
-    likesCount,
-    liked,
-    reactionType: liked || null,
-    reactionSummary,
-    actor,
-  });
+  io.emit(
+    "social-post-like-updated",
+    withSocketEventMeta(
+      {
+        postId: String(postId),
+        likesCount,
+        liked,
+        reactionType: liked || null,
+        reactionSummary,
+        actor,
+      },
+      {
+        eventName: "social-post-like-updated",
+        entityId: postId,
+        scope: `social:post:${String(postId)}`,
+      },
+    ),
+  );
 };
 
 const emitSocialCommentAdded = ({ postId, comment, commentsCount }) => {
-  io.emit("social-post-comment-added", {
-    postId: String(postId),
-    comment,
-    commentsCount,
-  });
+  io.emit(
+    "social-post-comment-added",
+    withSocketEventMeta(
+      {
+        postId: String(postId),
+        comment,
+        commentsCount,
+      },
+      {
+        eventName: "social-post-comment-added",
+        entityId: comment?._id || postId,
+        scope: `social:post:${String(postId)}`,
+      },
+    ),
+  );
 };
 
 const emitSocialPostCreated = ({ post, authorId }) => {
@@ -704,12 +736,32 @@ const emitSocialPostCreated = ({ post, authorId }) => {
   }
 
   if (post.privacy === "public") {
-    io.emit("social-post-created", { post });
+    io.emit(
+      "social-post-created",
+      withSocketEventMeta(
+        { post },
+        {
+          eventName: "social-post-created",
+          entityId: post?._id,
+          scope: "social:feed:public",
+        },
+      ),
+    );
     return;
   }
 
   if (authorId) {
-    io.to(String(authorId)).emit("social-post-created", { post });
+    io.to(String(authorId)).emit(
+      "social-post-created",
+      withSocketEventMeta(
+        { post },
+        {
+          eventName: "social-post-created",
+          entityId: post?._id,
+          scope: `social:user:${String(authorId)}`,
+        },
+      ),
+    );
   }
 };
 
@@ -719,19 +771,49 @@ const emitSocialPostUpdated = ({ post, authorId }) => {
   }
 
   if (post.privacy === "public") {
-    io.emit("social-post-updated", { post });
+    io.emit(
+      "social-post-updated",
+      withSocketEventMeta(
+        { post },
+        {
+          eventName: "social-post-updated",
+          entityId: post?._id,
+          scope: "social:feed:public",
+        },
+      ),
+    );
     return;
   }
 
   if (authorId) {
-    io.to(String(authorId)).emit("social-post-updated", { post });
+    io.to(String(authorId)).emit(
+      "social-post-updated",
+      withSocketEventMeta(
+        { post },
+        {
+          eventName: "social-post-updated",
+          entityId: post?._id,
+          scope: `social:user:${String(authorId)}`,
+        },
+      ),
+    );
   }
 };
 
 const emitSocialPostDeleted = ({ postId }) => {
-  io.emit("social-post-deleted", {
-    postId: String(postId),
-  });
+  io.emit(
+    "social-post-deleted",
+    withSocketEventMeta(
+      {
+        postId: String(postId),
+      },
+      {
+        eventName: "social-post-deleted",
+        entityId: postId,
+        scope: `social:post:${String(postId)}`,
+      },
+    ),
+  );
 };
 
 const emitSocialCommentDeleted = ({
@@ -740,17 +822,27 @@ const emitSocialCommentDeleted = ({
   deletedCommentIds,
   commentsCount,
 }) => {
-  io.emit("social-post-comment-deleted", {
-    postId: String(postId),
-    commentId: String(commentId),
-    deletedCommentIds: (Array.isArray(deletedCommentIds)
-      ? deletedCommentIds
-      : [commentId]
-    )
-      .map(String)
-      .filter(Boolean),
-    commentsCount,
-  });
+  io.emit(
+    "social-post-comment-deleted",
+    withSocketEventMeta(
+      {
+        postId: String(postId),
+        commentId: String(commentId),
+        deletedCommentIds: (Array.isArray(deletedCommentIds)
+          ? deletedCommentIds
+          : [commentId]
+        )
+          .map(String)
+          .filter(Boolean),
+        commentsCount,
+      },
+      {
+        eventName: "social-post-comment-deleted",
+        entityId: commentId || postId,
+        scope: `social:post:${String(postId)}`,
+      },
+    ),
+  );
 };
 
 export const createPost = async (req, res) => {
@@ -1114,19 +1206,36 @@ export const getProfile = async (req, res) => {
           .filter(Boolean)
       : [];
 
-    return res.status(200).json({
-      profile: {
-        ...profile.toObject(),
-        followerCount,
-        followingCount,
-        postCount,
-        friendCount,
-        friendsPreview,
-        isFollowing: access.isFollowing,
-        isFriend: access.isFriend,
-        canViewProfile: access.canViewProfile,
-      },
-    });
+    const profilePayload = {
+      ...profile.toObject(),
+      followerCount,
+      followingCount,
+      postCount,
+      friendCount,
+      friendsPreview,
+      isFollowing: access.isFollowing,
+      isFriend: access.isFriend,
+      canViewProfile: access.canViewProfile,
+    };
+
+    try {
+      const etag = createHash("sha1").update(JSON.stringify(profilePayload)).digest("hex");
+      const lastTs = profilePayload.updatedAt ? new Date(profilePayload.updatedAt).getTime() : (profilePayload.createdAt ? new Date(profilePayload.createdAt).getTime() : Date.now());
+      const lastModified = lastTs ? new Date(lastTs).toUTCString() : new Date().toUTCString();
+
+      if (req.headers["if-none-match"] && String(req.headers["if-none-match"]) === etag) {
+        res.setHeader("ETag", etag);
+        res.setHeader("Last-Modified", lastModified);
+        return res.status(304).end();
+      }
+
+      res.setHeader("ETag", etag);
+      res.setHeader("Last-Modified", lastModified);
+    } catch (e) {
+      // ignore
+    }
+
+    return res.status(200).json({ profile: profilePayload });
   } catch (error) {
     console.error("[social] getProfile error", error);
     return res.status(500).json({ message: "System error" });

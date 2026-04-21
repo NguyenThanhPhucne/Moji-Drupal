@@ -5,6 +5,7 @@ import {
   getUserProfileLite,
   searchUserByUsername,
   updateNotificationPreferences,
+  updatePersonalizationPreferences,
   updateOnlineStatusVisibility,
   updateProfile,
   uploadAvatar,
@@ -28,6 +29,11 @@ router.patch(
   "/notification-preferences",
   protectedRoute,
   updateNotificationPreferences,
+);
+router.patch(
+  "/personalization-preferences",
+  protectedRoute,
+  updatePersonalizationPreferences,
 );
 router.get("/search", protectedRoute, searchUserByUsername);
 router.get("/:userId/profile-lite", protectedRoute, getUserProfileLite);

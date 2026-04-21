@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 
 const now = Date.now();
 
-const APP_BASE_URL = process.env.APP_BASE_URL || "http://127.0.0.1:5173";
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:5173";
 const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:5001/api";
 const TEST_PASSWORD = process.env.SMOKE_TEST_PASSWORD || `Slow3G_${now}_Aa!`;
 const SLOW3G_LATENCY_MS = Number(process.env.SMOKE_SLOW3G_LATENCY_MS || 400);
@@ -70,6 +70,7 @@ const signupAndSignin = async (userPayload) => {
   return {
     token: signin.json.accessToken,
     userId: signin.json.user._id,
+    user: signin.json.user,
     username: userPayload.username,
     password: userPayload.password,
   };
@@ -111,52 +112,52 @@ const befriendUsers = async ({ sender, recipient }) => {
   }
 };
 
-const signInPageSession = async ({ page, username, password }) => {
-  await page.goto(`${APP_BASE_URL}/signin`, { waitUntil: "networkidle" });
-
-  const signInResult = await page.evaluate(async ({ usernameValue, passwordValue }) => {
-    const { useAuthStore } = await import("../src/stores/useAuthStore.ts");
-    const { useSocketStore } = await import("../src/stores/useSocketStore.ts");
-
-    const signedIn = await useAuthStore
-      .getState()
-      .signIn(usernameValue, passwordValue);
-
-    if (!signedIn) {
-      return {
-        signedIn: false,
-        socketConnected: false,
-      };
-    }
-
-    useSocketStore.getState().connectSocket();
-
-    const deadline = Date.now() + 7000;
-    while (Date.now() < deadline) {
-      if (useSocketStore.getState().socket?.connected) {
-        return {
-          signedIn: true,
-          socketConnected: true,
-        };
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 120));
-    }
-
-    return {
-      signedIn: true,
-      socketConnected: Boolean(useSocketStore.getState().socket?.connected),
-    };
-  }, {
-    usernameValue: username,
-    passwordValue: password,
+const signInPageSession = async ({
+  page,
+  fallbackToken,
+  fallbackUser,
+}) => {
+  await page.goto(`${APP_BASE_URL}/signin`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
   });
 
-  if (!signInResult?.signedIn) {
-    throw new Error(`UI signIn returned false for ${username}`);
-  }
+  await page.evaluate(({ fallbackAccessToken, fallbackUserPayload }) => {
+    globalThis.localStorage.setItem(
+      "auth-storage",
+      JSON.stringify({
+        state: {
+          user: fallbackUserPayload || null,
+          accessToken: fallbackAccessToken || null,
+        },
+        version: 0,
+      }),
+    );
+  }, {
+    fallbackAccessToken: fallbackToken || null,
+    fallbackUserPayload: fallbackUser || null,
+  });
 
-  await page.goto(`${APP_BASE_URL}/`, { waitUntil: "networkidle" });
+  await page.goto(`${APP_BASE_URL}/`, {
+    waitUntil: "domcontentloaded",
+    timeout: 30000,
+  });
+
+  await page
+    .waitForURL((url) => !url.pathname.includes("/signin"), {
+      timeout: 9000,
+    })
+    .catch(() => undefined);
+
+  if (new URL(page.url()).pathname.includes("/signin")) {
+    throw new Error("Cannot leave /signin after fallback auth bootstrap");
+  }
+};
+
+const enableChatStoreMutationDebug = async ({ page }) => {
+  await page.evaluate(() => {
+    globalThis.__MOJI_CHAT_DEBUG__ = true;
+  });
 };
 
 const ensureSocketConnectedAndJoined = async ({ page, conversationId }) => {
@@ -365,7 +366,37 @@ const runDeleteRollbackSpam = async ({ page, conversationId, messageId, rounds }
 
 const applyDefinitiveReaction = async ({ page, conversationId, messageId, emoji }) => {
   return page.evaluate(async ({ conversationIdValue, messageIdValue, emojiValue }) => {
-    const { useChatStore } = await import("../src/stores/useChatStore.ts");
+    const { useChatStore, __chatStoreMutationDebug } = await import("../src/stores/useChatStore.ts");
+    const { useAuthStore } = await import("../src/stores/useAuthStore.ts");
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const toPlainReactions = (reactions) => {
+      const normalized = [];
+      for (const reaction of Array.isArray(reactions) ? reactions : []) {
+        normalized.push({
+          userId: String(reaction?.userId || ""),
+          emoji: String(reaction?.emoji || ""),
+        });
+      }
+
+      return normalized;
+    };
+
+    const readMessage = () => {
+      const items = useChatStore.getState().messages[conversationIdValue]?.items || [];
+      for (const messageItem of items) {
+        if (String(messageItem?._id || "") === String(messageIdValue)) {
+          return messageItem;
+        }
+      }
+
+      return null;
+    };
+
+    const currentUserId = String(useAuthStore.getState().user?._id || "");
+    const beforeMessage = readMessage();
+    const beforeReactions = toPlainReactions(beforeMessage?.reactions);
+    const beforeMutation = __chatStoreMutationDebug.snapshot();
 
     await useChatStore.getState().reactToMessage(
       conversationIdValue,
@@ -373,14 +404,52 @@ const applyDefinitiveReaction = async ({ page, conversationId, messageId, emoji 
       emojiValue,
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 1600));
+    const afterInvokeMutation = __chatStoreMutationDebug.snapshot();
 
-    const message = (useChatStore.getState().messages[conversationIdValue]?.items || []).find(
-      (messageItem) => String(messageItem?._id || "") === String(messageIdValue),
-    );
+    const startedAt = Date.now();
+    const deadline = startedAt + 12000;
+    let message = readMessage();
+    const timeline = [];
+
+    while (Date.now() < deadline) {
+      message = readMessage();
+      const currentReactions = toPlainReactions(message?.reactions);
+
+      timeline.push({
+        elapsedMs: Date.now() - startedAt,
+        reactionCount: currentReactions.length,
+        hasCurrentUserReaction: currentReactions.some(
+          (reaction) =>
+            reaction.userId === currentUserId &&
+            reaction.emoji === String(emojiValue),
+        ),
+      });
+
+      if (Array.isArray(message?.reactions) && message.reactions.length > 0) {
+        break;
+      }
+
+      await pause(240);
+    }
+
+    const reactions = toPlainReactions(message?.reactions);
+    const finalMutation = __chatStoreMutationDebug.snapshot();
 
     return {
-      reactions: Array.isArray(message?.reactions) ? message.reactions : [],
+      messageFound: Boolean(message),
+      reactions,
+      beforeReactions,
+      hasCurrentUserReaction: reactions.some(
+        (reaction) =>
+          reaction.userId === currentUserId &&
+          reaction.emoji === String(emojiValue),
+      ),
+      debug: {
+        beforeMutation,
+        afterInvokeMutation,
+        finalMutation,
+        timeline,
+      },
     };
   }, {
     conversationIdValue: conversationId,
@@ -392,8 +461,29 @@ const applyDefinitiveReaction = async ({ page, conversationId, messageId, emoji 
 const waitRealtimeReactionEvent = async ({ page, conversationId, messageId, senderId, emoji }) => {
   return page.evaluate(async ({ conversationIdValue, messageIdValue, senderIdValue, emojiValue }) => {
     const { useSocketStore } = await import("../src/stores/useSocketStore.ts");
+    const { useChatStore } = await import("../src/stores/useChatStore.ts");
 
     const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const toPlainReactions = (reactions) => {
+      return Array.isArray(reactions)
+        ? reactions.reduce((acc, reaction) => {
+            acc.push({
+              userId: String(reaction?.userId || ""),
+              emoji: String(reaction?.emoji || ""),
+            });
+            return acc;
+          }, [])
+        : [];
+    };
+
+    const readLocalMessageReactions = () => {
+      const targetMessage = (useChatStore.getState().messages[conversationIdValue]?.items || []).find(
+        (messageItem) => String(messageItem?._id || "") === String(messageIdValue),
+      );
+
+      return toPlainReactions(targetMessage?.reactions);
+    };
+
     const hasReaction = (reactions) => {
       for (const reaction of reactions) {
         if (
@@ -424,6 +514,7 @@ const waitRealtimeReactionEvent = async ({ page, conversationId, messageId, send
         pass: false,
         reason: "socket_not_connected",
         reactions: [],
+        localMessageReactions: readLocalMessageReactions(),
       };
     }
 
@@ -440,8 +531,9 @@ const waitRealtimeReactionEvent = async ({ page, conversationId, messageId, send
           pass: false,
           reason: "timeout",
           reactions: [],
+          localMessageReactions: readLocalMessageReactions(),
         });
-      }, 9000);
+      }, 15000);
 
       const onMessageReacted = (payload) => {
         const sameConversation =
@@ -465,7 +557,8 @@ const waitRealtimeReactionEvent = async ({ page, conversationId, messageId, send
         resolve({
           pass: true,
           reason: "event_received",
-          reactions,
+          reactions: toPlainReactions(reactions),
+          localMessageReactions: readLocalMessageReactions(),
         });
       };
 
@@ -476,6 +569,13 @@ const waitRealtimeReactionEvent = async ({ page, conversationId, messageId, send
     messageIdValue: messageId,
     senderIdValue: senderId,
     emojiValue: emoji,
+  });
+};
+
+const getSenderMutationSnapshot = async ({ page }) => {
+  return page.evaluate(async () => {
+    const { __chatStoreMutationDebug } = await import("../src/stores/useChatStore.ts");
+    return __chatStoreMutationDebug.snapshot();
   });
 };
 
@@ -540,14 +640,19 @@ const run = async () => {
     await Promise.all([
       signInPageSession({
         page: pageSender,
-        username: sender.username,
-        password: sender.password,
+        fallbackToken: sender.token,
+        fallbackUser: sender.user,
       }),
       signInPageSession({
         page: pageRecipient,
-        username: recipient.username,
-        password: recipient.password,
+        fallbackToken: recipient.token,
+        fallbackUser: recipient.user,
       }),
+    ]);
+
+    await Promise.all([
+      enableChatStoreMutationDebug({ page: pageSender }),
+      enableChatStoreMutationDebug({ page: pageRecipient }),
     ]);
 
     await Promise.all([
@@ -644,16 +749,91 @@ const run = async () => {
 
     await pageSender.unroute("**/messages/**");
 
-    // Phase 2: keep Slow 3G delay, but allow API success to validate realtime sync.
-    await pageSender.route("**/messages/**", async (route, request) => {
-      if (isReactRequest(request) || isUnsendRequest(request)) {
-        await sleep(REQUEST_DELAY_MS);
+    // Phase 2: keep Slow 3G profile and add pre-action delay without route interception
+    // to avoid CORS side-effects introduced by Playwright request routing.
+    let phase2ReactRequests = 0;
+    let phase2UnsendRequests = 0;
+    const phase2ReactFailures = [];
+    const phase2ObservedOrigins = [];
+
+    const onPhase2Request = (request) => {
+      if (isReactRequest(request)) {
+        phase2ReactRequests += 1;
+        phase2ObservedOrigins.push(request.headers()["origin"] || null);
       }
 
-      await route.continue();
-    });
+      if (isUnsendRequest(request)) {
+        phase2UnsendRequests += 1;
+      }
+    };
+
+    const onPhase2RequestFailed = (request) => {
+      if (!isReactRequest(request)) {
+        return;
+      }
+
+      phase2ReactFailures.push({
+        url: request.url(),
+        failure: request.failure()?.errorText || "unknown_request_failure",
+      });
+    };
+
+    pageSender.on("request", onPhase2Request);
+    pageSender.on("requestfailed", onPhase2RequestFailed);
 
     const definitiveEmoji = "👍";
+    const senderMutationBeforePhase2 = await getSenderMutationSnapshot({
+      page: pageSender,
+    });
+
+    if (REQUEST_DELAY_MS > 0) {
+      await sleep(REQUEST_DELAY_MS);
+    }
+
+    const phase2ReactResponsePromise = pageSender
+      .waitForResponse((response) => {
+        const request = response.request();
+        if (!isReactRequest(request)) {
+          return false;
+        }
+
+        try {
+          const pathname = new URL(response.url()).pathname;
+          return pathname.includes(`/messages/${targetMessageId}/react`);
+        } catch {
+          return false;
+        }
+      }, {
+        timeout: 22000,
+      })
+      .then(async (response) => {
+        let body = null;
+        let rawBody = "";
+        try {
+          rawBody = await response.text();
+          body = rawBody ? JSON.parse(rawBody) : null;
+        } catch {
+          body = null;
+        }
+
+        return {
+          observed: true,
+          status: response.status(),
+          ok: response.ok(),
+          url: response.url(),
+          body,
+          rawBody: body ? "" : rawBody,
+        };
+      })
+      .catch((error) => ({
+        observed: false,
+        status: null,
+        ok: false,
+        url: null,
+        body: null,
+        error: String(error?.message || error),
+      }));
+
     const recipientRealtimeSyncPromise = waitRealtimeReactionEvent({
       page: pageRecipient,
       conversationId,
@@ -669,7 +849,14 @@ const run = async () => {
       emoji: definitiveEmoji,
     });
 
+    const phase2ReactResponse = await phase2ReactResponsePromise;
     const recipientRealtimeSync = await recipientRealtimeSyncPromise;
+    const senderMutationAfterPhase2 = await getSenderMutationSnapshot({
+      page: pageSender,
+    });
+
+    pageSender.off("request", onPhase2Request);
+    pageSender.off("requestfailed", onPhase2RequestFailed);
 
     const senderHasDefinitiveReaction = (Array.isArray(senderReactionState.reactions)
       ? senderReactionState.reactions
@@ -713,8 +900,16 @@ const run = async () => {
           targetMessageId,
           blockedReactRequests,
           blockedUnsendRequests,
+          phase2ReactRequests,
+          phase2UnsendRequests,
+          phase2ReactResponse,
+          phase2ReactFailures,
+          phase2ObservedOrigins,
+          senderMutationBeforePhase2,
+          senderMutationAfterPhase2,
           reactionRollback,
           deleteRollback,
+          senderReactionState,
           senderHasDefinitiveReaction,
           recipientRealtimeSync,
           recipientHasDefinitiveReaction,

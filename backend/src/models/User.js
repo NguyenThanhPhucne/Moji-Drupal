@@ -125,6 +125,33 @@ const userSchema = new mongoose.Schema(
         },
       },
     },
+    personalizationPreferences: {
+      locale: {
+        type: String,
+        enum: ["en", "vi"],
+        default: "en",
+      },
+      startPagePreference: {
+        type: String,
+        enum: ["chat", "feed", "explore", "saved"],
+        default: "chat",
+      },
+      timestampStylePreference: {
+        type: String,
+        enum: ["relative", "absolute"],
+        default: "relative",
+      },
+      notificationGroupingPreference: {
+        type: String,
+        enum: ["auto", "priority", "time"],
+        default: "auto",
+      },
+      notificationDensityPreference: {
+        type: String,
+        enum: ["comfortable", "compact"],
+        default: "comfortable",
+      },
+    },
     lastActiveAt: {
       type: Date,
     },

@@ -1,5 +1,11 @@
 import api from "@/lib/axios";
 import axios from "axios";
+import {
+  getCachedProfile,
+  invalidateCachedProfile,
+  setCachedProfileWithMeta,
+  getPersistedProfileMeta,
+} from "@/lib/scopedCache";
 import type {
   PaginationPayload,
   SocialComment,
@@ -72,7 +78,39 @@ export const socialService = {
   },
 
   getProfile: async (userId: string): Promise<SocialProfile> => {
+    const cachedProfile = getCachedProfile(userId);
+    if (cachedProfile) {
+      // background revalidation using persisted meta if available
+      (async () => {
+        try {
+          const persistedMeta = getPersistedProfileMeta(userId);
+          const res = await api.get(`/social/profiles/${userId}`, {
+            headers: {
+              ...(persistedMeta?.etag ? { "If-None-Match": String(persistedMeta.etag) } : {}),
+            },
+            validateStatus: (status) => status === 304 || (status >= 200 && status < 300),
+          });
+
+          if (res.status === 304) return; // still fresh
+
+          setCachedProfileWithMeta(userId, res.data.profile, {
+            etag: res.headers?.etag || null,
+            lastModified: res.headers?.["last-modified"] || null,
+          });
+        } catch (e) {
+          // non-fatal
+          console.debug("Profile revalidation failed", e);
+        }
+      })();
+
+      return cachedProfile;
+    }
+
     const res = await api.get(`/social/profiles/${userId}`);
+    setCachedProfileWithMeta(userId, res.data.profile, {
+      etag: res.headers?.etag || null,
+      lastModified: res.headers?.["last-modified"] || null,
+    });
     return res.data.profile;
   },
 
@@ -144,6 +182,7 @@ export const socialService = {
 
   toggleFollowUser: async (userId: string): Promise<{ following: boolean }> => {
     const res = await api.post(`/social/follows/${userId}/toggle`);
+    invalidateCachedProfile(userId);
     return res.data;
   },
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Command,
   FileText,
   MessageSquareText,
   Pin,
@@ -26,9 +27,20 @@ import { searchService } from "@/services/searchService";
 import axios from "axios";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useNotificationStore } from "@/stores/useNotificationStore";
+import { useSocialStore } from "@/stores/useSocialStore";
+import { useMiniChatDockStore } from "@/stores/useMiniChatDockStore";
+import {
+  usePersonalizationStore,
+  type NotificationDensityPreference,
+  type NotificationGroupingPreference,
+  type StartPagePreference,
+  type TimestampStylePreference,
+} from "@/stores/usePersonalizationStore";
 import GlobalSearchResultsSkeleton from "@/components/skeleton/GlobalSearchResultsSkeleton";
 import GlobalSearchMetaSkeleton from "@/components/skeleton/GlobalSearchMetaSkeleton";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type {
   GlobalSearchGroup,
   GlobalSearchMessage,
@@ -44,12 +56,20 @@ type SearchResultItem =
   | ({ type: "people" } & GlobalSearchPerson)
   | ({ type: "groups" } & GlobalSearchGroup)
   | ({ type: "messages" } & GlobalSearchMessage)
-  | ({ type: "posts" } & GlobalSearchPost);
+  | ({ type: "posts" } & GlobalSearchPost)
+  | {
+      type: "command";
+      commandId: string;
+      title: string;
+      subtitle: string;
+      score: number;
+    };
 
 type ResultFilter = "all" | SearchResultItem["type"];
 
 const RESULT_FILTERS: Array<{ value: ResultFilter; label: string }> = [
   { value: "all", label: "All" },
+  { value: "command", label: "Actions" },
   { value: "people", label: "People" },
   { value: "groups", label: "Groups" },
   { value: "messages", label: "Messages" },
@@ -59,13 +79,15 @@ const RESULT_FILTERS: Array<{ value: ResultFilter; label: string }> = [
 interface PinnedSearchItem {
   key: string;
   label: string;
-  type: "people" | "groups" | "messages" | "posts";
+  type: "people" | "groups" | "messages" | "posts" | "command";
   conversationId?: string;
   userId?: string;
   postId?: string;
+  commandId?: string;
 }
 
 const toResultKey = (item: SearchResultItem) => {
+  if (item.type === "command") return `command:${item.commandId}`;
   if (item.type === "people") return `people:${item._id}`;
   if (item.type === "groups") return `groups:${item.conversationId}`;
   if (item.type === "posts") return `posts:${item.postId}`;
@@ -73,6 +95,10 @@ const toResultKey = (item: SearchResultItem) => {
 };
 
 const getResultTitle = (item: SearchResultItem) => {
+  if (item.type === "command") {
+    return item.title;
+  }
+
   if (item.type === "people") {
     return item.displayName;
   }
@@ -89,6 +115,10 @@ const getResultTitle = (item: SearchResultItem) => {
 };
 
 const getResultSubtitle = (item: SearchResultItem) => {
+  if (item.type === "command") {
+    return item.subtitle;
+  }
+
   if (item.type === "people") {
     return `@${item.username} | ${item.mutualGroupsCount} mutual groups`;
   }
@@ -143,8 +173,41 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
     setActiveConversation,
     fetchMessages,
     createConversation,
+    fetchConversations,
+    flushOutgoingQueue,
   } = useChatStore();
   const { user } = useAuthStore();
+  const setIsHubOpen = useNotificationStore((state) => state.setIsHubOpen);
+  const minimizeMiniChatWindows = useMiniChatDockStore(
+    (state) => state.minimizeAll,
+  );
+  const markAllNotificationsRead = useSocialStore(
+    (state) => state.markAllNotificationsRead,
+  );
+  const notificationGroupingPreference = usePersonalizationStore(
+    (state) => state.notificationGroupingPreference,
+  );
+  const setNotificationGroupingPreference = usePersonalizationStore(
+    (state) => state.setNotificationGroupingPreference,
+  );
+  const timestampStylePreference = usePersonalizationStore(
+    (state) => state.timestampStylePreference,
+  );
+  const setTimestampStylePreference = usePersonalizationStore(
+    (state) => state.setTimestampStylePreference,
+  );
+  const notificationDensityPreference = usePersonalizationStore(
+    (state) => state.notificationDensityPreference,
+  );
+  const setNotificationDensityPreference = usePersonalizationStore(
+    (state) => state.setNotificationDensityPreference,
+  );
+  const startPagePreference = usePersonalizationStore(
+    (state) => state.startPagePreference,
+  );
+  const setStartPagePreference = usePersonalizationStore(
+    (state) => state.setStartPagePreference,
+  );
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -163,6 +226,350 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
 
   const hasLoadedMetaRef = useRef(false);
   const resultRowRefs = useRef<Array<HTMLDivElement | null>>([]);
+
+  const runCommandAction = useCallback(
+    async (commandId: string) => {
+      try {
+        switch (commandId) {
+          case "go-chat":
+            navigate("/");
+            break;
+          case "go-feed":
+            navigate("/feed");
+            break;
+          case "go-explore":
+            navigate("/explore");
+            break;
+          case "go-saved":
+            navigate("/saved");
+            break;
+          case "go-profile":
+            navigate(user?._id ? `/profile/${user._id}` : "/profile");
+            break;
+          case "go-notification-settings":
+            navigate("/settings/notifications");
+            break;
+          case "open-notification-center":
+            setIsHubOpen(true);
+            break;
+          case "mark-all-notifications-read":
+            await markAllNotificationsRead();
+            setIsHubOpen(true);
+            break;
+          case "refresh-conversations":
+            await fetchConversations();
+            break;
+          case "flush-outgoing-queue":
+            await flushOutgoingQueue();
+            break;
+          case "set-grouping-auto":
+            setNotificationGroupingPreference("auto");
+            break;
+          case "set-grouping-priority":
+            setNotificationGroupingPreference("priority");
+            break;
+          case "set-grouping-time":
+            setNotificationGroupingPreference("time");
+            break;
+          case "set-timestamp-relative":
+            setTimestampStylePreference("relative");
+            break;
+          case "set-timestamp-absolute":
+            setTimestampStylePreference("absolute");
+            break;
+          case "set-density-comfortable":
+            setNotificationDensityPreference("comfortable");
+            break;
+          case "set-density-compact":
+            setNotificationDensityPreference("compact");
+            break;
+          case "set-start-page-chat":
+            setStartPagePreference("chat");
+            break;
+          case "set-start-page-feed":
+            setStartPagePreference("feed");
+            break;
+          case "set-start-page-explore":
+            setStartPagePreference("explore");
+            break;
+          case "set-start-page-saved":
+            setStartPagePreference("saved");
+            break;
+          case "open-post-compose":
+            navigate("/feed");
+            globalThis.setTimeout(() => {
+              globalThis.dispatchEvent(new CustomEvent("moji:open-post-composer"));
+            }, 80);
+            break;
+          case "mini-chat-minimize-all":
+            minimizeMiniChatWindows();
+            break;
+          default:
+            return;
+        }
+
+        setOpen(false);
+      } catch (error) {
+        console.error("Global command action failed", error);
+        toast.error("Cannot run this command right now");
+      }
+    },
+    [
+      fetchConversations,
+      flushOutgoingQueue,
+      markAllNotificationsRead,
+      minimizeMiniChatWindows,
+      navigate,
+      setIsHubOpen,
+      setNotificationDensityPreference,
+      setNotificationGroupingPreference,
+      setStartPagePreference,
+      setTimestampStylePreference,
+      user?._id,
+    ],
+  );
+
+  const commandResults = useMemo<SearchResultItem[]>(() => {
+    const normalized = query.trim().toLowerCase();
+
+    const groupingLabelByPreference: Record<
+      NotificationGroupingPreference,
+      string
+    > = {
+      auto: "Auto",
+      priority: "Priority",
+      time: "Time",
+    };
+
+    const timestampLabelByPreference: Record<TimestampStylePreference, string> = {
+      relative: "Relative",
+      absolute: "Absolute",
+    };
+
+    const densityLabelByPreference: Record<NotificationDensityPreference, string> = {
+      comfortable: "Comfortable",
+      compact: "Compact",
+    };
+
+    const startPageLabelByPreference: Record<StartPagePreference, string> = {
+      chat: "Chat",
+      feed: "Feed",
+      explore: "Explore",
+      saved: "Saved",
+    };
+
+    const actions = [
+      {
+        commandId: "go-chat",
+        title: "Open Chat Workspace",
+        subtitle: "Jump to the main chat inbox",
+        keywords: ["chat", "inbox", "dm", "messages", "workspace"],
+        baseScore: 88,
+      },
+      {
+        commandId: "go-feed",
+        title: "Open Social Feed",
+        subtitle: "Go to feed and stories",
+        keywords: ["feed", "home", "social", "timeline", "posts"],
+        baseScore: 84,
+      },
+      {
+        commandId: "go-explore",
+        title: "Open Explore",
+        subtitle: "Discover people and trending posts",
+        keywords: ["explore", "discover", "trending", "search"],
+        baseScore: 80,
+      },
+      {
+        commandId: "go-saved",
+        title: "Open Saved Messages",
+        subtitle: "Review bookmarks and saved items",
+        keywords: ["saved", "bookmark", "bookmarks", "archive"],
+        baseScore: 78,
+      },
+      {
+        commandId: "go-profile",
+        title: "Open My Profile",
+        subtitle: "Go to your profile and activity",
+        keywords: ["profile", "me", "account", "activity"],
+        baseScore: 77,
+      },
+      {
+        commandId: "go-notification-settings",
+        title: "Open Notification Settings",
+        subtitle: "Tune delivery and social alerts",
+        keywords: ["notification", "settings", "alerts", "preferences"],
+        baseScore: 76,
+      },
+      {
+        commandId: "open-notification-center",
+        title: "Open Notification Center",
+        subtitle: "Review social and friend updates in one place",
+        keywords: ["notification", "center", "hub", "alerts", "inbox"],
+        baseScore: 79,
+      },
+      {
+        commandId: "mark-all-notifications-read",
+        title: "Mark All Notifications Read",
+        subtitle: "Clear unread counters across social notifications",
+        keywords: ["mark", "read", "clear", "notifications", "inbox"],
+        baseScore: 74,
+      },
+      {
+        commandId: "refresh-conversations",
+        title: "Refresh Conversation List",
+        subtitle: "Force reload conversation roster from server",
+        keywords: ["refresh", "conversation", "sync", "reload", "rooms"],
+        baseScore: 73,
+      },
+      {
+        commandId: "flush-outgoing-queue",
+        title: "Retry Outgoing Queue",
+        subtitle: "Send queued messages immediately",
+        keywords: ["retry", "queue", "flush", "delivery", "unsent"],
+        baseScore: 75,
+      },
+      {
+        commandId: "open-post-compose",
+        title: "Open Post Composer",
+        subtitle: "Start a new social post draft",
+        keywords: ["compose", "post", "create", "new", "feed"],
+        baseScore: 78,
+      },
+      {
+        commandId: "mini-chat-minimize-all",
+        title: "Mini Chat: Minimize All Windows",
+        subtitle: "Collapse all floating mini chat windows",
+        keywords: ["mini chat", "dock", "minimize", "windows", "focus"],
+        baseScore: 72,
+      },
+      {
+        commandId: "set-grouping-auto",
+        title: "Notification Grouping: Auto",
+        subtitle: `Current mode: ${groupingLabelByPreference[notificationGroupingPreference]}`,
+        keywords: ["grouping", "notification", "auto", "priority", "time"],
+        baseScore: 71,
+      },
+      {
+        commandId: "set-grouping-priority",
+        title: "Notification Grouping: Priority",
+        subtitle: `Current mode: ${groupingLabelByPreference[notificationGroupingPreference]}`,
+        keywords: ["grouping", "notification", "priority", "important"],
+        baseScore: 71,
+      },
+      {
+        commandId: "set-grouping-time",
+        title: "Notification Grouping: Time",
+        subtitle: `Current mode: ${groupingLabelByPreference[notificationGroupingPreference]}`,
+        keywords: ["grouping", "notification", "time", "chronological"],
+        baseScore: 71,
+      },
+      {
+        commandId: "set-timestamp-relative",
+        title: "Timestamp Mode: Relative",
+        subtitle: `Current mode: ${timestampLabelByPreference[timestampStylePreference]}`,
+        keywords: ["timestamp", "relative", "time", "format"],
+        baseScore: 70,
+      },
+      {
+        commandId: "set-timestamp-absolute",
+        title: "Timestamp Mode: Absolute",
+        subtitle: `Current mode: ${timestampLabelByPreference[timestampStylePreference]}`,
+        keywords: ["timestamp", "absolute", "time", "format"],
+        baseScore: 70,
+      },
+      {
+        commandId: "set-density-comfortable",
+        title: "Density: Comfortable",
+        subtitle: `Current density: ${densityLabelByPreference[notificationDensityPreference]}`,
+        keywords: ["density", "comfortable", "spacing", "layout"],
+        baseScore: 69,
+      },
+      {
+        commandId: "set-density-compact",
+        title: "Density: Compact",
+        subtitle: `Current density: ${densityLabelByPreference[notificationDensityPreference]}`,
+        keywords: ["density", "compact", "spacing", "layout"],
+        baseScore: 69,
+      },
+      {
+        commandId: "set-start-page-chat",
+        title: "Start Page: Chat",
+        subtitle: `Current start page: ${startPageLabelByPreference[startPagePreference]}`,
+        keywords: ["start", "default", "page", "chat", "workspace"],
+        baseScore: 68,
+      },
+      {
+        commandId: "set-start-page-feed",
+        title: "Start Page: Feed",
+        subtitle: `Current start page: ${startPageLabelByPreference[startPagePreference]}`,
+        keywords: ["start", "default", "page", "feed", "home"],
+        baseScore: 68,
+      },
+      {
+        commandId: "set-start-page-explore",
+        title: "Start Page: Explore",
+        subtitle: `Current start page: ${startPageLabelByPreference[startPagePreference]}`,
+        keywords: ["start", "default", "page", "explore", "discover"],
+        baseScore: 68,
+      },
+      {
+        commandId: "set-start-page-saved",
+        title: "Start Page: Saved",
+        subtitle: `Current start page: ${startPageLabelByPreference[startPagePreference]}`,
+        keywords: ["start", "default", "page", "saved", "bookmarks"],
+        baseScore: 68,
+      },
+    ];
+
+    const matches = actions
+      .filter((action) => {
+        if (!normalized) {
+          return true;
+        }
+
+        const searchable = `${action.title} ${action.subtitle} ${action.keywords.join(" ")}`.toLowerCase();
+        return searchable.includes(normalized);
+      })
+      .map<SearchResultItem>((action) => {
+        const titleMatch = action.title.toLowerCase().includes(normalized);
+        const keywordMatch = action.keywords.some((keyword) =>
+          keyword.toLowerCase().includes(normalized),
+        );
+
+        let scoreBoost = 0;
+        if (normalized) {
+          if (titleMatch) {
+            scoreBoost = 22;
+          } else if (keywordMatch) {
+            scoreBoost = 14;
+          } else {
+            scoreBoost = 6;
+          }
+        }
+
+        return {
+          type: "command",
+          commandId: action.commandId,
+          title: action.title,
+          subtitle: action.subtitle,
+          score: action.baseScore + scoreBoost,
+        };
+      })
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    if (!normalized) {
+      return matches.slice(0, 20);
+    }
+
+    return matches;
+  }, [
+    notificationDensityPreference,
+    notificationGroupingPreference,
+    query,
+    startPagePreference,
+    timestampStylePreference,
+  ]);
 
   const openConversation = useCallback(
     (conversationId: string, options?: { messageId?: string }) => {
@@ -369,10 +776,16 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
     };
   }, [query]);
 
-  const mergedResults = useMemo(
+  const mergedSearchResults = useMemo(
     () => mergeResults(localResult, remoteResult),
     [localResult, remoteResult],
   );
+
+  const mergedResults = useMemo(() => {
+    return [...commandResults, ...mergedSearchResults].sort(
+      (a, b) => (b.score || 0) - (a.score || 0),
+    );
+  }, [commandResults, mergedSearchResults]);
 
   const filteredResults = useMemo(() => {
     if (resultFilter === "all") {
@@ -385,6 +798,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   const filterCounts = useMemo(() => {
     return {
       all: mergedResults.length,
+      command: mergedResults.filter((item) => item.type === "command").length,
       people: mergedResults.filter((item) => item.type === "people").length,
       groups: mergedResults.filter((item) => item.type === "groups").length,
       messages: mergedResults.filter((item) => item.type === "messages").length,
@@ -429,7 +843,9 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   const togglePin = (item: SearchResultItem) => {
     const key = toResultKey(item);
     let label = "";
-    if (item.type === "people") {
+    if (item.type === "command") {
+      label = item.title;
+    } else if (item.type === "people") {
       label = item.displayName;
     } else if (item.type === "groups") {
       label = item.name;
@@ -453,6 +869,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
             conversationId: normalizedConversationId,
             userId: item.type === "people" ? item._id : undefined,
             postId: item.type === "posts" ? item.postId : undefined,
+            commandId: item.type === "command" ? item.commandId : undefined,
           },
           ...pinned,
         ].slice(0, 20);
@@ -461,11 +878,41 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
     localStorage.setItem(PINNED_KEY, JSON.stringify(next));
   };
 
+  const handleSelectPeopleResult = useCallback(
+    async (item: Extract<SearchResultItem, { type: "people" }>) => {
+      if (item.conversationId) {
+        openConversation(item.conversationId);
+        ensureConversationMessagesLoaded(item.conversationId);
+        return;
+      }
+
+      const ok = await createConversation("direct", "", [item._id]);
+      if (!ok) {
+        return;
+      }
+
+      const createdConversationId = String(
+        useChatStore.getState().activeConversationId || "",
+      ).trim();
+
+      if (createdConversationId) {
+        openConversation(createdConversationId);
+        ensureConversationMessagesLoaded(createdConversationId);
+      }
+    },
+    [createConversation, ensureConversationMessagesLoaded, openConversation],
+  );
+
   const onSelectResult = async (
     item: SearchResultItem,
     mode: "default" | "profile" = "default",
   ) => {
     saveRecentQuery(query);
+
+    if (item.type === "command") {
+      await runCommandAction(item.commandId);
+      return;
+    }
 
     if (mode === "profile" && item.type === "people") {
       navigate(`/profile/${item._id}`);
@@ -480,26 +927,8 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
     }
 
     if (item.type === "people") {
-      if (item.conversationId) {
-        openConversation(item.conversationId);
-        ensureConversationMessagesLoaded(item.conversationId);
-        return;
-      } else {
-        const ok = await createConversation("direct", "", [item._id]);
-        if (!ok) {
-          return;
-        }
-
-        const createdConversationId = String(
-          useChatStore.getState().activeConversationId || "",
-        ).trim();
-
-        if (createdConversationId) {
-          openConversation(createdConversationId);
-          ensureConversationMessagesLoaded(createdConversationId);
-          return;
-        }
-      }
+      await handleSelectPeopleResult(item);
+      return;
     }
 
     if (item.type === "groups") {
@@ -526,7 +955,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
   const handleSearchInputKeyDown = (
     event: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    if (query.trim().length < 2 || filteredResults.length === 0) {
+    if (filteredResults.length === 0) {
       return;
     }
 
@@ -682,6 +1111,11 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                               return;
                             }
 
+                            if (item.commandId) {
+                              runCommandAction(item.commandId);
+                              return;
+                            }
+
                             if (item.userId) {
                               navigate(`/profile/${item.userId}`);
                               setOpen(false);
@@ -701,6 +1135,45 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                     </div>
                   </div>
                 )}
+
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">
+                    Quick actions
+                  </p>
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {commandResults.length === 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        No quick actions match this keyword.
+                      </span>
+                    )}
+
+                    {commandResults.slice(0, 8).map((item) => {
+                      if (item.type !== "command") {
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={toResultKey(item)}
+                          type="button"
+                          className="w-full flex items-center justify-between rounded-md border border-border/70 px-2.5 py-2 text-left hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-1"
+                          onClick={() => runCommandAction(item.commandId)}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium text-foreground">
+                              {item.title}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {item.subtitle}
+                            </span>
+                          </span>
+
+                          <Command className="size-3.5 text-muted-foreground/75" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -779,12 +1252,14 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                         <div
                           className={cn(
                             "size-8 rounded-full flex items-center justify-center border",
+                            item.type === "command" && "bg-secondary/65 text-foreground border-border/50",
                             item.type === "people" && "bg-info/10 text-info border-info/20",
                             item.type === "groups" && "bg-online/10 text-online border-online/20",
                             item.type === "messages" && "bg-primary/10 text-primary border-primary/20",
                             item.type === "posts" && "bg-warning/10 text-warning border-warning/20",
                           )}
                         >
+                          {item.type === "command" && <Command className="size-[18px]" />}
                           {item.type === "people" && <Users className="size-[18px]" />}
                           {item.type === "groups" && <MessagesSquare className="size-[18px]" />}
                           {item.type === "messages" && <Search className="size-[18px]" />}
@@ -838,6 +1313,18 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
                             title="Open post"
                           >
                             <FileText className="size-4 text-muted-foreground" />
+                          </Button>
+                        )}
+
+                        {item.type === "command" && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onSelectResult(item)}
+                            title="Run action"
+                          >
+                            <Command className="size-4 text-muted-foreground" />
                           </Button>
                         )}
 

@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { X, Sun, Moon, Monitor, Check, Rabbit, Waves, Type, MessageCircleMore, Grid2x2, Rows3, RotateCcw } from "lucide-react";
+import { X, Sun, Moon, Monitor, Check, Rabbit, Waves, Type, MessageCircleMore, Grid2x2, Rows3, AlignJustify, RotateCcw, Globe, House, Clock3, ListFilter, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   useThemeStore,
@@ -8,11 +8,21 @@ import {
   type ThemeMode,
   type SidebarLayout,
   type BubbleStyle,
+  type PanelStyle,
   type ChatDensity,
   type MessageTextSize,
   type MotionPreference,
   type RememberMode,
 } from "@/stores/useThemeStore";
+import {
+  usePersonalizationStore,
+  type NotificationDensityPreference,
+  type NotificationGroupingPreference,
+  type StartPagePreference,
+  type SupportedLocale,
+  type TimestampStylePreference,
+} from "@/stores/usePersonalizationStore";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 
 interface AppearanceDrawerProps {
   open: boolean;
@@ -42,9 +52,10 @@ const LAYOUTS: Array<{ id: SidebarLayout; label: string }> = [
   { id: "compact", label: "Compact" },
 ];
 
-const DENSITY_OPTIONS: Array<{ id: ChatDensity; label: string; icon: typeof Rows3 }> = [
+const DENSITY_OPTIONS: Array<{ id: ChatDensity; label: string; icon: LucideIcon }> = [
   { id: "comfortable", label: "Comfortable", icon: Rows3 },
   { id: "compact", label: "Compact", icon: Grid2x2 },
+  { id: "dense", label: "Dense desktop", icon: AlignJustify },
 ];
 
 const MOTION_OPTIONS: Array<{ id: MotionPreference; label: string; icon: typeof Rabbit }> = [
@@ -66,8 +77,30 @@ const MESSAGE_SIZE_OPTIONS: Array<{ id: MessageTextSize; label: string }> = [
 ];
 
 const BUBBLE_STYLE_OPTIONS: Array<{ id: BubbleStyle; label: string; description: string }> = [
-  { id: "modern", label: "Modern", description: "Soft radius with subtle depth" },
-  { id: "classic", label: "Classic", description: "Cleaner shape with flatter bubbles" },
+  { id: "modern", label: "Premium glossy", description: "Soft premium depth and polished highlights" },
+  { id: "classic", label: "Corporate neutral", description: "Minimal, flatter surfaces for enterprise clarity" },
+  { id: "ultra-flat", label: "Ultra-flat (Teams)", description: "Flat tone + border only, no gradient and no gloss" },
+];
+
+const PANEL_STYLE_OPTIONS: Array<{ id: PanelStyle; label: string; description: string; icon: LucideIcon }> = [
+  {
+    id: "soft-glass",
+    label: "Soft Glass",
+    description: "Subtle depth, blur and premium lighting",
+    icon: Rows3,
+  },
+  {
+    id: "flat-enterprise",
+    label: "Flat Enterprise",
+    description: "Flatter, cleaner shell with restrained contrast",
+    icon: Grid2x2,
+  },
+  {
+    id: "flat-enterprise-ultra",
+    label: "Flat Enterprise Ultra",
+    description: "Max-flat QA variant: tighter radius, stronger border, near-zero shadow",
+    icon: AlignJustify,
+  },
 ];
 
 const APPEARANCE_PRESETS: Array<{
@@ -79,25 +112,68 @@ const APPEARANCE_PRESETS: Array<{
     motion: MotionPreference;
     textSize: MessageTextSize;
     bubbleStyle: BubbleStyle;
+    panelStyle: PanelStyle;
   };
 }> = [
   {
-    id: "deep-work",
-    label: "Deep Work",
-    description: "Compact layout with lower motion for focus",
-    config: { density: "compact", motion: "reduced", textSize: "sm", bubbleStyle: "classic" },
+    id: "corporate-neutral",
+    label: "Corporate neutral",
+    description: "Slack/Teams-style clean surfaces and restrained contrast",
+    config: {
+      density: "comfortable",
+      motion: "reduced",
+      textSize: "md",
+      bubbleStyle: "classic",
+      panelStyle: "flat-enterprise",
+    },
   },
   {
-    id: "accessibility-first",
-    label: "Accessibility First",
-    description: "Large text, calmer motion, clearer bubble shape",
-    config: { density: "comfortable", motion: "reduced", textSize: "lg", bubbleStyle: "classic" },
+    id: "premium-glossy",
+    label: "Premium glossy",
+    description: "Premium depth with subtle shine, without over-styling",
+    config: {
+      density: "comfortable",
+      motion: "smooth",
+      textSize: "md",
+      bubbleStyle: "modern",
+      panelStyle: "soft-glass",
+    },
   },
   {
-    id: "night-reader",
-    label: "Night Reader",
-    description: "Relaxed spacing with smooth readable rhythm",
-    config: { density: "comfortable", motion: "smooth", textSize: "md", bubbleStyle: "modern" },
+    id: "dense-desktop",
+    label: "Dense desktop",
+    description: "Tighter spacing for high-throughput desktop workflows",
+    config: {
+      density: "dense",
+      motion: "reduced",
+      textSize: "sm",
+      bubbleStyle: "classic",
+      panelStyle: "flat-enterprise",
+    },
+  },
+  {
+    id: "ultra-flat-teams",
+    label: "Ultra-flat Teams",
+    description: "Pure flat bubbles with border-tone contrast only",
+    config: {
+      density: "comfortable",
+      motion: "reduced",
+      textSize: "md",
+      bubbleStyle: "ultra-flat",
+      panelStyle: "flat-enterprise",
+    },
+  },
+  {
+    id: "flat-enterprise-ultra",
+    label: "Flat Enterprise Ultra",
+    description: "QA panel variant for strict flat visual checks",
+    config: {
+      density: "comfortable",
+      motion: "reduced",
+      textSize: "md",
+      bubbleStyle: "ultra-flat",
+      panelStyle: "flat-enterprise-ultra",
+    },
   },
 ];
 
@@ -118,7 +194,92 @@ const REMEMBER_OPTIONS: Array<{
   },
 ];
 
+const LANGUAGE_OPTIONS: Array<{
+  id: SupportedLocale;
+  labelKey: TranslationKey;
+  icon: LucideIcon;
+}> = [
+  { id: "en", labelKey: "personalization.lang.en", icon: Globe },
+  { id: "vi", labelKey: "personalization.lang.vi", icon: Globe },
+];
+
+const START_PAGE_OPTIONS: Array<{
+  id: StartPagePreference;
+  labelKey: TranslationKey;
+  icon: LucideIcon;
+}> = [
+  { id: "chat", labelKey: "personalization.start_page.chat", icon: House },
+  { id: "feed", labelKey: "personalization.start_page.feed", icon: Rows3 },
+  {
+    id: "explore",
+    labelKey: "personalization.start_page.explore",
+    icon: Grid2x2,
+  },
+  {
+    id: "saved",
+    labelKey: "personalization.start_page.saved",
+    icon: MessageCircleMore,
+  },
+];
+
+const TIMESTAMP_STYLE_OPTIONS: Array<{
+  id: TimestampStylePreference;
+  labelKey: TranslationKey;
+  icon: LucideIcon;
+}> = [
+  {
+    id: "relative",
+    labelKey: "personalization.timestamp.relative",
+    icon: Clock3,
+  },
+  {
+    id: "absolute",
+    labelKey: "personalization.timestamp.absolute",
+    icon: Clock3,
+  },
+];
+
+const NOTIFICATION_GROUPING_OPTIONS: Array<{
+  id: NotificationGroupingPreference;
+  labelKey: TranslationKey;
+  icon: LucideIcon;
+}> = [
+  {
+    id: "auto",
+    labelKey: "personalization.grouping.auto",
+    icon: ListFilter,
+  },
+  {
+    id: "priority",
+    labelKey: "personalization.grouping.priority",
+    icon: ListFilter,
+  },
+  {
+    id: "time",
+    labelKey: "personalization.grouping.time",
+    icon: ListFilter,
+  },
+];
+
+const NOTIFICATION_DENSITY_OPTIONS: Array<{
+  id: NotificationDensityPreference;
+  labelKey: TranslationKey;
+  icon: LucideIcon;
+}> = [
+  {
+    id: "comfortable",
+    labelKey: "personalization.density.comfortable",
+    icon: Rows3,
+  },
+  {
+    id: "compact",
+    labelKey: "personalization.density.compact",
+    icon: Grid2x2,
+  },
+];
+
 const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: AppearanceDrawerProps) {
+  const { t } = useI18n();
   const {
     themeMode,
     accentColor,
@@ -127,6 +288,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
     motionPreference,
     messageTextSize,
     bubbleStyle,
+    panelStyle,
     rememberMode,
     setThemeMode,
     setAccentColor,
@@ -135,9 +297,22 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
     setMotionPreference,
     setMessageTextSize,
     setBubbleStyle,
+    setPanelStyle,
     setRememberMode,
     resetAppearance,
   } = useThemeStore();
+  const {
+    locale,
+    startPagePreference,
+    timestampStylePreference,
+    notificationGroupingPreference,
+    notificationDensityPreference,
+    setLocale,
+    setStartPagePreference,
+    setTimestampStylePreference,
+    setNotificationGroupingPreference,
+    setNotificationDensityPreference,
+  } = usePersonalizationStore();
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Close on Escape
@@ -163,6 +338,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
     setMotionPreference(selectedPreset.config.motion);
     setMessageTextSize(selectedPreset.config.textSize);
     setBubbleStyle(selectedPreset.config.bubbleStyle);
+    setPanelStyle(selectedPreset.config.panelStyle);
   };
 
   const activePresetId =
@@ -171,7 +347,8 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
         preset.config.density === chatDensity &&
         preset.config.motion === motionPreference &&
         preset.config.textSize === messageTextSize &&
-        preset.config.bubbleStyle === bubbleStyle,
+        preset.config.bubbleStyle === bubbleStyle &&
+        preset.config.panelStyle === panelStyle,
     )?.id ?? null;
 
   return createPortal(
@@ -201,8 +378,8 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
           <div>
-            <h2 className="text-[15px] font-semibold text-foreground tracking-tight">Appearance</h2>
-            <p className="text-[12px] text-muted-foreground mt-0.5">Customize your Moji experience</p>
+            <h2 className="text-[15px] font-semibold text-foreground tracking-tight">{t("appearance.title")}</h2>
+            <p className="text-[12px] text-muted-foreground mt-0.5">{t("appearance.subtitle")}</p>
           </div>
           <button
             type="button"
@@ -309,6 +486,177 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
                   </button>
                 );
               })}
+            </div>
+          </section>
+
+          <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              {t("personalization.section_title")}
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
+                  {t("personalization.language")}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {LANGUAGE_OPTIONS.map((languageOption) => {
+                    const active = locale === languageOption.id;
+                    const Icon = languageOption.icon;
+
+                    return (
+                      <button
+                        key={languageOption.id}
+                        type="button"
+                        onClick={() => setLocale(languageOption.id)}
+                        className={cn(
+                          "appearance-drawer-btn flex items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-[background-color,border-color,color,box-shadow] duration-200",
+                          active
+                            ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                            : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span className="text-[12px] font-medium">
+                          {t(languageOption.labelKey)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
+                  {t("personalization.start_page")}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {START_PAGE_OPTIONS.map((startPageOption) => {
+                    const active = startPagePreference === startPageOption.id;
+                    const Icon = startPageOption.icon;
+
+                    return (
+                      <button
+                        key={startPageOption.id}
+                        type="button"
+                        onClick={() => setStartPagePreference(startPageOption.id)}
+                        className={cn(
+                          "appearance-drawer-btn flex items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-[background-color,border-color,color,box-shadow] duration-200",
+                          active
+                            ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                            : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span className="text-[12px] font-medium">
+                          {t(startPageOption.labelKey)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
+                  {t("personalization.timestamp_style")}
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {TIMESTAMP_STYLE_OPTIONS.map((timestampOption) => {
+                    const active = timestampStylePreference === timestampOption.id;
+                    const Icon = timestampOption.icon;
+
+                    return (
+                      <button
+                        key={timestampOption.id}
+                        type="button"
+                        onClick={() =>
+                          setTimestampStylePreference(timestampOption.id)
+                        }
+                        className={cn(
+                          "appearance-drawer-btn flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-[background-color,border-color,color,box-shadow] duration-200",
+                          active
+                            ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                            : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span className="text-[12px] font-medium">
+                          {t(timestampOption.labelKey)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
+                  {t("personalization.notification_grouping")}
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  {NOTIFICATION_GROUPING_OPTIONS.map((groupingOption) => {
+                    const active =
+                      notificationGroupingPreference === groupingOption.id;
+                    const Icon = groupingOption.icon;
+
+                    return (
+                      <button
+                        key={groupingOption.id}
+                        type="button"
+                        onClick={() =>
+                          setNotificationGroupingPreference(groupingOption.id)
+                        }
+                        className={cn(
+                          "appearance-drawer-btn flex items-center gap-2 rounded-xl border px-3 py-2 text-left transition-[background-color,border-color,color,box-shadow] duration-200",
+                          active
+                            ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                            : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span className="text-[12px] font-medium">
+                          {t(groupingOption.labelKey)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-[11px] font-semibold text-muted-foreground">
+                  {t("personalization.notification_density")}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {NOTIFICATION_DENSITY_OPTIONS.map((densityOption) => {
+                    const active =
+                      notificationDensityPreference === densityOption.id;
+                    const Icon = densityOption.icon;
+
+                    return (
+                      <button
+                        key={densityOption.id}
+                        type="button"
+                        onClick={() =>
+                          setNotificationDensityPreference(densityOption.id)
+                        }
+                        className={cn(
+                          "appearance-drawer-btn flex items-center justify-center gap-2 rounded-xl border px-3 py-2 transition-[background-color,border-color,color,box-shadow] duration-200",
+                          active
+                            ? "border-primary/60 bg-primary/10 text-primary ring-1 ring-primary/20"
+                            : "border-border/60 bg-muted/20 text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <Icon className="size-4" />
+                        <span className="text-[12px] font-medium">
+                          {t(densityOption.labelKey)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </section>
 
@@ -493,6 +841,38 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
           </section>
 
           <section>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground mb-3">
+              Panel shell
+            </p>
+            <div className="grid grid-cols-1 gap-2.5">
+              {PANEL_STYLE_OPTIONS.map((styleOption) => {
+                const active = panelStyle === styleOption.id;
+                const Icon = styleOption.icon;
+
+                return (
+                  <button
+                    key={styleOption.id}
+                    type="button"
+                    onClick={() => setPanelStyle(styleOption.id)}
+                    className={cn(
+                      "appearance-drawer-btn flex items-start gap-2.5 rounded-xl border px-3 py-3 text-left transition-[background-color,border-color,color,box-shadow] duration-200",
+                      active
+                        ? "border-primary/60 bg-primary/10 ring-1 ring-primary/20"
+                        : "border-border/60 bg-muted/20 hover:bg-muted/50"
+                    )}
+                  >
+                    <Icon className={cn("mt-0.5 size-4", active ? "text-primary" : "text-muted-foreground")} />
+                    <div className="space-y-1">
+                      <p className={cn("text-[12px] font-semibold", active ? "text-primary" : "text-foreground")}>{styleOption.label}</p>
+                      <p className="text-[11px] text-muted-foreground">{styleOption.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
             <div className="mb-3 flex items-center justify-between">
               <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
                 Live preview
@@ -618,7 +998,7 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
         {/* Footer */}
         <div className="px-5 py-3 border-t border-border/60">
           <p className="text-[11px] text-center text-muted-foreground/60">
-            Changes apply instantly & are saved automatically
+            {t("appearance.save_hint")}
           </p>
         </div>
       </div>

@@ -458,6 +458,16 @@ const ChatWindowBody = () => {
       const showDateDivider =
         !nextMessage || !isSameDay(message.createdAt, nextMessage.createdAt);
 
+      const sameOlderSender = prevMessage && prevMessage.senderId === message.senderId && !message.isDeleted && !prevMessage.isDeleted;
+      const sameNewerSender = nextMessage && nextMessage.senderId === message.senderId && !message.isDeleted && !nextMessage.isDeleted;
+      
+      const GROUPING_THRESHOLD_MS = 5 * 60 * 1000;
+      const isCloseToOlder = prevMessage && (new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() < GROUPING_THRESHOLD_MS);
+      const isCloseToNewer = nextMessage && (new Date(nextMessage.createdAt).getTime() - new Date(message.createdAt).getTime() < GROUPING_THRESHOLD_MS);
+
+      const isFirstInGroup = !sameOlderSender || !isCloseToOlder;
+      const isLastInGroup = !sameNewerSender || !isCloseToNewer;
+
       // Only animate a message if it matches the latest newly arrived ID.
       // This prevents every re-render of the last item (e.g. reaction updates)
       // from triggering the slide-in animation.
@@ -468,8 +478,8 @@ const ChatWindowBody = () => {
         <MessageItem
           message={message}
           index={index}
-          prevSenderId={prevMessage?.senderId ? String(prevMessage.senderId) : ""}
-          nextSenderId={nextMessage?.senderId ? String(nextMessage.senderId) : ""}
+          isFirstInGroup={isFirstInGroup}
+          isLastInGroup={isLastInGroup}
           selectedConvo={selectedConvo as NonNullable<typeof selectedConvo>}
           lastMessageStatus={lastMessageStatus}
           lastOwnMessageId={lastOwnMessage?._id ?? null}
@@ -714,18 +724,26 @@ const ChatWindowBody = () => {
 
   if (!messages?.length) {
     return (
-      <div className="flex h-full items-center justify-center flex-col gap-2.5 text-muted-foreground px-8 text-center bg-background animate-in fade-in slide-in-from-bottom-2 duration-500">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/40" aria-hidden="true">
+      <div className="relative flex h-full flex-col items-center justify-center gap-3 overflow-hidden bg-background px-8 text-center text-muted-foreground animate-in fade-in slide-in-from-bottom-2 duration-500">
+        <div className="pointer-events-none absolute -right-20 -top-16 h-56 w-56 rounded-full bg-primary/[0.05] blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-16 -left-20 h-52 w-52 rounded-full bg-accent/[0.05] blur-3xl" aria-hidden="true" />
+
+        <span className="relative z-10 flex h-14 w-14 items-center justify-center rounded-full border border-border/50 bg-muted/40" aria-hidden="true">
           <MessageCircle className="h-6 w-6 text-muted-foreground/70" />
         </span>
-        <div>
-          <p className="text-[14px] font-semibold text-foreground/80">No messages yet</p>
-          <p className="text-[12px] text-muted-foreground/60 mt-0.5">
+
+        <div className="relative z-10">
+          <p className="text-[14px] font-semibold text-foreground/85">No messages yet</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground/65">
             {selectedConvo.type === "group"
               ? `Be the first to post in #${activeGroupChannelName}`
               : "Be the first to say something!"}
           </p>
         </div>
+
+        <p className="relative z-10 rounded-full border border-border/45 bg-background/70 px-3 py-1 text-[10.5px] font-medium tracking-wide text-muted-foreground/60">
+          Tip: Start typing below and press Enter to send quickly.
+        </p>
       </div>
     );
   }
@@ -809,7 +827,12 @@ const ChatWindowBody = () => {
 
       {/* ── Typing indicator ── */}
       {typingUserList.length > 0 && (
-        <div className="typing-bubble-wrap typing-bubble-wrap--command">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="typing-bubble-wrap typing-bubble-wrap--command"
+        >
           <div className="typing-avatars">
             {typingUserList.slice(0, 3).map((typingUser) => (
               <div key={typingUser.userId} className="typing-avatar">
@@ -842,7 +865,11 @@ const ChatWindowBody = () => {
       <button
         type="button"
         onClick={scrollToBottom}
-        aria-label="Scroll to latest messages"
+        aria-label={
+          newMsgCount > 0
+            ? `Scroll to latest messages (${newMsgCount} unread)`
+            : "Scroll to latest messages"
+        }
         className={cn(
           "scroll-to-bottom-fab scroll-to-bottom-fab--command",
           showScrollButton
@@ -851,6 +878,7 @@ const ChatWindowBody = () => {
         )}
       >
         <ArrowDown className="size-4" />
+        <span className="hidden text-[11px] font-semibold sm:inline">Latest</span>
         {newMsgCount > 0 && (
           <span className="scroll-fab-badge animate-bounce shadow-md">
             {newMsgCount > 99 ? "99+" : newMsgCount}

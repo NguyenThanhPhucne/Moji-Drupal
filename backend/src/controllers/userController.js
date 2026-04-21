@@ -48,6 +48,17 @@ const SOCIAL_BOOLEAN_KEYS = new Set([
 const SOCIAL_ARRAY_KEYS = new Set(["mutedUserIds", "mutedConversationIds"]);
 const SOCIAL_NUMBER_KEYS = new Set(["digestWindowHours"]);
 
+const PERSONALIZATION_LOCALE_VALUES = new Set(["en", "vi"]);
+const PERSONALIZATION_START_PAGE_VALUES = new Set([
+  "chat",
+  "feed",
+  "explore",
+  "saved",
+]);
+const PERSONALIZATION_TIMESTAMP_VALUES = new Set(["relative", "absolute"]);
+const PERSONALIZATION_GROUPING_VALUES = new Set(["auto", "priority", "time"]);
+const PERSONALIZATION_DENSITY_VALUES = new Set(["comfortable", "compact"]);
+
 const parseSocialPreferenceEntry = (key, value) => {
   if (SOCIAL_BOOLEAN_KEYS.has(key)) {
     if (typeof value !== "boolean") {
@@ -123,6 +134,109 @@ const buildSocialPreferenceUpdates = (social) => {
 
   for (const key of Object.keys(social)) {
     const parsed = parseSocialPreferenceEntry(key, social[key]);
+    if (parsed.error) {
+      return {
+        error: parsed.error,
+      };
+    }
+
+    updates[parsed.path] = parsed.value;
+  }
+
+  return { updates };
+};
+
+const parsePersonalizationPreferenceEntry = (key, value) => {
+  if (key === "locale") {
+    const normalizedValue = String(value || "").trim();
+    if (!PERSONALIZATION_LOCALE_VALUES.has(normalizedValue)) {
+      return {
+        error: "personalizationPreferences.locale không hợp lệ",
+      };
+    }
+
+    return {
+      path: "personalizationPreferences.locale",
+      value: normalizedValue,
+    };
+  }
+
+  if (key === "startPagePreference") {
+    const normalizedValue = String(value || "").trim();
+    if (!PERSONALIZATION_START_PAGE_VALUES.has(normalizedValue)) {
+      return {
+        error: "personalizationPreferences.startPagePreference không hợp lệ",
+      };
+    }
+
+    return {
+      path: "personalizationPreferences.startPagePreference",
+      value: normalizedValue,
+    };
+  }
+
+  if (key === "timestampStylePreference") {
+    const normalizedValue = String(value || "").trim();
+    if (!PERSONALIZATION_TIMESTAMP_VALUES.has(normalizedValue)) {
+      return {
+        error: "personalizationPreferences.timestampStylePreference không hợp lệ",
+      };
+    }
+
+    return {
+      path: "personalizationPreferences.timestampStylePreference",
+      value: normalizedValue,
+    };
+  }
+
+  if (key === "notificationGroupingPreference") {
+    const normalizedValue = String(value || "").trim();
+    if (!PERSONALIZATION_GROUPING_VALUES.has(normalizedValue)) {
+      return {
+        error: "personalizationPreferences.notificationGroupingPreference không hợp lệ",
+      };
+    }
+
+    return {
+      path: "personalizationPreferences.notificationGroupingPreference",
+      value: normalizedValue,
+    };
+  }
+
+  if (key === "notificationDensityPreference") {
+    const normalizedValue = String(value || "").trim();
+    if (!PERSONALIZATION_DENSITY_VALUES.has(normalizedValue)) {
+      return {
+        error: "personalizationPreferences.notificationDensityPreference không hợp lệ",
+      };
+    }
+
+    return {
+      path: "personalizationPreferences.notificationDensityPreference",
+      value: normalizedValue,
+    };
+  }
+
+  return {
+    error: `personalizationPreferences.${key} không được hỗ trợ`,
+  };
+};
+
+const buildPersonalizationPreferenceUpdates = (preferences) => {
+  if (
+    !preferences ||
+    typeof preferences !== "object" ||
+    Array.isArray(preferences)
+  ) {
+    return {
+      error: "personalizationPreferences phải là object",
+    };
+  }
+
+  const updates = {};
+
+  for (const key of Object.keys(preferences)) {
+    const parsed = parsePersonalizationPreferenceEntry(key, preferences[key]);
     if (parsed.error) {
       return {
         error: parsed.error,
@@ -423,10 +537,58 @@ export const updateNotificationPreferences = async (req, res) => {
   }
 };
 
+export const updatePersonalizationPreferences = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const usesInlinePayload =
+      req.body?.personalizationPreferences === undefined;
+    const payload = usesInlinePayload
+      ? req.body
+      : req.body.personalizationPreferences;
+
+    const personalizationUpdateResult =
+      buildPersonalizationPreferenceUpdates(payload);
+
+    if (personalizationUpdateResult.error) {
+      return res.status(400).json({
+        message: personalizationUpdateResult.error,
+      });
+    }
+
+    const updates = personalizationUpdateResult.updates || {};
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        message: "Không có thay đổi personalizationPreferences",
+      });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updates },
+      { new: true },
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    await invalidateCache(`auth_profile:${userId}`);
+
+    return res.status(200).json({
+      message: "Cập nhật personalization thành công",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật personalizationPreferences", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const { displayName, bio, phone } = req.body || {};
+    const { displayName, bio, phone, personalizationPreferences } = req.body || {};
 
     const allowedUpdates = {};
 
@@ -444,6 +606,19 @@ export const updateProfile = async (req, res) => {
 
     if (phone !== undefined) {
       allowedUpdates.phone = String(phone).trim().slice(0, 20);
+    }
+
+    if (personalizationPreferences !== undefined) {
+      const personalizationUpdateResult =
+        buildPersonalizationPreferenceUpdates(personalizationPreferences);
+
+      if (personalizationUpdateResult.error) {
+        return res.status(400).json({
+          message: personalizationUpdateResult.error,
+        });
+      }
+
+      Object.assign(allowedUpdates, personalizationUpdateResult.updates || {});
     }
 
     if (Object.keys(allowedUpdates).length === 0) {

@@ -1,4 +1,5 @@
 import { Reply, X } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 type ReplyPreview = {
   senderDisplayName?: string | null;
@@ -23,13 +24,15 @@ const AnnouncementModeNotice = ({
   announcementOnly: boolean;
   isGroupAdmin: boolean;
 }) => {
+  const { t } = useI18n();
+
   if (!announcementOnly || isGroupAdmin) {
     return null;
   }
 
   return (
     <p className="px-3.5 pb-2 text-[11px] font-medium text-muted-foreground">
-      Announcement mode is enabled. Only group admins can post new messages.
+      {t("chatComposer.notice.announcement_only")}
     </p>
   );
 };
@@ -44,6 +47,8 @@ const MessagePreviewBlocks = ({
   announcementOnly,
   isGroupAdmin,
 }: MessagePreviewBlocksProps) => {
+  const { t } = useI18n();
+
   return (
     <>
       <div
@@ -60,7 +65,7 @@ const MessagePreviewBlocks = ({
           {composerModeLabel}
         </span>
         <span className="chat-composer-meta-chip chat-composer-meta-chip--hint">
-          Enter to send · Shift + Enter for new line
+          {t("chatComposer.hint.enter_shift_enter")}
         </span>
       </div>
 
@@ -71,16 +76,16 @@ const MessagePreviewBlocks = ({
             <div className="flex min-w-0 flex-col">
               <span className="mb-0.5 flex items-center gap-1 text-[10px] font-bold uppercase leading-none tracking-[0.05em] text-primary">
                 <Reply className="size-2.5" />
-                {replyingTo.senderDisplayName ?? "Reply"}
+                {replyingTo.senderDisplayName ?? t("chatComposer.reply")}
               </span>
               <p className="truncate text-[12px] leading-snug text-muted-foreground/70">
-                {replyingTo.content || "Photo attachment"}
+                {replyingTo.content || t("chatComposer.photo_attachment")}
               </p>
             </div>
           </div>
           <button
             type="button"
-            aria-label="Cancel reply"
+            aria-label={t("chatComposer.cancel_reply")}
             onClick={onClearReply}
             className="flex-shrink-0 rounded-full p-1 text-muted-foreground/50 transition-colors hover:bg-muted/60 hover:text-foreground"
           >
@@ -93,19 +98,19 @@ const MessagePreviewBlocks = ({
         <div className="relative mx-4 mt-3 w-fit animate-in fade-in zoom-in-95 duration-200">
           <img
             src={imagePreview}
-            alt="preview"
+            alt={t("chatComposer.preview")}
             className="h-24 w-24 rounded-xl border border-border/60 object-cover shadow-sm"
           />
           <button
             type="button"
             onClick={onClearImage}
             className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-foreground/80 shadow-md transition-colors hover:bg-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
-            aria-label="Remove selected image"
+            aria-label={t("socialComposer.remove_selected_image")}
           >
             <X className="size-3 text-background" />
           </button>
           <div className="absolute bottom-1 left-1 rounded bg-background/80 px-1 py-0.5 text-[9px] font-medium text-muted-foreground backdrop-blur-sm">
-            Image
+            {t("chatComposer.preview_image")}
           </div>
         </div>
       )}

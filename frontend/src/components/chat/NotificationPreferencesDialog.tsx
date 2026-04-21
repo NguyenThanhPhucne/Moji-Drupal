@@ -1,5 +1,7 @@
 import { Bell } from "lucide-react";
 import { Button } from "../ui/button";
+import { cn } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n";
 import {
   Dialog,
   DialogContent,
@@ -10,28 +12,51 @@ import {
 } from "../ui/dialog";
 import NotificationPreferencesSettings from "../notifications/NotificationPreferencesSettings";
 
-const NotificationPreferencesDialog = () => {
+interface NotificationPreferencesDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+  triggerClassName?: string;
+  triggerTitle?: string;
+}
+
+const NotificationPreferencesDialog = ({
+  open,
+  onOpenChange,
+  hideTrigger = false,
+  triggerClassName,
+  triggerTitle,
+}: NotificationPreferencesDialogProps) => {
+  const { t } = useI18n();
+  const resolvedTriggerTitle =
+    triggerTitle || t("notificationPreferences.trigger");
+
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="rounded-full text-muted-foreground hover:text-foreground"
-          title="Notification preferences"
-          aria-label="Notification preferences"
-        >
-          <Bell className="size-4" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "rounded-full text-muted-foreground hover:text-foreground",
+              triggerClassName,
+            )}
+            title={resolvedTriggerTitle}
+            aria-label={resolvedTriggerTitle}
+          >
+            <Bell className="size-4" />
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-w-xl p-0 overflow-hidden">
         <div className="border-b border-border/60 px-5 py-4">
           <DialogHeader>
-            <DialogTitle>Notification preferences</DialogTitle>
+            <DialogTitle>{t("notificationPreferences.title")}</DialogTitle>
             <DialogDescription>
-              Tune chat and social alerts with one-tap presets.
+              {t("notificationPreferences.description")}
             </DialogDescription>
           </DialogHeader>
         </div>

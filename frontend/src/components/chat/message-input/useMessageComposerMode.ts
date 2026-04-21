@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type { Conversation } from "@/types/chat";
+import { useI18n } from "@/lib/i18n";
 
 interface UseMessageComposerModeArgs {
   selectedConvo: Conversation;
@@ -25,35 +26,40 @@ const resolveComposerPlaceholder = ({
   canSendInCurrentMode,
   isGroupConversation,
   activeGroupChannelName,
+  t,
 }: {
   canSendInCurrentMode: boolean;
   isGroupConversation: boolean;
   activeGroupChannelName: string;
+  t: ReturnType<typeof useI18n>["t"];
 }) => {
   if (!canSendInCurrentMode) {
-    return "Only admins can send messages in announcement mode";
+    return t("chatComposer.placeholder.announcement_only");
   }
 
   if (isGroupConversation) {
-    return `Message #${activeGroupChannelName}`;
+    return t("chatComposer.placeholder.group", {
+      channel: activeGroupChannelName,
+    });
   }
 
-  return "Aa";
+  return t("chatComposer.placeholder.direct");
 };
 
 const resolveComposerModeLabel = (
   announcementOnly: boolean,
   canSendInCurrentMode: boolean,
+  t: ReturnType<typeof useI18n>["t"],
 ) => {
   if (!announcementOnly) {
-    return "Realtime mode";
+    return t("chatComposer.mode.realtime");
   }
 
   if (canSendInCurrentMode) {
-    return "Announcement mode (admin)";
+    return t("chatComposer.mode.announcement_admin");
   }
 
-  return "Announcement mode";
+  return t("chatComposer.mode.announcement");
 };
 
 const resolveSendButtonToneClass = (
@@ -76,6 +82,8 @@ export const useMessageComposerMode = ({
   currentUserId,
   hasSendableMessage,
 }: UseMessageComposerModeArgs) => {
+  const { t } = useI18n();
+
   return useMemo(() => {
     const isGroupConversation = selectedConvo.type === "group";
     const isGroupCreator =
@@ -95,13 +103,15 @@ export const useMessageComposerMode = ({
       canSendInCurrentMode,
       isGroupConversation,
       activeGroupChannelName,
+      t,
     });
     const composerContextLabel = isGroupConversation
       ? `#${activeGroupChannelName}`
-      : "Direct message";
+      : t("chatComposer.context.direct");
     const composerModeLabel = resolveComposerModeLabel(
       announcementOnly,
       canSendInCurrentMode,
+      t,
     );
     const sendDisabled = !hasSendableMessage || !canSendInCurrentMode;
     const sendButtonToneClass = resolveSendButtonToneClass(
@@ -119,5 +129,5 @@ export const useMessageComposerMode = ({
       sendDisabled,
       sendButtonToneClass,
     };
-  }, [currentUserId, hasSendableMessage, selectedConvo]);
+  }, [currentUserId, hasSendableMessage, selectedConvo, t]);
 };

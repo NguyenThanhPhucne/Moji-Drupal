@@ -22,6 +22,10 @@ import {
   Unlock,
   Pin,
   Flag,
+  LoaderCircle,
+  Clock3,
+  AlertCircle,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
@@ -672,6 +676,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
   message,
   isOwn,
   onReact,
+  onRetry,
   actionHint,
   selectedConvoType,
   isSeenAnchorMessage,
@@ -689,6 +694,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
   message: Message;
   isOwn: boolean;
   onReact: (emoji: string) => void;
+  onRetry?: () => void;
   actionHint: MessageActionHint | null;
   selectedConvoType: Conversation["type"];
   isSeenAnchorMessage: boolean;
@@ -748,6 +754,43 @@ const MessageMetaSection = memo(function MessageMetaSection({
           )}
           {format(new Date(message.createdAt), "HH:mm")}
         </span>
+
+        {isOwn && !message.isDeleted && message.deliveryState && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-none font-semibold",
+              message.deliveryState === "sending" &&
+                "border-primary/20 bg-primary/10 text-primary",
+              message.deliveryState === "queued" &&
+                "border-warning/30 bg-warning/10 text-warning",
+              message.deliveryState === "failed" &&
+                "border-destructive/30 bg-destructive/10 text-destructive",
+            )}
+          >
+            {message.deliveryState === "sending" && (
+              <LoaderCircle className="size-3 animate-spin" />
+            )}
+            {message.deliveryState === "queued" && <Clock3 className="size-3" />}
+            {message.deliveryState === "failed" && <AlertCircle className="size-3" />}
+            {message.deliveryState === "sending" && "Sending"}
+            {message.deliveryState === "queued" && "Queued"}
+            {message.deliveryState === "failed" && "Failed"}
+          </span>
+        )}
+
+        {isOwn &&
+          !message.isDeleted &&
+          onRetry &&
+          (message.deliveryState === "failed" || message.deliveryState === "queued") && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex items-center gap-1 rounded-full border border-border/70 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+            >
+              <RotateCcw className="size-3" />
+              Retry
+            </button>
+          )}
       </div>
 
       {actionHint && (
@@ -785,7 +828,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   message,
   isOwn,
   selectedConvoType,
-  isLastFromSender,
+  isFirstInGroup,
+  isLastInGroup,
   senderDisplayName,
   bubbleNode,
   previewUrl,
@@ -806,7 +850,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   message: Message;
   isOwn: boolean;
   selectedConvoType: Conversation["type"];
-  isLastFromSender: boolean;
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
   senderDisplayName?: string;
   bubbleNode: React.ReactNode;
   previewUrl: string | null;
@@ -833,7 +878,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
         isOwn ? "items-end" : "items-start",
       )}
     >
-      {selectedConvoType === "group" && !isOwn && isLastFromSender && (
+      {selectedConvoType === "group" && !isOwn && isFirstInGroup && (
         <span className="text-[11px] text-muted-foreground mb-0.5 ml-1 font-medium">
           {senderDisplayName}
         </span>
@@ -912,8 +957,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
 interface MessageItemProps {
   message: Message;
   index: number;
-  prevSenderId?: string;
-  nextSenderId?: string; // for cluster-aware bubble radius
+  isFirstInGroup?: boolean;
+  isLastInGroup?: boolean;
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
   lastOwnMessageId?: string | null;
@@ -939,8 +984,8 @@ interface MessageItemProps {
 const MessageItem = memo(function MessageItem({ // NOSONAR
   message,
   index,
-  prevSenderId,
-  nextSenderId,
+  isFirstInGroup,
+  isLastInGroup,
   selectedConvo,
   lastMessageStatus,
   lastOwnMessageId,
@@ -960,6 +1005,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     unsendMessage,
     removeMessageForMe,
     editMessage,
+    retryMessageDelivery,
     setReplyingTo,
     toggleMessageForwardable,
     activeConversationId,
@@ -1007,8 +1053,11 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     return activeConversation || null;
   }, [activeConversationId, message.conversationId]);
 
-  const isLastFromSender =
-    index === 0 || prevSenderId !== String(message.senderId);
+  const canRetryDelivery =
+    isOwn &&
+    !message.isDeleted &&
+    String(message._id).startsWith("temp-") &&
+    (message.deliveryState === "failed" || message.deliveryState === "queued");
 
 
   const senderParticipant = selectedConvo.participants.find(
@@ -1118,6 +1167,14 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       showActionHint("Copy failed", "error");
     }
   }, [message.content, showActionHint]);
+
+  const handleRetryDelivery = useCallback(() => {
+    if (!resolvedConversationId || !canRetryDelivery) {
+      return;
+    }
+
+    void retryMessageDelivery(resolvedConversationId, message._id);
+  }, [canRetryDelivery, message._id, resolvedConversationId, retryMessageDelivery]);
 
   const handleEditSave = useCallback(() => {
     const normalizedEditValue = editValue.trim();
@@ -1448,7 +1505,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     isOwn ? "flex-row-reverse" : "flex-row",
     isNew && "message-slide-in",
     isSearchTarget && "rounded-2xl bg-primary/[0.08] ring-1 ring-primary/35",
-    isLastFromSender ? "pt-2 pb-[2px]" : "py-[2px]",
+    isFirstInGroup ? "pt-2 pb-[1px]" : "py-[1px]",
   );
 
   const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted);
@@ -1456,26 +1513,20 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
 
   const imageCornerClass = isOwn ? "rounded-br-[4px]" : "rounded-tl-[4px]";
-  const senderId = String(message.senderId || "");
   const ownBubbleToneClass =
     "chat-bubble-sent chat-message-bubble-shell chat-message-bubble-shell--own";
   const peerBubbleToneClass =
     "chat-bubble-received chat-message-bubble-shell chat-message-bubble-shell--peer";
   const bubbleToneClass = isOwn ? ownBubbleToneClass : peerBubbleToneClass;
-
-  const isPrevFromSameSender = String(prevSenderId || "") === senderId;
-  const isNextFromSameSender = String(nextSenderId || "") === senderId;
-
-  let bubbleClusterToken = "single";
-  if (isPrevFromSameSender && isNextFromSameSender) {
-    bubbleClusterToken = "middle";
-  } else if (!isPrevFromSameSender && isNextFromSameSender) {
-    bubbleClusterToken = "start";
-  } else if (isPrevFromSameSender && !isNextFromSameSender) {
-    bubbleClusterToken = "end";
+  
+  let bubbleClusterClass = "";
+  if (!isFirstInGroup && !isLastInGroup) {
+    bubbleClusterClass = isOwn ? "rounded-tr-[4px] rounded-br-[4px]" : "rounded-tl-[4px] rounded-bl-[4px]";
+  } else if (!isFirstInGroup && isLastInGroup) {
+    bubbleClusterClass = isOwn ? "rounded-tr-[4px]" : "rounded-tl-[4px]";
+  } else if (isFirstInGroup && !isLastInGroup) {
+    bubbleClusterClass = isOwn ? "rounded-br-[4px]" : "rounded-bl-[4px]";
   }
-
-  const bubbleClusterClass = `chat-message-bubble-shell--cluster-${bubbleClusterToken}`;
 
   const renderReadOnlyBubble = () => (
     <div
@@ -1493,7 +1544,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
           : "chat-message-bubble-surface--peer"),
         !hasOnlyImage && actionBarVisible && "chat-message-bubble-surface--actions-visible",
         bubbleClusterClass,
-        message.isDeleted && "chat-message-bubble-shell--deleted opacity-50 italic",
+        message.isDeleted && "chat-message-bubble-shell--deleted opacity-65 italic",
         isBubblePressed && !message.isDeleted && "chat-message-bubble-shell--pressed",
         "select-text",
       )}
@@ -1544,7 +1595,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
             </span>
           )}
           {message.content && (
-            <p className="chat-message-content whitespace-pre-wrap break-words tracking-tight">{message.content}</p>
+            <p className="chat-message-content whitespace-pre-wrap break-words">{message.content}</p>
           )}
         </>
       )}
@@ -1635,7 +1686,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
         {/* Avatar */}
         {!isOwn && (
           <div className="w-8 flex-shrink-0 self-end">
-            {isLastFromSender && (
+            {isLastInGroup && (
               <UserAvatar
                 type="chat"
                 name={senderParticipant?.displayName ?? "?"}
@@ -1650,7 +1701,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
           message={message}
           isOwn={isOwn}
           selectedConvoType={selectedConvo.type}
-          isLastFromSender={isLastFromSender}
+          isFirstInGroup={isFirstInGroup}
+          isLastInGroup={isLastInGroup}
           senderDisplayName={senderParticipant?.displayName}
           bubbleNode={bubbleNode}
           previewUrl={previewUrl}
@@ -1673,6 +1725,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
               message={message}
               isOwn={isOwn}
               onReact={handleReact}
+              onRetry={canRetryDelivery ? handleRetryDelivery : undefined}
               selectedConvoType={selectedConvo.type}
               isSeenAnchorMessage={isSeenAnchorMessage}
               lastMessageStatus={lastMessageStatus}

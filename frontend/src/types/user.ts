@@ -1,3 +1,11 @@
+export interface PersonalizationPreferences {
+  locale?: "en" | "vi";
+  startPagePreference?: "chat" | "feed" | "explore" | "saved";
+  timestampStylePreference?: "relative" | "absolute";
+  notificationGroupingPreference?: "auto" | "priority" | "time";
+  notificationDensityPreference?: "comfortable" | "compact";
+}
+
 export interface User {
   _id: string;
   username: string;
@@ -25,6 +33,7 @@ export interface User {
       digestWindowHours?: number;
     };
   };
+  personalizationPreferences?: PersonalizationPreferences;
   createdAt?: string;
   updatedAt?: string;
 }

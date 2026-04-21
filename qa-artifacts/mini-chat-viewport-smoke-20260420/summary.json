@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-04-20T03:52:02.583Z",
+  "appBaseUrl": "http://localhost:5173",
+  "outDir": "/Users/phucnguyen/Downloads/open_crm/new/Moji-Drupal/qa-artifacts/mini-chat-viewport-smoke-20260420",
+  "totalChecks": 3,
+  "passedChecks": 0,
+  "failedChecks": 3,
+  "checks": [
+    {
+      "viewport": "1280x800",
+      "route": "/feed",
+      "actualPath": "",
+      "windowsCount": 0,
+      "screenshotPath": "mini-chat-1280x800.png",
+      "found": false,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 0,
+      "windowHeight": 0,
+      "error": "page.waitForFunction: Timeout 30000ms exceeded."
+    },
+    {
+      "viewport": "1366x768",
+      "route": "/feed",
+      "actualPath": "",
+      "windowsCount": 0,
+      "screenshotPath": "mini-chat-1366x768.png",
+      "found": false,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 0,
+      "windowHeight": 0,
+      "error": "page.waitForFunction: Timeout 30000ms exceeded."
+    },
+    {
+      "viewport": "1440x900",
+      "route": "/feed",
+      "actualPath": "",
+      "windowsCount": 0,
+      "screenshotPath": "mini-chat-1440x900.png",
+      "found": false,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 0,
+      "windowHeight": 0,
+      "error": "page.waitForFunction: Timeout 30000ms exceeded."
+    }
+  ]
+}

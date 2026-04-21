@@ -12,10 +12,14 @@ export type AccentColor =
   | "ocean"
   | "slate";
 export type SidebarLayout = "full" | "compact";
-export type ChatDensity = "comfortable" | "compact";
+export type ChatDensity = "comfortable" | "compact" | "dense";
 export type MotionPreference = "system" | "smooth" | "reduced";
 export type MessageTextSize = "sm" | "md" | "lg";
-export type BubbleStyle = "modern" | "classic";
+export type BubbleStyle = "modern" | "classic" | "ultra-flat";
+export type PanelStyle =
+  | "soft-glass"
+  | "flat-enterprise"
+  | "flat-enterprise-ultra";
 export type RememberMode = "device" | "profile";
 
 interface AppearanceSnapshot {
@@ -26,6 +30,7 @@ interface AppearanceSnapshot {
   motionPreference: MotionPreference;
   messageTextSize: MessageTextSize;
   bubbleStyle: BubbleStyle;
+  panelStyle: PanelStyle;
 }
 
 const PROFILE_STORAGE_PREFIX = "moji-appearance-profile:";
@@ -37,7 +42,8 @@ const DEFAULT_APPEARANCE: AppearanceSnapshot = {
   chatDensity: "comfortable",
   motionPreference: "system",
   messageTextSize: "md",
-  bubbleStyle: "modern",
+  bubbleStyle: "ultra-flat",
+  panelStyle: "soft-glass",
 };
 
 interface ThemeState {
@@ -52,6 +58,7 @@ interface ThemeState {
   motionPreference: MotionPreference;
   messageTextSize: MessageTextSize;
   bubbleStyle: BubbleStyle;
+  panelStyle: PanelStyle;
   rememberMode: RememberMode;
   activeProfileUserId: string | null;
 
@@ -63,6 +70,7 @@ interface ThemeState {
   setMotionPreference: (preference: MotionPreference) => void;
   setMessageTextSize: (size: MessageTextSize) => void;
   setBubbleStyle: (style: BubbleStyle) => void;
+  setPanelStyle: (style: PanelStyle) => void;
   setRememberMode: (mode: RememberMode) => void;
   bindProfileUser: (userId?: string | null) => void;
   resetAppearance: () => void;
@@ -95,6 +103,7 @@ const toAppearanceSnapshot = (state: ThemeState): AppearanceSnapshot => ({
   motionPreference: state.motionPreference,
   messageTextSize: state.messageTextSize,
   bubbleStyle: state.bubbleStyle,
+  panelStyle: state.panelStyle,
 });
 
 const saveProfileAppearance = (userId: string, snapshot: AppearanceSnapshot) => {
@@ -126,6 +135,7 @@ const loadProfileAppearance = (userId: string): AppearanceSnapshot | null => {
         parsed.motionPreference ?? DEFAULT_APPEARANCE.motionPreference,
       messageTextSize: parsed.messageTextSize ?? DEFAULT_APPEARANCE.messageTextSize,
       bubbleStyle: parsed.bubbleStyle ?? DEFAULT_APPEARANCE.bubbleStyle,
+      panelStyle: parsed.panelStyle ?? DEFAULT_APPEARANCE.panelStyle,
     };
   } catch {
     return null;
@@ -140,6 +150,7 @@ const applyToDOM = (
   motion: MotionPreference,
   messageSize: MessageTextSize,
   bubbleStyle: BubbleStyle,
+  panelStyle: PanelStyle,
 ) => {
   const root = document.documentElement;
   const dark =
@@ -156,6 +167,7 @@ const applyToDOM = (
   root.setAttribute("data-chat-density", density);
   root.setAttribute("data-message-size", messageSize);
   root.setAttribute("data-bubble-style", bubbleStyle);
+  root.setAttribute("data-panel-style", panelStyle);
   root.setAttribute("data-motion", reducedMotion ? "reduced" : "smooth");
 };
 
@@ -183,6 +195,7 @@ export const useThemeStore = create<ThemeState>()(
       motionPreference: DEFAULT_APPEARANCE.motionPreference,
       messageTextSize: DEFAULT_APPEARANCE.messageTextSize,
       bubbleStyle: DEFAULT_APPEARANCE.bubbleStyle,
+      panelStyle: DEFAULT_APPEARANCE.panelStyle,
       rememberMode: "device",
       activeProfileUserId: null,
 
@@ -194,6 +207,7 @@ export const useThemeStore = create<ThemeState>()(
           motionPreference,
           messageTextSize,
           bubbleStyle,
+          panelStyle,
         } = get();
         applyToDOM(
           themeMode,
@@ -202,20 +216,21 @@ export const useThemeStore = create<ThemeState>()(
           motionPreference,
           messageTextSize,
           bubbleStyle,
+          panelStyle,
         );
       },
 
       setThemeMode: (mode) => {
         set({ themeMode: mode, isDark: mode === "dark" || (mode === "system" && getSystemDark()) });
-        const { accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle } = get();
-        applyToDOM(mode, accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle);
+        const { accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle, panelStyle } = get();
+        applyToDOM(mode, accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle, panelStyle);
         syncProfileSnapshot();
       },
 
       setAccentColor: (color) => {
         set({ accentColor: color });
-        const { themeMode, chatDensity, motionPreference, messageTextSize, bubbleStyle } = get();
-        applyToDOM(themeMode, color, chatDensity, motionPreference, messageTextSize, bubbleStyle);
+        const { themeMode, chatDensity, motionPreference, messageTextSize, bubbleStyle, panelStyle } = get();
+        applyToDOM(themeMode, color, chatDensity, motionPreference, messageTextSize, bubbleStyle, panelStyle);
         syncProfileSnapshot();
       },
 
@@ -226,29 +241,36 @@ export const useThemeStore = create<ThemeState>()(
 
       setChatDensity: (density) => {
         set({ chatDensity: density });
-        const { themeMode, accentColor, motionPreference, messageTextSize, bubbleStyle } = get();
-        applyToDOM(themeMode, accentColor, density, motionPreference, messageTextSize, bubbleStyle);
+        const { themeMode, accentColor, motionPreference, messageTextSize, bubbleStyle, panelStyle } = get();
+        applyToDOM(themeMode, accentColor, density, motionPreference, messageTextSize, bubbleStyle, panelStyle);
         syncProfileSnapshot();
       },
 
       setMotionPreference: (preference) => {
         set({ motionPreference: preference });
-        const { themeMode, accentColor, chatDensity, messageTextSize, bubbleStyle } = get();
-        applyToDOM(themeMode, accentColor, chatDensity, preference, messageTextSize, bubbleStyle);
+        const { themeMode, accentColor, chatDensity, messageTextSize, bubbleStyle, panelStyle } = get();
+        applyToDOM(themeMode, accentColor, chatDensity, preference, messageTextSize, bubbleStyle, panelStyle);
         syncProfileSnapshot();
       },
 
       setMessageTextSize: (size) => {
         set({ messageTextSize: size });
-        const { themeMode, accentColor, chatDensity, motionPreference, bubbleStyle } = get();
-        applyToDOM(themeMode, accentColor, chatDensity, motionPreference, size, bubbleStyle);
+        const { themeMode, accentColor, chatDensity, motionPreference, bubbleStyle, panelStyle } = get();
+        applyToDOM(themeMode, accentColor, chatDensity, motionPreference, size, bubbleStyle, panelStyle);
         syncProfileSnapshot();
       },
 
       setBubbleStyle: (style) => {
         set({ bubbleStyle: style });
-        const { themeMode, accentColor, chatDensity, motionPreference, messageTextSize } = get();
-        applyToDOM(themeMode, accentColor, chatDensity, motionPreference, messageTextSize, style);
+        const { themeMode, accentColor, chatDensity, motionPreference, messageTextSize, panelStyle } = get();
+        applyToDOM(themeMode, accentColor, chatDensity, motionPreference, messageTextSize, style, panelStyle);
+        syncProfileSnapshot();
+      },
+
+      setPanelStyle: (style) => {
+        set({ panelStyle: style });
+        const { themeMode, accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle } = get();
+        applyToDOM(themeMode, accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle, style);
         syncProfileSnapshot();
       },
 
@@ -288,6 +310,7 @@ export const useThemeStore = create<ThemeState>()(
           profileAppearance.motionPreference,
           profileAppearance.messageTextSize,
           profileAppearance.bubbleStyle,
+          profileAppearance.panelStyle,
         );
       },
 
@@ -305,6 +328,7 @@ export const useThemeStore = create<ThemeState>()(
           DEFAULT_APPEARANCE.motionPreference,
           DEFAULT_APPEARANCE.messageTextSize,
           DEFAULT_APPEARANCE.bubbleStyle,
+          DEFAULT_APPEARANCE.panelStyle,
         );
         syncProfileSnapshot();
       },
@@ -322,6 +346,25 @@ export const useThemeStore = create<ThemeState>()(
     },
     {
       name: "moji-appearance",
+      version: 3,
+      migrate: (persistedState, version) => {
+        if (!persistedState || typeof persistedState !== "object") {
+          return persistedState as ThemeState;
+        }
+
+        const legacyState = persistedState as Partial<ThemeState>;
+        const nextState: Partial<ThemeState> = { ...legacyState };
+
+        if (version < 2 && (!nextState.bubbleStyle || nextState.bubbleStyle === "modern")) {
+          nextState.bubbleStyle = "ultra-flat";
+        }
+
+        if (version < 3 && !nextState.panelStyle) {
+          nextState.panelStyle = DEFAULT_APPEARANCE.panelStyle;
+        }
+
+        return nextState as ThemeState;
+      },
       onRehydrateStorage: () => (state) => {
         if (state) {
           // Re-apply stored settings after hydration
@@ -331,7 +374,8 @@ export const useThemeStore = create<ThemeState>()(
             state.chatDensity ?? "comfortable",
             state.motionPreference ?? "system",
             state.messageTextSize ?? "md",
-            state.bubbleStyle ?? "modern",
+            state.bubbleStyle ?? DEFAULT_APPEARANCE.bubbleStyle,
+            state.panelStyle ?? DEFAULT_APPEARANCE.panelStyle,
           );
         }
       },
@@ -344,10 +388,25 @@ if (typeof window !== "undefined") {
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", () => {
-      const { themeMode, accentColor } = useThemeStore.getState();
+      const {
+        themeMode,
+        accentColor,
+        chatDensity,
+        motionPreference,
+        messageTextSize,
+        bubbleStyle,
+        panelStyle,
+      } = useThemeStore.getState();
       if (themeMode === "system") {
-        const { chatDensity, motionPreference, messageTextSize, bubbleStyle } = useThemeStore.getState();
-        applyToDOM("system", accentColor, chatDensity, motionPreference, messageTextSize, bubbleStyle);
+        applyToDOM(
+          "system",
+          accentColor,
+          chatDensity,
+          motionPreference,
+          messageTextSize,
+          bubbleStyle,
+          panelStyle,
+        );
       }
     });
 
@@ -361,6 +420,7 @@ if (typeof window !== "undefined") {
         motionPreference,
         messageTextSize,
         bubbleStyle,
+        panelStyle,
       } = useThemeStore.getState();
       if (motionPreference === "system") {
         applyToDOM(
@@ -370,6 +430,7 @@ if (typeof window !== "undefined") {
           "system",
           messageTextSize,
           bubbleStyle,
+          panelStyle,
         );
       }
     });

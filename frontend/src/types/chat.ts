@@ -145,6 +145,8 @@ export interface Reaction {
   emoji: string;
 }
 
+export type MessageDeliveryState = "sending" | "queued" | "failed";
+
 export interface Message {
   _id: string;
   conversationId: string;
@@ -166,12 +168,16 @@ export interface Message {
   isDeleted?: boolean;
   editedAt?: string | null;
   readBy?: string[];
+  hiddenFor?: string[];
   isForwardable?: boolean;
   forwardedFrom?: {
     _id: string;
     displayName: string;
     avatarUrl?: string | null;
   } | null;
+  deliveryState?: MessageDeliveryState;
+  deliveryError?: string | null;
+  deliveryAttemptCount?: number;
 }
 
 export interface ProfileLite {

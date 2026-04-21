@@ -6,6 +6,8 @@ import WorkspaceLoadingSkeleton from "@/components/skeleton/WorkspaceLoadingSkel
 
 const CRM_SSO_SESSION_KEY = "crm_sso_payload";
 
+let authBootstrapInFlight: Promise<void> | null = null;
+
 type AuthPersistApi = {
   hasHydrated: () => boolean;
   onFinishHydration: (listener: () => void) => () => void;
@@ -115,8 +117,10 @@ const ProtectedRoute = () => {
       return Boolean(useAuthStore.getState().accessToken);
     };
 
-    const init = async () => {
-      if (!accessToken) {
+    const runBootstrap = async () => {
+      const initialToken = useAuthStore.getState().accessToken;
+
+      if (!initialToken) {
         await tryDrupalSso();
       }
 
@@ -148,12 +152,20 @@ const ProtectedRoute = () => {
       }
     };
 
-    void init();
+    authBootstrapInFlight ??= runBootstrap().finally(() => {
+      authBootstrapInFlight = null;
+    });
+
+    void authBootstrapInFlight.finally(() => {
+      if (!cancelled) {
+        setStarting(false);
+      }
+    });
 
     return () => {
       cancelled = true;
     };
-  }, [accessToken, fetchMe, hydrated, refresh, setAccessToken]);
+  }, [fetchMe, hydrated, refresh, setAccessToken]);
 
   if (!hydrated || starting) {
     return <WorkspaceLoadingSkeleton />;

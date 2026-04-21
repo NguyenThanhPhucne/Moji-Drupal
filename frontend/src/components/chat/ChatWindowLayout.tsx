@@ -148,7 +148,7 @@ const ChatWindowLayout = () => {
   }
 
   return (
-    <SidebarInset className="app-shell-panel chat-main-shell glass-strong flex h-full min-h-0 flex-1 overflow-hidden shadow-soft md:rounded-2xl md:border md:border-border/80">
+    <SidebarInset className="chat-shell-panel chat-main-shell">
       {/* Header */}
       <div
         key={`chat-header-${selectedConvo._id}`}
@@ -158,14 +158,27 @@ const ChatWindowLayout = () => {
       </div>
 
       {showRealtimeStatusBanner && (
-        <div className="flex items-center justify-between gap-2 border-b border-amber-300/45 bg-amber-100/70 px-3 py-1.5 text-[11px] font-medium text-amber-900/85">
-          <div className="flex min-w-0 items-center gap-2">
-          <WifiOff className="size-3.5" />
-          <span>
-            {isRealtimeReconnecting
-              ? "Reconnecting to live chat. New messages will sync automatically."
-              : "Live chat is offline. We'll sync updates once your connection is back."}
-          </span>
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-between gap-2 border-b border-amber-300/55 bg-[linear-gradient(180deg,hsl(42_96%_89%_/_0.95),hsl(42_92%_84%_/_0.92))] px-2.5 py-2 text-[11px] text-amber-900/90 sm:px-3"
+        >
+          <div className="flex min-w-0 items-start gap-2">
+            <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border border-amber-400/45 bg-amber-50/85">
+              <WifiOff className="size-3.5" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-semibold tracking-[0.01em] text-amber-950">
+                {isRealtimeReconnecting
+                  ? "Reconnecting to live updates"
+                  : "Live updates are paused"}
+              </p>
+              <p className="truncate text-[10.5px] text-amber-900/85">
+                {isRealtimeReconnecting
+                  ? "Messages will sync automatically when the connection is restored."
+                  : "You can retry now or keep chatting while updates sync in the background."}
+              </p>
+            </div>
           </div>
 
           {!isRealtimeReconnecting && (
@@ -173,7 +186,7 @@ const ChatWindowLayout = () => {
               type="button"
               onClick={handleRetryRealtime}
               disabled={retryingRealtime}
-              className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-amber-300/60 bg-amber-50/70 px-2.5 py-1 text-[10.5px] font-semibold text-amber-900 transition-[background-color,color,border-color] hover:bg-amber-200/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/35 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-amber-400/70 bg-amber-50/85 px-2.5 py-1 text-[10.5px] font-semibold text-amber-950 transition-[background-color,color,border-color,box-shadow] hover:border-amber-500/65 hover:bg-amber-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/35 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <RefreshCw className={retryingRealtime ? "size-3 animate-spin" : "size-3"} />
               {retryingRealtime ? "Retrying..." : "Retry"}
@@ -213,6 +226,11 @@ const ChatWindowLayout = () => {
               </option>
             ))}
           </select>
+
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/85 px-2 py-0.5 text-[10px] font-medium text-muted-foreground/75">
+            <span className="font-semibold text-foreground/75">Tip</span>
+            <span>Alt + ↑ / ↓</span>
+          </span>
         </div>
       )}
 

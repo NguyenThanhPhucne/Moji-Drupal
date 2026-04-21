@@ -1,0 +1,50 @@
+{
+  "appBaseUrl": "http://127.0.0.1:5173",
+  "generatedAt": "2026-04-20T11:00:37.504Z",
+  "checks": [
+    {
+      "id": "I18N-EN-BASE",
+      "title": "Render feed in EN locale",
+      "pass": true,
+      "detail": "Home feed visible"
+    },
+    {
+      "id": "I18N-LOCALE-SWITCH",
+      "title": "Switch locale EN -> VI",
+      "pass": true,
+      "detail": "lang=vi"
+    },
+    {
+      "id": "A11Y-ROUTE-ANNOUNCE",
+      "title": "Announce route changes via polite live region",
+      "pass": true,
+      "detail": "Received Vietnamese route announcement"
+    },
+    {
+      "id": "NOTIF-GROUP-PRIORITY",
+      "title": "Notification grouping mode: priority",
+      "pass": true,
+      "detail": "Header Quan trọng rendered"
+    },
+    {
+      "id": "NOTIF-GROUP-TIME",
+      "title": "Notification grouping mode: time",
+      "pass": true,
+      "detail": "Header Mới rendered"
+    },
+    {
+      "id": "NOTIF-TIMESTAMP-MODE",
+      "title": "Notification timestamp mode: relative -> absolute",
+      "pass": true,
+      "detail": "relative=\"2 phút trước\" | absolute=\"17:58 20 thg 4, 2026\""
+    },
+    {
+      "id": "PERSONALIZATION-SYNC-BE",
+      "title": "Sync personalization updates to backend profile endpoint",
+      "pass": true,
+      "detail": "syncCalls=5"
+    }
+  ],
+  "passCount": 7,
+  "failCount": 0
+}

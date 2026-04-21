@@ -6,6 +6,22 @@ import type {
   Message,
 } from "./chat";
 import type { Friend, FriendRequest, User } from "./user";
+import type { AppFeatureFlagKey, AppFeatureFlags } from "@/lib/featureFlags";
+
+export type OutgoingMessageScope = "direct" | "group";
+
+export interface OutgoingMessageQueueItem {
+  tempId: string;
+  scope: OutgoingMessageScope;
+  conversationId: string;
+  recipientId?: string;
+  groupChannelId?: string;
+  content: string;
+  imgUrl?: string;
+  replyTo?: string;
+  queuedAt: string;
+  attemptCount: number;
+}
 
 export interface AuthState {
   accessToken: string | null;
@@ -57,6 +73,8 @@ export interface ChatState {
   messageLoading: boolean;
   loading: boolean;
   replyingTo: Message | null;
+  outgoingQueue: OutgoingMessageQueueItem[];
+  isFlushingOutgoingQueue: boolean;
   reset: () => void;
 
   setReplyingTo: (message: Message | null) => void;
@@ -99,6 +117,11 @@ export interface ChatState {
     conversationId: string,
     messageId: string,
   ) => void;
+  retryMessageDelivery: (
+    conversationId: string,
+    messageId: string,
+  ) => Promise<void>;
+  flushOutgoingQueue: () => Promise<void>;
   removeMessageForMe: (
     conversationId: string,
     messageId: string,
@@ -254,11 +277,13 @@ export interface SocketState {
   onlineUsers: string[];
   recentActiveUsers: Record<string, number>;
   lastActiveByUser: Record<string, number>;
+  featureFlags: AppFeatureFlags;
   isUserOnline: (userId?: string | null) => boolean;
   getUserPresence: (
     userId?: string | null,
   ) => "online" | "recently-active" | "offline";
   getLastActiveAt: (userId?: string | null) => number | null;
+  isFeatureEnabled: (flagKey: AppFeatureFlagKey) => boolean;
   connectSocket: () => void;
   disconnectSocket: () => void;
 }

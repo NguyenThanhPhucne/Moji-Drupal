@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef } from "react";
 import {
+  AlertCircle,
+  Clock3,
   ExternalLink,
   ImagePlus,
+  LoaderCircle,
   Maximize2,
   MessageCircle,
   Minimize2,
   Minus,
   Pin,
   PinOff,
+  RotateCcw,
   SendHorizontal,
   Sparkles,
   X,
@@ -24,6 +28,37 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import MiniChatSkeleton from "@/components/skeleton/MiniChatSkeleton";
 import { cn } from "@/lib/utils";
 
+const MINI_CHAT_KEYBOARD_SHORTCUTS = {
+  focusNext: "Alt+→",
+  focusPrevious: "Alt+←",
+  closeFocused: "Alt+⌫",
+  minimizeAll: "Alt+M",
+} as const;
+
+const isMiniChatShortcut = (event: KeyboardEvent) => {
+  if (!event.altKey) {
+    return null;
+  }
+
+  if (event.key === "ArrowRight") {
+    return "focusNext";
+  }
+
+  if (event.key === "ArrowLeft") {
+    return "focusPrevious";
+  }
+
+  if (event.key === "Backspace") {
+    return "closeFocused";
+  }
+
+  if (event.key === "m" || event.key === "M") {
+    return "minimizeAll";
+  }
+
+  return null;
+};
+
 const formatMessageTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -31,6 +66,22 @@ const formatMessageTime = (value: string) => {
   }
 
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
+const getMiniChatDeliveryLabel = (message: Message) => {
+  if (message.deliveryState === "sending") {
+    return "Sending";
+  }
+
+  if (message.deliveryState === "queued") {
+    return "Queued";
+  }
+
+  if (message.deliveryState === "failed") {
+    return "Failed";
+  }
+
+  return "";
 };
 
 const findDirectConversationId = (
@@ -335,6 +386,7 @@ type MiniChatMessagesProps = {
   poppedOut: boolean;
   poppedHeight: number;
   listRef: React.RefObject<HTMLDivElement | null>;
+  onRetryMessage: (conversationId: string, messageId: string) => void;
 };
 
 const MiniChatMessages = ({
@@ -345,6 +397,7 @@ const MiniChatMessages = ({
   poppedOut,
   poppedHeight,
   listRef,
+  onRetryMessage,
 }: MiniChatMessagesProps) => {
   const containerStyle = poppedOut
     ? { height: `${Math.max(poppedHeight - 150, 240)}px` }
@@ -366,6 +419,12 @@ const MiniChatMessages = ({
         const animateClass = ownMessage
           ? "animate-in fade-in slide-in-from-bottom-1 duration-200"
           : "animate-in fade-in slide-in-from-left-1 duration-200";
+        const deliveryLabel = ownMessage ? getMiniChatDeliveryLabel(messageItem) : "";
+        const canRetry =
+          ownMessage &&
+          Boolean(conversationId) &&
+          String(messageItem._id || "").startsWith("temp-") &&
+          (messageItem.deliveryState === "queued" || messageItem.deliveryState === "failed");
 
         return (
           <article
@@ -382,7 +441,46 @@ const MiniChatMessages = ({
                 />
               ) : null}
             </div>
-            <span className="social-mini-chat-time">{formatMessageTime(messageItem.createdAt)}</span>
+
+            <div className="social-mini-chat-meta-row">
+              <span className="social-mini-chat-time">{formatMessageTime(messageItem.createdAt)}</span>
+
+              {deliveryLabel && (
+                <span
+                  className={cn(
+                    "social-mini-chat-delivery-badge",
+                    messageItem.deliveryState === "sending" &&
+                      "social-mini-chat-delivery-badge--sending",
+                    messageItem.deliveryState === "queued" &&
+                      "social-mini-chat-delivery-badge--queued",
+                    messageItem.deliveryState === "failed" &&
+                      "social-mini-chat-delivery-badge--failed",
+                  )}
+                >
+                  {messageItem.deliveryState === "sending" && (
+                    <LoaderCircle className="h-2.5 w-2.5 animate-spin" />
+                  )}
+                  {messageItem.deliveryState === "queued" && (
+                    <Clock3 className="h-2.5 w-2.5" />
+                  )}
+                  {messageItem.deliveryState === "failed" && (
+                    <AlertCircle className="h-2.5 w-2.5" />
+                  )}
+                  {deliveryLabel}
+                </span>
+              )}
+
+              {canRetry && conversationId ? (
+                <button
+                  type="button"
+                  className="social-mini-chat-retry"
+                  onClick={() => onRetryMessage(conversationId, messageItem._id)}
+                >
+                  <RotateCcw className="h-2.5 w-2.5" />
+                  Retry
+                </button>
+              ) : null}
+            </div>
           </article>
         );
       });
@@ -440,7 +538,7 @@ const MiniChatWindowHeader = ({
   navigate,
 }: MiniChatWindowHeaderProps) => {
   return (
-    <header className={`social-mini-chat-head mini-chat-glass-head ${shouldPulse ? "social-mini-chat-head--pulse" : ""}`}>
+    <header className={`social-mini-chat-head ${shouldPulse ? "social-mini-chat-head--pulse" : ""}`}>
       <button
         type="button"
         className="social-mini-chat-user"
@@ -533,9 +631,11 @@ const MiniChatWindowHeader = ({
 const MiniChatWindow = ({
   userId,
   onReorder,
+  isFocused,
 }: {
   userId: string;
   onReorder: MiniChatDockStoreSnapshot["reorderWindows"];
+  isFocused: boolean;
 }) => {
   const navigate = useNavigate();
   const windowItem = useMiniChatDockStore((state) =>
@@ -557,6 +657,7 @@ const MiniChatWindow = ({
     messages,
     fetchMessages,
     sendDirectMessage,
+    retryMessageDelivery,
     addConvo,
     updateConversation,
     setActiveConversation,
@@ -613,6 +714,10 @@ const MiniChatWindow = ({
     });
   };
 
+  const handleRetryMessage = (targetConversationId: string, messageId: string) => {
+    void retryMessageDelivery(targetConversationId, messageId);
+  };
+
   const shouldPulse = windowItem.pulseUntil > Date.now();
 
   return (
@@ -620,7 +725,8 @@ const MiniChatWindow = ({
       className={cn(
         "social-mini-chat-window mini-chat-bounce-in",
         windowItem.poppedOut ? "social-mini-chat-window--popped" : "",
-        windowItem.minimized && windowItem.unreadCount > 0 ? "mini-chat-flash-unread" : ""
+        windowItem.minimized && windowItem.unreadCount > 0 ? "mini-chat-flash-unread" : "",
+        isFocused ? "social-mini-chat-window--focused" : ""
       )}
       aria-label={`Chat with ${windowItem.displayName}`}
       draggable
@@ -658,6 +764,7 @@ const MiniChatWindow = ({
             poppedOut={windowItem.poppedOut}
             poppedHeight={windowItem.poppedHeight || 500}
             listRef={listRef}
+            onRetryMessage={handleRetryMessage}
           />
 
           <div className="social-mini-chat-input-row">
@@ -742,11 +849,63 @@ const MiniChatWindow = ({
 const SocialMiniChatDock = () => {
   const windows = useMiniChatDockStore((state) => state.windows);
   const minimizeAll = useMiniChatDockStore((state) => state.minimizeAll);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const focusNextWindow = useMiniChatDockStore((state) => state.focusNextWindow);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const focusPreviousWindow = useMiniChatDockStore((state) => state.focusPreviousWindow);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const closeFocusedWindow = useMiniChatDockStore((state) => state.closeFocusedWindow);
   const reorderWindows = useMiniChatDockStore((state) => state.reorderWindows);
+  const focusWindow = useMiniChatDockStore((state) => state.focusWindow);
+  const closeWindow = useMiniChatDockStore((state) => state.closeWindow);
+  const focusedWindowId = useMiniChatDockStore((state) => state.focusedWindowId);
+  const expandedWindows = useMemo(
+    () => windows.filter((windowItem) => !windowItem.minimized),
+    [windows],
+  );
+  const collapsedWindows = useMemo(
+    () => windows.filter((windowItem) => windowItem.minimized),
+    [windows],
+  );
   const totalUnread = useMemo(
     () => windows.reduce((sum, windowItem) => sum + (windowItem.unreadCount || 0), 0),
     [windows],
   );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const shortcut = isMiniChatShortcut(event);
+      if (!shortcut) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      switch (shortcut) {
+        case "focusNext":
+          focusNextWindow();
+          break;
+        case "focusPrevious":
+          focusPreviousWindow();
+          break;
+        case "closeFocused":
+          closeFocusedWindow();
+          break;
+        case "minimizeAll":
+          minimizeAll();
+          break;
+        default:
+          break;
+      }
+    };
+
+    globalThis.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      globalThis.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [focusNextWindow, focusPreviousWindow, closeFocusedWindow, minimizeAll]);
 
   if (!windows.length) {
     return null;
@@ -761,21 +920,76 @@ const SocialMiniChatDock = () => {
           size="sm"
           className="social-mini-chat-overview"
           onClick={minimizeAll}
+          title={`Mini chat shortcuts: ${MINI_CHAT_KEYBOARD_SHORTCUTS.focusNext} (next), ${MINI_CHAT_KEYBOARD_SHORTCUTS.focusPrevious} (previous), ${MINI_CHAT_KEYBOARD_SHORTCUTS.closeFocused} (close), ${MINI_CHAT_KEYBOARD_SHORTCUTS.minimizeAll} (minimize all)`}
         >
           <MessageCircle className="h-4 w-4" />
           Chats ({windows.length})
+          {collapsedWindows.length > 0 ? (
+            <span className="social-mini-chat-overview-meta">
+              {expandedWindows.length} open
+            </span>
+          ) : null}
           {totalUnread > 0 ? (
             <span className="social-mini-chat-overview-unread">{totalUnread}</span>
           ) : null}
         </Button>
       </div>
 
+      {collapsedWindows.length > 0 ? (
+        <div className="social-mini-chat-collapsed-strip" role="tablist" aria-label="Collapsed mini chats">
+          {collapsedWindows.map((windowItem) => {
+            const shouldPulse = windowItem.pulseUntil > Date.now();
+
+            return (
+              <div
+                key={windowItem.userId}
+                className={cn(
+                  "social-mini-chat-collapsed-tab",
+                  shouldPulse && "social-mini-chat-collapsed-tab--pulse",
+                )}
+              >
+                <button
+                  type="button"
+                  className="social-mini-chat-collapsed-main"
+                  onClick={() => focusWindow(windowItem.userId)}
+                >
+                  <UserAvatar
+                    type="chat"
+                    name={windowItem.displayName}
+                    avatarUrl={windowItem.avatarUrl}
+                    className="social-mini-chat-collapsed-avatar"
+                  />
+
+                  <span className="social-mini-chat-collapsed-name">{windowItem.displayName}</span>
+
+                  {windowItem.unreadCount > 0 ? (
+                    <span className="social-mini-chat-collapsed-unread">
+                      {windowItem.unreadCount > 99 ? "99+" : windowItem.unreadCount}
+                    </span>
+                  ) : null}
+                </button>
+
+                <button
+                  type="button"
+                  className="social-mini-chat-collapsed-close"
+                  onClick={() => closeWindow(windowItem.userId)}
+                  aria-label={`Close ${windowItem.displayName} chat`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       <div className="social-mini-chat-dock">
-        {windows.map((windowItem) => (
+        {expandedWindows.map((windowItem) => (
           <MiniChatWindow
             key={windowItem.userId}
             userId={windowItem.userId}
             onReorder={reorderWindows}
+            isFocused={focusedWindowId === windowItem.userId}
           />
         ))}
       </div>

@@ -1,4 +1,5 @@
 import { invalidateCache } from "../libs/redis.js";
+import { withSocketEventMeta } from "./socketEventMeta.js";
 
 const DEFAULT_GROUP_CHANNEL_ID = "general";
 
@@ -117,7 +118,7 @@ export const emitNewMessage = (io, conversation, message) => {
       ? Object.fromEntries(conversation.unreadCounts)
       : conversation.unreadCounts || {};
 
-  io.to(conversation._id.toString()).emit("new-message", {
+  io.to(conversation._id.toString()).emit("new-message", withSocketEventMeta({
     message,
     conversation: {
       _id: conversation._id,
@@ -141,7 +142,12 @@ export const emitNewMessage = (io, conversation, message) => {
         : {}),
     },
     unreadCounts: normalizedUnreadCounts,
-  });
+  }, {
+    eventName: "new-message",
+    conversationId: conversation?._id,
+    entityId: message?._id,
+    scope: conversation?._id,
+  }));
   
   // Fire and forget cache invalidation
   invalidateConversationParticipantsCache(conversation).catch(console.error);

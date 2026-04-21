@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-04-20T03:57:19.405Z",
+  "appBaseUrl": "http://localhost:5173",
+  "outDir": "/Users/phucnguyen/Downloads/open_crm/new/Moji-Drupal/qa-artifacts/mini-chat-viewport-smoke-20260420-rerun3",
+  "totalChecks": 3,
+  "passedChecks": 1,
+  "failedChecks": 2,
+  "checks": [
+    {
+      "viewport": "1280x800",
+      "route": "/feed",
+      "actualPath": "/signin",
+      "windowsCount": 1,
+      "pageShellVisible": false,
+      "screenshotPath": "mini-chat-1280x800.png",
+      "found": false,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 0,
+      "windowHeight": 0,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.social-mini-chat-window').first() to be visible\u001b[22m\n"
+    },
+    {
+      "viewport": "1366x768",
+      "route": "/feed",
+      "actualPath": "/signin",
+      "windowsCount": 1,
+      "pageShellVisible": false,
+      "screenshotPath": "mini-chat-1366x768.png",
+      "found": false,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 0,
+      "windowHeight": 0,
+      "error": "locator.waitFor: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('.social-mini-chat-window').first() to be visible\u001b[22m\n"
+    },
+    {
+      "viewport": "1440x900",
+      "route": "/feed",
+      "actualPath": "/feed",
+      "windowsCount": 1,
+      "pageShellVisible": true,
+      "screenshotPath": "mini-chat-1440x900.png",
+      "found": true,
+      "overflowLeft": false,
+      "overflowRight": false,
+      "windowWidth": 320,
+      "windowHeight": 355.81,
+      "error": "locator.screenshot: Element is not attached to the DOM\nCall log:\n\u001b[2m  - taking element screenshot\u001b[22m\n\u001b[2m  - waiting for fonts to load...\u001b[22m\n\u001b[2m  - fonts loaded\u001b[22m\n\u001b[2m  - attempting scroll into view action\u001b[22m\n\u001b[2m    - waiting for element to be stable\u001b[22m\n"
+    }
+  ]
+}

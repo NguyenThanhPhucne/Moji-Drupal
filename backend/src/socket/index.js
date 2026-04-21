@@ -5,6 +5,7 @@ import { socketAuthMiddleware } from "../middlewares/socketMiddleware.js";
 import { getUserConversationsForSocketIO } from "../controllers/conversationController.js";
 import User from "../models/User.js";
 import Conversation from "../models/Conversation.js";
+import { getSocketScopeCursorSnapshot } from "../utils/socketEventMeta.js";
 
 const app = express();
 
@@ -78,7 +79,80 @@ const TYPING_EMIT_THROTTLE_MS = 300;
 const typingEmitTimelineBySocket = new Map(); // {socketId: Map<conversationId, ts>}
 const MONGO_OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 
+const normalizeRolloutPercent = (rawValue, fallbackPercent) => {
+  const numericValue = Number(rawValue);
+  if (!Number.isFinite(numericValue)) {
+    return fallbackPercent;
+  }
+
+  return Math.max(0, Math.min(100, Math.floor(numericValue)));
+};
+
+const hashToPercentBucket = (value) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) {
+    return 0;
+  }
+
+  let hash = 0;
+  for (let index = 0; index < normalized.length; index += 1) {
+    hash = (hash * 31 + (normalized.codePointAt(index) || 0)) >>> 0;
+  }
+
+  return hash % 100;
+};
+
+const isUserInRolloutBucket = ({ userId, featureKey, rolloutPercent }) => {
+  if (!userId) {
+    return false;
+  }
+
+  if (rolloutPercent >= 100) {
+    return true;
+  }
+
+  if (rolloutPercent <= 0) {
+    return false;
+  }
+
+  const bucket = hashToPercentBucket(`${featureKey}:${userId}`);
+  return bucket < rolloutPercent;
+};
+
+const resolveSocketFeatureFlagsForUser = (userId) => {
+  const rolloutConfig = {
+    realtime_snapshot_delta_resync: normalizeRolloutPercent(
+      process.env.FF_REALTIME_SNAPSHOT_DELTA_PERCENT,
+      35,
+    ),
+    realtime_event_dedupe_ordering: normalizeRolloutPercent(
+      process.env.FF_REALTIME_EVENT_DEDUPE_ORDERING_PERCENT,
+      100,
+    ),
+    keyboard_power_shortcuts: normalizeRolloutPercent(
+      process.env.FF_KEYBOARD_POWER_SHORTCUTS_PERCENT,
+      50,
+    ),
+    notification_priority_center: normalizeRolloutPercent(
+      process.env.FF_NOTIFICATION_PRIORITY_CENTER_PERCENT,
+      50,
+    ),
+  };
+
+  return Object.fromEntries(
+    Object.entries(rolloutConfig).map(([featureKey, rolloutPercent]) => [
+      featureKey,
+      isUserInRolloutBucket({
+        userId,
+        featureKey,
+        rolloutPercent,
+      }),
+    ]),
+  );
+};
+
 const normalizeConversationId = (value) => String(value || "").trim();
+const normalizeScopeHint = (value) => String(value || "").trim();
 
 const ensureSocketConversationAccess = async ({
   socket,
@@ -178,6 +252,10 @@ io.on("connection", async (socket) => {
   // Join user room ngay để không bỏ lỡ các sự kiện private-user ngay sau connect.
   socket.join(userId);
 
+  socket.emit("feature-flags", {
+    flags: resolveSocketFeatureFlagsForUser(userId),
+  });
+
   await broadcastOnlineUsers();
 
   const conversationIds = await getUserConversationsForSocketIO(user._id);
@@ -195,6 +273,77 @@ io.on("connection", async (socket) => {
 
   authorizedConversationIds.forEach((conversationId) => {
     socket.join(conversationId);
+  });
+
+  const buildDefaultScopeHints = () => {
+    const scopeHints = new Set([userId, `user:${userId}`]);
+
+    authorizedConversationIds.forEach((conversationId) => {
+      scopeHints.add(conversationId);
+      scopeHints.add(`conversation:${conversationId}`);
+    });
+
+    return scopeHints;
+  };
+
+  socket.on("realtime-resync-request", (payload, acknowledge) => {
+    try {
+      const requestedScopeHints = Array.isArray(payload?.scopeHints)
+        ? payload.scopeHints
+        : [];
+      const allowedScopeHints = buildDefaultScopeHints();
+
+      requestedScopeHints.forEach((rawScopeHint) => {
+        const normalizedScopeHint = normalizeScopeHint(rawScopeHint);
+        if (!normalizedScopeHint) {
+          return;
+        }
+
+        if (
+          normalizedScopeHint === userId ||
+          normalizedScopeHint === `user:${userId}`
+        ) {
+          allowedScopeHints.add(normalizedScopeHint);
+          return;
+        }
+
+        const normalizedConversationId = normalizedScopeHint.startsWith(
+          "conversation:",
+        )
+          ? normalizeScopeHint(
+              normalizedScopeHint.slice("conversation:".length),
+            )
+          : normalizedScopeHint;
+
+        if (
+          MONGO_OBJECT_ID_PATTERN.test(normalizedConversationId) &&
+          authorizedConversationIds.has(normalizedConversationId)
+        ) {
+          allowedScopeHints.add(normalizedConversationId);
+          allowedScopeHints.add(`conversation:${normalizedConversationId}`);
+        }
+      });
+
+      const responsePayload = {
+        ok: true,
+        generatedAtMs: Date.now(),
+        scopeCursors: getSocketScopeCursorSnapshot({
+          scopes: Array.from(allowedScopeHints),
+        }),
+      };
+
+      if (typeof acknowledge === "function") {
+        acknowledge(responsePayload);
+        return;
+      }
+
+      socket.emit("realtime-resync-snapshot", responsePayload);
+    } catch (error) {
+      console.error("[Socket] realtime-resync-request failed", error);
+      if (typeof acknowledge === "function") {
+        acknowledge({ ok: false, generatedAtMs: Date.now(), scopeCursors: [] });
+      }
+    }
   });
 
   socket.on("join-conversation", async (conversationId) => {

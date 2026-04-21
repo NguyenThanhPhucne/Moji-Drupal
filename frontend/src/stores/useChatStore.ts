@@ -1,12 +1,18 @@
 import { chatService } from "@/services/chatService";
-import type { Conversation } from "@/types/chat";
-import type { ChatState } from "@/types/store";
+import type { Conversation, Message, ConversationResponse } from "@/types/chat";
+import type { ChatState, OutgoingMessageQueueItem } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
 import { toast } from "sonner";
 import { handleRateLimitError } from "@/lib/rateLimitFeedback";
+import {
+  clearRealtimeScopedCaches,
+  getCachedConversationList,
+  setCachedConversationList,
+  getPersistedConversationMeta,
+} from "@/lib/scopedCache";
 
 const buildTempDirectConversationId = (recipientId: string) => {
   return `temp-direct-${String(recipientId)}`;
@@ -15,6 +21,279 @@ const buildTempDirectConversationId = (recipientId: string) => {
 const UNDO_SEND_WINDOW_SECONDS = 7;
 const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
 const DEFAULT_GROUP_CHANNEL_ID = "general";
+const MAX_OUTGOING_QUEUE_ITEMS = 120;
+
+const syncConversationListCacheForCurrentUser = () => {
+  const currentUserId = String(useAuthStore.getState().user?._id || "").trim();
+  if (!currentUserId) {
+    return;
+  }
+
+  setCachedConversationList(currentUserId, useChatStore.getState().conversations);
+};
+
+const buildTempMessageId = () => {
+  return `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const toSafeScalarString = (value: unknown) => {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+  ) {
+    return String(value);
+  }
+
+  return "";
+};
+
+const isNavigatorOffline = () => {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return navigator.onLine === false;
+};
+
+const extractErrorCode = (error: unknown) => {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+  ) {
+    return (error as { code?: string }).code || "";
+  }
+
+  return "";
+};
+
+const isLikelyOfflineError = (error: unknown) => {
+  if (isNavigatorOffline()) {
+    return true;
+  }
+
+  const code = extractErrorCode(error);
+  if (code === "ERR_NETWORK") {
+    return true;
+  }
+
+  const message = [
+    extractApiErrorMessage(error),
+    typeof error === "object" && error !== null && "message" in error
+      ? toSafeScalarString((error as { message?: unknown }).message)
+      : "",
+  ]
+    .join(" ")
+    .trim();
+
+  return /(network error|offline|failed to fetch|network request failed|ecconn|enotfound)/i.test(
+    message,
+  );
+};
+
+const resolveDeliveryErrorMessage = (error: unknown) => {
+  return extractApiErrorMessage(error) || "Failed to send. Tap retry.";
+};
+
+const isTempMessageId = (value: unknown) => {
+  return typeof value === "string" && value.startsWith("temp-");
+};
+
+const upsertOutgoingQueueItem = (
+  queue: OutgoingMessageQueueItem[],
+  nextItem: OutgoingMessageQueueItem,
+) => {
+  const withoutCurrent = queue.filter((item) => item.tempId !== nextItem.tempId);
+  return [...withoutCurrent, nextItem].slice(-MAX_OUTGOING_QUEUE_ITEMS);
+};
+
+const removeOutgoingQueueItem = (
+  queue: OutgoingMessageQueueItem[],
+  tempId: string,
+) => {
+  return queue.filter((item) => item.tempId !== tempId);
+};
+
+const enqueueDirectOutgoingMessage = ({
+  set,
+  tempId,
+  conversationId,
+  recipientId,
+  content,
+  imgUrl,
+  replyTo,
+  queuedAt,
+  attemptCount,
+}: {
+  set: typeof useChatStore.setState;
+  tempId: string;
+  conversationId: string;
+  recipientId: string;
+  content: string;
+  imgUrl?: string;
+  replyTo?: string;
+  queuedAt: string;
+  attemptCount: number;
+}) => {
+  set((state) => ({
+    outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
+      tempId,
+      scope: "direct",
+      conversationId,
+      recipientId,
+      content,
+      imgUrl,
+      replyTo,
+      queuedAt,
+      attemptCount,
+    }),
+  }));
+};
+
+const finalizeDirectSendSuccess = ({
+  set,
+  get,
+  deliveredMessage,
+  tempId,
+  optimisticConversationId,
+  conversationIdOverride,
+  activeConversationId,
+  createdTempConversation,
+}: {
+  set: typeof useChatStore.setState;
+  get: typeof useChatStore.getState;
+  deliveredMessage: Message;
+  tempId: string;
+  optimisticConversationId: string;
+  conversationIdOverride?: string;
+  activeConversationId: string | null;
+  createdTempConversation: boolean;
+}) => {
+  unregisterPendingOwnTempMessage({
+    conversationId: optimisticConversationId,
+    tempId,
+  });
+
+  set((state) => ({
+    outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
+  }));
+
+  get().removeMessageFromConversation(optimisticConversationId, tempId);
+
+  const realConvoId = String(
+    deliveredMessage.conversationId || conversationIdOverride || activeConversationId || "",
+  ).trim();
+
+  if (realConvoId && optimisticConversationId !== realConvoId) {
+    pruneTempConversationState({
+      optimisticConversationId,
+      fallbackActiveConversationId: realConvoId,
+      setState: set,
+    });
+  }
+
+  get().addMessage(deliveredMessage);
+
+  if (realConvoId) {
+    set((state) => ({
+      conversations: state.conversations.map((conversationItem) =>
+        conversationItem._id === realConvoId
+          ? { ...conversationItem, seenBy: [] }
+          : conversationItem,
+      ),
+    }));
+  }
+
+  if (createdTempConversation) {
+    get().fetchConversations().catch((error) => {
+      console.error("Error refreshing conversations", error);
+    });
+  }
+
+  const undoConversationId = String(
+    realConvoId || deliveredMessage.conversationId || optimisticConversationId,
+  ).trim();
+  const undoMessageId = String(deliveredMessage._id || "").trim();
+
+  showUndoSendToast({
+    conversationId: undoConversationId,
+    messageId: undoMessageId,
+    onUndo: () => {
+      void get()
+        .unsendMessage(undoConversationId, undoMessageId, "undo")
+        .catch((undoError) => {
+          console.error("Undo send failed", undoError);
+        });
+    },
+  });
+};
+
+const applyDirectSendFailure = ({
+  set,
+  get,
+  error,
+  tempId,
+  optimisticConversationId,
+  optimisticMessage,
+  recipientId,
+  content,
+  imgUrl,
+  replyTo,
+  queuedAt,
+}: {
+  set: typeof useChatStore.setState;
+  get: typeof useChatStore.getState;
+  error: unknown;
+  tempId: string;
+  optimisticConversationId: string;
+  optimisticMessage: Message;
+  recipientId: string;
+  content: string;
+  imgUrl?: string;
+  replyTo?: string;
+  queuedAt: string;
+}) => {
+  const offlineFailure = isLikelyOfflineError(error);
+  const nextAttemptCount = Number(optimisticMessage.deliveryAttemptCount || 0) + 1;
+
+  get().updateMessage(optimisticConversationId, tempId, {
+    deliveryState: offlineFailure ? "queued" : "failed",
+    deliveryError: offlineFailure ? null : resolveDeliveryErrorMessage(error),
+    deliveryAttemptCount: nextAttemptCount,
+  });
+
+  if (offlineFailure) {
+    enqueueDirectOutgoingMessage({
+      set,
+      tempId,
+      conversationId: optimisticConversationId,
+      recipientId: String(recipientId || "").trim(),
+      content: String(content || ""),
+      imgUrl,
+      replyTo,
+      queuedAt,
+      attemptCount: nextAttemptCount,
+    });
+    toast.info("Connection lost. Message moved to queue.");
+  } else {
+    set((state) => ({
+      outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
+    }));
+
+    const rateLimit = handleRateLimitError(error, {
+      fallbackScope: "message:direct",
+      actionLabel: "Sending messages too fast",
+    });
+    if (!rateLimit.handled) {
+      toast.error(resolveDeliveryErrorMessage(error));
+    }
+  }
+
+  set({ replyingTo: null });
+};
 
 const normalizeGroupChannelId = (channelId?: string | null) => {
   const normalized = String(channelId || "")
@@ -52,6 +331,45 @@ const resolveConversationActiveGroupChannelId = (
 
 const resolveMessageGroupChannelId = (message: { groupChannelId?: string | null }) => {
   return normalizeGroupChannelId(message.groupChannelId);
+};
+
+const resolveDirectRecipientId = ({
+  conversations,
+  conversationId,
+  fallbackRecipientId,
+  currentUserId,
+}: {
+  conversations: Conversation[];
+  conversationId: string;
+  fallbackRecipientId?: string;
+  currentUserId: string;
+}) => {
+  const normalizedFallback = String(fallbackRecipientId || "").trim();
+  if (normalizedFallback) {
+    return normalizedFallback;
+  }
+
+  const normalizedConversationId = String(conversationId || "").trim();
+  if (!normalizedConversationId) {
+    return "";
+  }
+
+  if (normalizedConversationId.startsWith("temp-direct-")) {
+    return normalizedConversationId.replace("temp-direct-", "");
+  }
+
+  const conversation = conversations.find(
+    (conversationItem) => String(conversationItem._id) === normalizedConversationId,
+  );
+  if (!conversation) {
+    return "";
+  }
+
+  const recipient = conversation.participants.find(
+    (participant) => String(participant._id) !== String(currentUserId),
+  );
+
+  return String(recipient?._id || "").trim();
 };
 
 const extractApiErrorMessage = (error: unknown) => {
@@ -272,38 +590,6 @@ const pruneTempConversationState = ({
   });
 };
 
-const rollbackOptimisticDirectSend = ({
-  optimisticConversationId,
-  tempId,
-  createdTempConversation,
-  removeMessageFromConversation,
-  setState,
-}: {
-  optimisticConversationId: string | null;
-  tempId: string;
-  createdTempConversation: boolean;
-  removeMessageFromConversation: (conversationId: string, messageId: string) => void;
-  setState: typeof useChatStore.setState;
-}) => {
-  if (!optimisticConversationId) {
-    return;
-  }
-
-  unregisterPendingOwnTempMessage({
-    conversationId: optimisticConversationId,
-    tempId,
-  });
-  removeMessageFromConversation(optimisticConversationId, tempId);
-
-  if (createdTempConversation) {
-    pruneTempConversationState({
-      optimisticConversationId,
-      fallbackActiveConversationId: null,
-      setState,
-    });
-  }
-};
-
 const toTimestamp = (value?: string) => {
   const ts = value ? new Date(value).getTime() : 0;
   return Number.isFinite(ts) ? ts : 0;
@@ -479,6 +765,38 @@ const sortMessagesChronologically = <
 const messageMutationVersions = new Map<string, number>();
 const messageMutationLocks = new Set<string>();
 
+type ChatStoreDebugGlobal = typeof globalThis & {
+  __MOJI_CHAT_DEBUG__?: boolean;
+};
+
+const isChatStoreMutationDebugEnabled = () => {
+  if (!import.meta.env.DEV) {
+    return false;
+  }
+
+  if (globalThis.window === undefined) {
+    return false;
+  }
+
+  return (globalThis as ChatStoreDebugGlobal).__MOJI_CHAT_DEBUG__ === true;
+};
+
+export const __chatStoreMutationDebug = {
+  snapshot: () => {
+    if (!isChatStoreMutationDebugEnabled()) {
+      return {
+        locks: [],
+        versions: {},
+      };
+    }
+
+    return {
+      locks: Array.from(messageMutationLocks),
+      versions: Object.fromEntries(messageMutationVersions.entries()),
+    };
+  },
+};
+
 const acquireMessageMutationLock = (mutationKey: string) => {
   if (messageMutationLocks.has(mutationKey)) {
     return false;
@@ -518,6 +836,8 @@ export const useChatStore = create<ChatState>()(
       messageLoading: false,
       loading: false,
       replyingTo: null,
+      outgoingQueue: [],
+      isFlushingOutgoingQueue: false,
 
       setReplyingTo: (message) => set({ replyingTo: message }),
       setActiveConversation: (id) => {
@@ -574,21 +894,78 @@ export const useChatStore = create<ChatState>()(
           });
       },
       reset: () => {
+        pendingOwnTempMessagesByConversation.clear();
+        clearRealtimeScopedCaches();
+
         set({
           conversations: [],
           messages: {},
           activeConversationId: null,
           convoLoading: false,
           messageLoading: false,
+          loading: false,
           replyingTo: null,
+          outgoingQueue: [],
+          isFlushingOutgoingQueue: false,
         });
       },
       fetchConversations: async () => {
+        const currentUserId = String(useAuthStore.getState().user?._id || "").trim();
+        const cachedConversations = currentUserId
+          ? getCachedConversationList(currentUserId)
+          : null;
+
+        if (cachedConversations) {
+          set({ conversations: cachedConversations, convoLoading: false });
+
+          // background revalidation using persisted meta
+          (async () => {
+            try {
+              const persistedMeta = currentUserId ? getPersistedConversationMeta(currentUserId) : null;
+              const res = await chatService.fetchConversations({
+                ifNoneMatch: persistedMeta?.etag || null,
+                ifModifiedSince: persistedMeta?.lastModified || null,
+              });
+
+              if ((res as any).notModified) {
+                // nothing to do
+                return;
+              }
+
+              const payload = res as ConversationResponse & { _etag?: string | null; _lastModified?: string | null };
+              if (payload?.conversations) {
+                set({ conversations: payload.conversations });
+                if (currentUserId) {
+                  setCachedConversationList(currentUserId, payload.conversations, {
+                    etag: (payload as any)._etag || null,
+                    lastModified: (payload as any)._lastModified || null,
+                  });
+                }
+              }
+            } catch (err) {
+              // background revalidation failures are non-fatal
+              console.debug("Background conversation revalidation failed:", err);
+            }
+          })();
+
+          return;
+        }
+
         set({ convoLoading: true });
 
         try {
-          const { conversations } = await chatService.fetchConversations();
+          const res = await chatService.fetchConversations();
+          const conversations = (res as ConversationResponse).conversations;
           set({ conversations });
+
+          if (currentUserId) {
+            const meta = (res as any)?._etag || null;
+            const lastMod = (res as any)?._lastModified || null;
+            setCachedConversationList(currentUserId, conversations, {
+              etag: meta,
+              lastModified: lastMod,
+            });
+          }
           return;
         } catch (error) {
           const status =
@@ -605,6 +982,10 @@ export const useChatStore = create<ChatState>()(
               const { conversations } =
                 await chatService.fetchConversationsWithCookieSession();
               set({ conversations });
+
+              if (currentUserId) {
+                setCachedConversationList(currentUserId, conversations);
+              }
               return;
             } catch (cookieSessionError) {
               console.error(
@@ -693,6 +1074,7 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
+      // NOSONAR
       sendDirectMessage: async (
         recipientId,
         content,
@@ -731,15 +1113,25 @@ export const useChatStore = create<ChatState>()(
           setState: set,
         });
 
+        const normalizedOptimisticConversationId = String(
+          optimisticConversationId || "",
+        ).trim();
+        if (!normalizedOptimisticConversationId) {
+          return;
+        }
+
         // Build an optimistic message to show immediately
-        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const optimisticMessage = {
+        const tempId = buildTempMessageId();
+        const shouldQueueImmediately = isNavigatorOffline();
+        const optimisticMessage: Message = {
           _id: tempId,
-          conversationId: optimisticConversationId ?? "",
+          conversationId: normalizedOptimisticConversationId,
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
-          replyTo: replyTo ? { _id: replyTo } : null,
+          replyTo: replyTo
+            ? { _id: replyTo, content: "", senderId: "" }
+            : null,
           reactions: [],
           isDeleted: false,
           editedAt: null,
@@ -748,22 +1140,38 @@ export const useChatStore = create<ChatState>()(
           createdAt: nowIso,
           updatedAt: nowIso,
           isOwn: true,
+          deliveryState: shouldQueueImmediately ? "queued" : "sending",
+          deliveryError: null,
+          deliveryAttemptCount: shouldQueueImmediately ? 0 : 1,
         };
 
-        if (optimisticConversationId) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          get().addMessage(optimisticMessage as any);
-          registerPendingOwnTempMessage({
-            conversationId: optimisticConversationId,
+        get().addMessage(optimisticMessage);
+        registerPendingOwnTempMessage({
+          conversationId: normalizedOptimisticConversationId,
+          tempId,
+          content: optimisticMessage.content,
+          replyToId: resolveReplyToId(optimisticMessage.replyTo),
+          hasImage: Boolean(optimisticMessage.imgUrl),
+        });
+
+        if (shouldQueueImmediately) {
+          enqueueDirectOutgoingMessage({
+            set,
             tempId,
-            content: optimisticMessage.content,
-            replyToId: resolveReplyToId(optimisticMessage.replyTo),
-            hasImage: Boolean(optimisticMessage.imgUrl),
+            conversationId: normalizedOptimisticConversationId,
+            recipientId: String(recipientId || "").trim(),
+            content: String(content || ""),
+            imgUrl: imgUrl || undefined,
+            replyTo: String(replyTo || "").trim() || undefined,
+            queuedAt: nowIso,
+            attemptCount: 0,
           });
+          toast.info("You're offline. Message queued.");
+          return;
         }
 
         try {
-          const message = await chatService.sendDirectMessage(
+          const deliveredMessage = await chatService.sendDirectMessage(
             recipientId,
             content,
             imgUrl,
@@ -771,80 +1179,30 @@ export const useChatStore = create<ChatState>()(
             replyTo,
           );
 
-          // Replace temp message with real one from server
-          if (optimisticConversationId) {
-            unregisterPendingOwnTempMessage({
-              conversationId: optimisticConversationId,
-              tempId,
-            });
-            get().removeMessageFromConversation(optimisticConversationId, tempId);
-          }
-
-          const realConvoId =
-            conversationIdOverride ?? message.conversationId ?? activeConversationId;
-
-          if (
-            optimisticConversationId &&
-            realConvoId &&
-            optimisticConversationId !== realConvoId
-          ) {
-            pruneTempConversationState({
-              optimisticConversationId,
-              fallbackActiveConversationId: realConvoId,
-              setState: set,
-            });
-          }
-
-          get().addMessage(message);
-
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c._id === realConvoId ? { ...c, seenBy: [] } : c,
-            ),
-          }));
-
-          if (createdTempConversation) {
-            get().fetchConversations().catch((error) => {
-              console.error("Error refreshing conversations", error);
-            });
-          }
-
-          const undoConversationId = String(
-            realConvoId || message.conversationId || "",
-          ).trim();
-          const undoMessageId = String(message._id || "").trim();
-
-          showUndoSendToast({
-            conversationId: undoConversationId,
-            messageId: undoMessageId,
-            onUndo: () => {
-              void get()
-                .unsendMessage(undoConversationId, undoMessageId, "undo")
-                .catch((undoError) => {
-                  console.error("Undo send failed", undoError);
-                });
-            },
+          finalizeDirectSendSuccess({
+            set,
+            get,
+            deliveredMessage,
+            tempId,
+            optimisticConversationId: normalizedOptimisticConversationId,
+            conversationIdOverride,
+            activeConversationId,
+            createdTempConversation,
           });
         } catch (error) {
-          // Rollback: remove optimistic artifacts for direct send failures.
-          rollbackOptimisticDirectSend({
-            optimisticConversationId,
+          applyDirectSendFailure({
+            set,
+            get,
+            error,
             tempId,
-            createdTempConversation,
-            removeMessageFromConversation: get().removeMessageFromConversation,
-            setState: set,
+            optimisticConversationId: normalizedOptimisticConversationId,
+            optimisticMessage,
+            recipientId,
+            content: String(content || ""),
+            imgUrl: imgUrl || undefined,
+            replyTo: String(replyTo || "").trim() || undefined,
+            queuedAt: nowIso,
           });
-
-          // Reset reply context so user doesn't get stuck with stale reply preview
-          set({ replyingTo: null });
-
-          const rateLimit = handleRateLimitError(error, {
-            fallbackScope: "message:direct",
-            actionLabel: "Sending messages too fast",
-          });
-          if (!rateLimit.handled) {
-            toast.error("Failed to send message. Please try again.");
-          }
 
           console.error("Error sending direct message", error);
         }
@@ -864,29 +1222,35 @@ export const useChatStore = create<ChatState>()(
           groupChannelId ||
           resolveConversationActiveGroupChannelId(conversation) ||
           DEFAULT_GROUP_CHANNEL_ID;
+        const nowIso = new Date().toISOString();
+        const shouldQueueImmediately = isNavigatorOffline();
 
         // Optimistic message
-        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        const optimisticMessage = {
+        const tempId = buildTempMessageId();
+        const optimisticMessage: Message = {
           _id: tempId,
           conversationId,
           groupChannelId: effectiveGroupChannelId,
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
-          replyTo: replyTo ? { _id: replyTo } : null,
+          replyTo: replyTo
+            ? { _id: replyTo, content: "", senderId: "" }
+            : null,
           reactions: [],
           isDeleted: false,
           editedAt: null,
           readBy: [],
           hiddenFor: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: nowIso,
+          updatedAt: nowIso,
           isOwn: true,
+          deliveryState: shouldQueueImmediately ? "queued" : "sending",
+          deliveryError: null,
+          deliveryAttemptCount: shouldQueueImmediately ? 0 : 1,
         };
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        get().addMessage(optimisticMessage as any);
+        get().addMessage(optimisticMessage);
         registerPendingOwnTempMessage({
           conversationId,
           tempId,
@@ -894,6 +1258,24 @@ export const useChatStore = create<ChatState>()(
           replyToId: resolveReplyToId(optimisticMessage.replyTo),
           hasImage: Boolean(optimisticMessage.imgUrl),
         });
+
+        if (shouldQueueImmediately) {
+          set((state) => ({
+            outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
+              tempId,
+              scope: "group",
+              conversationId,
+              groupChannelId: effectiveGroupChannelId,
+              content: String(content || ""),
+              imgUrl: imgUrl || undefined,
+              replyTo: String(replyTo || "").trim() || undefined,
+              queuedAt: nowIso,
+              attemptCount: 0,
+            }),
+          }));
+          toast.info("You're offline. Message queued.");
+          return;
+        }
 
         try {
           const { addMessage } = get();
@@ -910,6 +1292,9 @@ export const useChatStore = create<ChatState>()(
             conversationId,
             tempId,
           });
+          set((state) => ({
+            outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
+          }));
           get().removeMessageFromConversation(conversationId, tempId);
           addMessage(message);
 
@@ -932,22 +1317,47 @@ export const useChatStore = create<ChatState>()(
             },
           });
         } catch (error) {
-          // Rollback
-          unregisterPendingOwnTempMessage({
-            conversationId,
-            tempId,
+          const offlineFailure = isLikelyOfflineError(error);
+          const nextAttemptCount =
+            Number(optimisticMessage.deliveryAttemptCount || 0) + 1;
+
+          get().updateMessage(conversationId, tempId, {
+            deliveryState: offlineFailure ? "queued" : "failed",
+            deliveryError: offlineFailure ? null : resolveDeliveryErrorMessage(error),
+            deliveryAttemptCount: nextAttemptCount,
           });
-          get().removeMessageFromConversation(conversationId, tempId);
+
+          if (offlineFailure) {
+            set((state) => ({
+              outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
+                tempId,
+                scope: "group",
+                conversationId,
+                groupChannelId: effectiveGroupChannelId,
+                content: String(content || ""),
+                imgUrl: imgUrl || undefined,
+                replyTo: String(replyTo || "").trim() || undefined,
+                queuedAt: nowIso,
+                attemptCount: nextAttemptCount,
+              }),
+            }));
+            toast.info("Connection lost. Message moved to queue.");
+          } else {
+            set((state) => ({
+              outgoingQueue: removeOutgoingQueueItem(state.outgoingQueue, tempId),
+            }));
+
+            const rateLimit = handleRateLimitError(error, {
+              fallbackScope: "message:group",
+              actionLabel: "Sending messages too fast",
+            });
+            if (!rateLimit.handled) {
+              toast.error(resolveDeliveryErrorMessage(error));
+            }
+          }
+
           // Reset reply context so user doesn't get stuck with stale reply preview
           set({ replyingTo: null });
-
-          const rateLimit = handleRateLimitError(error, {
-            fallbackScope: "message:group",
-            actionLabel: "Sending messages too fast",
-          });
-          if (!rateLimit.handled) {
-            toast.error("Failed to send message. Please try again.");
-          }
 
           console.error("Error sending group message", error);
         }
@@ -976,10 +1386,12 @@ export const useChatStore = create<ChatState>()(
               return state;
             }
 
+            let matchedTempId: string | null = null;
+
             // Defend against Socket/API race condition where socket broadcasts the real message
             // before our local API call resolves and tears down the optimistic (temp-) message.
             if (message.isOwn && !String(message._id).startsWith("temp-")) {
-              const matchedTempId = consumeMatchingPendingOwnTempMessage({
+              matchedTempId = consumeMatchingPendingOwnTempMessage({
                 conversationId: convoId,
                 content: String(message.content || ""),
                 replyToId: resolveReplyToId(message.replyTo),
@@ -1010,6 +1422,9 @@ export const useChatStore = create<ChatState>()(
                   nextCursor: state.messages[convoId]?.nextCursor ?? undefined,
                 },
               },
+              outgoingQueue: matchedTempId
+                ? removeOutgoingQueueItem(state.outgoingQueue, matchedTempId)
+                : state.outgoingQueue,
             };
           });
         } catch (error) {
@@ -1049,6 +1464,306 @@ export const useChatStore = create<ChatState>()(
             },
           };
         });
+      },
+      retryMessageDelivery: async (conversationId, messageId) => { // NOSONAR
+        const normalizedConversationId = String(conversationId || "").trim();
+        const normalizedMessageId = String(messageId || "").trim();
+
+        if (
+          !normalizedConversationId ||
+          !normalizedMessageId ||
+          !isTempMessageId(normalizedMessageId)
+        ) {
+          return;
+        }
+
+        const stateSnapshot = get();
+        const queuedItem = stateSnapshot.outgoingQueue.find(
+          (item) => item.tempId === normalizedMessageId,
+        );
+        const queuedConversationId = String(
+          queuedItem?.conversationId || normalizedConversationId,
+        ).trim();
+        const effectiveConversationId = queuedConversationId || normalizedConversationId;
+
+        const messageBucket =
+          stateSnapshot.messages[effectiveConversationId]?.items ||
+          stateSnapshot.messages[normalizedConversationId]?.items ||
+          [];
+        const pendingMessage = messageBucket.find(
+          (messageItem) => String(messageItem._id) === normalizedMessageId,
+        );
+
+        if (!pendingMessage) {
+          set((state) => ({
+            outgoingQueue: removeOutgoingQueueItem(
+              state.outgoingQueue,
+              normalizedMessageId,
+            ),
+          }));
+          return;
+        }
+
+        const user = useAuthStore.getState().user;
+        const currentUserId = String(user?._id || "").trim();
+        const conversation = stateSnapshot.conversations.find(
+          (conversationItem) =>
+            String(conversationItem._id) === String(effectiveConversationId),
+        );
+
+        const inferredScope: OutgoingMessageQueueItem["scope"] =
+          conversation?.type === "group" ? "group" : "direct";
+        const scope = queuedItem?.scope || inferredScope;
+
+        const payloadContent = String(
+          pendingMessage.content ?? queuedItem?.content ?? "",
+        );
+        const payloadImgUrl = pendingMessage.imgUrl || queuedItem?.imgUrl || undefined;
+        const payloadReplyTo =
+          resolveReplyToId(pendingMessage.replyTo) || queuedItem?.replyTo || "";
+        const nextAttemptCount =
+          Number(
+            pendingMessage.deliveryAttemptCount || queuedItem?.attemptCount || 0,
+          ) + 1;
+        const nowIso = new Date().toISOString();
+
+        if (!payloadContent.trim() && !payloadImgUrl) {
+          get().updateMessage(effectiveConversationId, normalizedMessageId, {
+            deliveryState: "failed",
+            deliveryError: "Message content is empty.",
+            deliveryAttemptCount: nextAttemptCount,
+          });
+          set((state) => ({
+            outgoingQueue: removeOutgoingQueueItem(
+              state.outgoingQueue,
+              normalizedMessageId,
+            ),
+          }));
+          return;
+        }
+
+        const recipientId =
+          scope === "direct"
+            ? resolveDirectRecipientId({
+                conversations: stateSnapshot.conversations,
+                conversationId: effectiveConversationId,
+                fallbackRecipientId: queuedItem?.recipientId,
+                currentUserId,
+              })
+            : "";
+
+        const targetGroupChannelId =
+          scope === "group"
+            ? normalizeGroupChannelId(
+                queuedItem?.groupChannelId || pendingMessage.groupChannelId,
+              )
+            : null;
+
+        if (scope === "direct" && !recipientId) {
+          get().updateMessage(effectiveConversationId, normalizedMessageId, {
+            deliveryState: "failed",
+            deliveryError: "Recipient is no longer available.",
+            deliveryAttemptCount: nextAttemptCount,
+          });
+          set((state) => ({
+            outgoingQueue: removeOutgoingQueueItem(
+              state.outgoingQueue,
+              normalizedMessageId,
+            ),
+          }));
+          return;
+        }
+
+        if (isNavigatorOffline()) {
+          get().updateMessage(effectiveConversationId, normalizedMessageId, {
+            deliveryState: "queued",
+            deliveryError: null,
+            deliveryAttemptCount: nextAttemptCount,
+          });
+          set((state) => ({
+            outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
+              tempId: normalizedMessageId,
+              scope,
+              conversationId: effectiveConversationId,
+              recipientId: scope === "direct" ? recipientId : undefined,
+              groupChannelId: scope === "group" ? targetGroupChannelId || undefined : undefined,
+              content: payloadContent,
+              imgUrl: payloadImgUrl,
+              replyTo: payloadReplyTo || undefined,
+              queuedAt: nowIso,
+              attemptCount: nextAttemptCount,
+            }),
+          }));
+          return;
+        }
+
+        registerPendingOwnTempMessage({
+          conversationId: effectiveConversationId,
+          tempId: normalizedMessageId,
+          content: payloadContent,
+          replyToId: payloadReplyTo,
+          hasImage: Boolean(payloadImgUrl),
+        });
+
+        get().updateMessage(effectiveConversationId, normalizedMessageId, {
+          deliveryState: "sending",
+          deliveryError: null,
+          deliveryAttemptCount: nextAttemptCount,
+        });
+
+        set((state) => ({
+          outgoingQueue: removeOutgoingQueueItem(
+            state.outgoingQueue,
+            normalizedMessageId,
+          ),
+        }));
+
+        try {
+          if (scope === "direct") {
+            const resolvedConversationId = isPersistedConversationId(
+              effectiveConversationId,
+            )
+              ? effectiveConversationId
+              : undefined;
+
+            const deliveredMessage = await chatService.sendDirectMessage(
+              recipientId,
+              payloadContent,
+              payloadImgUrl,
+              resolvedConversationId,
+              payloadReplyTo || undefined,
+            );
+
+            unregisterPendingOwnTempMessage({
+              conversationId: effectiveConversationId,
+              tempId: normalizedMessageId,
+            });
+            get().removeMessageFromConversation(
+              effectiveConversationId,
+              normalizedMessageId,
+            );
+
+            const realConvoId = String(
+              deliveredMessage.conversationId || effectiveConversationId,
+            ).trim();
+
+            if (realConvoId && realConvoId !== effectiveConversationId) {
+              pruneTempConversationState({
+                optimisticConversationId: effectiveConversationId,
+                fallbackActiveConversationId: realConvoId,
+                setState: set,
+              });
+            }
+
+            get().addMessage(deliveredMessage);
+
+            if (realConvoId) {
+              set((state) => ({
+                conversations: state.conversations.map((conversationItem) =>
+                  conversationItem._id === realConvoId
+                    ? { ...conversationItem, seenBy: [] }
+                    : conversationItem,
+                ),
+              }));
+            }
+          } else {
+            const deliveredMessage = await chatService.sendGroupMessage(
+              effectiveConversationId,
+              payloadContent,
+              payloadImgUrl,
+              payloadReplyTo || undefined,
+              targetGroupChannelId || undefined,
+            );
+
+            unregisterPendingOwnTempMessage({
+              conversationId: effectiveConversationId,
+              tempId: normalizedMessageId,
+            });
+            get().removeMessageFromConversation(
+              effectiveConversationId,
+              normalizedMessageId,
+            );
+            get().addMessage(deliveredMessage);
+
+            set((state) => ({
+              conversations: state.conversations.map((conversationItem) =>
+                conversationItem._id === effectiveConversationId
+                  ? { ...conversationItem, seenBy: [] }
+                  : conversationItem,
+              ),
+            }));
+          }
+        } catch (error) {
+          const offlineFailure = isLikelyOfflineError(error);
+
+          get().updateMessage(effectiveConversationId, normalizedMessageId, {
+            deliveryState: offlineFailure ? "queued" : "failed",
+            deliveryError: offlineFailure ? null : resolveDeliveryErrorMessage(error),
+            deliveryAttemptCount: nextAttemptCount,
+          });
+
+          if (offlineFailure) {
+            set((state) => ({
+              outgoingQueue: upsertOutgoingQueueItem(state.outgoingQueue, {
+                tempId: normalizedMessageId,
+                scope,
+                conversationId: effectiveConversationId,
+                recipientId: scope === "direct" ? recipientId : undefined,
+                groupChannelId:
+                  scope === "group" ? targetGroupChannelId || undefined : undefined,
+                content: payloadContent,
+                imgUrl: payloadImgUrl,
+                replyTo: payloadReplyTo || undefined,
+                queuedAt: nowIso,
+                attemptCount: nextAttemptCount,
+              }),
+            }));
+            return;
+          }
+
+          const rateLimit = handleRateLimitError(error, {
+            fallbackScope: scope === "direct" ? "message:direct" : "message:group",
+            actionLabel: "Sending messages too fast",
+          });
+          if (!rateLimit.handled) {
+            toast.error(resolveDeliveryErrorMessage(error));
+          }
+
+          console.error("Error retrying message delivery", error);
+        }
+      },
+      flushOutgoingQueue: async () => {
+        if (get().isFlushingOutgoingQueue || isNavigatorOffline()) {
+          return;
+        }
+
+        const queueSnapshot = [...get().outgoingQueue];
+        if (!queueSnapshot.length) {
+          return;
+        }
+
+        set({ isFlushingOutgoingQueue: true });
+
+        try {
+          for (const queuedItem of queueSnapshot) {
+            if (isNavigatorOffline()) {
+              break;
+            }
+
+            const targetConversationId = String(
+              queuedItem.conversationId || "",
+            ).trim();
+            const targetMessageId = String(queuedItem.tempId || "").trim();
+
+            if (!targetConversationId || !targetMessageId) {
+              continue;
+            }
+
+            await get().retryMessageDelivery(targetConversationId, targetMessageId);
+          }
+        } finally {
+          set({ isFlushingOutgoingQueue: false });
+        }
       },
       reactToMessage: async (conversationId, messageId, emoji) => {
         const mutationKey = `react:${conversationId}:${messageId}`;
@@ -1223,8 +1938,6 @@ export const useChatStore = create<ChatState>()(
             editedAt: previousMessage.editedAt ?? null,
           });
 
-          notifyUnsendFailure(mode, error);
-
           console.error("Unsend error:", error);
           throw error;
         } finally {
@@ -1273,7 +1986,6 @@ export const useChatStore = create<ChatState>()(
               },
             };
           });
-          toast.error("Could not remove message. Restored.");
           console.error("Remove-for-me error:", error);
           throw error;
         }
@@ -1379,6 +2091,8 @@ export const useChatStore = create<ChatState>()(
 
           return { conversations: nextList };
         });
+
+        syncConversationListCacheForCurrentUser();
       },
       markAsSeen: async () => {
         let rollbackState: {
@@ -1575,12 +2289,8 @@ export const useChatStore = create<ChatState>()(
                       ...conversationItem.group,
                       channelUnreadCounts: restoredChannelUnreadCounts,
                     },
-                  };
-                }),
               };
             });
-
-            toast.error("Could not sync read status. Restored.");
           }
 
           console.error("Error calling markAsSeen in store", error);
@@ -1602,6 +2312,8 @@ export const useChatStore = create<ChatState>()(
               : state.activeConversationId,
           };
         });
+
+        syncConversationListCacheForCurrentUser();
       },
       createConversation: async (type, name, memberIds) => {
         try {
@@ -2442,9 +3154,11 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: "chat-storage",
-      // Only persist the active conversation ID to restore focus on reload.
-      // Conversations list is always fetched fresh from the server to avoid stale data.
-      partialize: (state) => ({ activeConversationId: state.activeConversationId }),
+      // Persist lightweight client state only; conversation/message bodies remain server-driven.
+      partialize: (state) => ({
+        activeConversationId: state.activeConversationId,
+        outgoingQueue: state.outgoingQueue.slice(-MAX_OUTGOING_QUEUE_ITEMS),
+      }),
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as Partial<ChatState> | undefined) || {};
 
@@ -2454,6 +3168,9 @@ export const useChatStore = create<ChatState>()(
           // Keep a runtime-selected conversation when hydration finishes later.
           activeConversationId:
             currentState.activeConversationId || persisted.activeConversationId || null,
+          outgoingQueue: Array.isArray(persisted.outgoingQueue)
+            ? persisted.outgoingQueue
+            : currentState.outgoingQueue,
         };
       },
     },

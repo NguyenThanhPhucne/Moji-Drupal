@@ -1,0 +1,58 @@
+{
+  "outDir": "/Users/phucnguyen/Downloads/open_crm/new/Moji-Drupal/frontend/qa-artifacts/panel-preset-cycle-20260419",
+  "totalChecks": 3,
+  "passedChecks": 3,
+  "failedChecks": 0,
+  "viewports": [
+    "1536x960"
+  ],
+  "presets": [
+    "soft-glass",
+    "flat-enterprise",
+    "flat-enterprise-ultra"
+  ],
+  "checks": [
+    {
+      "viewport": "1536x960",
+      "preset": "soft-glass",
+      "pass": true,
+      "screenshot": "1536x960--soft-glass.png",
+      "metrics": {
+        "datasetPanelStyle": "soft-glass",
+        "panelBorderRadius": "16px",
+        "panelBorderColor": "rgba(198, 208, 220, 0.8)",
+        "panelBoxShadow": "rgba(25, 36, 56, 0.34) 0px 20px 48px -36px",
+        "panelBackdropFilter": "blur(16px) saturate(1.05)",
+        "mainBackgroundImage": "radial-gradient(820px 260px at 105% -14%, rgba(27, 112, 238, 0.1), rgba(0, 0, 0, 0) 68%), linear-gradient(rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.96) 100%)"
+      }
+    },
+    {
+      "viewport": "1536x960",
+      "preset": "flat-enterprise",
+      "pass": true,
+      "screenshot": "1536x960--flat-enterprise.png",
+      "metrics": {
+        "datasetPanelStyle": "flat-enterprise",
+        "panelBorderRadius": "11.52px",
+        "panelBorderColor": "rgba(198, 208, 220, 0.96)",
+        "panelBoxShadow": "rgba(24, 32, 48, 0.16) 0px 6px 14px -18px",
+        "panelBackdropFilter": "none",
+        "mainBackgroundImage": "none"
+      }
+    },
+    {
+      "viewport": "1536x960",
+      "preset": "flat-enterprise-ultra",
+      "pass": true,
+      "screenshot": "1536x960--flat-enterprise-ultra.png",
+      "metrics": {
+        "datasetPanelStyle": "flat-enterprise-ultra",
+        "panelBorderRadius": "9.6px",
+        "panelBorderColor": "rgb(198, 208, 220)",
+        "panelBoxShadow": "rgba(32, 41, 60, 0.08) 0px 1px 2px 0px",
+        "panelBackdropFilter": "none",
+        "mainBackgroundImage": "none"
+      }
+    }
+  ]
+}
