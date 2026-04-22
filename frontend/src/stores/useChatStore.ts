@@ -117,6 +117,12 @@ const removeOutgoingQueueItem = (
   return queue.filter((item) => item.tempId !== tempId);
 };
 
+const isDataAudioPayload = (value?: string | null) => {
+  return /^data:audio\//i.test(String(value || "").trim());
+};
+
+
+
 const enqueueDirectOutgoingMessage = ({
   set,
   tempId,
@@ -1093,6 +1099,12 @@ export const useChatStore = create<ChatState>()(
         conversationIdOverride,
         replyTo,
       ) => {
+        const normalizedAudioUrl = String(audioUrl || "").trim();
+        if (isDataAudioPayload(normalizedAudioUrl)) {
+          toast.error("Voice memo is still uploading. Please try sending again.");
+          return;
+        }
+
         const { activeConversationId, user } = {
           activeConversationId: get().activeConversationId,
           user: useAuthStore.getState().user,
@@ -1107,7 +1119,7 @@ export const useChatStore = create<ChatState>()(
         const nowIso = new Date().toISOString();
         const optimisticPreviewContent =
           String(content || "").trim() || (imgUrl ? "Photo attachment" : 
-            (audioUrl ? "Voice message" : "New message")
+            (normalizedAudioUrl ? "Voice message" : "New message")
           );
 
         const {
@@ -1142,7 +1154,7 @@ export const useChatStore = create<ChatState>()(
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
-          audioUrl: audioUrl ?? null,
+          audioUrl: normalizedAudioUrl || null,
           replyTo: replyTo
             ? { _id: replyTo, content: "", senderId: "" }
             : null,
@@ -1180,7 +1192,7 @@ export const useChatStore = create<ChatState>()(
             replyTo: String(replyTo || "").trim() || undefined,
             queuedAt: nowIso,
             attemptCount: 0,
-            audioUrl: audioUrl || undefined,
+            audioUrl: normalizedAudioUrl || undefined,
           });
           toast.info("You're offline. Message queued.");
           return;
@@ -1191,7 +1203,7 @@ export const useChatStore = create<ChatState>()(
             recipientId,
             content,
             imgUrl,
-            audioUrl,
+            normalizedAudioUrl || undefined,
             resolvedConversationId ?? undefined,
             replyTo,
           );
@@ -1217,7 +1229,7 @@ export const useChatStore = create<ChatState>()(
             recipientId,
             content: String(content || ""),
             imgUrl: imgUrl || undefined,
-            audioUrl: audioUrl || undefined,
+            audioUrl: normalizedAudioUrl || undefined,
             replyTo: String(replyTo || "").trim() || undefined,
             queuedAt: nowIso,
           });
@@ -1233,6 +1245,12 @@ export const useChatStore = create<ChatState>()(
         replyTo,
         groupChannelId,
       ) => {
+        const normalizedAudioUrl = String(audioUrl || "").trim();
+        if (isDataAudioPayload(normalizedAudioUrl)) {
+          toast.error("Voice memo is still uploading. Please try sending again.");
+          return;
+        }
+
         const user = useAuthStore.getState().user;
         const conversation = get().conversations.find(
           (conversationItem) => conversationItem._id === conversationId,
@@ -1253,7 +1271,7 @@ export const useChatStore = create<ChatState>()(
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
-          audioUrl: audioUrl ?? null,
+          audioUrl: normalizedAudioUrl || null,
           replyTo: replyTo
             ? { _id: replyTo, content: "", senderId: "" }
             : null,
@@ -1289,7 +1307,7 @@ export const useChatStore = create<ChatState>()(
               groupChannelId: effectiveGroupChannelId,
               content: String(content || ""),
               imgUrl: imgUrl || undefined,
-              audioUrl: audioUrl || undefined,
+              audioUrl: normalizedAudioUrl || undefined,
               replyTo: String(replyTo || "").trim() || undefined,
               queuedAt: nowIso,
               attemptCount: 0,
@@ -1305,7 +1323,7 @@ export const useChatStore = create<ChatState>()(
             conversationId,
             content,
             imgUrl,
-            audioUrl,
+            normalizedAudioUrl || undefined,
             replyTo,
             effectiveGroupChannelId,
           );
@@ -1359,7 +1377,7 @@ export const useChatStore = create<ChatState>()(
                 groupChannelId: effectiveGroupChannelId,
                 content: String(content || ""),
                 imgUrl: imgUrl || undefined,
-                audioUrl: audioUrl || undefined,
+                audioUrl: normalizedAudioUrl || undefined,
                 replyTo: String(replyTo || "").trim() || undefined,
                 queuedAt: nowIso,
                 attemptCount: nextAttemptCount,
@@ -1558,6 +1576,21 @@ export const useChatStore = create<ChatState>()(
           get().updateMessage(effectiveConversationId, normalizedMessageId, {
             deliveryState: "failed",
             deliveryError: "Message content is empty.",
+            deliveryAttemptCount: nextAttemptCount,
+          });
+          set((state) => ({
+            outgoingQueue: removeOutgoingQueueItem(
+              state.outgoingQueue,
+              normalizedMessageId,
+            ),
+          }));
+          return;
+        }
+
+        if (isDataAudioPayload(payloadAudioUrl)) {
+          get().updateMessage(effectiveConversationId, normalizedMessageId, {
+            deliveryState: "failed",
+            deliveryError: "Voice memo upload expired. Re-record and send again.",
             deliveryAttemptCount: nextAttemptCount,
           });
           set((state) => ({

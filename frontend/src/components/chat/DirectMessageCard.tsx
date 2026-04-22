@@ -48,6 +48,7 @@ const resolveLastMessagePreview = (
   const lastMsg = convo.lastMessage as { content?: string; imgUrl?: string; audioUrl?: string; senderId?: string; sender?: { _id: string } } | null | undefined;
   const lastMessage = lastMsg?.content ?? "";
 
+  // Audio message takes priority
   if (lastMsg?.audioUrl && !lastMessage.trim()) {
     const senderId = lastMsg?.senderId || (lastMsg as { sender?: { _id: string } })?.sender?._id;
     if (senderId === currentUser._id) return "You sent a voice message";
@@ -55,15 +56,19 @@ const resolveLastMessagePreview = (
     return "🎤 Voice message";
   }
 
-  if (
+  // Photo: check both imgUrl directly AND legacy content strings
+  const isPhoto =
+    Boolean(lastMsg?.imgUrl) ||
     lastMessage === "Photo attachment" ||
-    lastMessage === LEGACY_PHOTO_PREVIEW
-  ) {
+    lastMessage === LEGACY_PHOTO_PREVIEW;
+
+  if (isPhoto) {
     return resolvePhotoPreviewText(convo, currentUser, otherUser);
   }
 
   return lastMessage;
 };
+
 
 const resolveMentionCount = (
   lastMessage: string,

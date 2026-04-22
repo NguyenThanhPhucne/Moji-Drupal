@@ -1,12 +1,14 @@
 import { useChatStore } from "@/stores/useChatStore";
 import DirectMessageCard from "./DirectMessageCard";
 import { getStaggerEnterClass } from "@/lib/utils";
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare, Search, X } from "lucide-react";
 import ConversationSkeleton from "@/components/skeleton/ConversationSkeleton";
+import { useState } from "react";
 
 const DirectMessageList = () => {
   const conversations = useChatStore((state) => state.conversations);
   const convoLoading = useChatStore((state) => state.convoLoading);
+  const [filter, setFilter] = useState("");
 
   // Show skeleton on first load (no data yet)
   if (convoLoading && conversations.length === 0) {
@@ -31,6 +33,17 @@ const DirectMessageList = () => {
     );
   }
 
+  const query = filter.trim().toLowerCase();
+  const filtered = query
+    ? directConversations.filter((convo) => {
+        const peer = convo.participants?.find(
+          (p) => p.username || p.displayName,
+        );
+        const name = (peer?.displayName || peer?.username || "").toLowerCase();
+        return name.includes(query);
+      })
+    : directConversations;
+
   return (
     <div className="chat-sidebar-section-list flex-1 overflow-y-auto pb-2 space-y-0.5">
       <div className="chat-sidebar-section-head mb-1.5 flex items-center justify-between px-3 pt-3 pb-1">
@@ -42,7 +55,39 @@ const DirectMessageList = () => {
         </span>
       </div>
 
-      {directConversations.map((convo, index) => (
+      {/* Inline search filter */}
+      {directConversations.length > 4 && (
+        <div className="px-3 pb-1.5">
+          <div className="relative flex items-center">
+            <Search className="pointer-events-none absolute left-2.5 size-3 text-muted-foreground/50" />
+            <input
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter…"
+              className="h-7 w-full rounded-lg border border-border/50 bg-muted/35 pl-7 pr-7 text-[11.5px] text-foreground placeholder:text-muted-foreground/50 focus:border-primary/40 focus:bg-background focus:outline-none focus:ring-1 focus:ring-primary/30 transition-all"
+            />
+            {filter && (
+              <button
+                type="button"
+                onClick={() => setFilter("")}
+                className="absolute right-2 text-muted-foreground/50 hover:text-foreground transition-colors"
+                aria-label="Clear filter"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 && query && (
+        <div className="px-3 py-4 text-center text-[12px] text-muted-foreground/60">
+          No results for &ldquo;{filter}&rdquo;
+        </div>
+      )}
+
+      {filtered.map((convo, index) => (
         <div
           key={convo._id}
           className={`chat-sidebar-card-enter ${getStaggerEnterClass(index)}`}
@@ -55,4 +100,3 @@ const DirectMessageList = () => {
 };
 
 export default DirectMessageList;
-

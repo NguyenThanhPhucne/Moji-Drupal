@@ -11,6 +11,38 @@ export const MAX_FILE_SIZE_MB = 5;
 export const MAX_MESSAGE_LENGTH = 1200;
 const TYPING_EMIT_INTERVAL_MS = 350;
 const MESSAGE_DRAFT_STORAGE_PREFIX = "moji-message-drafts-v1";
+const MAX_VOICE_MEMO_DURATION_SECONDS = 180;
+const AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR = "AUDIO_UPLOAD_REQUIRES_ONLINE";
+
+const VOICE_MEMO_MIME_TYPE_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+  "audio/ogg",
+];
+
+const resolveVoiceMemoMimeType = () => {
+  if (typeof MediaRecorder === "undefined") {
+    return "";
+  }
+
+  for (const mimeType of VOICE_MEMO_MIME_TYPE_CANDIDATES) {
+    if (MediaRecorder.isTypeSupported(mimeType)) {
+      return mimeType;
+    }
+  }
+
+  return "";
+};
+
+const isAudioUploadRequiresOnlineError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message === AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR;
+};
 
 type MessageDraftState = {
   value: string;
@@ -82,8 +114,14 @@ export function useMessageInput(selectedConvo: Conversation) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingMimeTypeRef = useRef("");
+  const recordingCanceledRef = useRef(false);
+  const recordingAutoStoppedRef = useRef(false);
+  const recordingDurationRef = useRef(0);
+  const isUnmountingRef = useRef(false);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingEmitAtRef = useRef(0);
@@ -96,12 +134,26 @@ export function useMessageInput(selectedConvo: Conversation) {
   const draftStorageKey = `${MESSAGE_DRAFT_STORAGE_PREFIX}:${String(user?._id || "guest")}`;
 
   useEffect(() => {
+    isUnmountingRef.current = false;
     persistedDraftTextByConversationRef.current =
       readPersistedDraftMap(draftStorageKey);
+
+    return () => {
+      isUnmountingRef.current = true;
+    };
   }, [draftStorageKey]);
 
+  useEffect(() => {
+    recordingDurationRef.current = recordingDuration;
+  }, [recordingDuration]);
+
   const persistDraft = useCallback(
-    (conversationId: string, nextValue: string, nextImagePreview: string | null) => {
+    (
+      conversationId: string,
+      nextValue: string,
+      nextImagePreview: string | null,
+      nextAudioPreview?: string | null,
+    ) => {
       const normalizedConversationId = String(conversationId || "").trim();
       if (!normalizedConversationId) {
         return;
@@ -109,7 +161,10 @@ export function useMessageInput(selectedConvo: Conversation) {
 
       const normalizedValue = String(nextValue || "");
       const normalizedImagePreview = nextImagePreview || null;
-      const normalizedAudioPreview = audioPreview || null;
+      const normalizedAudioPreview =
+        nextAudioPreview === undefined
+          ? audioPreview || null
+          : nextAudioPreview || null;
       const hasDraft = Boolean(
         normalizedValue.trim() || normalizedImagePreview || normalizedAudioPreview,
       );
@@ -152,8 +207,35 @@ export function useMessageInput(selectedConvo: Conversation) {
         persistedDraftTextByConversationRef.current,
       );
     },
-    [draftStorageKey],
+    [audioPreview, draftStorageKey],
   );
+
+  const clearRecordingTimer = useCallback(() => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }, []);
+
+  const releaseRecordingStream = useCallback(() => {
+    const activeStream = recordingStreamRef.current;
+    if (!activeStream) {
+      return;
+    }
+
+    activeStream.getTracks().forEach((track) => {
+      track.stop();
+    });
+
+    recordingStreamRef.current = null;
+  }, []);
+
+  const requestRecorderStop = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === "recording" || recorder?.state === "paused") {
+      recorder.stop();
+    }
+  }, []);
 
   const stopTyping = useCallback(() => {
     if (typing && socket?.connected) {
@@ -166,7 +248,7 @@ export function useMessageInput(selectedConvo: Conversation) {
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value.slice(0, MAX_MESSAGE_LENGTH);
     setValue(newValue);
-    persistDraft(selectedConvo._id, newValue, imagePreview);
+    persistDraft(selectedConvo._id, newValue, imagePreview, audioPreview);
 
     // Auto-resize textarea
     const el = textareaRef.current;
@@ -198,7 +280,7 @@ export function useMessageInput(selectedConvo: Conversation) {
   const appendEmoji = (emoji: string) => {
     setValue((prev) => {
       const nextValue = `${prev}${emoji}`;
-      persistDraft(selectedConvo._id, nextValue, imagePreview);
+      persistDraft(selectedConvo._id, nextValue, imagePreview, audioPreview);
       return nextValue;
     });
   };
@@ -206,9 +288,17 @@ export function useMessageInput(selectedConvo: Conversation) {
   const setImagePreviewWithDraft = useCallback(
     (nextImagePreview: string | null) => {
       setImagePreview(nextImagePreview);
-      persistDraft(selectedConvo._id, value, nextImagePreview);
+      persistDraft(selectedConvo._id, value, nextImagePreview, audioPreview);
     },
-    [persistDraft, selectedConvo._id, value],
+    [audioPreview, persistDraft, selectedConvo._id, value],
+  );
+
+  const setAudioPreviewWithDraft = useCallback(
+    (nextAudioPreview: string | null) => {
+      setAudioPreview(nextAudioPreview);
+      persistDraft(selectedConvo._id, value, imagePreview, nextAudioPreview);
+    },
+    [imagePreview, persistDraft, selectedConvo._id, value],
   );
 
   useEffect(() => {
@@ -222,8 +312,20 @@ export function useMessageInput(selectedConvo: Conversation) {
       if (socket?.connected) {
         socket.emit("stop_typing", selectedConvo._id);
       }
+
+      clearRecordingTimer();
+      const recorder = mediaRecorderRef.current;
+      if (recorder?.state === "recording" || recorder?.state === "paused") {
+        recordingCanceledRef.current = true;
+        recorder.stop();
+      }
+      releaseRecordingStream();
+      mediaRecorderRef.current = null;
+      audioChunksRef.current = [];
+      recordingMimeTypeRef.current = "";
+      recordingAutoStoppedRef.current = false;
     };
-  }, [socket, selectedConvo._id]);
+  }, [clearRecordingTimer, releaseRecordingStream, socket, selectedConvo._id]);
 
   // Keep per-conversation drafts instead of resetting on room switch.
   useEffect(() => {
@@ -231,7 +333,7 @@ export function useMessageInput(selectedConvo: Conversation) {
     const previousConversationId = previousConversationIdRef.current;
 
     if (previousConversationId && previousConversationId !== nextConversationId) {
-      persistDraft(previousConversationId, value, imagePreview);
+      persistDraft(previousConversationId, value, imagePreview, audioPreview);
       setReplyingTo(null);
     }
 
@@ -241,10 +343,12 @@ export function useMessageInput(selectedConvo: Conversation) {
     const draft = draftByConversationRef.current[nextConversationId] || {
       value: persistedDraftValue,
       imagePreview: null,
+      audioPreview: null,
     };
 
     setValue(draft.value);
     setImagePreview(draft.imagePreview);
+    setAudioPreview(draft.audioPreview);
     setReplyingTo(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -260,10 +364,42 @@ export function useMessageInput(selectedConvo: Conversation) {
   }, [selectedConvo._id]);
 
   const startRecording = async () => {
+    if (isRecording) {
+      return;
+    }
+
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== "function"
+    ) {
+      toast.error("Voice recording is not supported on this device.");
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined") {
+      toast.error("Voice recording is not supported by this browser.");
+      return;
+    }
+
+    const supportedMimeType = resolveVoiceMemoMimeType();
+    if (!supportedMimeType) {
+      toast.error("No supported voice memo format was found.");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      recordingStreamRef.current = stream;
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: supportedMimeType,
+      });
+
       mediaRecorderRef.current = mediaRecorder;
+      recordingMimeTypeRef.current = supportedMimeType;
+      recordingCanceledRef.current = false;
+      recordingAutoStoppedRef.current = false;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
@@ -272,56 +408,137 @@ export function useMessageInput(selectedConvo: Conversation) {
         }
       };
 
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setAudioPreview(reader.result as string);
-        };
-        reader.readAsDataURL(audioBlob);
-        
-        // Stop all tracks to release microphone
-        stream.getTracks().forEach((track) => track.stop());
+      mediaRecorder.onerror = () => {
+        clearRecordingTimer();
+        setIsRecording(false);
+        setRecordingDuration(0);
+        recordingDurationRef.current = 0;
+        releaseRecordingStream();
+        mediaRecorderRef.current = null;
+        audioChunksRef.current = [];
+        recordingMimeTypeRef.current = "";
+        recordingCanceledRef.current = false;
+        recordingAutoStoppedRef.current = false;
+
+        if (!isUnmountingRef.current) {
+          toast.error("Voice memo recording failed. Please try again.");
+        }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.onstop = () => {
+        const shouldDiscard = recordingCanceledRef.current;
+        const shouldShowAutoStopToast = recordingAutoStoppedRef.current;
+        const mimeType = mediaRecorder.mimeType || recordingMimeTypeRef.current || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+        clearRecordingTimer();
+        setIsRecording(false);
+        setRecordingDuration(0);
+        recordingDurationRef.current = 0;
+        releaseRecordingStream();
+        mediaRecorderRef.current = null;
+        audioChunksRef.current = [];
+        recordingMimeTypeRef.current = "";
+        recordingCanceledRef.current = false;
+        recordingAutoStoppedRef.current = false;
+
+        if (isUnmountingRef.current || shouldDiscard) {
+          return;
+        }
+
+        if (!audioBlob.size) {
+          toast.error("Voice memo is empty. Please record again.");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (isUnmountingRef.current) {
+            return;
+          }
+
+          setAudioPreviewWithDraft(reader.result as string);
+
+          if (shouldShowAutoStopToast) {
+            toast.info("Voice memo reached 3:00 and was saved.");
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      mediaRecorder.start(250);
       setIsRecording(true);
       setRecordingDuration(0);
+      recordingDurationRef.current = 0;
+
+      clearRecordingTimer();
       recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
+        const nextDuration = recordingDurationRef.current + 1;
+        const boundedDuration = Math.min(
+          nextDuration,
+          MAX_VOICE_MEMO_DURATION_SECONDS,
+        );
+
+        recordingDurationRef.current = boundedDuration;
+        setRecordingDuration(boundedDuration);
+
+        if (nextDuration >= MAX_VOICE_MEMO_DURATION_SECONDS) {
+          clearRecordingTimer();
+          recordingAutoStoppedRef.current = true;
+          requestRecorderStop();
+        }
       }, 1000);
     } catch (err) {
-      console.error("Lỗi khi truy cập microphone", err);
-      toast.error("Không thể truy cập microphone. Vui lòng cấp quyền.");
+      console.error("Unable to access microphone", err);
+      releaseRecordingStream();
+      mediaRecorderRef.current = null;
+      recordingMimeTypeRef.current = "";
+      recordingCanceledRef.current = false;
+      recordingAutoStoppedRef.current = false;
+      clearRecordingTimer();
+
+      if (!isUnmountingRef.current) {
+        toast.error("Microphone access was denied. Please allow microphone permission.");
+      }
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state !== "recording") {
+      return;
     }
+
+    recordingCanceledRef.current = false;
+    clearRecordingTimer();
+    setIsRecording(false);
+    recorder.stop();
   };
 
   const cancelRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-      setAudioPreview(null);
-      audioChunksRef.current = [];
+    const recorder = mediaRecorderRef.current;
+    recordingCanceledRef.current = true;
+    recordingAutoStoppedRef.current = false;
+    audioChunksRef.current = [];
+    clearRecordingTimer();
+    setIsRecording(false);
+    setRecordingDuration(0);
+    recordingDurationRef.current = 0;
+    setAudioPreviewWithDraft(null);
+
+    if (recorder?.state === "recording" || recorder?.state === "paused") {
+      recorder.stop();
+      return;
     }
+
+    recordingCanceledRef.current = false;
+    releaseRecordingStream();
+    mediaRecorderRef.current = null;
+    recordingMimeTypeRef.current = "";
   };
 
   const removeAudioPreview = () => {
-    setAudioPreview(null);
+    setAudioPreviewWithDraft(null);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,6 +557,86 @@ export function useMessageInput(selectedConvo: Conversation) {
     reader.readAsDataURL(file);
   };
 
+  const resolveOutgoingAudioUrl = async (rawAudioPreview: string | null) => {
+    if (!rawAudioPreview) {
+      return undefined;
+    }
+
+    if (!rawAudioPreview.startsWith("data:audio/")) {
+      return rawAudioPreview;
+    }
+
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      throw new Error(AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR);
+    }
+
+    const { audioUrl } = await chatService.uploadAudio(rawAudioPreview);
+    return audioUrl;
+  };
+
+  const restoreComposerAfterSendFailure = (
+    failedValue: string,
+    failedImagePreview: string | null,
+    failedAudioPreview: string | null,
+  ) => {
+    setValue(failedValue);
+    setImagePreview(failedImagePreview);
+    setAudioPreview(failedAudioPreview);
+    persistDraft(
+      selectedConvo._id,
+      failedValue,
+      failedImagePreview ?? null,
+      failedAudioPreview,
+    );
+
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      const nextHeight = Math.min(textareaRef.current.scrollHeight, 120);
+      textareaRef.current.style.height = `${Math.max(40, nextHeight)}px`;
+    }
+  };
+
+  const sendMessageToConversation = async ({
+    content,
+    imageUrl,
+    audioUrl,
+    replyToId,
+  }: {
+    content: string;
+    imageUrl?: string;
+    audioUrl?: string;
+    replyToId?: string;
+  }) => {
+    if (selectedConvo.type === "direct") {
+      const otherUser = selectedConvo.participants.find(
+        (participant) => String(participant._id) !== String(user?._id),
+      );
+
+      if (!otherUser) {
+        throw new Error("DIRECT_RECIPIENT_NOT_FOUND");
+      }
+
+      await sendDirectMessage(
+        otherUser._id,
+        content,
+        imageUrl,
+        audioUrl,
+        selectedConvo._id,
+        replyToId,
+      );
+      return;
+    }
+
+    await sendGroupMessage(
+      selectedConvo._id,
+      content,
+      imageUrl,
+      audioUrl,
+      replyToId,
+      selectedConvo.group?.activeChannelId,
+    );
+  };
+
   const sendMessage = async () => {
     if (isSendingRef.current || !user) return;
     const trimmed = value.trim();
@@ -353,61 +650,29 @@ export function useMessageInput(selectedConvo: Conversation) {
     setValue("");
     setImagePreview(null);
     setAudioPreview(null);
-    persistDraft(selectedConvo._id, "", null);
+    persistDraft(selectedConvo._id, "", null, null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
-      // ── Pre-upload audio to Cloudinary if we have a base64 recording ──
-      let resolvedAudioUrl: string | undefined = currAudio ?? undefined;
-      if (currAudio && currAudio.startsWith("data:audio/")) {
-        try {
-          const { audioUrl } = await chatService.uploadAudio(currAudio);
-          resolvedAudioUrl = audioUrl;
-        } catch {
-          // Fall through and send the raw base64 as fallback
-          // (backend also handles base64 directly)
-          resolvedAudioUrl = currAudio;
-        }
-      }
+      const resolvedAudioUrl = await resolveOutgoingAudioUrl(currAudio);
 
-      if (selectedConvo.type === "direct") {
-        const otherUser = selectedConvo.participants.find(
-          (p) => String(p._id) !== String(user._id),
-        );
-        if (!otherUser) return;
-        await sendDirectMessage(
-          otherUser._id,
-          currValue,
-          currImage ?? undefined,
-          resolvedAudioUrl,
-          selectedConvo._id,
-          replyingTo?._id,
-        );
-      } else {
-        await sendGroupMessage(
-          selectedConvo._id,
-          currValue,
-          currImage ?? undefined,
-          resolvedAudioUrl,
-          replyingTo?._id,
-          selectedConvo.group?.activeChannelId,
-        );
-      }
+      await sendMessageToConversation({
+        content: currValue,
+        imageUrl: currImage ?? undefined,
+        audioUrl: resolvedAudioUrl,
+        replyToId: replyingTo?._id,
+      });
+
       setReplyingTo(null);
       stopTyping();
-    } catch {
-      setValue(currValue);
-      setImagePreview(currImage);
-      setAudioPreview(currAudio);
-      persistDraft(selectedConvo._id, currValue, currImage ?? null);
+    } catch (error) {
+      restoreComposerAfterSendFailure(currValue, currImage, currAudio);
 
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-        const nextHeight = Math.min(textareaRef.current.scrollHeight, 120);
-        textareaRef.current.style.height = `${Math.max(40, nextHeight)}px`;
+      if (isAudioUploadRequiresOnlineError(error)) {
+        toast.error("Voice memo needs internet to upload before sending.");
+      } else {
+        toast.error(t("chatComposer.error.send_failed"));
       }
-
-      toast.error(t("chatComposer.error.send_failed"));
     } finally {
       isSendingRef.current = false;
     }

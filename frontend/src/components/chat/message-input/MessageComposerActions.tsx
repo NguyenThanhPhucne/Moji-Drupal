@@ -184,29 +184,40 @@ const MessageComposerActions = ({
         )}
       >
         {isRecording ? (
-          <div className="flex flex-1 items-center gap-3 px-3 animate-in fade-in duration-200">
-            <span className="flex size-2.5 rounded-full bg-destructive animate-pulse" />
-            <span className="font-mono text-sm font-medium tabular-nums text-foreground">
+        <div className="flex flex-1 items-center gap-3 px-3 animate-in fade-in duration-200">
+            {/* Recording waveform animation */}
+            <div className="flex items-center gap-[2px] h-5 flex-shrink-0" aria-hidden="true">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <span
+                  key={i}
+                  className="inline-block w-[3px] rounded-full bg-destructive"
+                  style={{
+                    height: "100%",
+                    animation: `voice-bar-bounce 0.9s ease-in-out ${i * 0.1}s infinite`,
+                    minHeight: "4px",
+                  }}
+                />
+              ))}
+            </div>
+            <span className="font-mono text-sm font-semibold tabular-nums text-destructive">
               {formatDuration(recordingDuration)}
             </span>
-            <span className="text-xs text-muted-foreground ml-2">Recording Voice Memo...</span>
+            <span className="text-[11.5px] text-muted-foreground/70 hidden sm:inline">Recording…</span>
             <div className="flex-1" />
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={onCancelRecording}
-              className="px-2 h-7 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              className="px-2.5 h-7 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
               Cancel
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
+            </button>
+            <button
+              type="button"
               onClick={onStopRecording}
-              className="px-3 h-7 rounded-sm shadow text-xs font-semibold"
+              className="px-3 h-7 rounded-lg bg-primary text-primary-foreground text-[12px] font-semibold shadow-sm hover:bg-primary/90 active:scale-[0.97] transition-all"
             >
               Done
-            </Button>
+            </button>
           </div>
         ) : (
           <>

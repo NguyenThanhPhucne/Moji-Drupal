@@ -9,14 +9,17 @@ interface GroupChatAvatarProps {
 
 const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
   const avatars = [];
-  const limit = Math.min(participants.length, 4);
+  // In sidebar stacked layout, cap at 3 avatars to avoid overflow
+  const limit = type === "sidebar" ? Math.min(participants.length, 3) : Math.min(participants.length, 4);
+  // Sidebar stacks use the 'chat' (size-8/32px) size so they don't overflow the card
+  const avatarType = type === "sidebar" ? "chat" : "chat";
 
   for (let i = 0; i < limit; i++) {
     const member = participants[i];
     avatars.push(
       <UserAvatar
         key={i}
-        type={type}
+        type={avatarType}
         name={member.displayName}
         avatarUrl={member.avatarUrl ?? undefined}
       />,
@@ -24,15 +27,21 @@ const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
   }
 
   return (
-    <div className="relative flex -space-x-1.5 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-[1.5px]">
+    <div
+      className={cn(
+        "relative flex",
+        type === "sidebar" ? "-space-x-2.5" : "-space-x-1.5",
+        "*:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-[1.5px]",
+      )}
+    >
       {avatars}
 
-      {/* if there are more than 4 avatars, render overflow indicator */}
+      {/* if there are more than limit avatars, render overflow indicator */}
       {participants.length > limit && (
-        <div 
+        <div
           className={cn(
             "flex items-center z-10 justify-center rounded-full bg-primary/10 ring-[1.5px] ring-background text-primary font-bold transition-colors",
-            type === "sidebar" ? "size-[42px] text-sm" : "size-8 text-xs"
+            type === "sidebar" ? "size-8 text-xs" : "size-8 text-xs"
           )}
         >
           +{participants.length - limit}

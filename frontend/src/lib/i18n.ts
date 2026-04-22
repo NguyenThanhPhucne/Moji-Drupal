@@ -188,6 +188,7 @@ const EN_TRANSLATIONS = {
   "chatComposer.attach_image": "Attach image",
   "chatComposer.message_input": "Message input",
   "chatComposer.send_message": "Send message",
+  "chatComposer.record_audio": "Record voice memo",
   "chatComposer.like": "Like",
   "chatComposer.send_enter": "Send (Enter)",
   "chatComposer.error.image_too_large": "Image is too large. Max {size}MB",
@@ -201,7 +202,6 @@ const EN_TRANSLATIONS = {
   "chatComposer.cancel_reply": "Cancel reply",
   "chatComposer.preview": "preview",
   "chatComposer.preview_image": "Image",
-  "chatComposer.record_audio": "Record voice memo",
   "chatComposer.voice_attachment": "Voice message",
 } as const;
 
@@ -391,6 +391,7 @@ const VI_TRANSLATIONS: Record<TranslationKey, string> = {
   "chatComposer.attach_image": "Đính kèm ảnh",
   "chatComposer.message_input": "Ô nhập tin nhắn",
   "chatComposer.send_message": "Gửi tin nhắn",
+  "chatComposer.record_audio": "Ghi âm tin nhắn",
   "chatComposer.like": "Thích",
   "chatComposer.send_enter": "Gửi (Enter)",
   "chatComposer.error.image_too_large": "Ảnh quá lớn. Tối đa {size}MB",
@@ -403,7 +404,6 @@ const VI_TRANSLATIONS: Record<TranslationKey, string> = {
   "chatComposer.cancel_reply": "Hủy trả lời",
   "chatComposer.preview": "xem trước",
   "chatComposer.preview_image": "Ảnh",
-  "chatComposer.record_audio": "Ghi tin nhắn thoại",
   "chatComposer.voice_attachment": "Tin nhắn thoại",
 };
 
