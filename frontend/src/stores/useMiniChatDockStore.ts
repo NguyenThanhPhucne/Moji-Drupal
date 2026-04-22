@@ -666,6 +666,9 @@ export const useMiniChatDockStore = create<MiniChatDockState>()(
     {
       name: "mini-chat-dock-storage",
       version: 2,
+      migrate: (persistedState: unknown, _version: number) => {
+        return persistedState as Partial<MiniChatDockState>;
+      },
       partialize: (state) => ({
         focusedWindowId: state.focusedWindowId,
         windows: state.windows.map((windowItem) => ({

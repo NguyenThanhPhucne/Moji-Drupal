@@ -119,12 +119,16 @@ const VoiceMessagePlayer = ({ src, isOwn = false }: VoiceMessagePlayerProps) => 
 
   const handleWaveformClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
-    if (!audio || !duration) return;
+    if (!audio || !duration || !Number.isFinite(duration)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const ratio = Math.max(0, Math.min(1, x / rect.width));
-    audio.currentTime = ratio * duration;
-    setCurrentTime(audio.currentTime);
+    const newTime = ratio * duration;
+    
+    if (Number.isFinite(newTime)) {
+      audio.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
   };
 
   return (
