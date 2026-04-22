@@ -93,7 +93,12 @@ const VoiceMessagePlayer = ({ src, isOwn = false }: VoiceMessagePlayerProps) => 
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
 
-    audio.addEventListener("loadedmetadata", onLoaded);
+    if (audio.readyState >= 1) {
+      onLoaded();
+    } else {
+      audio.addEventListener("loadedmetadata", onLoaded);
+    }
+
     audio.addEventListener("ended", onEnded);
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
@@ -107,7 +112,11 @@ const VoiceMessagePlayer = ({ src, isOwn = false }: VoiceMessagePlayerProps) => 
     };
   }, [tick]);
 
-  const togglePlay = () => {
+  const togglePlay = (e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
     const audio = audioRef.current;
     if (!audio) return;
     if (isPlaying) {
@@ -118,6 +127,8 @@ const VoiceMessagePlayer = ({ src, isOwn = false }: VoiceMessagePlayerProps) => 
   };
 
   const handleWaveformClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    e.preventDefault();
     const audio = audioRef.current;
     if (!audio || !duration || !Number.isFinite(duration)) return;
     const rect = e.currentTarget.getBoundingClientRect();
