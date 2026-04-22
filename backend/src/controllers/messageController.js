@@ -760,11 +760,31 @@ const uploadMessageAudio = async (rawAudioUrl) => {
     throw createHttpError(400, "Unsupported audio format");
   }
 
+  // Strip the data-URL header (including any codec params like ;codecs=opus)
+  // and decode to raw Buffer — Cloudinary's upload() rejects codec params in MIME type.
+  let audioBuffer;
+  try {
+    const base64Part = normalized.split(",")[1];
+    if (!base64Part) throw new Error("Invalid data URL — no base64 payload");
+    audioBuffer = Buffer.from(base64Part, "base64");
+  } catch {
+    throw createHttpError(400, "Malformed audio data URL");
+  }
+
   let result;
   try {
-    result = await cloudinary.uploader.upload(normalized, {
-      folder: "coming_chat/messages/audio",
-      resource_type: "video", // Cloudinary treats audio as video
+    result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: "coming_chat/messages/audio",
+          resource_type: "video", // Cloudinary treats audio as 'video'
+        },
+        (error, uploadResult) => {
+          if (error) return reject(error);
+          resolve(uploadResult);
+        },
+      );
+      stream.end(audioBuffer);
     });
   } catch (error) {
     console.error("Audio upload error:", error);
@@ -787,11 +807,31 @@ export const uploadAudio = async (req, res) => {
       return res.status(400).json({ message: "Unsupported format. Expected base64 data:audio/*" });
     }
 
+    // Extract raw base64 after the comma — strips codec params that Cloudinary rejects
+    const base64Part = normalized.split(",")[1];
+    if (!base64Part) {
+      return res.status(400).json({ message: "Malformed audio data URL" });
+    }
+
+    const audioBuffer = Buffer.from(base64Part, "base64");
+    if (audioBuffer.length === 0) {
+      return res.status(400).json({ message: "Empty audio payload" });
+    }
+
     let result;
     try {
-      result = await cloudinary.uploader.upload(normalized, {
-        folder: "coming_chat/messages/audio",
-        resource_type: "video",
+      result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "coming_chat/messages/audio",
+            resource_type: "video", // Cloudinary stores audio under video resource type
+          },
+          (error, uploadResult) => {
+            if (error) return reject(error);
+            resolve(uploadResult);
+          },
+        );
+        stream.end(audioBuffer);
       });
     } catch (uploadError) {
       console.error("Audio upload failed:", uploadError);
