@@ -1367,7 +1367,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   }, []);
 
   const handleBubbleTouchStart = useCallback(
-    (event: React.TouchEvent<HTMLButtonElement>) => {
+    (event: React.TouchEvent<HTMLElement>) => {
       handleTouchPeekActions();
 
       const touchPoint = event.touches?.[0];
@@ -1390,7 +1390,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   );
 
   const handleBubbleTouchMove = useCallback(
-    (event: React.TouchEvent<HTMLButtonElement>) => {
+    (event: React.TouchEvent<HTMLElement>) => {
       const startPoint = touchStartPointRef.current;
       const touchPoint = event.touches?.[0];
 
@@ -1639,11 +1639,20 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   );
 
   const readOnlyBubbleNode = (
-    <button
-      type="button"
+    // NOTE: Must be <div> not <button> — VoiceMessagePlayer renders its own <button>
+    // inside and HTML disallows nested interactive buttons.
+    <div
+      role="button"
+      tabIndex={canOpenEditMode ? 0 : undefined}
       onClick={handleBubbleClick}
       onDoubleClick={handleDoubleClickBubble}
       onContextMenu={handleContextMenu}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleBubbleClick();
+        }
+      }}
       onTouchStart={handleBubbleTouchStart}
       onTouchMove={handleBubbleTouchMove}
       onTouchEnd={handleBubbleTouchEnd}
@@ -1660,7 +1669,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       )}
     >
       {renderReadOnlyBubble()}
-    </button>
+    </div>
   );
 
   const bubbleNode = editMode ? (
