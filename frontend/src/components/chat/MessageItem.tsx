@@ -168,7 +168,7 @@ const ReactionBar = memo(function ReactionBar({
       )}
     >
       {Object.entries(grouped).map(([emoji, count]) => {
-        const { Icon, label } = getReactionMetaByEmoji(emoji);
+        const { label } = getReactionMetaByEmoji(emoji);
 
         return (
           <button
@@ -182,7 +182,7 @@ const ReactionBar = memo(function ReactionBar({
             aria-label={`${count} ${label} reactions`}
             title={label}
           >
-            <Icon className="chat-reaction-icon" aria-hidden="true" />
+            <span className="chat-reaction-emoji" aria-hidden="true">{emoji}</span>
             <span className="chat-reaction-bar-count">{count}</span>
           </button>
         );
@@ -208,22 +208,20 @@ const QuickReactBar = memo(function QuickReactBar({
           : "chat-quick-react-bar--hidden",
       )}
     >
-      {QUICK_REACTIONS.map((reaction) => {
-        const Icon = reaction.Icon;
-
-        return (
-          <button
-            key={reaction.id}
-            type="button"
-            onClick={() => onReact(reaction.emoji)}
-            className="chat-quick-react-item chat-quick-react-item--command"
-            aria-label={`React ${reaction.label}`}
-            title={reaction.label}
-          >
-            <Icon className="chat-quick-react-icon" aria-hidden="true" />
-          </button>
-        );
-      })}
+      {QUICK_REACTIONS.map((reaction) => (
+        <button
+          key={reaction.id}
+          type="button"
+          onClick={() => onReact(reaction.emoji)}
+          className="chat-quick-react-item chat-quick-react-item--command"
+          aria-label={`React ${reaction.label}`}
+          title={reaction.label}
+        >
+          <span className="chat-quick-react-emoji" aria-hidden="true">
+            {reaction.emoji}
+          </span>
+        </button>
+      ))}
     </div>
   );
 });
@@ -623,7 +621,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
           ? "right-[calc(100%+0.3rem)]"
           : "left-[calc(100%+0.3rem)]",
         actionBarVisible
-          ? "opacity-100 pointer-events-auto"
+          ? "opacity-100 pointer-events-auto translate-y-[-50%]"
           : cn("opacity-0 pointer-events-none", hiddenActionOffsetClass),
       )}
     >
@@ -631,44 +629,69 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
         {reactBarVisible && (
           <QuickReactBar onReact={onReact} visible={true} />
         )}
-        <button
-          type="button"
-          onClick={onToggleReactBar}
-          aria-label="Add reaction"
-          className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
-        >
-          <Smile className="size-[13px] text-muted-foreground" />
-        </button>
+        <Tooltip delayDuration={600}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={onToggleReactBar}
+              aria-label="Add reaction"
+              className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
+            >
+              <Smile className="size-[13px] text-muted-foreground" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">React</TooltipContent>
+        </Tooltip>
       </div>
-      <button
-        type="button"
-        onClick={onReply}
-        aria-label="Reply"
-        className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
-      >
-        <Reply className="size-[13px] text-muted-foreground" />
-      </button>
-      <button
-        type="button"
-        onClick={onToggleBookmark}
-        aria-label={bookmarked ? "Remove bookmark" : "Save message"}
-        className={cn(
-          "chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command",
-          bookmarked && "chat-bookmark-active",
-        )}
-      >
-        <Bookmark
-          className={cn("size-[13px]", bookmarked && "fill-current")}
-        />
-      </button>
-      <button
-        type="button"
-        onClick={onOpenContext}
-        aria-label="Open message actions"
-        className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
-      >
-        <MoreHorizontal className="size-[13px] text-muted-foreground" />
-      </button>
+
+      <Tooltip delayDuration={600}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onReply}
+            aria-label="Reply"
+            className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
+          >
+            <Reply className="size-[13px] text-muted-foreground" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">Reply</TooltipContent>
+      </Tooltip>
+
+      <Tooltip delayDuration={600}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onToggleBookmark}
+            aria-label={bookmarked ? "Remove bookmark" : "Save message"}
+            className={cn(
+              "chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command",
+              bookmarked && "chat-bookmark-active",
+            )}
+          >
+            <Bookmark
+              className={cn("size-[13px]", bookmarked && "fill-current")}
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">
+          {bookmarked ? "Unsave" : "Save"}
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip delayDuration={600}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onOpenContext}
+            aria-label="Open message actions"
+            className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
+          >
+            <MoreHorizontal className="size-[13px] text-muted-foreground" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">More</TooltipContent>
+      </Tooltip>
     </div>
   );
 });
@@ -742,19 +765,26 @@ const MessageMetaSection = memo(function MessageMetaSection({
             edited
           </span>
         )}
-        <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium tabular-nums tracking-wide leading-none">
-          {message.isForwardable === false && !message.isDeleted && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Lock className="size-2.5 text-muted-foreground/60" />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-[10px] py-1 px-2">
-                Forwarding disabled
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {format(new Date(message.createdAt), "HH:mm")}
-        </span>
+          <Tooltip delayDuration={400}>
+            <TooltipTrigger asChild>
+              <span className="flex items-center gap-1 text-[10px] sm:text-[11px] text-muted-foreground/70 font-medium tabular-nums tracking-wide leading-none cursor-default">
+                {message.isForwardable === false && !message.isDeleted && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Lock className="size-2.5 text-muted-foreground/60" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                      Forwarding disabled
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {format(new Date(message.createdAt), "HH:mm")}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1.5 px-2.5">
+              {format(new Date(message.createdAt), "EEEE, MMMM d, yyyy 'at' HH:mm")}
+            </TooltipContent>
+          </Tooltip>
 
         {isOwn && !message.isDeleted && message.deliveryState && (
           <span
