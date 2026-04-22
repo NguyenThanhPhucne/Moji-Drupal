@@ -5,6 +5,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import type { Conversation } from "@/types/chat";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
+import { chatService } from "@/services/chatService";
 
 export const MAX_FILE_SIZE_MB = 5;
 export const MAX_MESSAGE_LENGTH = 1200;
@@ -356,6 +357,19 @@ export function useMessageInput(selectedConvo: Conversation) {
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
     try {
+      // ── Pre-upload audio to Cloudinary if we have a base64 recording ──
+      let resolvedAudioUrl: string | undefined = currAudio ?? undefined;
+      if (currAudio && currAudio.startsWith("data:audio/")) {
+        try {
+          const { audioUrl } = await chatService.uploadAudio(currAudio);
+          resolvedAudioUrl = audioUrl;
+        } catch {
+          // Fall through and send the raw base64 as fallback
+          // (backend also handles base64 directly)
+          resolvedAudioUrl = currAudio;
+        }
+      }
+
       if (selectedConvo.type === "direct") {
         const otherUser = selectedConvo.participants.find(
           (p) => String(p._id) !== String(user._id),
@@ -365,7 +379,7 @@ export function useMessageInput(selectedConvo: Conversation) {
           otherUser._id,
           currValue,
           currImage ?? undefined,
-          currAudio ?? undefined,
+          resolvedAudioUrl,
           selectedConvo._id,
           replyingTo?._id,
         );
@@ -374,7 +388,7 @@ export function useMessageInput(selectedConvo: Conversation) {
           selectedConvo._id,
           currValue,
           currImage ?? undefined,
-          currAudio ?? undefined,
+          resolvedAudioUrl,
           replyingTo?._id,
           selectedConvo.group?.activeChannelId,
         );

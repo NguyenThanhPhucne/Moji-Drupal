@@ -774,6 +774,37 @@ const uploadMessageAudio = async (rawAudioUrl) => {
   return result.secure_url;
 };
 
+// ─── HTTP endpoint: dedicated audio pre-upload ───────────────────────────────
+export const uploadAudio = async (req, res) => {
+  try {
+    const { audio } = req.body;
+    if (!audio) {
+      return res.status(400).json({ message: "Missing audio data" });
+    }
+
+    const normalized = String(audio).trim();
+    if (!normalized.startsWith("data:audio/")) {
+      return res.status(400).json({ message: "Unsupported format. Expected base64 data:audio/*" });
+    }
+
+    let result;
+    try {
+      result = await cloudinary.uploader.upload(normalized, {
+        folder: "coming_chat/messages/audio",
+        resource_type: "video",
+      });
+    } catch (uploadError) {
+      console.error("Audio upload failed:", uploadError);
+      return res.status(502).json({ message: "Audio upload service temporarily unavailable" });
+    }
+
+    return res.status(200).json({ audioUrl: result.secure_url });
+  } catch (error) {
+    console.error("uploadAudio error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 const sanitizeMetaValue = (input) => {
   return String(input || "")
     .replaceAll(/\s+/g, " ")

@@ -45,7 +45,15 @@ const resolveLastMessagePreview = (
   currentUser: DirectUserLite,
   otherUser: { _id: string; displayName?: string },
 ) => {
-  const lastMessage = convo.lastMessage?.content ?? "";
+  const lastMsg = convo.lastMessage as { content?: string; imgUrl?: string; audioUrl?: string; senderId?: string; sender?: { _id: string } } | null | undefined;
+  const lastMessage = lastMsg?.content ?? "";
+
+  if (lastMsg?.audioUrl && !lastMessage.trim()) {
+    const senderId = lastMsg?.senderId || (lastMsg as { sender?: { _id: string } })?.sender?._id;
+    if (senderId === currentUser._id) return "You sent a voice message";
+    if (senderId === otherUser._id) return `${otherUser.displayName} sent a voice message`;
+    return "🎤 Voice message";
+  }
 
   if (
     lastMessage === "Photo attachment" ||

@@ -414,4 +414,13 @@ export const chatService = {
     });
     return res.data;
   },
+
+  /**
+   * Upload a base64 audio recording to Cloudinary via backend.
+   * Returns the public `audioUrl` (https Cloudinary URL).
+   */
+  async uploadAudio(base64Audio: string): Promise<{ audioUrl: string }> {
+    const res = await api.post("/messages/audio/upload", { audio: base64Audio });
+    return res.data as { audioUrl: string };
+  },
 };

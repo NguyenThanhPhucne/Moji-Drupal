@@ -12,6 +12,7 @@ import {
   getLinkPreview,
   forwardMessage,
   toggleForwardable,
+  uploadAudio,
 } from "../controllers/messageController.js";
 import {
   checkFriendship,
@@ -20,6 +21,7 @@ import {
 
 const router = express.Router();
 
+router.post("/audio/upload", uploadAudio);
 router.post("/direct", checkFriendship, sendDirectMessage);
 router.post("/group", checkGroupMembership, sendGroupMessage);
 router.post("/:messageId/react", reactToMessage);
