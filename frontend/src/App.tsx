@@ -26,6 +26,7 @@ import {
 } from "./stores/usePersonalizationStore";
 import { useA11yAnnouncerStore } from "./stores/useA11yAnnouncerStore";
 import { useI18n } from "./lib/i18n";
+import { flushVoiceMemoOutbox } from "./lib/voiceMemoDelivery";
 import { userService } from "./services/userService";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import WorkspaceLoadingSkeleton from "./components/skeleton/WorkspaceLoadingSkeleton";
@@ -533,8 +534,17 @@ function AppContent() {
       return;
     }
 
+    void flushVoiceMemoOutbox({ silent: true });
+  }, [accessToken, user?._id]);
+
+  useEffect(() => {
+    if (!accessToken || !user) {
+      return;
+    }
+
     const handleOnline = () => {
       void flushOutgoingQueue();
+      void flushVoiceMemoOutbox();
     };
 
     globalThis.addEventListener("online", handleOnline);

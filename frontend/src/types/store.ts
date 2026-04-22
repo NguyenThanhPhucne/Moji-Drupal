@@ -20,6 +20,7 @@ export interface OutgoingMessageQueueItem {
   imgUrl?: string;
   audioUrl?: string;
   replyTo?: string;
+  threadRootId?: string;
   queuedAt: string;
   attemptCount: number;
 }
@@ -74,11 +75,13 @@ export interface ChatState {
   messageLoading: boolean;
   loading: boolean;
   replyingTo: Message | null;
+  activeThreadRootId: string | null;
   outgoingQueue: OutgoingMessageQueueItem[];
   isFlushingOutgoingQueue: boolean;
   reset: () => void;
 
   setReplyingTo: (message: Message | null) => void;
+  setActiveThreadRootId: (messageId: string | null) => void;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string, channelId?: string) => Promise<void>;
@@ -89,6 +92,7 @@ export interface ChatState {
     audioUrl?: string,
     conversationId?: string,
     replyTo?: string,
+    threadRootId?: string,
   ) => Promise<void>;
   sendGroupMessage: (
     conversationId: string,
@@ -97,6 +101,7 @@ export interface ChatState {
     audioUrl?: string,
     replyTo?: string,
     groupChannelId?: string,
+    threadRootId?: string,
   ) => Promise<void>;
   // add message
   addMessage: (message: Message) => void;

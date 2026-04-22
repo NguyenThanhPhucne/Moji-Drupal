@@ -1852,6 +1852,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             isDeleted: true,
             content: "This message was removed",
             imgUrl: null,
+            audioUrl: null,
             editedAt: eventPayload.editedAt ?? new Date().toISOString(),
             reactions: Array.isArray(eventPayload.reactions)
               ? (eventPayload.reactions as NonNullable<Message["reactions"]>)

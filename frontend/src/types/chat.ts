@@ -166,6 +166,7 @@ export interface Message {
     senderId: string;
     senderDisplayName?: string;
   } | null;
+  threadRootId?: string | null;
   reactions?: Reaction[];
   isDeleted?: boolean;
   editedAt?: string | null;

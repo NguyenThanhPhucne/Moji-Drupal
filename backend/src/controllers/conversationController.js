@@ -1745,7 +1745,7 @@ export const getMessages = async (req, res) => {
 
     let messages = await Message.find(query)
       .select(
-        "_id conversationId groupChannelId senderId content imgUrl replyTo reactions isDeleted editedAt readBy createdAt updatedAt",
+        "_id conversationId groupChannelId senderId content imgUrl audioUrl replyTo threadRootId reactions isDeleted editedAt readBy createdAt updatedAt",
       )
       .populate("replyTo", "content senderId")
       .sort({ createdAt: -1, _id: -1 })

@@ -87,6 +87,7 @@ const ChatWindowBody = () => {
     messageLoading,
     fetchMessages,
     pinGroupMessage,
+    setActiveThreadRootId,
   } = useChatStore();
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
@@ -458,8 +459,16 @@ const ChatWindowBody = () => {
       const showDateDivider =
         !nextMessage || !isSameDay(message.createdAt, nextMessage.createdAt);
 
-      const sameOlderSender = prevMessage && prevMessage.senderId === message.senderId && !message.isDeleted && !prevMessage.isDeleted;
-      const sameNewerSender = nextMessage && nextMessage.senderId === message.senderId && !message.isDeleted && !nextMessage.isDeleted;
+      const sameOlderSender =
+        Boolean(prevMessage) &&
+        prevMessage?.senderId === message.senderId &&
+        !message.isDeleted &&
+        !prevMessage?.isDeleted;
+      const sameNewerSender =
+        Boolean(nextMessage) &&
+        nextMessage?.senderId === message.senderId &&
+        !message.isDeleted &&
+        !nextMessage?.isDeleted;
       
       const GROUPING_THRESHOLD_MS = 5 * 60 * 1000;
       const isCloseToOlder = prevMessage && (new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() < GROUPING_THRESHOLD_MS);
@@ -477,7 +486,6 @@ const ChatWindowBody = () => {
       return (
         <MessageItem
           message={message}
-          index={index}
           isFirstInGroup={isFirstInGroup}
           isLastInGroup={isLastInGroup}
           selectedConvo={selectedConvo as NonNullable<typeof selectedConvo>}
@@ -501,6 +509,9 @@ const ChatWindowBody = () => {
               willPin ? targetMessageId : null,
             );
           }}
+          onOpenThread={(messageId) => {
+            setActiveThreadRootId(messageId);
+          }}
         />
       );
     },
@@ -513,6 +524,7 @@ const ChatWindowBody = () => {
       groupSeenUsers,
       isGroupAdmin,
       pinGroupMessage,
+      setActiveThreadRootId,
       pinnedMessage?._id,
       highlightedMessageId,
     ],

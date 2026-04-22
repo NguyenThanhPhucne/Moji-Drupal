@@ -123,6 +123,7 @@ export const chatService = {
     audioUrl?: string,
     conversationId?: string,
     replyTo?: string,
+    threadRootId?: string,
   ) {
     const res = await api.post("/messages/direct", {
       recipientId,
@@ -131,6 +132,7 @@ export const chatService = {
       audioUrl,
       conversationId,
       replyTo,
+      threadRootId,
     });
 
     return res.data.message;
@@ -143,6 +145,7 @@ export const chatService = {
     audioUrl?: string,
     replyTo?: string,
     groupChannelId?: string,
+    threadRootId?: string,
   ) {
     const res = await api.post("/messages/group", {
       conversationId,
@@ -151,8 +154,24 @@ export const chatService = {
       audioUrl,
       replyTo,
       groupChannelId,
+      threadRootId,
     });
     return res.data.message;
+  },
+
+  async fetchMessageThread(messageId: string, cursor?: string) {
+    const res = await api.get(`/messages/${messageId}/thread`, {
+      params: {
+        limit: pageLimit,
+        ...(cursor ? { cursor } : {}),
+      },
+    });
+
+    return {
+      threadRootId: String(res.data.threadRootId || messageId),
+      messages: Array.isArray(res.data.messages) ? res.data.messages : [],
+      cursor: res.data.nextCursor || null,
+    };
   },
 
   async markAsSeen(conversationId: string, channelId?: string) {

@@ -26,6 +26,7 @@ import {
   Clock3,
   AlertCircle,
   RotateCcw,
+  MessageSquare,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
@@ -596,6 +597,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   onReply,
   onToggleBookmark,
   onOpenContext,
+  onOpenThread,
 }: {
   editMode: boolean;
   isOwn: boolean;
@@ -608,6 +610,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   onReply: () => void;
   onToggleBookmark: () => void;
   onOpenContext: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onOpenThread: () => void;
 }) {
   if (editMode) {
     return null;
@@ -643,6 +646,20 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
           <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">React</TooltipContent>
         </Tooltip>
       </div>
+
+      <Tooltip delayDuration={600}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onOpenThread}
+            aria-label="Open thread"
+            className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
+          >
+            <MessageSquare className="size-[13px] text-muted-foreground" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">Thread</TooltipContent>
+      </Tooltip>
 
       <Tooltip delayDuration={600}>
         <TooltipTrigger asChild>
@@ -875,6 +892,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   onReply,
   onToggleBookmark,
   onOpenContext,
+  onOpenThread,
   metaNode,
 }: {
   message: Message;
@@ -896,6 +914,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   onReply: () => void;
   onToggleBookmark: () => void;
   onOpenContext: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onOpenThread: () => void;
   metaNode: React.ReactNode;
 }) {
   const replyPreviewText = String(message.replyTo?.content || "").trim() || "Original message unavailable";
@@ -931,6 +950,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
           onReact={onReact}
           onToggleReactBar={onToggleReactBar}
           onReply={onReply}
+          onOpenThread={onOpenThread}
           onToggleBookmark={onToggleBookmark}
           onOpenContext={onOpenContext}
         />
@@ -985,7 +1005,6 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
 /* ========== Main MessageItem ========== */
 interface MessageItemProps {
   message: Message;
-  index: number;
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   selectedConvo: Conversation;
@@ -1008,6 +1027,7 @@ interface MessageItemProps {
   canPinMessage?: boolean;
   isPinned?: boolean;
   onTogglePin?: (messageId: string, willPin: boolean) => void;
+  onOpenThread?: (messageId: string) => void;
 }
 
 const MessageItem = memo(function MessageItem({ // NOSONAR
@@ -1026,6 +1046,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   canPinMessage = false,
   isPinned = false,
   onTogglePin,
+  onOpenThread,
 }: MessageItemProps) {
   const { user } = useAuthStore();
   const {
@@ -1294,6 +1315,10 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     },
     [message, setReplyingTo],
   );
+  const handleOpenThreadPanel = useCallback(() => {
+    onOpenThread?.(message._id);
+    setContextMenu(null);
+  }, [message._id, onOpenThread]);
 
   const handleForward = useCallback(() => {
     if (onForward) onForward();
@@ -1538,6 +1563,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
   const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted && !message.audioUrl);
   const hasOnlyAudio = Boolean(message.audioUrl && !message.content && !message.imgUrl && !message.isDeleted);
+  const hasInteractiveMediaControls = Boolean(message.audioUrl && !message.isDeleted);
 
 
 
@@ -1627,7 +1653,12 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
           )}
           {message.audioUrl && !message.isDeleted && (
             <div className={cn("voice-memo-player", !hasOnlyAudio && "mt-1.5")}>
-              <VoiceMessagePlayer src={message.audioUrl} isOwn={isOwn} />
+              <VoiceMessagePlayer 
+                src={message.audioUrl} 
+                isOwn={isOwn} 
+                standalone={hasOnlyAudio}
+                className={hasOnlyAudio ? bubbleClusterClass : undefined}
+              />
             </div>
           )}
           {message.content && (
@@ -1638,21 +1669,34 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     </div>
   );
 
-  const readOnlyBubbleNode = (
-    // NOTE: Must be <div> not <button> — VoiceMessagePlayer renders its own <button>
-    // inside and HTML disallows nested interactive buttons.
+  const readOnlyBubbleNode = hasInteractiveMediaControls ? (
+    // NOSONAR: audio bubbles contain nested native controls, so this wrapper must stay non-button.
     <div
-      role="button"
-      tabIndex={canOpenEditMode ? 0 : undefined}
       onClick={handleBubbleClick}
       onDoubleClick={handleDoubleClickBubble}
       onContextMenu={handleContextMenu}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleBubbleClick();
-        }
-      }}
+      onTouchStart={handleBubbleTouchStart}
+      onTouchMove={handleBubbleTouchMove}
+      onTouchEnd={handleBubbleTouchEnd}
+      onTouchCancel={handleBubbleTouchCancel}
+      onPointerDown={() => setIsBubblePressed(true)}
+      onPointerUp={() => setIsBubblePressed(false)}
+      onPointerLeave={() => setIsBubblePressed(false)}
+      onPointerCancel={() => setIsBubblePressed(false)}
+      className={cn(
+        "chat-message-bubble-hit text-left select-none relative p-0 m-0 border-0 bg-transparent",
+        isBubblePressed && "chat-message-bubble-hit--pressed",
+        "cursor-default",
+      )}
+    >
+      {renderReadOnlyBubble()}
+    </div>
+  ) : (
+    <button
+      type="button"
+      onClick={handleBubbleClick}
+      onDoubleClick={handleDoubleClickBubble}
+      onContextMenu={handleContextMenu}
       onTouchStart={handleBubbleTouchStart}
       onTouchMove={handleBubbleTouchMove}
       onTouchEnd={handleBubbleTouchEnd}
@@ -1669,7 +1713,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       )}
     >
       {renderReadOnlyBubble()}
-    </div>
+    </button>
   );
 
   const bubbleNode = editMode ? (
@@ -1760,6 +1804,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
           onReact={handleReact}
           onToggleReactBar={() => setReactBarVisible((v) => !v)}
           onReply={handleReply}
+          onOpenThread={handleOpenThreadPanel}
           onToggleBookmark={() => {
             void handleToggleBookmark();
           }}

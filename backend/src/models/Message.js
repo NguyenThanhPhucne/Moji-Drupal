@@ -176,6 +176,12 @@ const messageSchema = new mongoose.Schema(
       ref: "Message",
       default: null,
     },
+    threadRootId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Message",
+      default: null,
+      index: true,
+    },
     forwardedFrom: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -223,6 +229,7 @@ const messageSchema = new mongoose.Schema(
 messageSchema.index({ conversationId: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, isDeleted: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, groupChannelId: 1, createdAt: -1 });
+messageSchema.index({ conversationId: 1, threadRootId: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1, createdAt: -1 });
 messageSchema.index(
   { content: "text" },

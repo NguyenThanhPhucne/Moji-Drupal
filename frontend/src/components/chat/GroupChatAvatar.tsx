@@ -22,6 +22,7 @@ const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
         type={avatarType}
         name={member.displayName}
         avatarUrl={member.avatarUrl ?? undefined}
+        className="ring-[1.5px] ring-background"
       />,
     );
   }
@@ -31,7 +32,6 @@ const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
       className={cn(
         "relative flex",
         type === "sidebar" ? "-space-x-2.5" : "-space-x-1.5",
-        "*:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-[1.5px]",
       )}
     >
       {avatars}

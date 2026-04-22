@@ -7,7 +7,7 @@ import {
   updateConversationAfterCreateMessage,
   invalidateConversationParticipantsCache
 } from "../utils/messageHelper.js";
-import { destroyImageFromUrl, destroyMediaFromUrl } from "../utils/cloudinaryHelper.js";
+import { destroyMediaFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
 import {
   applyRateLimitHeaders,
@@ -27,6 +27,16 @@ const GROUP_CHANNEL_ROLE_OPTIONS = ["owner", "admin", "member"];
 const MAX_MESSAGE_CONTENT_LENGTH = 5000;
 const MAX_REACTION_EMOJI_LENGTH = 16;
 const MAX_FORWARD_TARGETS_PER_REQUEST = 30;
+const MAX_AUDIO_UPLOAD_BYTES = 8 * 1024 * 1024;
+const SUPPORTED_AUDIO_MIME_TYPES = new Set([
+  "audio/webm",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/mpeg",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mp3",
+]);
 
 const assertValidMessageId = (messageId, res) => {
   if (!mongoose.isValidObjectId(messageId)) {
@@ -653,6 +663,11 @@ const normalizeReplyToId = (replyTo) => {
   return normalized || null;
 };
 
+const normalizeThreadRootId = (threadRootId) => {
+  const normalized = String(threadRootId || "").trim();
+  return normalized || null;
+};
+
 const resolveValidatedReplyTo = async ({
   replyTo,
   conversationId,
@@ -664,7 +679,7 @@ const resolveValidatedReplyTo = async ({
   }
 
   const replyTarget = await Message.findById(normalizedReplyTo)
-    .select("_id conversationId groupChannelId")
+    .select("_id conversationId groupChannelId threadRootId")
     .lean();
 
   if (!replyTarget) {
@@ -694,7 +709,51 @@ const resolveValidatedReplyTo = async ({
     }
   }
 
-  return replyTarget._id;
+  return replyTarget;
+};
+
+const resolveValidatedThreadRoot = async ({
+  threadRootId,
+  conversationId,
+  expectedGroupChannelId = null,
+}) => {
+  const normalizedThreadRootId = normalizeThreadRootId(threadRootId);
+  if (!normalizedThreadRootId) {
+    return null;
+  }
+
+  const threadRootMessage = await Message.findById(normalizedThreadRootId)
+    .select("_id conversationId groupChannelId")
+    .lean();
+
+  if (!threadRootMessage) {
+    throw createHttpError(404, "Không tìm thấy thread gốc");
+  }
+
+  if (String(threadRootMessage.conversationId) !== String(conversationId)) {
+    throw createHttpError(
+      400,
+      "Thread phải thuộc cùng cuộc trò chuyện",
+    );
+  }
+
+  if (expectedGroupChannelId) {
+    const normalizedExpectedChannelId = normalizeGroupChannelId(
+      expectedGroupChannelId,
+    );
+    const normalizedThreadChannelId = normalizeGroupChannelId(
+      threadRootMessage.groupChannelId,
+    );
+
+    if (normalizedThreadChannelId !== normalizedExpectedChannelId) {
+      throw createHttpError(
+        400,
+        "Thread phải thuộc cùng group channel",
+      );
+    }
+  }
+
+  return threadRootMessage._id;
 };
 
 const uploadMessageImage = async (rawImgUrl) => {
@@ -760,32 +819,86 @@ const uploadMessageAudio = async (rawAudioUrl) => {
     throw createHttpError(400, "Unsupported audio format");
   }
 
-  // Strip the data-URL header (including any codec params like ;codecs=opus)
-  // and decode to raw Buffer — Cloudinary's upload() rejects codec params in MIME type.
-  let audioBuffer;
-  try {
-    const base64Part = normalized.split(",")[1];
-    if (!base64Part) throw new Error("Invalid data URL — no base64 payload");
-    audioBuffer = Buffer.from(base64Part, "base64");
-  } catch {
-    throw createHttpError(400, "Malformed audio data URL");
-  }
+  const parseAudioDataUrl = (dataUrl) => {
+    const headerAndPayload = String(dataUrl || "").split(",", 2);
+    if (headerAndPayload.length < 2) {
+      throw createHttpError(400, "Malformed audio data URL");
+    }
+
+    const [header, base64Part] = headerAndPayload;
+    const mimeTypeMatch = /^data:([^;,]+)(?:;[^,]*)?;base64$/i.exec(header);
+    const normalizedMimeType = String(mimeTypeMatch?.[1] || "").toLowerCase();
+    if (!SUPPORTED_AUDIO_MIME_TYPES.has(normalizedMimeType)) {
+      throw createHttpError(400, "Unsupported audio format");
+    }
+
+    const normalizedBase64 = String(base64Part || "").replaceAll(/\s+/g, "");
+    if (!normalizedBase64) {
+      throw createHttpError(400, "Malformed audio data URL");
+    }
+
+    const estimatedBytes = Math.floor((normalizedBase64.length * 3) / 4);
+    if (!Number.isFinite(estimatedBytes) || estimatedBytes <= 0) {
+      throw createHttpError(400, "Malformed audio data URL");
+    }
+
+    if (estimatedBytes > MAX_AUDIO_UPLOAD_BYTES) {
+      throw createHttpError(413, "Audio payload exceeds 8MB limit");
+    }
+
+    let audioBuffer;
+    try {
+      audioBuffer = Buffer.from(normalizedBase64, "base64");
+    } catch {
+      throw createHttpError(400, "Malformed audio data URL");
+    }
+
+    if (!audioBuffer.length) {
+      throw createHttpError(400, "Malformed audio data URL");
+    }
+
+    if (audioBuffer.length > MAX_AUDIO_UPLOAD_BYTES) {
+      throw createHttpError(413, "Audio payload exceeds 8MB limit");
+    }
+
+    return {
+      mimeType: normalizedMimeType,
+      audioBuffer,
+    };
+  };
+
+  const { audioBuffer } = parseAudioDataUrl(normalized);
 
   let result;
   try {
-    result = await new Promise((resolve, reject) => {
+    const uploadOutcome = await new Promise((resolve) => {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: "coming_chat/messages/audio",
           resource_type: "video", // Cloudinary treats audio as 'video'
+          format: "mp4", // Force mp4 for Safari compatibility and to fix WebM Infinity duration
         },
         (error, uploadResult) => {
-          if (error) return reject(error);
-          resolve(uploadResult);
+          if (error) {
+            resolve({
+              error:
+                error instanceof Error
+                  ? error
+                  : new Error("Audio upload provider is temporarily unavailable"),
+            });
+            return;
+          }
+          resolve({ uploadResult });
         },
       );
       stream.end(audioBuffer);
     });
+
+    if (uploadOutcome?.error) {
+      throw uploadOutcome.error;
+    }
+
+    result = uploadOutcome?.uploadResult;
   } catch (error) {
     console.error("Audio upload error:", error);
     throw createHttpError(502, "Audio upload provider is temporarily unavailable");
@@ -807,32 +920,70 @@ export const uploadAudio = async (req, res) => {
       return res.status(400).json({ message: "Unsupported format. Expected base64 data:audio/*" });
     }
 
-    // Extract raw base64 after the comma — strips codec params that Cloudinary rejects
-    const base64Part = normalized.split(",")[1];
-    if (!base64Part) {
+    const headerAndPayload = normalized.split(",", 2);
+    if (headerAndPayload.length < 2) {
       return res.status(400).json({ message: "Malformed audio data URL" });
     }
 
-    const audioBuffer = Buffer.from(base64Part, "base64");
+    const [header, base64Part] = headerAndPayload;
+    const mimeTypeMatch = /^data:([^;,]+)(?:;[^,]*)?;base64$/i.exec(header);
+    const normalizedMimeType = String(mimeTypeMatch?.[1] || "").toLowerCase();
+    if (!SUPPORTED_AUDIO_MIME_TYPES.has(normalizedMimeType)) {
+      return res.status(400).json({ message: "Unsupported audio format" });
+    }
+
+    const normalizedBase64 = String(base64Part || "").replaceAll(/\s+/g, "");
+    if (!normalizedBase64) {
+      return res.status(400).json({ message: "Malformed audio data URL" });
+    }
+
+    const estimatedBytes = Math.floor((normalizedBase64.length * 3) / 4);
+    if (!Number.isFinite(estimatedBytes) || estimatedBytes <= 0) {
+      return res.status(400).json({ message: "Malformed audio data URL" });
+    }
+
+    if (estimatedBytes > MAX_AUDIO_UPLOAD_BYTES) {
+      return res.status(413).json({ message: "Audio payload exceeds 8MB limit" });
+    }
+
+    const audioBuffer = Buffer.from(normalizedBase64, "base64");
     if (audioBuffer.length === 0) {
       return res.status(400).json({ message: "Empty audio payload" });
+    }
+    if (audioBuffer.length > MAX_AUDIO_UPLOAD_BYTES) {
+      return res.status(413).json({ message: "Audio payload exceeds 8MB limit" });
     }
 
     let result;
     try {
-      result = await new Promise((resolve, reject) => {
+      const uploadOutcome = await new Promise((resolve) => {
         const stream = cloudinary.uploader.upload_stream(
           {
             folder: "coming_chat/messages/audio",
             resource_type: "video", // Cloudinary stores audio under video resource type
+            format: "mp4", // Force mp4 for Safari compatibility
           },
           (error, uploadResult) => {
-            if (error) return reject(error);
-            resolve(uploadResult);
+            if (error) {
+              resolve({
+                error:
+                  error instanceof Error
+                    ? error
+                    : new Error("Audio upload service temporarily unavailable"),
+              });
+              return;
+            }
+            resolve({ uploadResult });
           },
         );
         stream.end(audioBuffer);
       });
+
+      if (uploadOutcome?.error) {
+        throw uploadOutcome.error;
+      }
+
+      result = uploadOutcome?.uploadResult;
     } catch (uploadError) {
       console.error("Audio upload failed:", uploadError);
       return res.status(502).json({ message: "Audio upload service temporarily unavailable" });
@@ -1171,7 +1322,15 @@ const resolveLinkMetadata = async (rawUrl) => {
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export const sendDirectMessage = async (req, res) => {
   try {
-    const { recipientId, content, imgUrl, audioUrl, conversationId, replyTo } = req.body;
+    const {
+      recipientId,
+      content,
+      imgUrl,
+      audioUrl,
+      conversationId,
+      replyTo,
+      threadRootId,
+    } = req.body;
     const senderId = req.user._id;
     const normalizedContent = String(content || "").trim();
     const hasMediaPayload = Boolean(String(imgUrl || "").trim() || String(audioUrl || "").trim());
@@ -1222,10 +1381,19 @@ export const sendDirectMessage = async (req, res) => {
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
     const uploadedAudioUrl = await uploadMessageAudio(audioUrl);
 
-    const validatedReplyTo = await resolveValidatedReplyTo({
+    const validatedReplyTarget = await resolveValidatedReplyTo({
       replyTo,
       conversationId: conversation._id,
     });
+    const validatedThreadRootId = await resolveValidatedThreadRoot({
+      threadRootId,
+      conversationId: conversation._id,
+    });
+    const effectiveThreadRootId =
+      validatedThreadRootId ||
+      validatedReplyTarget?.threadRootId ||
+      validatedReplyTarget?._id ||
+      null;
 
     let message = await Message.create({
       conversationId: conversation._id,
@@ -1233,10 +1401,11 @@ export const sendDirectMessage = async (req, res) => {
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
       audioUrl: uploadedAudioUrl,
-      replyTo: validatedReplyTo,
+      replyTo: validatedReplyTarget?._id || null,
+      threadRootId: effectiveThreadRootId,
     });
 
-    if (validatedReplyTo) {
+    if (validatedReplyTarget?._id) {
       message = await message.populate("replyTo", "content senderId");
     }
 
@@ -1270,7 +1439,15 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { conversationId, content, imgUrl, audioUrl, replyTo, groupChannelId } = req.body;
+    const {
+      conversationId,
+      content,
+      imgUrl,
+      audioUrl,
+      replyTo,
+      groupChannelId,
+      threadRootId,
+    } = req.body;
     const senderId = req.user._id;
     const normalizedConversationId = String(conversationId || "").trim();
     const normalizedRequestedChannelId = String(groupChannelId || "").trim();
@@ -1355,11 +1532,21 @@ export const sendGroupMessage = async (req, res) => {
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
     const uploadedAudioUrl = await uploadMessageAudio(audioUrl);
-    const validatedReplyTo = await resolveValidatedReplyTo({
+    const validatedReplyTarget = await resolveValidatedReplyTo({
       replyTo,
       conversationId: normalizedConversationId,
       expectedGroupChannelId: effectiveGroupChannelId,
     });
+    const validatedThreadRootId = await resolveValidatedThreadRoot({
+      threadRootId,
+      conversationId: normalizedConversationId,
+      expectedGroupChannelId: effectiveGroupChannelId,
+    });
+    const effectiveThreadRootId =
+      validatedThreadRootId ||
+      validatedReplyTarget?.threadRootId ||
+      validatedReplyTarget?._id ||
+      null;
 
     let message = await Message.create({
       conversationId: normalizedConversationId,
@@ -1368,10 +1555,11 @@ export const sendGroupMessage = async (req, res) => {
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
       audioUrl: uploadedAudioUrl,
-      replyTo: validatedReplyTo,
+      replyTo: validatedReplyTarget?._id || null,
+      threadRootId: effectiveThreadRootId,
     });
 
-    if (validatedReplyTo) {
+    if (validatedReplyTarget?._id) {
       message = await message.populate("replyTo", "content senderId");
     }
 
@@ -1664,6 +1852,8 @@ export const unsendMessage = async (req, res) => {
         conversationId: deletedMessage.conversationId,
         messageId: deletedMessage._id,
         content: deletedMessage.content,
+        imgUrl: deletedMessage.imgUrl,
+        audioUrl: deletedMessage.audioUrl,
         editedAt: deletedMessage.editedAt,
         reactions: deletedMessage.reactions,
         readBy: deletedMessage.readBy,
@@ -2034,6 +2224,134 @@ export const markMessageRead = async (req, res) => {
     return res.status(200).json({ ok: true });
   } catch (error) {
     console.error("Lỗi khi đánh dấu đã đọc:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+const encodeThreadCursor = (message) => {
+  if (!message?._id || !message?.createdAt) {
+    return null;
+  }
+
+  const payload = `${new Date(message.createdAt).toISOString()}_${message._id}`;
+  return Buffer.from(payload, "utf8").toString("base64url");
+};
+
+const decodeThreadCursor = (cursor) => {
+  const normalizedCursor = String(cursor || "").trim();
+  if (!normalizedCursor) {
+    return null;
+  }
+
+  try {
+    const decoded = Buffer.from(normalizedCursor, "base64url").toString("utf8");
+    const [createdAtPart, messageIdPart] = decoded.split("_");
+    const createdAt = new Date(createdAtPart);
+    if (!Number.isFinite(createdAt.getTime()) || !mongoose.isValidObjectId(messageIdPart)) {
+      return null;
+    }
+
+    return {
+      createdAt,
+      messageId: messageIdPart,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const getMessageThread = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { cursor, limit = 30 } = req.query;
+    const userId = assertValidAuthUserId(req, res);
+    if (!userId) return;
+    if (!assertValidMessageId(messageId, res)) return;
+
+    const parsedLimit = Number(limit);
+    const safeLimit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 80)
+      : 30;
+
+    const rootMessage = await Message.findById(messageId)
+      .select("_id conversationId groupChannelId hiddenFor")
+      .lean();
+    if (!rootMessage) {
+      return res.status(404).json({ message: "Không tìm thấy thread gốc" });
+    }
+
+    const isHiddenForUser = (rootMessage.hiddenFor || []).some(
+      (hiddenUserId) => String(hiddenUserId) === String(userId),
+    );
+    if (isHiddenForUser) {
+      return res.status(404).json({ message: "Không tìm thấy thread gốc" });
+    }
+
+    const isMember = await ensureConversationMembership(
+      rootMessage.conversationId,
+      userId,
+    );
+    if (!isMember) {
+      return res.status(403).json({ message: "Không có quyền thao tác" });
+    }
+
+    const query = {
+      conversationId: rootMessage.conversationId,
+      hiddenFor: { $ne: userId },
+      $or: [{ _id: rootMessage._id }, { threadRootId: rootMessage._id }],
+    };
+
+    if (rootMessage.groupChannelId) {
+      query.groupChannelId = rootMessage.groupChannelId;
+    }
+
+    const decodedCursor = decodeThreadCursor(cursor);
+    if (cursor && !decodedCursor) {
+      return res.status(400).json({ message: "Cursor không hợp lệ" });
+    }
+
+    if (decodedCursor) {
+      query.$and = [
+        {
+          $or: [
+            { createdAt: { $lt: decodedCursor.createdAt } },
+            {
+              createdAt: decodedCursor.createdAt,
+              _id: { $lt: decodedCursor.messageId },
+            },
+          ],
+        },
+      ];
+    }
+
+    let messages = await Message.find(query)
+      .select(
+        "_id conversationId groupChannelId senderId content imgUrl audioUrl replyTo threadRootId reactions isDeleted editedAt readBy createdAt updatedAt",
+      )
+      .populate("replyTo", "content senderId")
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(safeLimit + 1)
+      .lean();
+
+    let nextCursor = null;
+    if (messages.length > safeLimit) {
+      const nextMessage = messages.at(-1);
+      nextCursor = encodeThreadCursor(nextMessage);
+      messages.pop();
+    }
+
+    messages = messages.reverse();
+    return res.status(200).json({
+      threadRootId: toStringId(rootMessage._id),
+      messages,
+      nextCursor,
+    });
+  } catch (error) {
+    if (error?.status) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    console.error("Lỗi khi lấy thread tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

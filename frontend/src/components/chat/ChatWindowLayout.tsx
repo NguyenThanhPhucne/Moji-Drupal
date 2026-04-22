@@ -4,6 +4,7 @@ import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
+import ThreadPanel from "./ThreadPanel";
 import { useEffect, useState } from "react";
 import ChatWindowSkeleton from "../skeleton/ChatWindowSkeleton";
 import { useSocketStore } from "@/stores/useSocketStore";
@@ -252,6 +253,8 @@ const ChatWindowLayout = () => {
       <div className="chat-footer-shell chat-footer-shell--command">
         <MessageInput selectedConvo={selectedConvo} />
       </div>
+
+      <ThreadPanel selectedConvo={selectedConvo} />
     </SidebarInset>
   );
 };

@@ -4,7 +4,7 @@ const ConversationSkeleton = ({ count = 5 }: { count?: number }) => {
       {Array.from({ length: count }).map((_, index) => (
         <div
           key={index}
-          className="flex flex-row items-center gap-3 rounded-xl px-3 py-[10px]"
+          className="flex flex-row items-center gap-3 rounded-[14px] px-3.5 py-2.5"
           style={{ opacity: 1 - index * 0.14 }}
         >
           {/* Avatar skeleton */}

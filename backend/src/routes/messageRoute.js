@@ -13,6 +13,7 @@ import {
   forwardMessage,
   toggleForwardable,
   uploadAudio,
+  getMessageThread,
 } from "../controllers/messageController.js";
 import {
   checkFriendship,
@@ -32,6 +33,7 @@ router.put("/:messageId/edit", editMessage);
 router.post("/:messageId/read", markMessageRead);
 router.post("/:messageId/forward", forwardMessage);
 router.put("/:messageId/toggle-forward", toggleForwardable);
+router.get("/:messageId/thread", getMessageThread);
 router.get("/link-preview/meta", getLinkPreview);
 
 export default router;
