@@ -7,7 +7,7 @@ import {
   updateConversationAfterCreateMessage,
   invalidateConversationParticipantsCache
 } from "../utils/messageHelper.js";
-import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
+import { destroyImageFromUrl, destroyMediaFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
 import {
   applyRateLimitHeaders,
@@ -745,6 +745,35 @@ const uploadMessageImage = async (rawImgUrl) => {
   return result.secure_url;
 };
 
+const uploadMessageAudio = async (rawAudioUrl) => {
+  const normalized = String(rawAudioUrl || "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  // If already an http(s) URL, trust and keep it as-is.
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return normalized;
+  }
+
+  if (!normalized.startsWith("data:audio/")) {
+    throw createHttpError(400, "Unsupported audio format");
+  }
+
+  let result;
+  try {
+    result = await cloudinary.uploader.upload(normalized, {
+      folder: "coming_chat/messages/audio",
+      resource_type: "video", // Cloudinary treats audio as video
+    });
+  } catch (error) {
+    console.error("Audio upload error:", error);
+    throw createHttpError(502, "Audio upload provider is temporarily unavailable");
+  }
+
+  return result.secure_url;
+};
+
 const sanitizeMetaValue = (input) => {
   return String(input || "")
     .replaceAll(/\s+/g, " ")
@@ -1071,10 +1100,10 @@ const resolveLinkMetadata = async (rawUrl) => {
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export const sendDirectMessage = async (req, res) => {
   try {
-    const { recipientId, content, imgUrl, conversationId, replyTo } = req.body;
+    const { recipientId, content, imgUrl, audioUrl, conversationId, replyTo } = req.body;
     const senderId = req.user._id;
     const normalizedContent = String(content || "").trim();
-    const hasImagePayload = Boolean(String(imgUrl || "").trim());
+    const hasMediaPayload = Boolean(String(imgUrl || "").trim() || String(audioUrl || "").trim());
 
     if (!conversationId && !recipientId) {
       return res
@@ -1082,8 +1111,8 @@ export const sendDirectMessage = async (req, res) => {
         .json({ message: "Thiếu recipientId cho cuộc trò chuyện trực tiếp mới" });
     }
 
-    if (!normalizedContent && !hasImagePayload) {
-      return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
+    if (!normalizedContent && !hasMediaPayload) {
+      return res.status(400).json({ message: "Thiếu nội dung hoặc phương tiện" });
     }
 
     if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
@@ -1120,6 +1149,7 @@ export const sendDirectMessage = async (req, res) => {
     }
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
+    const uploadedAudioUrl = await uploadMessageAudio(audioUrl);
 
     const validatedReplyTo = await resolveValidatedReplyTo({
       replyTo,
@@ -1131,6 +1161,7 @@ export const sendDirectMessage = async (req, res) => {
       senderId,
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
+      audioUrl: uploadedAudioUrl,
       replyTo: validatedReplyTo,
     });
 
@@ -1168,12 +1199,12 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { conversationId, content, imgUrl, replyTo, groupChannelId } = req.body;
+    const { conversationId, content, imgUrl, audioUrl, replyTo, groupChannelId } = req.body;
     const senderId = req.user._id;
     const normalizedConversationId = String(conversationId || "").trim();
     const normalizedRequestedChannelId = String(groupChannelId || "").trim();
     const normalizedContent = String(content || "").trim();
-    const hasImagePayload = Boolean(String(imgUrl || "").trim());
+    const hasMediaPayload = Boolean(String(imgUrl || "").trim() || String(audioUrl || "").trim());
 
     if (!mongoose.isValidObjectId(normalizedConversationId)) {
       return res.status(400).json({ message: "Conversation id không hợp lệ" });
@@ -1225,8 +1256,8 @@ export const sendGroupMessage = async (req, res) => {
       });
     }
 
-    if (!normalizedContent && !hasImagePayload) {
-      return res.status(400).json({ message: "Thiếu nội dung hoặc hình ảnh" });
+    if (!normalizedContent && !hasMediaPayload) {
+      return res.status(400).json({ message: "Thiếu nội dung hoặc phương tiện" });
     }
 
     if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
@@ -1252,6 +1283,7 @@ export const sendGroupMessage = async (req, res) => {
     }
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
+    const uploadedAudioUrl = await uploadMessageAudio(audioUrl);
     const validatedReplyTo = await resolveValidatedReplyTo({
       replyTo,
       conversationId: normalizedConversationId,
@@ -1264,6 +1296,7 @@ export const sendGroupMessage = async (req, res) => {
       senderId,
       content: normalizedContent,
       imgUrl: uploadedImgUrl,
+      audioUrl: uploadedAudioUrl,
       replyTo: validatedReplyTo,
     });
 
@@ -1460,6 +1493,7 @@ export const unsendMessage = async (req, res) => {
           isDeleted: true,
           content: REMOVED_MESSAGE_CONTENT,
           imgUrl: null,
+          audioUrl: null,
           replyTo: null,
           reactions: [],
           readBy: [],
@@ -1484,9 +1518,18 @@ export const unsendMessage = async (req, res) => {
     }
 
     if (message.imgUrl) {
-      destroyImageFromUrl(message.imgUrl).catch((cleanupError) => {
+      destroyMediaFromUrl(message.imgUrl, "image").catch((cleanupError) => {
         console.error(
           "[unsendMessage] Image cleanup failed after successful message delete",
+          cleanupError,
+        );
+      });
+    }
+
+    if (message.audioUrl) {
+      destroyMediaFromUrl(message.audioUrl, "video").catch((cleanupError) => {
+        console.error(
+          "[unsendMessage] Audio cleanup failed after successful message delete",
           cleanupError,
         );
       });

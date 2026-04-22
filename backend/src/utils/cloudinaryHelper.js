@@ -41,3 +41,16 @@ export const destroyImageFromUrl = async (url) => {
     return false;
   }
 };
+
+export const destroyMediaFromUrl = async (url, resourceType = "image") => {
+  const publicId = extractPublicIdFromUrl(url);
+  if (!publicId) return false;
+
+  try {
+    const response = await cloudinary.uploader.destroy(publicId, { resource_type: resourceType });
+    return response.result === "ok";
+  } catch (error) {
+    console.error(`[cloudinaryHelper] Lỗi khi huỷ ${resourceType} trên Cloudinary ID: ${publicId}`, error);
+    return false;
+  }
+};

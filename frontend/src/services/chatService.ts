@@ -120,6 +120,7 @@ export const chatService = {
     recipientId: string,
     content: string = "",
     imgUrl?: string,
+    audioUrl?: string,
     conversationId?: string,
     replyTo?: string,
   ) {
@@ -127,6 +128,7 @@ export const chatService = {
       recipientId,
       content,
       imgUrl,
+      audioUrl,
       conversationId,
       replyTo,
     });
@@ -138,6 +140,7 @@ export const chatService = {
     conversationId: string,
     content: string = "",
     imgUrl?: string,
+    audioUrl?: string,
     replyTo?: string,
     groupChannelId?: string,
   ) {
@@ -145,6 +148,7 @@ export const chatService = {
       conversationId,
       content,
       imgUrl,
+      audioUrl,
       replyTo,
       groupChannelId,
     });

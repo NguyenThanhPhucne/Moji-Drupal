@@ -168,6 +168,9 @@ const messageSchema = new mongoose.Schema(
     imgUrl: {
       type: String,
     },
+    audioUrl: {
+      type: String,
+    },
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",

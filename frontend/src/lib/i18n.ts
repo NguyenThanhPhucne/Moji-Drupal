@@ -201,6 +201,8 @@ const EN_TRANSLATIONS = {
   "chatComposer.cancel_reply": "Cancel reply",
   "chatComposer.preview": "preview",
   "chatComposer.preview_image": "Image",
+  "chatComposer.record_audio": "Record voice memo",
+  "chatComposer.voice_attachment": "Voice message",
 } as const;
 
 type TranslationKey = keyof typeof EN_TRANSLATIONS;
@@ -401,6 +403,8 @@ const VI_TRANSLATIONS: Record<TranslationKey, string> = {
   "chatComposer.cancel_reply": "Hủy trả lời",
   "chatComposer.preview": "xem trước",
   "chatComposer.preview_image": "Ảnh",
+  "chatComposer.record_audio": "Ghi tin nhắn thoại",
+  "chatComposer.voice_attachment": "Tin nhắn thoại",
 };
 
 const TRANSLATIONS: Record<SupportedLocale, Record<TranslationKey, string>> = {

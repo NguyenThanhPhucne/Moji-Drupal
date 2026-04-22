@@ -27,6 +27,13 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     appendEmoji,
     hasSendable,
     charsLeft,
+    audioPreview,
+    isRecording,
+    recordingDuration,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+    removeAudioPreview,
   } = useMessageInput(selectedConvo);
 
   const {
@@ -87,6 +94,8 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         onClearReply={() => setReplyingTo(null)}
         imagePreview={imagePreview}
         onClearImage={() => setImagePreview(null)}
+        audioPreview={audioPreview}
+        onClearAudio={removeAudioPreview}
         announcementOnly={announcementOnly}
         isGroupAdmin={isGroupAdmin}
       />
@@ -111,6 +120,11 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         isSendBursting={isSendBursting}
         sendButtonToneClass={sendButtonToneClass}
         onSend={handleSendClick}
+        isRecording={isRecording}
+        recordingDuration={recordingDuration}
+        onStartRecording={startRecording}
+        onStopRecording={stopRecording}
+        onCancelRecording={cancelRecording}
       />
     </MessageComposerShell>
   );

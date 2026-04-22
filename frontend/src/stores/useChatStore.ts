@@ -124,6 +124,7 @@ const enqueueDirectOutgoingMessage = ({
   recipientId,
   content,
   imgUrl,
+  audioUrl,
   replyTo,
   queuedAt,
   attemptCount,
@@ -134,6 +135,7 @@ const enqueueDirectOutgoingMessage = ({
   recipientId: string;
   content: string;
   imgUrl?: string;
+  audioUrl?: string;
   replyTo?: string;
   queuedAt: string;
   attemptCount: number;
@@ -146,6 +148,7 @@ const enqueueDirectOutgoingMessage = ({
       recipientId,
       content,
       imgUrl,
+      audioUrl,
       replyTo,
       queuedAt,
       attemptCount,
@@ -241,6 +244,7 @@ const applyDirectSendFailure = ({
   recipientId,
   content,
   imgUrl,
+  audioUrl,
   replyTo,
   queuedAt,
 }: {
@@ -253,6 +257,7 @@ const applyDirectSendFailure = ({
   recipientId: string;
   content: string;
   imgUrl?: string;
+  audioUrl?: string;
   replyTo?: string;
   queuedAt: string;
 }) => {
@@ -273,6 +278,7 @@ const applyDirectSendFailure = ({
       recipientId: String(recipientId || "").trim(),
       content: String(content || ""),
       imgUrl,
+      audioUrl,
       replyTo,
       queuedAt,
       attemptCount: nextAttemptCount,
@@ -593,6 +599,7 @@ type PendingOwnTempMessageEntry = {
   content: string;
   replyToId: string;
   hasImage: boolean;
+  hasAudio: boolean;
 };
 
 const pendingOwnTempMessagesByConversation = new Map<
@@ -604,15 +611,18 @@ const normalizePendingOwnMessageDescriptor = ({
   content,
   replyToId,
   hasImage,
+  hasAudio,
 }: {
   content?: string | null;
   replyToId?: string | null;
   hasImage?: boolean;
+  hasAudio?: boolean;
 }) => {
   return {
     content: String(content || "").trim(),
     replyToId: String(replyToId || "").trim(),
     hasImage: Boolean(hasImage),
+    hasAudio: Boolean(hasAudio),
   };
 };
 
@@ -639,12 +649,14 @@ const registerPendingOwnTempMessage = ({
   content,
   replyToId,
   hasImage,
+  hasAudio,
 }: {
   conversationId: string;
   tempId: string;
   content?: string | null;
   replyToId?: string | null;
   hasImage?: boolean;
+  hasAudio?: boolean;
 }) => {
   const normalizedConversationId = String(conversationId || "").trim();
   const normalizedTempId = String(tempId || "").trim();
@@ -659,6 +671,7 @@ const registerPendingOwnTempMessage = ({
       content,
       replyToId,
       hasImage,
+      hasAudio,
     }),
   });
   pendingOwnTempMessagesByConversation.set(normalizedConversationId, queue);
@@ -696,11 +709,13 @@ const consumeMatchingPendingOwnTempMessage = ({
   content,
   replyToId,
   hasImage,
+  hasAudio,
 }: {
   conversationId: string;
   content?: string | null;
   replyToId?: string | null;
   hasImage?: boolean;
+  hasAudio?: boolean;
 }) => {
   const normalizedConversationId = String(conversationId || "").trim();
   if (!normalizedConversationId) {
@@ -716,13 +731,15 @@ const consumeMatchingPendingOwnTempMessage = ({
     content,
     replyToId,
     hasImage,
+    hasAudio,
   });
 
   const matchedIndex = queue.findIndex((entry) => {
     return (
       entry.content === normalizedDescriptor.content &&
       entry.replyToId === normalizedDescriptor.replyToId &&
-      entry.hasImage === normalizedDescriptor.hasImage
+      entry.hasImage === normalizedDescriptor.hasImage &&
+      entry.hasAudio === normalizedDescriptor.hasAudio
     );
   });
 
@@ -1072,6 +1089,7 @@ export const useChatStore = create<ChatState>()(
         recipientId,
         content,
         imgUrl,
+        audioUrl,
         conversationIdOverride,
         replyTo,
       ) => {
@@ -1088,7 +1106,9 @@ export const useChatStore = create<ChatState>()(
           : null;
         const nowIso = new Date().toISOString();
         const optimisticPreviewContent =
-          String(content || "").trim() || (imgUrl ? "Photo attachment" : "New message");
+          String(content || "").trim() || (imgUrl ? "Photo attachment" : 
+            (audioUrl ? "Voice message" : "New message")
+          );
 
         const {
           optimisticConversationId,
@@ -1122,6 +1142,7 @@ export const useChatStore = create<ChatState>()(
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
+          audioUrl: audioUrl ?? null,
           replyTo: replyTo
             ? { _id: replyTo, content: "", senderId: "" }
             : null,
@@ -1145,6 +1166,7 @@ export const useChatStore = create<ChatState>()(
           content: optimisticMessage.content,
           replyToId: resolveReplyToId(optimisticMessage.replyTo),
           hasImage: Boolean(optimisticMessage.imgUrl),
+          hasAudio: Boolean(optimisticMessage.audioUrl),
         });
 
         if (shouldQueueImmediately) {
@@ -1158,6 +1180,7 @@ export const useChatStore = create<ChatState>()(
             replyTo: String(replyTo || "").trim() || undefined,
             queuedAt: nowIso,
             attemptCount: 0,
+            audioUrl: audioUrl || undefined,
           });
           toast.info("You're offline. Message queued.");
           return;
@@ -1168,6 +1191,7 @@ export const useChatStore = create<ChatState>()(
             recipientId,
             content,
             imgUrl,
+            audioUrl,
             resolvedConversationId ?? undefined,
             replyTo,
           );
@@ -1193,6 +1217,7 @@ export const useChatStore = create<ChatState>()(
             recipientId,
             content: String(content || ""),
             imgUrl: imgUrl || undefined,
+            audioUrl: audioUrl || undefined,
             replyTo: String(replyTo || "").trim() || undefined,
             queuedAt: nowIso,
           });
@@ -1204,6 +1229,7 @@ export const useChatStore = create<ChatState>()(
         conversationId,
         content,
         imgUrl,
+        audioUrl,
         replyTo,
         groupChannelId,
       ) => {
@@ -1227,6 +1253,7 @@ export const useChatStore = create<ChatState>()(
           senderId: user?._id ?? "",
           content: content ?? "",
           imgUrl: imgUrl ?? null,
+          audioUrl: audioUrl ?? null,
           replyTo: replyTo
             ? { _id: replyTo, content: "", senderId: "" }
             : null,
@@ -1250,6 +1277,7 @@ export const useChatStore = create<ChatState>()(
           content: optimisticMessage.content,
           replyToId: resolveReplyToId(optimisticMessage.replyTo),
           hasImage: Boolean(optimisticMessage.imgUrl),
+          hasAudio: Boolean(optimisticMessage.audioUrl),
         });
 
         if (shouldQueueImmediately) {
@@ -1261,6 +1289,7 @@ export const useChatStore = create<ChatState>()(
               groupChannelId: effectiveGroupChannelId,
               content: String(content || ""),
               imgUrl: imgUrl || undefined,
+              audioUrl: audioUrl || undefined,
               replyTo: String(replyTo || "").trim() || undefined,
               queuedAt: nowIso,
               attemptCount: 0,
@@ -1276,6 +1305,7 @@ export const useChatStore = create<ChatState>()(
             conversationId,
             content,
             imgUrl,
+            audioUrl,
             replyTo,
             effectiveGroupChannelId,
           );
@@ -1329,6 +1359,7 @@ export const useChatStore = create<ChatState>()(
                 groupChannelId: effectiveGroupChannelId,
                 content: String(content || ""),
                 imgUrl: imgUrl || undefined,
+                audioUrl: audioUrl || undefined,
                 replyTo: String(replyTo || "").trim() || undefined,
                 queuedAt: nowIso,
                 attemptCount: nextAttemptCount,
@@ -1389,6 +1420,7 @@ export const useChatStore = create<ChatState>()(
                 content: String(message.content || ""),
                 replyToId: resolveReplyToId(message.replyTo),
                 hasImage: Boolean(message.imgUrl),
+                hasAudio: Boolean(message.audioUrl),
               });
 
               if (matchedTempId) {
@@ -1512,6 +1544,8 @@ export const useChatStore = create<ChatState>()(
           pendingMessage.content ?? queuedItem?.content ?? "",
         );
         const payloadImgUrl = pendingMessage.imgUrl || queuedItem?.imgUrl || undefined;
+        const payloadAudioUrl =
+          pendingMessage.audioUrl || queuedItem?.audioUrl || undefined;
         const payloadReplyTo =
           resolveReplyToId(pendingMessage.replyTo) || queuedItem?.replyTo || "";
         const nextAttemptCount =
@@ -1520,7 +1554,7 @@ export const useChatStore = create<ChatState>()(
           ) + 1;
         const nowIso = new Date().toISOString();
 
-        if (!payloadContent.trim() && !payloadImgUrl) {
+        if (!payloadContent.trim() && !payloadImgUrl && !payloadAudioUrl) {
           get().updateMessage(effectiveConversationId, normalizedMessageId, {
             deliveryState: "failed",
             deliveryError: "Message content is empty.",
@@ -1582,6 +1616,7 @@ export const useChatStore = create<ChatState>()(
               groupChannelId: scope === "group" ? targetGroupChannelId || undefined : undefined,
               content: payloadContent,
               imgUrl: payloadImgUrl,
+              audioUrl: payloadAudioUrl,
               replyTo: payloadReplyTo || undefined,
               queuedAt: nowIso,
               attemptCount: nextAttemptCount,
@@ -1596,6 +1631,7 @@ export const useChatStore = create<ChatState>()(
           content: payloadContent,
           replyToId: payloadReplyTo,
           hasImage: Boolean(payloadImgUrl),
+          hasAudio: Boolean(payloadAudioUrl),
         });
 
         get().updateMessage(effectiveConversationId, normalizedMessageId, {
@@ -1623,6 +1659,7 @@ export const useChatStore = create<ChatState>()(
               recipientId,
               payloadContent,
               payloadImgUrl,
+              payloadAudioUrl,
               resolvedConversationId,
               payloadReplyTo || undefined,
             );
@@ -1664,6 +1701,7 @@ export const useChatStore = create<ChatState>()(
               effectiveConversationId,
               payloadContent,
               payloadImgUrl,
+              payloadAudioUrl,
               payloadReplyTo || undefined,
               targetGroupChannelId || undefined,
             );
@@ -1706,6 +1744,7 @@ export const useChatStore = create<ChatState>()(
                   scope === "group" ? targetGroupChannelId || undefined : undefined,
                 content: payloadContent,
                 imgUrl: payloadImgUrl,
+                audioUrl: payloadAudioUrl,
                 replyTo: payloadReplyTo || undefined,
                 queuedAt: nowIso,
                 attemptCount: nextAttemptCount,

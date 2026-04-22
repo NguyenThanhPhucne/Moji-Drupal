@@ -1505,7 +1505,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     isFirstInGroup ? "pt-2 pb-[1px]" : "py-[1px]",
   );
 
-  const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted);
+  const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted && !message.audioUrl);
+  const hasOnlyAudio = Boolean(message.audioUrl && !message.content && !message.imgUrl && !message.isDeleted);
 
 
 
@@ -1525,21 +1526,23 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     bubbleClusterClass = isOwn ? "rounded-br-[4px]" : "rounded-bl-[4px]";
   }
 
+  const hasNoBubbleShell = hasOnlyImage || hasOnlyAudio;
+
   const renderReadOnlyBubble = () => (
     <div
       className={cn(
         "relative leading-[1.35] transition-colors duration-150 mt-0.5",
-        hasOnlyImage
+        hasNoBubbleShell
           ? "bg-transparent p-0 border-transparent shadow-none"
           : cn(
               "px-3.5 py-2.5",
               bubbleToneClass,
             ),
-        !hasOnlyImage && "chat-message-bubble-surface",
-        !hasOnlyImage && (isOwn
+        !hasNoBubbleShell && "chat-message-bubble-surface",
+        !hasNoBubbleShell && (isOwn
           ? "chat-message-bubble-surface--own"
           : "chat-message-bubble-surface--peer"),
-        !hasOnlyImage && actionBarVisible && "chat-message-bubble-surface--actions-visible",
+        !hasNoBubbleShell && actionBarVisible && "chat-message-bubble-surface--actions-visible",
         bubbleClusterClass,
         message.isDeleted && "chat-message-bubble-shell--deleted opacity-65 italic",
         isBubblePressed && !message.isDeleted && "chat-message-bubble-shell--pressed",
@@ -1590,6 +1593,52 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
                 <ZoomIn className="size-5 text-white" />
               </span>
             </span>
+          )}
+          {message.audioUrl && !message.isDeleted && (
+            <div
+              className={cn(
+                "voice-memo-player flex items-center gap-2.5",
+                hasOnlyAudio
+                  ? "p-0"
+                  : "mt-1.5",
+              )}
+            >
+              <div className={cn(
+                "flex items-center gap-2 rounded-2xl px-3 py-2 min-w-[200px] max-w-[280px]",
+                isOwn
+                  ? "bg-white/15 border border-white/20"
+                  : "bg-muted/40 border border-border/30",
+              )}>
+                <span className={cn(
+                  "flex shrink-0 size-8 items-center justify-center rounded-full",
+                  isOwn ? "bg-white/20" : "bg-primary/15",
+                )}>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={isOwn ? "text-white/90" : "text-primary"}
+                  >
+                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" x2="12" y1="19" y2="22" />
+                  </svg>
+                </span>
+                <audio
+                  src={message.audioUrl}
+                  controls
+                  preload="metadata"
+                  className="h-7 w-full min-w-0"
+                  aria-label="Voice message"
+                />
+              </div>
+            </div>
           )}
           {message.content && (
             <p className="chat-message-content whitespace-pre-wrap break-words">{message.content}</p>

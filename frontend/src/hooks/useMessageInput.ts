@@ -14,6 +14,7 @@ const MESSAGE_DRAFT_STORAGE_PREFIX = "moji-message-drafts-v1";
 type MessageDraftState = {
   value: string;
   imagePreview: string | null;
+  audioPreview: string | null;
 };
 
 type PersistedDraftMap = Record<string, string>;
@@ -74,7 +75,14 @@ export function useMessageInput(selectedConvo: Conversation) {
   const [value, setValue] = useState("");
   const [typing, setTyping] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
+  
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingEmitAtRef = useRef(0);
@@ -100,8 +108,9 @@ export function useMessageInput(selectedConvo: Conversation) {
 
       const normalizedValue = String(nextValue || "");
       const normalizedImagePreview = nextImagePreview || null;
+      const normalizedAudioPreview = audioPreview || null;
       const hasDraft = Boolean(
-        normalizedValue.trim() || normalizedImagePreview,
+        normalizedValue.trim() || normalizedImagePreview || normalizedAudioPreview,
       );
 
       if (!hasDraft) {
@@ -125,6 +134,7 @@ export function useMessageInput(selectedConvo: Conversation) {
       draftByConversationRef.current[normalizedConversationId] = {
         value: normalizedValue,
         imagePreview: normalizedImagePreview,
+        audioPreview: normalizedAudioPreview,
       };
 
       if (normalizedValue.trim()) {
@@ -248,6 +258,71 @@ export function useMessageInput(selectedConvo: Conversation) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConvo._id]);
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setAudioPreview(reader.result as string);
+        };
+        reader.readAsDataURL(audioBlob);
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Lỗi khi truy cập microphone", err);
+      toast.error("Không thể truy cập microphone. Vui lòng cấp quyền.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      setAudioPreview(null);
+      audioChunksRef.current = [];
+    }
+  };
+
+  const removeAudioPreview = () => {
+    setAudioPreview(null);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -267,14 +342,16 @@ export function useMessageInput(selectedConvo: Conversation) {
   const sendMessage = async () => {
     if (isSendingRef.current || !user) return;
     const trimmed = value.trim();
-    if (!trimmed && !imagePreview) return;
+    if (!trimmed && !imagePreview && !audioPreview) return;
 
     isSendingRef.current = true;
 
     const currValue = trimmed;
     const currImage = imagePreview;
+    const currAudio = audioPreview;
     setValue("");
     setImagePreview(null);
+    setAudioPreview(null);
     persistDraft(selectedConvo._id, "", null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
@@ -288,6 +365,7 @@ export function useMessageInput(selectedConvo: Conversation) {
           otherUser._id,
           currValue,
           currImage ?? undefined,
+          currAudio ?? undefined,
           selectedConvo._id,
           replyingTo?._id,
         );
@@ -296,6 +374,7 @@ export function useMessageInput(selectedConvo: Conversation) {
           selectedConvo._id,
           currValue,
           currImage ?? undefined,
+          currAudio ?? undefined,
           replyingTo?._id,
           selectedConvo.group?.activeChannelId,
         );
@@ -305,6 +384,7 @@ export function useMessageInput(selectedConvo: Conversation) {
     } catch {
       setValue(currValue);
       setImagePreview(currImage);
+      setAudioPreview(currAudio);
       persistDraft(selectedConvo._id, currValue, currImage ?? null);
 
       if (textareaRef.current) {
@@ -329,7 +409,7 @@ export function useMessageInput(selectedConvo: Conversation) {
     }
   };
 
-  const hasSendable = value.trim() || imagePreview;
+  const hasSendable = value.trim() || imagePreview || audioPreview;
   const charsLeft = MAX_MESSAGE_LENGTH - value.length;
 
   return {
@@ -349,5 +429,13 @@ export function useMessageInput(selectedConvo: Conversation) {
     appendEmoji,
     hasSendable,
     charsLeft,
+
+    audioPreview,
+    isRecording,
+    recordingDuration,
+    startRecording,
+    stopRecording,
+    cancelRecording,
+    removeAudioPreview,
   };
 }

@@ -18,6 +18,7 @@ export interface OutgoingMessageQueueItem {
   groupChannelId?: string;
   content: string;
   imgUrl?: string;
+  audioUrl?: string;
   replyTo?: string;
   queuedAt: string;
   attemptCount: number;
@@ -85,6 +86,7 @@ export interface ChatState {
     recipientId: string,
     content: string,
     imgUrl?: string,
+    audioUrl?: string,
     conversationId?: string,
     replyTo?: string,
   ) => Promise<void>;
@@ -92,6 +94,7 @@ export interface ChatState {
     conversationId: string,
     content: string,
     imgUrl?: string,
+    audioUrl?: string,
     replyTo?: string,
     groupChannelId?: string,
   ) => Promise<void>;

@@ -68,6 +68,7 @@ export interface PinnedMessageMeta {
   _id: string;
   content?: string | null;
   imgUrl?: string | null;
+  audioUrl?: string | null;
   senderId: string;
   createdAt: string;
   pinnedAt?: string | null;
@@ -155,6 +156,7 @@ export interface Message {
   senderDisplayName?: string;
   content: string | null;
   imgUrl?: string | null;
+  audioUrl?: string | null;
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
@@ -206,6 +208,7 @@ export interface SavedBookmark {
     senderId: string;
     content: string | null;
     imgUrl?: string | null;
+    audioUrl?: string | null;
     createdAt: string;
     isDeleted?: boolean;
   };

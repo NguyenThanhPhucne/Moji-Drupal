@@ -105,6 +105,12 @@ interface MessageComposerActionsProps {
   isSendBursting: boolean;
   sendButtonToneClass: string;
   onSend: () => void;
+  // Audio state
+  isRecording?: boolean;
+  recordingDuration?: number;
+  onStartRecording?: () => void;
+  onStopRecording?: () => void;
+  onCancelRecording?: () => void;
 }
 
 const MessageComposerActions = ({
@@ -127,8 +133,20 @@ const MessageComposerActions = ({
   isSendBursting,
   sendButtonToneClass,
   onSend,
+  isRecording,
+  recordingDuration,
+  onStartRecording,
+  onStopRecording,
+  onCancelRecording,
 }: MessageComposerActionsProps) => {
   const { t } = useI18n();
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
 
   return (
     <div className="chat-composer-actions-row chat-composer-actions-row--command">
@@ -159,15 +177,42 @@ const MessageComposerActions = ({
 
       <div
         className={cn(
-          "chat-composer-input-surface chat-composer-input-surface--command",
+          "chat-composer-input-surface chat-composer-input-surface--command flex-1 flex items-center min-w-0 transition-colors",
           focused
             ? "chat-composer-input-surface--focused"
             : "chat-composer-input-surface--idle",
         )}
       >
-        <textarea
-          ref={textareaRef}
-          rows={1}
+        {isRecording ? (
+          <div className="flex flex-1 items-center gap-3 px-3 animate-in fade-in duration-200">
+            <span className="flex size-2.5 rounded-full bg-destructive animate-pulse" />
+            <span className="font-mono text-sm font-medium tabular-nums text-foreground">
+              {formatDuration(recordingDuration)}
+            </span>
+            <span className="text-xs text-muted-foreground ml-2">Recording Voice Memo...</span>
+            <div className="flex-1" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCancelRecording}
+              className="px-2 h-7 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={onStopRecording}
+              className="px-3 h-7 rounded-sm shadow text-xs font-semibold"
+            >
+              Done
+            </Button>
+          </div>
+        ) : (
+          <>
+            <textarea
+              ref={textareaRef}
+              rows={1}
           value={value}
           onChange={onChange}
           onKeyDown={onKeyDown}
@@ -198,7 +243,40 @@ const MessageComposerActions = ({
             </div>
           </Button>
         </div>
+        </>
+      )}
       </div>
+
+      {!isRecording && !hasSendableMessage && !value.trim() && (
+        <Button
+          variant="ghost"
+          size="icon"
+          disabled={!canSendInCurrentMode}
+          className={cn(
+            "chat-composer-action-btn chat-composer-action-btn--command text-muted-foreground hover:text-primary",
+            !canSendInCurrentMode && "chat-composer-action-btn--disabled",
+          )}
+          onClick={onStartRecording}
+          title={t("chatComposer.record_audio") || "Record voice memo"}
+          aria-label="Record voice memo"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" x2="12" y1="19" y2="22" />
+          </svg>
+        </Button>
+      )}
 
       <CharRingSlot show={showRing} charsUsed={charsUsed} />
 
