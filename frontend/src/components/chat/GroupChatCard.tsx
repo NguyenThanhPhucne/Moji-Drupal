@@ -72,6 +72,24 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
     }
   }
 
+  // Audio message preview
+  const lastMsgForAudio = convo.lastMessage as {
+    audioUrl?: string;
+    senderId?: string;
+    sender?: { _id: string };
+  } | undefined | null;
+  if (lastMsgForAudio?.audioUrl && !lastMessagePreview.trim()) {
+    const audioSenderId = lastMsgForAudio.senderId || lastMsgForAudio.sender?._id;
+    const audioSender = convo.participants.find(p => String(p._id) === String(audioSenderId));
+    if (String(audioSenderId) === String(user._id)) {
+      lastMessagePreview = "You sent a voice message";
+    } else if (audioSender?.displayName) {
+      lastMessagePreview = `${audioSender.displayName} sent a voice message`;
+    } else {
+      lastMessagePreview = "🎤 Voice message";
+    }
+  }
+
   const normalizedLastMessage = lastMessagePreview.toLowerCase();
   const mentionPatterns = [
     `@${(user.username || "").toLowerCase()}`,

@@ -20,7 +20,7 @@ import {
   User,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
@@ -44,6 +44,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const navigate = useNavigate();
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [bellShaking, setBellShaking] = useState(false);
+  const prevSocialCount = useRef(unreadSocialCount);
+
+  useEffect(() => {
+    if (unreadSocialCount > prevSocialCount.current) {
+      setBellShaking(true);
+      const timer = setTimeout(() => setBellShaking(false), 750);
+      return () => clearTimeout(timer);
+    }
+    prevSocialCount.current = unreadSocialCount;
+  }, [unreadSocialCount]);
 
   const unreadChatCount = useMemo(() => {
     const currentUserId = String(user?._id || "");
@@ -200,7 +211,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                               : "text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
                           )}
                         >
-                          <Icon className={cn("size-5", item.isActive && "stroke-[2.25]")} />
+                          <Icon className={cn(
+                            "size-5",
+                            item.isActive && "stroke-[2.25]",
+                            item.key === "feed" && bellShaking && "bell-shake",
+                          )} />
                           {(item.badge ?? 0) > 0 && (
                             <span className="absolute -top-0.5 -right-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
                               {item.badge && item.badge > 99 ? "99+" : item.badge}
@@ -239,7 +254,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             : "text-muted-foreground/65 hover:bg-muted/50 hover:text-foreground/80",
                         )}
                       >
-                        <Icon className={cn("size-[18px]", item.isActive && "stroke-[2.2]")} />
+                        <Icon className={cn(
+                          "size-[18px]",
+                          item.isActive && "stroke-[2.2]",
+                          item.key === "feed" && bellShaking && "bell-shake",
+                        )} />
                         <span className="leading-none">{item.label}</span>
                         {(item.badge ?? 0) > 0 && (
                           <span className="absolute top-1 right-1.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground">
