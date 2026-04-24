@@ -341,7 +341,7 @@ const VoiceMessagePlayer = ({
     [duration],
   );
 
-  const handleWaveformClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleWaveformClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -350,7 +350,7 @@ const VoiceMessagePlayer = ({
     seekToRatio(x / width);
   };
 
-  const handleWaveformKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleWaveformKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!duration || !Number.isFinite(duration)) {
       return;
     }

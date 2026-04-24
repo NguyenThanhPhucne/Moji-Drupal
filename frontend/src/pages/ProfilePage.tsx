@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Lock, Crown, ShieldCheck, BadgeCheck, ShieldAlert, Ban, CheckCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Crown, ShieldCheck, BadgeCheck, Ban } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import UserAvatar from "@/components/chat/UserAvatar";
@@ -19,14 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
+
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { getStaggerEnterClass } from "@/lib/utils";

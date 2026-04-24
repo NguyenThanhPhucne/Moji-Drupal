@@ -25,7 +25,7 @@ const fmtSeconds = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
 
-const THREAD_PAGE_LIMIT_FALLBACK = 50;
+
 const THREAD_SKELETON_KEYS = [
   "thread-skeleton-a",
   "thread-skeleton-b",
@@ -454,6 +454,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                           type="chat"
                           name={senderName}
                           avatarUrl={selectedConvo?.participants?.find((p) => String(p._id) === String(messageItem.senderId))?.avatarUrl ?? undefined}
+                        />
                       )}
 
                       {/* Bubble */}

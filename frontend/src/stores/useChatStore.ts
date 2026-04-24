@@ -264,6 +264,7 @@ const applyDirectSendFailure = ({
   audioUrl,
   audioMeta,
   replyTo,
+  threadRootId,
   queuedAt,
 }: {
   set: typeof useChatStore.setState;
@@ -278,6 +279,7 @@ const applyDirectSendFailure = ({
   audioUrl?: string;
   audioMeta?: AudioMeta;
   replyTo?: string;
+  threadRootId?: string;
   queuedAt: string;
 }) => {
   const offlineFailure = isLikelyOfflineError(error);
@@ -300,6 +302,7 @@ const applyDirectSendFailure = ({
       audioUrl,
       audioMeta,
       replyTo,
+      threadRootId,
       queuedAt,
       attemptCount: nextAttemptCount,
     });
@@ -1797,7 +1800,7 @@ export const useChatStore = create<ChatState>()(
           });
 
           try {
-            const uploadResult = await chatService.uploadAudio(resolvedPayloadAudioUrl);
+            const uploadResult = await chatService.uploadAudio(resolvedPayloadAudioUrl as string);
             const uploadedAudioUrl = String(uploadResult.audioUrl || "").trim();
 
             if (!uploadedAudioUrl) {

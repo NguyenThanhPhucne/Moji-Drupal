@@ -13,7 +13,6 @@ import NewGroupChatModal from "./NewGroupChatModal";
 import { Dialog } from "../ui/dialog";
 import { useFriendStore } from "@/stores/useFriendStore";
 import FriendListModal from "../createNewChat/FriendListModal";
-import type { Conversation } from "@/types/chat";
 
 const toConversationTimestamp = (conversation: {
   lastMessage?: { createdAt?: string } | null;

@@ -41,6 +41,9 @@ export interface SocialProfile {
   username: string;
   avatarUrl?: string | null;
   bio?: string;
+  isVerified?: boolean;
+  role?: "admin" | "moderator" | "member" | "guest";
+  isBanned?: boolean;
   createdAt: string;
   followerCount: number;
   followingCount: number;
