@@ -353,10 +353,10 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
         className="w-[min(92vw,400px)] border-l border-border/70 bg-background p-0 flex flex-col"
       >
         {/* Header */}
-        <SheetHeader className="flex-none border-b border-border/60 px-4 py-3 bg-background/95 backdrop-blur-sm">
+        <SheetHeader className="flex-none border-b border-border/60 px-4 py-3 bg-background/85 backdrop-blur-md">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary shadow-sm">
                 <MessageSquareText className="size-3.5" />
               </div>
               <div className="min-w-0">
@@ -406,12 +406,15 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
         {/* Messages list */}
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-0.5">
           {loadingThread ? (
-            <div className="space-y-2.5">
-              {THREAD_SKELETON_KEYS.map((skeletonKey) => (
-                <div
-                  key={skeletonKey}
-                  className="h-14 animate-pulse rounded-xl border border-border/40 bg-muted/25"
-                />
+            <div className="space-y-4">
+              {THREAD_SKELETON_KEYS.map((skeletonKey, i) => (
+                <div key={skeletonKey} className={cn("flex gap-3", i % 2 === 0 ? "flex-row-reverse" : "flex-row")}>
+                  <div className="size-8 animate-pulse rounded-full bg-muted/40 shrink-0" />
+                  <div className={cn("flex flex-col gap-1.5", i % 2 === 0 ? "items-end" : "items-start")}>
+                    <div className="h-3.5 w-16 animate-pulse rounded-md bg-muted/40" />
+                    <div className="h-10 w-[200px] animate-pulse rounded-2xl bg-muted/25 border border-border/40" />
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -478,31 +481,32 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                           </div>
                         )}
 
-                        {/* Message content */}
                         <div
                           className={cn(
-                            "rounded-2xl px-3 py-2 text-sm leading-relaxed",
+                            "chat-message-bubble-shell text-[13.5px] leading-relaxed relative",
                             isOwn
-                              ? "bg-primary text-primary-foreground rounded-tr-[4px]"
-                              : "bg-muted/60 border border-border/50 text-foreground rounded-tl-[4px]",
-                            isRoot && !isOwn && "border-primary/30 bg-primary/[0.06]",
+                              ? "chat-bubble-sent chat-message-bubble-shell--own"
+                              : "chat-bubble-received chat-message-bubble-shell--peer",
+                            isRoot && !isOwn && "border-primary/40 bg-primary/[0.04] shadow-sm",
                           )}
                         >
-                          {messageItem.audioUrl && !messageItem.isDeleted ? (
-                            <VoiceMessagePlayer
-                              src={messageItem.audioUrl}
-                              isOwn={isOwn}
-                              initialDurationSeconds={
-                                messageItem.audioMeta?.durationSeconds ?? null
-                              }
-                            />
-                          ) : (
-                            <p>
-                              {messageItem.isDeleted
-                                ? "This message was removed"
-                                : messageItem.content?.trim() || "Media message"}
-                            </p>
-                          )}
+                          <div className={cn("chat-message-bubble-surface relative z-10", isOwn ? "chat-message-bubble-surface--own" : "chat-message-bubble-surface--peer")}>
+                            {messageItem.audioUrl && !messageItem.isDeleted ? (
+                              <VoiceMessagePlayer
+                                src={messageItem.audioUrl}
+                                isOwn={isOwn}
+                                initialDurationSeconds={
+                                  messageItem.audioMeta?.durationSeconds ?? null
+                                }
+                              />
+                            ) : (
+                              <p>
+                                {messageItem.isDeleted
+                                  ? "This message was removed"
+                                  : messageItem.content?.trim() || "Media message"}
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         {/* Timestamp */}
@@ -556,7 +560,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
           )}
 
           <div className="flex items-end gap-2">
-            <div className="flex-1 rounded-2xl border border-border/70 bg-muted/20 transition-colors focus-within:border-primary/60 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/20">
+            <div className="flex-1 clean-composer-shell transition-all">
               <textarea
                 ref={textareaRef}
                 id="thread-reply-input"

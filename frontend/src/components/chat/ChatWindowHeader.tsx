@@ -64,8 +64,14 @@ import FriendProfileMiniCard from "./FriendProfileMiniCard";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { Switch } from "../ui/switch";
 import NotificationPreferencesDialog from "./NotificationPreferencesDialog";
+import { DeleteConversationDialog } from "./dialogs/DeleteConversationDialog";
+import { GroupMembersDialog } from "./dialogs/GroupMembersDialog";
+import { ManageAdminsDialog } from "./dialogs/ManageAdminsDialog";
+import { JoinLinkDialog } from "./dialogs/JoinLinkDialog";
+import { GroupRoleBadge } from "./GroupRoleBadge";
 import { Input } from "../ui/input";
 import { useThemeStore, type PanelStyle } from "@/stores/useThemeStore";
+
 
 function resolveDirectPeer(chat: Conversation, userId?: string) {
   if (chat.type !== "direct") {
@@ -196,31 +202,7 @@ const PANEL_STYLE_TOGGLE_OPTIONS: Array<{
   },
 ];
 
-const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
-  if (role === "owner") {
-    return (
-      <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-warning/45 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
-        <Crown className="size-2.5" />
-        Owner
-      </span>
-    );
-  }
 
-  if (role === "admin") {
-    return (
-      <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
-        <Shield className="size-2.5" />
-        Admin
-      </span>
-    );
-  }
-
-  return (
-    <span className="chat-header-context-pill inline-flex items-center rounded-full border border-border/70 bg-muted/35 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-      Member
-    </span>
-  );
-};
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const { conversations, activeConversationId } = useChatStore();
@@ -234,18 +216,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
   const [showManageAdminsDialog, setShowManageAdminsDialog] = useState(false);
   const [showMembersDialog, setShowMembersDialog] = useState(false);
-  const [membersAdminsOnly, setMembersAdminsOnly] = useState(false);
   const [isAnnouncementUpdating, setIsAnnouncementUpdating] = useState(false);
   const [adminActionTarget, setAdminActionTarget] = useState<string | null>(null);
   const [showJoinLinkDialog, setShowJoinLinkDialog] = useState(false);
-  const [isJoinLinkGenerating, setIsJoinLinkGenerating] = useState(false);
-  const [joinLinkHours, setJoinLinkHours] = useState(24);
-  const [joinLinkMaxUsesInput, setJoinLinkMaxUsesInput] = useState("");
-  const [joinLinkOneTime, setJoinLinkOneTime] = useState(false);
-  const [generatedJoinLink, setGeneratedJoinLink] = useState("");
-  const [generatedJoinLinkExpiresAt, setGeneratedJoinLinkExpiresAt] = useState<string | null>(null);
-  const [joinLinkErrorMessage, setJoinLinkErrorMessage] = useState("");
-  const [joinLinkCooldownSeconds, setJoinLinkCooldownSeconds] = useState(0);
   const [showCreateChannelDialog, setShowCreateChannelDialog] = useState(false);
   const [showManageChannelsDialog, setShowManageChannelsDialog] = useState(false);
   const [newChannelName, setNewChannelName] = useState("");
@@ -352,13 +325,6 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
         );
       });
   }, [chat, groupAdminIds, ownerId]);
-  const visibleGroupMembers = useMemo(() => {
-    if (!membersAdminsOnly) {
-      return groupMembersWithRole;
-    }
-
-    return groupMembersWithRole.filter((member) => member.role !== "member");
-  }, [groupMembersWithRole, membersAdminsOnly]);
   const manageableMembers = useMemo(() => {
     if (chat?.type !== "group") {
       return [];
@@ -556,19 +522,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     showManageChannelsDialog,
   ]);
 
-  useEffect(() => {
-    if (joinLinkCooldownSeconds <= 0) {
-      return;
-    }
 
-    const timer = globalThis.setInterval(() => {
-      setJoinLinkCooldownSeconds((previous) => (previous > 1 ? previous - 1 : 0));
-    }, 1000);
-
-    return () => {
-      globalThis.clearInterval(timer);
-    };
-  }, [joinLinkCooldownSeconds]);
 
   if (!chat) {
     return (
@@ -680,103 +634,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
   const handleMembersDialogOpenChange = (open: boolean) => {
     setShowMembersDialog(open);
-    if (!open) {
-      setMembersAdminsOnly(false);
-    }
   };
 
-  const handleGenerateGroupJoinLink = async () => {
-    if (chat.type !== "group" || !isGroupAdmin) {
-      return;
-    }
 
-    if (joinLinkCooldownSeconds > 0) {
-      return;
-    }
-
-    const normalizedMaxUsesInput = String(joinLinkMaxUsesInput || "").trim();
-    const parsedMaxUses =
-      normalizedMaxUsesInput.length > 0
-        ? Number(normalizedMaxUsesInput)
-        : null;
-
-    if (
-      !joinLinkOneTime &&
-      parsedMaxUses !== null &&
-      (!Number.isInteger(parsedMaxUses) || parsedMaxUses < 1 || parsedMaxUses > 500)
-    ) {
-      toast.error("Max uses must be an integer between 1 and 500");
-      return;
-    }
-
-    const maxUses = joinLinkOneTime
-      ? 1
-      : parsedMaxUses;
-
-    try {
-      setIsJoinLinkGenerating(true);
-      setJoinLinkErrorMessage("");
-      const result = await createGroupJoinLink(chat._id, {
-        expiresInHours: joinLinkHours,
-        maxUses,
-        oneTime: joinLinkOneTime,
-      });
-      if (!result.ok || !result.joinLinkUrl) {
-        if (result.retryAfterSeconds && result.retryAfterSeconds > 0) {
-          setJoinLinkCooldownSeconds(result.retryAfterSeconds);
-        }
-
-        setJoinLinkErrorMessage(
-          result.message || "Could not create join link right now.",
-        );
-        toast.error(result.message || "Could not create join link");
-        return;
-      }
-
-      setGeneratedJoinLink(result.joinLinkUrl);
-      setGeneratedJoinLinkExpiresAt(result.expiresAt || null);
-      setJoinLinkOneTime(Boolean(result.oneTime));
-      if (result.maxUses && !result.oneTime) {
-        setJoinLinkMaxUsesInput(String(result.maxUses));
-      } else if (!result.maxUses) {
-        setJoinLinkMaxUsesInput("");
-      }
-      setJoinLinkCooldownSeconds(0);
-      setJoinLinkErrorMessage("");
-      toast.success("Join link created");
-    } finally {
-      setIsJoinLinkGenerating(false);
-    }
-  };
-
-  const handleCopyJoinLink = async () => {
-    if (!generatedJoinLink) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(generatedJoinLink);
-      toast.success("Join link copied");
-    } catch {
-      toast.error("Could not copy join link");
-    }
-  };
-
-  const handleRevokeGroupJoinLink = async () => {
-    if (chat.type !== "group" || !isGroupAdmin) {
-      return;
-    }
-
-    const ok = await revokeGroupJoinLink(chat._id);
-    if (!ok) {
-      toast.error("Could not revoke join link");
-      return;
-    }
-
-    setGeneratedJoinLink("");
-    setGeneratedJoinLinkExpiresAt(null);
-    toast.success("Join link revoked");
-  };
 
   const handleSwitchGroupChannel = async (nextChannelId: string) => {
     if (chat.type !== "group") {
@@ -1136,40 +996,6 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     }
   };
 
-  let joinLinkButtonLabel = "Create new link";
-  if (isJoinLinkGenerating) {
-    joinLinkButtonLabel = "Creating...";
-  } else if (joinLinkCooldownSeconds > 0) {
-    joinLinkButtonLabel = `Retry in ${joinLinkCooldownSeconds}s`;
-  }
-
-  const activeJoinLinkPolicyLabel = (() => {
-    if (!hasActiveGroupJoinLink || !activeGroupJoinLink) {
-      return "";
-    }
-
-    if (activeGroupJoinLink.oneTime) {
-      return "One-time link";
-    }
-
-    if (
-      typeof activeGroupJoinLink.maxUses === "number" &&
-      Number.isFinite(activeGroupJoinLink.maxUses)
-    ) {
-      const remainingUses =
-        typeof activeGroupJoinLink.remainingUses === "number"
-          ? Math.max(0, Math.floor(activeGroupJoinLink.remainingUses))
-          : null;
-
-      if (remainingUses !== null) {
-        return `${remainingUses} uses left`;
-      }
-
-      return `Max ${Math.floor(activeGroupJoinLink.maxUses)} uses`;
-    }
-
-    return "Unlimited uses";
-  })();
 
   let destructiveActionTitle = "Delete this item?";
   let destructiveActionDescription =
@@ -1559,48 +1385,17 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
       </header>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent
-          className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-[border-color,background-color,box-shadow] duration-200"
-          aria-busy={isDeleting}
-        >
-          <AlertDialogHeader className="items-center text-center space-y-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
-              <Trash2 className="size-6 text-destructive" />
-            </div>
-            <div className="space-y-1.5">
-              <AlertDialogTitle className="text-xl font-bold tracking-tight">
-                Delete this conversation?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-[15px] font-medium leading-relaxed text-muted-foreground/80 px-2">
-                This will permanently remove all messages for{" "}
-                <strong className="font-semibold text-foreground">
-                  {chat.type === "direct"
-                    ? otherUser?.displayName ?? "this contact"
-                    : chat.group?.name ?? "this group"}
-                </strong>. 
-                This action cannot be undone.
-              </AlertDialogDescription>
-            </div>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="sm:flex-row gap-3 sm:space-x-0 pt-2 w-full">
-            <AlertDialogCancel disabled={isDeleting} className="flex-1 h-11 rounded-full border-border/60 font-semibold transition-colors hover:bg-muted/55">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConversation}
-              disabled={isDeleting}
-              className={cn(
-                "flex-1 h-11 rounded-full bg-destructive font-semibold text-white transition-colors",
-                "hover:bg-destructive/90",
-                isDeleting && "opacity-70 pointer-events-none"
-              )}
-            >
-              {isDeleting ? "Deleting..." : "Yes, delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConversationDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        isDeleting={isDeleting}
+        onConfirm={handleDeleteConversation}
+        chatType={chat.type}
+        chatName={chat.type === "direct"
+          ? otherUser?.displayName ?? "this contact"
+          : chat.group?.name ?? "this group"
+        }
+      />
 
       <AlertDialog
         open={Boolean(pendingDestructiveAction)}
@@ -1652,113 +1447,22 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={showMembersDialog} onOpenChange={handleMembersDialogOpenChange}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden">
-          <div className="border-b border-border/60 px-5 py-4">
-            <DialogHeader>
-              <DialogTitle>Group members</DialogTitle>
-              <DialogDescription>
-                {visibleGroupMembers.length} of {groupMembersWithRole.length} participants.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
+      <GroupMembersDialog
+        open={showMembersDialog}
+        onOpenChange={handleMembersDialogOpenChange}
+        groupMembersWithRole={groupMembersWithRole as any}
+      />
 
-          <div className="border-b border-border/60 px-4 py-2.5">
-            <label className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
-              <span>Admins only</span>
-              <Switch
-                checked={membersAdminsOnly}
-                onCheckedChange={setMembersAdminsOnly}
-              />
-            </label>
-          </div>
-
-          <div className="max-h-[60vh] overflow-y-auto beautiful-scrollbar p-4 space-y-2">
-            {visibleGroupMembers.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No admins found in this group.
-              </p>
-            )}
-
-            {visibleGroupMembers.map((member) => (
-              <div
-                key={member.memberId}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5"
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <UserAvatar
-                    type="chat"
-                    name={member.displayName}
-                    avatarUrl={member.avatarUrl || undefined}
-                  />
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {member.displayName}
-                  </p>
-                </div>
-
-                <GroupRoleBadge role={member.role} />
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showManageAdminsDialog} onOpenChange={setShowManageAdminsDialog}>
-        <DialogContent className="max-w-lg p-0 overflow-hidden">
-          <div className="border-b border-border/60 px-5 py-4">
-            <DialogHeader>
-              <DialogTitle>Manage group admins</DialogTitle>
-              <DialogDescription>
-                Group owners can assign or remove admin rights for members.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-
-          <div className="max-h-[60vh] overflow-y-auto beautiful-scrollbar p-4 space-y-2">
-            {manageableMembers.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No members available for admin assignment.
-              </p>
-            )}
-
-            {manageableMembers.map((member) => {
-              const memberId = String(member._id);
-              const isAdmin = groupAdminIds.has(memberId);
-
-              return (
-                <div
-                  key={memberId}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <UserAvatar
-                      type="chat"
-                      name={member.displayName}
-                      avatarUrl={member.avatarUrl || undefined}
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
-                        {member.displayName}
-                      </p>
-                      <div className="mt-0.5">
-                        <GroupRoleBadge role={isAdmin ? "admin" : "member"} />
-                      </div>
-                    </div>
-                  </div>
-
-                  <Switch
-                    checked={isAdmin}
-                    disabled={adminActionTarget === memberId}
-                    onCheckedChange={(checked) => {
-                      void handleToggleAdminRole(memberId, checked);
-                    }}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ManageAdminsDialog
+        open={showManageAdminsDialog}
+        onOpenChange={setShowManageAdminsDialog}
+        manageableMembers={manageableMembers}
+        groupAdminIds={groupAdminIds}
+        adminActionTarget={adminActionTarget}
+        onToggleAdminRole={(memberId, checked) => {
+          void handleToggleAdminRole(memberId, checked);
+        }}
+      />
 
       <Dialog
         open={showManageChannelsDialog}
@@ -2260,149 +1964,13 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <JoinLinkDialog
         open={showJoinLinkDialog}
-        onOpenChange={(open) => {
-          setShowJoinLinkDialog(open);
-          if (open) {
-            const presetMaxUses =
-              typeof activeGroupJoinLink?.maxUses === "number" &&
-              Number.isFinite(activeGroupJoinLink.maxUses) &&
-              !activeGroupJoinLink.oneTime
-                ? String(Math.max(1, Math.floor(activeGroupJoinLink.maxUses)))
-                : "";
-
-            setJoinLinkMaxUsesInput(presetMaxUses);
-            setJoinLinkOneTime(Boolean(activeGroupJoinLink?.oneTime));
-            return;
-          }
-
-          if (!open) {
-            setGeneratedJoinLink("");
-            setGeneratedJoinLinkExpiresAt(null);
-            setJoinLinkErrorMessage("");
-            setJoinLinkCooldownSeconds(0);
-            setJoinLinkMaxUsesInput("");
-            setJoinLinkOneTime(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-lg p-0 overflow-hidden">
-          <div className="border-b border-border/60 px-5 py-4">
-            <DialogHeader>
-              <DialogTitle>Group join link</DialogTitle>
-              <DialogDescription>
-                Create an expiring invite link for this group.
-              </DialogDescription>
-            </DialogHeader>
-          </div>
-
-          <div className="space-y-4 p-4">
-            <label className="block space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Link expiry
-              </span>
-              <select
-                value={joinLinkHours}
-                onChange={(event) => setJoinLinkHours(Number(event.target.value) || 24)}
-                className="h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/35"
-              >
-                <option value={1}>1 hour</option>
-                <option value={6}>6 hours</option>
-                <option value={24}>24 hours</option>
-                <option value={72}>72 hours</option>
-              </select>
-            </label>
-
-            <label className="block space-y-1">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Max uses (optional)
-              </span>
-              <input
-                type="number"
-                min={1}
-                max={500}
-                value={joinLinkOneTime ? "1" : joinLinkMaxUsesInput}
-                onChange={(event) => setJoinLinkMaxUsesInput(event.target.value)}
-                disabled={joinLinkOneTime}
-                placeholder="Leave empty for unlimited"
-                className="h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-65"
-              />
-            </label>
-
-            <label className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2.5">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                One-time invite link
-              </span>
-              <Switch
-                checked={joinLinkOneTime}
-                onCheckedChange={(checked) => setJoinLinkOneTime(checked)}
-              />
-            </label>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => {
-                  void handleGenerateGroupJoinLink();
-                }}
-                disabled={isJoinLinkGenerating || joinLinkCooldownSeconds > 0}
-              >
-                {joinLinkButtonLabel}
-              </Button>
-              {hasActiveGroupJoinLink && (
-                <div className="text-xs text-muted-foreground">
-                  <p>
-                    Active link expires at{" "}
-                    {activeGroupJoinLink?.expiresAt
-                      ? new Date(activeGroupJoinLink.expiresAt).toLocaleString()
-                      : "-"}
-                  </p>
-                  {activeJoinLinkPolicyLabel && (
-                    <p className="mt-0.5">Policy: {activeJoinLinkPolicyLabel}</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {joinLinkErrorMessage && (
-              <p className="text-xs font-medium text-destructive">
-                {joinLinkErrorMessage}
-              </p>
-            )}
-            {joinLinkCooldownSeconds > 0 && (
-              <p className="text-xs text-muted-foreground">
-                Join link actions will be available in {joinLinkCooldownSeconds}s.
-              </p>
-            )}
-
-            {generatedJoinLink && (
-              <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
-                <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Generated link
-                </p>
-                <p className="break-all text-sm text-foreground">{generatedJoinLink}</p>
-                {generatedJoinLinkExpiresAt && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Expires at {new Date(generatedJoinLinkExpiresAt).toLocaleString()}
-                  </p>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-3 gap-2"
-                  onClick={() => {
-                    void handleCopyJoinLink();
-                  }}
-                >
-                  <Copy className="size-4" />
-                  Copy link
-                </Button>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setShowJoinLinkDialog}
+        chat={chat}
+        isGroupAdmin={isGroupAdmin}
+        activeGroupJoinLink={activeGroupJoinLink}
+      />
     </>
   );
 };
