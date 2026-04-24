@@ -3,7 +3,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { userService } from "@/services/userService";
 import { useRef, useState } from "react";
-import { Camera, ImagePlus, Trash2 } from "lucide-react";
+import { Camera, ImagePlus, Trash2, BadgeCheck, Crown, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -174,7 +174,18 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
 
         {/* Name + Status */}
         <div className="profile-hero-info">
-          <h2 className="profile-hero-name">{user.displayName}</h2>
+          <h2 className="profile-hero-name flex items-center gap-1.5">
+            {user.displayName}
+            {user.isVerified && (
+              <BadgeCheck className="size-5 text-blue-500" />
+            )}
+            {user.role === "admin" && (
+              <Crown className="size-5 text-amber-500" />
+            )}
+            {user.role === "moderator" && (
+              <Shield className="size-5 text-indigo-500" />
+            )}
+          </h2>
           <p className="profile-hero-username">@{user.username}</p>
         </div>
 

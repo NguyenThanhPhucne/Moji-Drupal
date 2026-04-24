@@ -10,6 +10,9 @@ export interface VoiceMemoOutboxItem {
   content: string;
   imgUrl?: string;
   audioDataUrl: string;
+  audioDurationSeconds?: number | null;
+  audioMimeType?: string | null;
+  audioSizeBytes?: number | null;
   replyToId?: string;
   threadRootId?: string;
   queuedAt: string;

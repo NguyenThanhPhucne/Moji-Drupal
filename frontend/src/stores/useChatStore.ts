@@ -1,5 +1,10 @@
 import { chatService } from "@/services/chatService";
-import type { Conversation, Message, ConversationResponse } from "@/types/chat";
+import type {
+  AudioMeta,
+  Conversation,
+  ConversationResponse,
+  Message,
+} from "@/types/chat";
 import type { ChatState, OutgoingMessageQueueItem } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -131,6 +136,7 @@ const enqueueDirectOutgoingMessage = ({
   content,
   imgUrl,
   audioUrl,
+  audioMeta,
   replyTo,
   threadRootId,
   queuedAt,
@@ -143,6 +149,7 @@ const enqueueDirectOutgoingMessage = ({
   content: string;
   imgUrl?: string;
   audioUrl?: string;
+  audioMeta?: AudioMeta;
   replyTo?: string;
   threadRootId?: string;
   queuedAt: string;
@@ -157,6 +164,7 @@ const enqueueDirectOutgoingMessage = ({
       content,
       imgUrl,
       audioUrl,
+      audioMeta,
       replyTo,
       threadRootId,
       queuedAt,
@@ -254,6 +262,7 @@ const applyDirectSendFailure = ({
   content,
   imgUrl,
   audioUrl,
+  audioMeta,
   replyTo,
   queuedAt,
 }: {
@@ -267,6 +276,7 @@ const applyDirectSendFailure = ({
   content: string;
   imgUrl?: string;
   audioUrl?: string;
+  audioMeta?: AudioMeta;
   replyTo?: string;
   queuedAt: string;
 }) => {
@@ -288,6 +298,7 @@ const applyDirectSendFailure = ({
       content: String(content || ""),
       imgUrl,
       audioUrl,
+      audioMeta,
       replyTo,
       queuedAt,
       attemptCount: nextAttemptCount,
@@ -603,12 +614,37 @@ const toTimestamp = (value?: string) => {
   return Number.isFinite(ts) ? ts : 0;
 };
 
+const buildThreadUnreadKey = (conversationId: unknown, threadRootId: unknown) => {
+  const conversationIdValue =
+    typeof conversationId === "string" ||
+    typeof conversationId === "number" ||
+    typeof conversationId === "boolean" ||
+    typeof conversationId === "bigint"
+      ? String(conversationId)
+      : "";
+  const threadRootIdValue =
+    typeof threadRootId === "string" ||
+    typeof threadRootId === "number" ||
+    typeof threadRootId === "boolean" ||
+    typeof threadRootId === "bigint"
+      ? String(threadRootId)
+      : "";
+  const normalizedConversationId = conversationIdValue.trim();
+  const normalizedThreadRootId = threadRootIdValue.trim();
+  if (!normalizedConversationId || !normalizedThreadRootId) {
+    return "";
+  }
+
+  return `${normalizedConversationId}:${normalizedThreadRootId}`;
+};
+
 type PendingOwnTempMessageEntry = {
   tempId: string;
   content: string;
   replyToId: string;
   hasImage: boolean;
   hasAudio: boolean;
+  threadRootId: string;
 };
 
 const pendingOwnTempMessagesByConversation = new Map<
@@ -621,17 +657,20 @@ const normalizePendingOwnMessageDescriptor = ({
   replyToId,
   hasImage,
   hasAudio,
+  threadRootId,
 }: {
   content?: string | null;
   replyToId?: string | null;
   hasImage?: boolean;
   hasAudio?: boolean;
+  threadRootId?: string | null;
 }) => {
   return {
     content: String(content || "").trim(),
     replyToId: String(replyToId || "").trim(),
     hasImage: Boolean(hasImage),
     hasAudio: Boolean(hasAudio),
+    threadRootId: String(threadRootId || "").trim(),
   };
 };
 
@@ -659,6 +698,7 @@ const registerPendingOwnTempMessage = ({
   replyToId,
   hasImage,
   hasAudio,
+  threadRootId,
 }: {
   conversationId: string;
   tempId: string;
@@ -666,6 +706,7 @@ const registerPendingOwnTempMessage = ({
   replyToId?: string | null;
   hasImage?: boolean;
   hasAudio?: boolean;
+  threadRootId?: string | null;
 }) => {
   const normalizedConversationId = String(conversationId || "").trim();
   const normalizedTempId = String(tempId || "").trim();
@@ -681,6 +722,7 @@ const registerPendingOwnTempMessage = ({
       replyToId,
       hasImage,
       hasAudio,
+      threadRootId,
     }),
   });
   pendingOwnTempMessagesByConversation.set(normalizedConversationId, queue);
@@ -719,12 +761,14 @@ const consumeMatchingPendingOwnTempMessage = ({
   replyToId,
   hasImage,
   hasAudio,
+  threadRootId,
 }: {
   conversationId: string;
   content?: string | null;
   replyToId?: string | null;
   hasImage?: boolean;
   hasAudio?: boolean;
+  threadRootId?: string | null;
 }) => {
   const normalizedConversationId = String(conversationId || "").trim();
   if (!normalizedConversationId) {
@@ -741,6 +785,7 @@ const consumeMatchingPendingOwnTempMessage = ({
     replyToId,
     hasImage,
     hasAudio,
+    threadRootId,
   });
 
   const matchedIndex = queue.findIndex((entry) => {
@@ -748,7 +793,8 @@ const consumeMatchingPendingOwnTempMessage = ({
       entry.content === normalizedDescriptor.content &&
       entry.replyToId === normalizedDescriptor.replyToId &&
       entry.hasImage === normalizedDescriptor.hasImage &&
-      entry.hasAudio === normalizedDescriptor.hasAudio
+      entry.hasAudio === normalizedDescriptor.hasAudio &&
+      entry.threadRootId === normalizedDescriptor.threadRootId
     );
   });
 
@@ -856,12 +902,33 @@ export const useChatStore = create<ChatState>()(
       loading: false,
       replyingTo: null,
       activeThreadRootId: null,
+      threadUnreadCounts: {},
       outgoingQueue: [],
       isFlushingOutgoingQueue: false,
 
       setReplyingTo: (message) => set({ replyingTo: message }),
       setActiveThreadRootId: (messageId) =>
-        set({ activeThreadRootId: messageId ? String(messageId) : null }),
+        set((state) => {
+          const normalizedThreadRootId = String(messageId || "").trim();
+          if (!normalizedThreadRootId || !state.activeConversationId) {
+            return { activeThreadRootId: normalizedThreadRootId || null };
+          }
+
+          const threadKey = buildThreadUnreadKey(
+            state.activeConversationId,
+            normalizedThreadRootId,
+          );
+          if (!threadKey || !(threadKey in state.threadUnreadCounts)) {
+            return { activeThreadRootId: normalizedThreadRootId };
+          }
+
+          const nextThreadUnreadCounts = { ...state.threadUnreadCounts };
+          delete nextThreadUnreadCounts[threadKey];
+          return {
+            activeThreadRootId: normalizedThreadRootId,
+            threadUnreadCounts: nextThreadUnreadCounts,
+          };
+        }),
       setActiveConversation: (id) => {
         set({ activeConversationId: id, activeThreadRootId: null });
 
@@ -928,6 +995,7 @@ export const useChatStore = create<ChatState>()(
           loading: false,
           replyingTo: null,
           activeThreadRootId: null,
+          threadUnreadCounts: {},
           outgoingQueue: [],
           isFlushingOutgoingQueue: false,
         });
@@ -1104,9 +1172,13 @@ export const useChatStore = create<ChatState>()(
         imgUrl,
         audioUrl,
         conversationIdOverride,
-        replyTo,
-        threadRootId,
+        options,
       ) => {
+        const replyTo = String(options?.replyTo || "").trim() || undefined;
+        const threadRootId = String(options?.threadRootId || "").trim() || undefined;
+        const clientMessageId =
+          String(options?.clientMessageId || "").trim() || undefined;
+        const audioMeta = options?.audioMeta || undefined;
         const normalizedAudioUrl = String(audioUrl || "").trim();
         if (isDataAudioPayload(normalizedAudioUrl)) {
           toast.error("Voice memo is still uploading. Please try sending again.");
@@ -1161,7 +1233,7 @@ export const useChatStore = create<ChatState>()(
         }
 
         // Build an optimistic message to show immediately
-        const tempId = buildTempMessageId();
+        const tempId = String(clientMessageId || "").trim() || buildTempMessageId();
         const shouldQueueImmediately = isNavigatorOffline();
         const optimisticMessage: Message = {
           _id: tempId,
@@ -1170,6 +1242,7 @@ export const useChatStore = create<ChatState>()(
           content: content ?? "",
           imgUrl: imgUrl ?? null,
           audioUrl: normalizedAudioUrl || null,
+          audioMeta: audioMeta || null,
           replyTo: replyTo
             ? { _id: replyTo, content: "", senderId: "" }
             : null,
@@ -1195,6 +1268,7 @@ export const useChatStore = create<ChatState>()(
           replyToId: resolveReplyToId(optimisticMessage.replyTo),
           hasImage: Boolean(optimisticMessage.imgUrl),
           hasAudio: Boolean(optimisticMessage.audioUrl),
+          threadRootId: optimisticMessage.threadRootId || "",
         });
 
         if (shouldQueueImmediately) {
@@ -1210,6 +1284,7 @@ export const useChatStore = create<ChatState>()(
             queuedAt: nowIso,
             attemptCount: 0,
             audioUrl: normalizedAudioUrl || undefined,
+            audioMeta: audioMeta || undefined,
           });
           toast.info("You're offline. Message queued.");
           return;
@@ -1222,8 +1297,12 @@ export const useChatStore = create<ChatState>()(
             imgUrl,
             normalizedAudioUrl || undefined,
             resolvedConversationId ?? undefined,
-            replyTo,
-            threadRootId,
+            {
+              replyTo,
+              threadRootId,
+              clientMessageId: tempId,
+              audioMeta: audioMeta || undefined,
+            },
           );
 
           finalizeDirectSendSuccess({
@@ -1248,6 +1327,7 @@ export const useChatStore = create<ChatState>()(
             content: String(content || ""),
             imgUrl: imgUrl || undefined,
             audioUrl: normalizedAudioUrl || undefined,
+            audioMeta: audioMeta || undefined,
             replyTo: String(replyTo || "").trim() || undefined,
             threadRootId: String(threadRootId || "").trim() || undefined,
             queuedAt: nowIso,
@@ -1256,15 +1336,21 @@ export const useChatStore = create<ChatState>()(
           console.error("Error sending direct message", error);
         }
       },
+      // eslint-disable-next-line sonarjs/cognitive-complexity
       sendGroupMessage: async (
         conversationId,
         content,
         imgUrl,
         audioUrl,
-        replyTo,
-        groupChannelId,
-        threadRootId,
-      ) => {
+        options,
+      ) => { // NOSONAR
+        const replyTo = String(options?.replyTo || "").trim() || undefined;
+        const groupChannelId =
+          String(options?.groupChannelId || "").trim() || undefined;
+        const threadRootId = String(options?.threadRootId || "").trim() || undefined;
+        const clientMessageId =
+          String(options?.clientMessageId || "").trim() || undefined;
+        const audioMeta = options?.audioMeta || undefined;
         const normalizedAudioUrl = String(audioUrl || "").trim();
         if (isDataAudioPayload(normalizedAudioUrl)) {
           toast.error("Voice memo is still uploading. Please try sending again.");
@@ -1283,7 +1369,7 @@ export const useChatStore = create<ChatState>()(
         const shouldQueueImmediately = isNavigatorOffline();
 
         // Optimistic message
-        const tempId = buildTempMessageId();
+        const tempId = String(clientMessageId || "").trim() || buildTempMessageId();
         const optimisticMessage: Message = {
           _id: tempId,
           conversationId,
@@ -1292,6 +1378,7 @@ export const useChatStore = create<ChatState>()(
           content: content ?? "",
           imgUrl: imgUrl ?? null,
           audioUrl: normalizedAudioUrl || null,
+          audioMeta: audioMeta || null,
           replyTo: replyTo
             ? { _id: replyTo, content: "", senderId: "" }
             : null,
@@ -1317,6 +1404,7 @@ export const useChatStore = create<ChatState>()(
           replyToId: resolveReplyToId(optimisticMessage.replyTo),
           hasImage: Boolean(optimisticMessage.imgUrl),
           hasAudio: Boolean(optimisticMessage.audioUrl),
+          threadRootId: optimisticMessage.threadRootId || "",
         });
 
         if (shouldQueueImmediately) {
@@ -1329,6 +1417,7 @@ export const useChatStore = create<ChatState>()(
               content: String(content || ""),
               imgUrl: imgUrl || undefined,
               audioUrl: normalizedAudioUrl || undefined,
+              audioMeta: audioMeta || undefined,
               replyTo: String(replyTo || "").trim() || undefined,
               threadRootId: String(threadRootId || "").trim() || undefined,
               queuedAt: nowIso,
@@ -1346,9 +1435,13 @@ export const useChatStore = create<ChatState>()(
             content,
             imgUrl,
             normalizedAudioUrl || undefined,
-            replyTo,
-            effectiveGroupChannelId,
-            threadRootId,
+            {
+              replyTo,
+              groupChannelId: effectiveGroupChannelId,
+              threadRootId,
+              clientMessageId: tempId,
+              audioMeta: audioMeta || undefined,
+            },
           );
 
           // Replace temp with real
@@ -1401,6 +1494,7 @@ export const useChatStore = create<ChatState>()(
                 content: String(content || ""),
                 imgUrl: imgUrl || undefined,
                 audioUrl: normalizedAudioUrl || undefined,
+                audioMeta: audioMeta || undefined,
                 replyTo: String(replyTo || "").trim() || undefined,
                 threadRootId: String(threadRootId || "").trim() || undefined,
                 queuedAt: nowIso,
@@ -1463,6 +1557,7 @@ export const useChatStore = create<ChatState>()(
                 replyToId: resolveReplyToId(message.replyTo),
                 hasImage: Boolean(message.imgUrl),
                 hasAudio: Boolean(message.audioUrl),
+                threadRootId: String(message.threadRootId || ""),
               });
 
               if (matchedTempId) {
@@ -1478,6 +1573,24 @@ export const useChatStore = create<ChatState>()(
               message,
             ]);
 
+            let nextThreadUnreadCounts = state.threadUnreadCounts;
+            const messageThreadRootId = String(message.threadRootId || "").trim();
+            const activeThreadRootId = String(state.activeThreadRootId || "").trim();
+            const shouldIncreaseThreadUnread =
+              !message.isOwn &&
+              Boolean(messageThreadRootId) &&
+              messageThreadRootId !== activeThreadRootId;
+            if (shouldIncreaseThreadUnread) {
+              const threadUnreadKey = buildThreadUnreadKey(convoId, messageThreadRootId);
+              if (threadUnreadKey) {
+                nextThreadUnreadCounts = {
+                  ...state.threadUnreadCounts,
+                  [threadUnreadKey]:
+                    Number(state.threadUnreadCounts[threadUnreadKey] || 0) + 1,
+                };
+              }
+            }
+
             return {
               messages: {
                 ...state.messages,
@@ -1492,6 +1605,7 @@ export const useChatStore = create<ChatState>()(
               outgoingQueue: matchedTempId
                 ? removeOutgoingQueueItem(state.outgoingQueue, matchedTempId)
                 : state.outgoingQueue,
+              threadUnreadCounts: nextThreadUnreadCounts,
             };
           });
         } catch (error) {
@@ -1588,6 +1702,8 @@ export const useChatStore = create<ChatState>()(
         const payloadImgUrl = pendingMessage.imgUrl || queuedItem?.imgUrl || undefined;
         const payloadAudioUrl =
           pendingMessage.audioUrl || queuedItem?.audioUrl || undefined;
+        const payloadAudioMeta =
+          pendingMessage.audioMeta || queuedItem?.audioMeta || undefined;
         let resolvedPayloadAudioUrl = payloadAudioUrl;
         const payloadReplyTo =
           resolveReplyToId(pendingMessage.replyTo) || queuedItem?.replyTo || "";
@@ -1663,6 +1779,7 @@ export const useChatStore = create<ChatState>()(
               content: payloadContent,
               imgUrl: payloadImgUrl,
               audioUrl: resolvedPayloadAudioUrl,
+              audioMeta: payloadAudioMeta,
               replyTo: payloadReplyTo || undefined,
               threadRootId: payloadThreadRootId || undefined,
               queuedAt: nowIso,
@@ -1673,6 +1790,12 @@ export const useChatStore = create<ChatState>()(
         }
 
         if (isDataAudioPayload(resolvedPayloadAudioUrl)) {
+          get().updateMessage(effectiveConversationId, normalizedMessageId, {
+            deliveryState: "uploading",
+            deliveryError: null,
+            deliveryAttemptCount: nextAttemptCount,
+          });
+
           try {
             const uploadResult = await chatService.uploadAudio(resolvedPayloadAudioUrl);
             const uploadedAudioUrl = String(uploadResult.audioUrl || "").trim();
@@ -1704,6 +1827,7 @@ export const useChatStore = create<ChatState>()(
                 content: payloadContent,
                 imgUrl: payloadImgUrl,
                 audioUrl: payloadAudioUrl,
+                audioMeta: payloadAudioMeta,
                 replyTo: payloadReplyTo || undefined,
                 threadRootId: payloadThreadRootId || undefined,
                 queuedAt: nowIso,
@@ -1725,6 +1849,7 @@ export const useChatStore = create<ChatState>()(
           replyToId: payloadReplyTo,
           hasImage: Boolean(payloadImgUrl),
           hasAudio: Boolean(payloadAudioUrl),
+          threadRootId: payloadThreadRootId,
         });
 
         get().updateMessage(effectiveConversationId, normalizedMessageId, {
@@ -1754,8 +1879,12 @@ export const useChatStore = create<ChatState>()(
               payloadImgUrl,
               resolvedPayloadAudioUrl,
               resolvedConversationId,
-              payloadReplyTo || undefined,
-              payloadThreadRootId || undefined,
+              {
+                replyTo: payloadReplyTo || undefined,
+                threadRootId: payloadThreadRootId || undefined,
+                clientMessageId: normalizedMessageId,
+                audioMeta: payloadAudioMeta,
+              },
             );
 
             unregisterPendingOwnTempMessage({
@@ -1796,9 +1925,13 @@ export const useChatStore = create<ChatState>()(
               payloadContent,
               payloadImgUrl,
               resolvedPayloadAudioUrl,
-              payloadReplyTo || undefined,
-              targetGroupChannelId || undefined,
-              payloadThreadRootId || undefined,
+              {
+                replyTo: payloadReplyTo || undefined,
+                groupChannelId: targetGroupChannelId || undefined,
+                threadRootId: payloadThreadRootId || undefined,
+                clientMessageId: normalizedMessageId,
+                audioMeta: payloadAudioMeta,
+              },
             );
 
             unregisterPendingOwnTempMessage({
@@ -1840,6 +1973,7 @@ export const useChatStore = create<ChatState>()(
                 content: payloadContent,
                 imgUrl: payloadImgUrl,
                 audioUrl: resolvedPayloadAudioUrl,
+                audioMeta: payloadAudioMeta,
                 replyTo: payloadReplyTo || undefined,
                 threadRootId: payloadThreadRootId || undefined,
                 queuedAt: nowIso,
@@ -2011,6 +2145,7 @@ export const useChatStore = create<ChatState>()(
           content: "This message was removed",
           imgUrl: null,
           audioUrl: null,
+          audioMeta: null,
           replyTo: null,
           reactions: [],
           readBy: [],
@@ -2029,6 +2164,7 @@ export const useChatStore = create<ChatState>()(
               content: result.message.content ?? "",
               imgUrl: result.message.imgUrl ?? null,
               audioUrl: result.message.audioUrl ?? null,
+              audioMeta: result.message.audioMeta ?? null,
               replyTo: result.message.replyTo ?? null,
               reactions: result.message.reactions ?? [],
               readBy: result.message.readBy ?? [],
@@ -2077,6 +2213,7 @@ export const useChatStore = create<ChatState>()(
             content: previousMessage.content,
             imgUrl: previousMessage.imgUrl ?? null,
             audioUrl: previousMessage.audioUrl ?? null,
+            audioMeta: previousMessage.audioMeta ?? null,
             replyTo: previousMessage.replyTo ?? null,
             reactions: previousMessage.reactions ?? [],
             readBy: previousMessage.readBy ?? [],

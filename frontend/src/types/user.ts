@@ -34,6 +34,9 @@ export interface User {
     };
   };
   personalizationPreferences?: PersonalizationPreferences;
+  role?: "admin" | "moderator" | "member" | "guest";
+  isBanned?: boolean;
+  isVerified?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

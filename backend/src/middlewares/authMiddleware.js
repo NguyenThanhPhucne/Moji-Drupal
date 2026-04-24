@@ -131,6 +131,10 @@ export const protectedRoute = async (req, res, next) => {
       return res.status(401).json({ message: "Phiên đăng nhập không hợp lệ" });
     }
 
+    if (user.isBanned) {
+      return res.status(403).json({ message: "Tài khoản của bạn đã bị khóa." });
+    }
+
     req.user = user;
     // Keep decoded token data for RBAC checks downstream.
     req.decodedUser = decodedUser;
@@ -140,4 +144,18 @@ export const protectedRoute = async (req, res, next) => {
     console.error("Lỗi authMiddleware:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
+};
+
+export const requireRole = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Chưa xác thực" });
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({ message: "Bạn không có quyền thực hiện thao tác này" });
+    }
+
+    next();
+  };
 };

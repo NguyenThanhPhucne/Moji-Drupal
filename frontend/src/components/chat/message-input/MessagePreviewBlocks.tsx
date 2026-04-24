@@ -1,5 +1,6 @@
 import { Reply, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import VoiceMessagePlayer from "../VoiceMessagePlayer";
 
 type ReplyPreview = {
   senderDisplayName?: string | null;
@@ -121,12 +122,14 @@ const MessagePreviewBlocks = ({
       )}
 
       {audioPreview && (
-        <div className="relative mx-4 mt-3 w-fit animate-in fade-in zoom-in-95 duration-200 bg-muted/20 px-3 py-2 rounded-xl border border-border/60 shadow-sm flex items-center gap-3">
-          <audio src={audioPreview} controls className="h-8 max-w-[200px]" />
+        <div className="relative mx-4 mt-3 animate-in fade-in zoom-in-95 duration-200 flex items-center gap-2">
+          <div className="flex-1">
+            <VoiceMessagePlayer src={audioPreview} standalone className="rounded-2xl" />
+          </div>
           <button
             type="button"
             onClick={onClearAudio}
-            className="flex size-6 items-center justify-center rounded-full bg-destructive/80 shadow-md transition-colors hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
+            className="flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive/80 shadow-md transition-colors hover:bg-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
             aria-label="Remove voice memo"
           >
             <X className="size-3.5 text-white" />

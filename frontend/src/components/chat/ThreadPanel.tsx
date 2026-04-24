@@ -1,12 +1,29 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { MessageSquareText, Send, X, Mic } from "lucide-react";
+import { MessageSquareText, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { chatService } from "@/services/chatService";
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import type { Conversation, Message } from "@/types/chat";
+import type { AudioMeta, Conversation, Message } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
+import UserAvatar from "./UserAvatar";
+import { toast } from "sonner";
+
+const MAX_THREAD_RECORDING_SECONDS = 180;
+const THREAD_MEMO_MIME_CANDIDATES = [
+  "audio/webm;codecs=opus",
+  "audio/webm",
+  "audio/mp4",
+  "audio/ogg;codecs=opus",
+];
+const resolveThreadMime = () => {
+  if (typeof MediaRecorder === "undefined") return "";
+  return THREAD_MEMO_MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+};
+const fmtSeconds = (s: number) =>
+  `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
 
 const THREAD_PAGE_LIMIT_FALLBACK = 50;
 const THREAD_SKELETON_KEYS = [
@@ -31,26 +48,7 @@ const toMessageDateLabel = (value?: string) => {
   }
 };
 
-// Simple avatar fallback circle with initials
-const AvatarFallback = ({ name, size = 7 }: { name?: string; size?: number }) => {
-  const initials = String(name || "?")
-    .split(" ")
-    .map((part) => part[0] || "")
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 
-  return (
-    <div
-      className={cn(
-        `size-${size} flex shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary font-semibold`,
-        `text-[${size > 6 ? "11" : "9"}px]`,
-      )}
-    >
-      {initials}
-    </div>
-  );
-};
 
 interface ThreadPanelProps {
   selectedConvo: Conversation | null;
@@ -74,6 +72,93 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const latestThreadRequestIdRef = useRef(0);
+  const shouldStickToBottomRef = useRef(true);
+
+  // ── Voice recording state ──────────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSecs, setRecordingSecs] = useState(0);
+  const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [audioMeta, setAudioMeta] = useState<AudioMeta | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recSecsRef = useRef(0);
+  const recMimeRef = useRef("");
+  const recCanceledRef = useRef(false);
+  const recUnmountRef = useRef(false);
+
+  useEffect(() => { recUnmountRef.current = false; return () => { recUnmountRef.current = true; }; }, []);
+
+  const clearRecTimer = useCallback(() => {
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+  }, []);
+
+  const releaseStream = useCallback(() => {
+    recorderRef.current = null;
+    chunksRef.current = [];
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    if (isRecording) return;
+    const mime = resolveThreadMime();
+    if (!mime) { toast.error("Voice recording not supported by this browser."); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: mime });
+      recorderRef.current = recorder;
+      recMimeRef.current = mime;
+      recCanceledRef.current = false;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onerror = () => {
+        clearRecTimer(); setIsRecording(false); setRecordingSecs(0);
+        stream.getTracks().forEach((t) => t.stop()); releaseStream();
+        if (!recUnmountRef.current) toast.error("Recording failed.");
+      };
+      recorder.onstop = () => {
+        const canceled = recCanceledRef.current;
+        const mimeType = recorder.mimeType || recMimeRef.current || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        const dur = Math.max(1, Math.round(recSecsRef.current));
+        clearRecTimer(); setIsRecording(false); setRecordingSecs(0); recSecsRef.current = 0;
+        stream.getTracks().forEach((t) => t.stop()); releaseStream();
+        if (recUnmountRef.current || canceled || !blob.size) return;
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (recUnmountRef.current) return;
+          setAudioPreview(reader.result as string);
+          setAudioMeta({ durationSeconds: dur, mimeType, sizeBytes: blob.size });
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      recorder.start(250);
+      setIsRecording(true); setRecordingSecs(0); recSecsRef.current = 0;
+      clearRecTimer();
+      recTimerRef.current = setInterval(() => {
+        const next = recSecsRef.current + 1;
+        recSecsRef.current = Math.min(next, MAX_THREAD_RECORDING_SECONDS);
+        setRecordingSecs(recSecsRef.current);
+        if (next >= MAX_THREAD_RECORDING_SECONDS) { clearRecTimer(); recorder.stop(); }
+      }, 1000);
+    } catch {
+      toast.error("Microphone access denied.");
+    }
+  }, [isRecording, clearRecTimer, releaseStream]);
+
+  const stopRecording = useCallback(() => {
+    recCanceledRef.current = false;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+  }, []);
+
+  const cancelRecording = useCallback(() => {
+    recCanceledRef.current = true;
+    clearRecTimer(); setIsRecording(false); setRecordingSecs(0); recSecsRef.current = 0;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    setAudioPreview(null); setAudioMeta(null);
+  }, [clearRecTimer]);
 
   const activeConversationId = String(selectedConvo?._id || "").trim();
   const rootMessageId = String(activeThreadRootId || "").trim();
@@ -111,9 +196,21 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const replyCount = mergedThreadMessages.filter(
     (m) => String(m._id) !== rootMessageId,
   ).length;
+  const replyCountLabel = (() => {
+    if (replyCount <= 0) {
+      return "No replies yet";
+    }
+
+    return `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`;
+  })();
 
   const loadThread = useCallback(async (cursor?: string, append = false) => {
     if (!rootMessageId) return;
+    if (append && !cursor) return;
+
+    const requestId = latestThreadRequestIdRef.current + 1;
+    latestThreadRequestIdRef.current = requestId;
+    shouldStickToBottomRef.current = !append;
 
     if (append) {
       setLoadingMore(true);
@@ -123,6 +220,18 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
     try {
       const result = await chatService.fetchMessageThread(rootMessageId, cursor);
+      if (requestId !== latestThreadRequestIdRef.current) {
+        return;
+      }
+
+      const resolvedThreadRootId = String(result.threadRootId || "").trim();
+      if (
+        resolvedThreadRootId &&
+        resolvedThreadRootId !== rootMessageId
+      ) {
+        setActiveThreadRootId(resolvedThreadRootId);
+      }
+
       const fetchedItems = Array.isArray(result.messages) ? result.messages : [];
 
       setThreadMessages((currentItems) => {
@@ -141,14 +250,19 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
       });
 
       setThreadCursor(result.cursor || null);
+    } catch (error) {
+      console.error("Failed to load thread messages", error);
     } finally {
-      setLoadingThread(false);
-      setLoadingMore(false);
+      if (requestId === latestThreadRequestIdRef.current) {
+        setLoadingThread(false);
+        setLoadingMore(false);
+      }
     }
-  }, [rootMessageId]);
+  }, [rootMessageId, setActiveThreadRootId]);
 
   useEffect(() => {
     if (!rootMessageId || !activeConversationId) {
+      latestThreadRequestIdRef.current += 1;
       setThreadMessages([]);
       setThreadCursor(null);
       setComposerValue("");
@@ -160,6 +274,11 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
+    if (!shouldStickToBottomRef.current) {
+      shouldStickToBottomRef.current = true;
+      return;
+    }
+
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mergedThreadMessages.length]);
 
@@ -170,43 +289,52 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
   const handleSendThreadReply = useCallback(async () => {
     const normalizedContent = String(composerValue || "").trim();
-    if (!normalizedContent || !selectedConvo || !rootMessageId || sending) return;
+    const hasAudio = Boolean(audioPreview);
+    if ((!normalizedContent && !hasAudio) || !selectedConvo || !rootMessageId || sending) return;
 
     setSending(true);
+    const capturedAudio = audioPreview;
+    const capturedMeta = audioMeta;
+    setComposerValue(""); setAudioPreview(null); setAudioMeta(null);
+
     try {
+      let resolvedAudioUrl: string | undefined;
+      let resolvedAudioMeta = capturedMeta;
+      if (capturedAudio?.startsWith("data:audio/")) {
+        const up = await chatService.uploadAudio(capturedAudio);
+        resolvedAudioUrl = up.audioUrl;
+        if (up.audioMeta) resolvedAudioMeta = { ...capturedMeta, ...up.audioMeta };
+      } else if (capturedAudio) {
+        resolvedAudioUrl = capturedAudio;
+      }
+
       if (selectedConvo.type === "direct") {
         const recipient = selectedConvo.participants.find(
-          (participant) => String(participant._id) !== String(user?._id || ""),
+          (p) => String(p._id) !== String(user?._id || ""),
         );
         if (!recipient?._id) return;
-
         await sendDirectMessage(
-          String(recipient._id),
-          normalizedContent,
-          undefined,
-          undefined,
-          selectedConvo._id,
-          rootMessageId,
-          rootMessageId,
+          String(recipient._id), normalizedContent,
+          undefined, resolvedAudioUrl, selectedConvo._id,
+          { replyTo: rootMessageId, threadRootId: rootMessageId, audioMeta: resolvedAudioMeta || undefined },
         );
       } else {
         await sendGroupMessage(
-          selectedConvo._id,
-          normalizedContent,
-          undefined,
-          undefined,
-          rootMessageId,
-          selectedConvo.group?.activeChannelId,
-          rootMessageId,
+          selectedConvo._id, normalizedContent,
+          undefined, resolvedAudioUrl,
+          { replyTo: rootMessageId, groupChannelId: selectedConvo.group?.activeChannelId, threadRootId: rootMessageId, audioMeta: resolvedAudioMeta || undefined },
         );
       }
 
-      setComposerValue("");
       textareaRef.current?.focus();
+    } catch {
+      setComposerValue(normalizedContent);
+      setAudioPreview(capturedAudio); setAudioMeta(capturedMeta);
+      toast.error("Failed to send reply.");
     } finally {
       setSending(false);
     }
-  }, [composerValue, selectedConvo, rootMessageId, sending, user, sendDirectMessage, sendGroupMessage]);
+  }, [composerValue, audioPreview, audioMeta, selectedConvo, rootMessageId, sending, user, sendDirectMessage, sendGroupMessage]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -236,9 +364,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                   Thread
                 </SheetTitle>
                 <SheetDescription className="text-[11px] leading-none mt-0.5 text-muted-foreground">
-                  {replyCount > 0
-                    ? `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`
-                    : "No replies yet"}
+                  {replyCountLabel}
                 </SheetDescription>
               </div>
             </div>
@@ -260,7 +386,10 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
               Original message
             </p>
             {rootMessage.audioUrl && !rootMessage.isDeleted ? (
-              <VoiceMessagePlayer src={rootMessage.audioUrl} />
+              <VoiceMessagePlayer
+                src={rootMessage.audioUrl}
+                initialDurationSeconds={rootMessage.audioMeta?.durationSeconds ?? null}
+              />
             ) : (
               <p className="text-sm leading-relaxed text-foreground line-clamp-3">
                 {rootMessage.isDeleted
@@ -321,7 +450,10 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                     >
                       {/* Avatar */}
                       {!isOwn && (
-                        <AvatarFallback name={senderName} size={7} />
+                        <UserAvatar
+                          type="chat"
+                          name={senderName}
+                          avatarUrl={selectedConvo?.participants?.find((p) => String(p._id) === String(messageItem.senderId))?.avatarUrl ?? undefined}
                       )}
 
                       {/* Bubble */}
@@ -359,6 +491,9 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                             <VoiceMessagePlayer
                               src={messageItem.audioUrl}
                               isOwn={isOwn}
+                              initialDurationSeconds={
+                                messageItem.audioMeta?.durationSeconds ?? null
+                              }
                             />
                           ) : (
                             <p>
@@ -385,7 +520,40 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
         </div>
 
         {/* Composer */}
-        <div className="flex-none border-t border-border/60 bg-background px-3 py-3">
+        <div className="flex-none border-t border-border/60 bg-background px-3 py-3 space-y-2">
+          {/* Audio preview before send */}
+          {audioPreview && !isRecording && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-150">
+              <div className="flex-1">
+                <VoiceMessagePlayer src={audioPreview} standalone />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setAudioPreview(null); setAudioMeta(null); }}
+                className="flex size-6 shrink-0 items-center justify-center rounded-full bg-destructive/80 text-white hover:bg-destructive transition-colors"
+                aria-label="Remove voice memo"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 animate-in fade-in duration-150">
+              <span className="size-2 rounded-full bg-destructive animate-pulse shrink-0" />
+              <span className="text-xs font-medium text-destructive flex-1">Recording {fmtSeconds(recordingSecs)}</span>
+              <button type="button" onClick={cancelRecording} aria-label="Cancel recording"
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={stopRecording} aria-label="Stop recording"
+                className="inline-flex size-7 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 transition-colors">
+                <Square className="size-3" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-end gap-2">
             <div className="flex-1 rounded-2xl border border-border/70 bg-muted/20 transition-colors focus-within:border-primary/60 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/20">
               <textarea
@@ -394,25 +562,37 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                 value={composerValue}
                 onChange={(event) => setComposerValue(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Reply in thread… (Enter to send)"
+                placeholder={isRecording ? "Recording…" : "Reply in thread… (Enter to send)"}
                 rows={2}
-                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-2 text-sm outline-none placeholder:text-muted-foreground/60"
+                disabled={isRecording}
+                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-2 text-sm outline-none placeholder:text-muted-foreground/60 disabled:opacity-50"
               />
               <div className="flex items-center justify-between px-2 pb-1.5">
                 <div className="flex items-center gap-1">
-                  <div className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/60 transition-colors">
-                    <Mic className="size-3.5" />
-                  </div>
+                  {isRecording ? (
+                    <button type="button" onClick={cancelRecording} aria-label="Cancel recording"
+                      className="inline-flex size-6 items-center justify-center rounded-full bg-destructive/15 text-destructive hover:bg-destructive/25 transition-colors">
+                      <MicOff className="size-3.5" />
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => { void startRecording(); }} aria-label="Record voice memo"
+                      className={cn(
+                        "inline-flex size-6 items-center justify-center rounded-full transition-colors",
+                        audioPreview
+                          ? "text-primary bg-primary/15 hover:bg-primary/25"
+                          : "text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/60"
+                      )}>
+                      <Mic className="size-3.5" />
+                    </button>
+                  )}
                 </div>
-                <p className="text-[10px] text-muted-foreground/50">
-                  Shift+Enter for new line
-                </p>
+                <p className="text-[10px] text-muted-foreground/50">Shift+Enter for new line</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => { void handleSendThreadReply(); }}
-              disabled={sending || !String(composerValue || "").trim()}
+              disabled={sending || isRecording || (!String(composerValue || "").trim() && !audioPreview)}
               className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 shadow-sm"
               aria-label="Send thread reply"
             >

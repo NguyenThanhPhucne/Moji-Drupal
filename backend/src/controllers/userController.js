@@ -340,7 +340,7 @@ export const getUserProfileLite = async (req, res) => {
     const { userId } = req.params;
 
     const user = await User.findById(userId)
-      .select("_id displayName username avatarUrl bio lastActiveAt updatedAt")
+      .select("_id displayName username avatarUrl bio lastActiveAt updatedAt role isBanned isVerified")
       .lean();
 
     if (!user) {
@@ -366,6 +366,9 @@ export const getUserProfileLite = async (req, res) => {
         username: user.username,
         avatarUrl: user.avatarUrl || null,
         bio: user.bio || "",
+        role: user.role || "member",
+        isBanned: Boolean(user.isBanned),
+        isVerified: Boolean(user.isVerified),
         lastActiveAt: user.lastActiveAt || latestMessage?.createdAt || user.updatedAt || null,
         mutualGroupsCount: mutualGroups.length,
         mutualGroups: mutualGroups.map((groupItem) => ({
@@ -698,6 +701,81 @@ export const removeCoverPhoto = async (req, res) => {
     return res.status(200).json({ message: "Cover photo removed" });
   } catch (error) {
     console.error("Lỗi khi removeCoverPhoto", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+// --- ADMIN CONTROLLERS ---
+
+export const updateUserRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!["admin", "moderator", "member", "guest"].includes(role)) {
+      return res.status(400).json({ message: "Role không hợp lệ" });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { role },
+      { new: true }
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    await invalidateCache(`auth_profile:${id}`);
+    return res.status(200).json({ message: "Cập nhật quyền thành công", user: updatedUser });
+  } catch (error) {
+    console.error("Lỗi khi updateUserRole:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const toggleUserBan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isBanned } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { isBanned: Boolean(isBanned) },
+      { new: true }
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    await invalidateCache(`auth_profile:${id}`);
+    return res.status(200).json({ message: `Đã ${isBanned ? 'khóa' : 'mở khóa'} tài khoản`, user: updatedUser });
+  } catch (error) {
+    console.error("Lỗi khi toggleUserBan:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const toggleUserVerify = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isVerified } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      id,
+      { isVerified: Boolean(isVerified) },
+      { new: true }
+    ).select("-hashedPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    await invalidateCache(`auth_profile:${id}`);
+    return res.status(200).json({ message: `Đã ${isVerified ? 'cấp' : 'thu hồi'} tích xanh`, user: updatedUser });
+  } catch (error) {
+    console.error("Lỗi khi toggleUserVerify:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

@@ -3,7 +3,6 @@ import Message from "../models/Message.js";
 import Bookmark from "../models/Bookmark.js";
 import Notification from "../models/Notification.js";
 import ContentReport from "../models/ContentReport.js";
-import User from "../models/User.js";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
 import { createHash, randomBytes } from "node:crypto";
@@ -1398,7 +1397,7 @@ export const getConversations = async (req, res) => {
     if (cached) {
       try {
         const etag = createHash("sha1").update(JSON.stringify(cached)).digest("hex");
-        const lastTs = (cached || [])
+        const lastTs = cached
           .map((c) => {
             const lm = c?.updatedAt || c?.lastMessageAt || null;
             return lm ? new Date(lm).getTime() : 0;
@@ -1416,7 +1415,7 @@ export const getConversations = async (req, res) => {
         res.setHeader("ETag", etag);
         res.setHeader("Last-Modified", lastModified);
       } catch (e) {
-        // ignore header computation failures
+        console.warn("[conversations] Failed to compute cache validation headers", e);
       }
 
       return res.status(200).json({ conversations: cached });
@@ -1498,7 +1497,7 @@ export const getConversations = async (req, res) => {
       res.setHeader("ETag", etag);
       res.setHeader("Last-Modified", lastModified);
     } catch (e) {
-      // ignore
+      console.warn("[conversations] Failed to compute response validation headers", e);
     }
 
     await setCachedData(cacheKey, userScopedConversations, 120); // 2-minute cache: short enough for near-realtime freshness
@@ -1745,7 +1744,7 @@ export const getMessages = async (req, res) => {
 
     let messages = await Message.find(query)
       .select(
-        "_id conversationId groupChannelId senderId content imgUrl audioUrl replyTo threadRootId reactions isDeleted editedAt readBy createdAt updatedAt",
+        "_id conversationId groupChannelId senderId content imgUrl audioUrl audioMeta replyTo threadRootId reactions isDeleted editedAt readBy createdAt updatedAt",
       )
       .populate("replyTo", "content senderId")
       .sort({ createdAt: -1, _id: -1 })
@@ -3445,7 +3444,7 @@ export const getGroupChannelAnalytics = async (req, res) => {
         $lte: now,
       },
     })
-      .select("groupChannelId senderId")
+      .select("groupChannelId senderId audioMeta")
       .lean();
 
     const previousMessages = await Message.find({
@@ -3455,13 +3454,25 @@ export const getGroupChannelAnalytics = async (req, res) => {
         $lt: currentPeriodStart,
       },
     })
-      .select("groupChannelId senderId")
+      .select("groupChannelId senderId audioMeta")
       .lean();
 
     const currentStatsByChannel = new Map(
       channelIds.map((channelIdValue) => [
         channelIdValue,
         { messages: 0, senders: new Set() },
+      ]),
+    );
+    const currentVoiceStatsByChannel = new Map(
+      channelIds.map((channelIdValue) => [
+        channelIdValue,
+        { voiceMemoCount: 0, voiceDurationSeconds: 0 },
+      ]),
+    );
+    const previousVoiceStatsByChannel = new Map(
+      channelIds.map((channelIdValue) => [
+        channelIdValue,
+        { voiceMemoCount: 0, voiceDurationSeconds: 0 },
       ]),
     );
     const previousStatsByChannel = new Map(
@@ -3491,6 +3502,15 @@ export const getGroupChannelAnalytics = async (req, res) => {
         stats.senders.add(senderId);
         currentActiveMembers.add(senderId);
       }
+
+      const durationSeconds = Number(message?.audioMeta?.durationSeconds || 0);
+      if (durationSeconds > 0) {
+        const voiceStats = currentVoiceStatsByChannel.get(normalizedChannelId);
+        if (voiceStats) {
+          voiceStats.voiceMemoCount += 1;
+          voiceStats.voiceDurationSeconds += durationSeconds;
+        }
+      }
     });
 
     previousMessages.forEach((message) => {
@@ -3510,6 +3530,15 @@ export const getGroupChannelAnalytics = async (req, res) => {
         stats.senders.add(senderId);
         previousActiveMembers.add(senderId);
       }
+
+      const durationSeconds = Number(message?.audioMeta?.durationSeconds || 0);
+      if (durationSeconds > 0) {
+        const voiceStats = previousVoiceStatsByChannel.get(normalizedChannelId);
+        if (voiceStats) {
+          voiceStats.voiceMemoCount += 1;
+          voiceStats.voiceDurationSeconds += durationSeconds;
+        }
+      }
     });
 
     const membersCount = Array.isArray(conversation.participants)
@@ -3524,6 +3553,14 @@ export const getGroupChannelAnalytics = async (req, res) => {
       const previousStats = previousStatsByChannel.get(channel.channelId) || {
         messages: 0,
         senders: new Set(),
+      };
+      const currentVoiceStats = currentVoiceStatsByChannel.get(channel.channelId) || {
+        voiceMemoCount: 0,
+        voiceDurationSeconds: 0,
+      };
+      const previousVoiceStats = previousVoiceStatsByChannel.get(channel.channelId) || {
+        voiceMemoCount: 0,
+        voiceDurationSeconds: 0,
       };
 
       const previousMessagesCount = previousStats.messages;
@@ -3549,6 +3586,18 @@ export const getGroupChannelAnalytics = async (req, res) => {
         previousStats.senders.size > 0
           ? Math.round((retainedSenders / previousStats.senders.size) * 10000) / 100
           : 0;
+      const currentVoiceMinutes =
+        Math.round((currentVoiceStats.voiceDurationSeconds / 60) * 100) / 100;
+      const previousVoiceMinutes =
+        Math.round((previousVoiceStats.voiceDurationSeconds / 60) * 100) / 100;
+      const avgVoiceMemoLengthSeconds =
+        currentVoiceStats.voiceMemoCount > 0
+          ? Math.round(
+              (currentVoiceStats.voiceDurationSeconds /
+                currentVoiceStats.voiceMemoCount) *
+                100,
+            ) / 100
+          : 0;
 
       return {
         channelId: channel.channelId,
@@ -3560,8 +3609,31 @@ export const getGroupChannelAnalytics = async (req, res) => {
         messageGrowthPercent,
         currentActiveSenders: currentStats.senders.size,
         senderRetentionPercent,
+        currentVoiceMinutes,
+        previousVoiceMinutes,
+        currentVoiceMemoCount: currentVoiceStats.voiceMemoCount,
+        avgVoiceMemoLengthSeconds,
       };
     });
+
+    const currentVoiceDurationSeconds = currentMessages.reduce((sum, message) => {
+      const durationSeconds = Number(message?.audioMeta?.durationSeconds || 0);
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+        return sum;
+      }
+      return sum + durationSeconds;
+    }, 0);
+    const previousVoiceDurationSeconds = previousMessages.reduce((sum, message) => {
+      const durationSeconds = Number(message?.audioMeta?.durationSeconds || 0);
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+        return sum;
+      }
+      return sum + durationSeconds;
+    }, 0);
+    const currentVoiceMemoCount = currentMessages.reduce((sum, message) => {
+      const durationSeconds = Number(message?.audioMeta?.durationSeconds || 0);
+      return durationSeconds > 0 ? sum + 1 : sum;
+    }, 0);
 
     const currentRetentionRate =
       membersCount > 0
@@ -3586,6 +3658,17 @@ export const getGroupChannelAnalytics = async (req, res) => {
           membersCount,
           currentMessages: currentMessages.length,
           previousMessages: previousMessages.length,
+          currentVoiceMinutes:
+            Math.round((currentVoiceDurationSeconds / 60) * 100) / 100,
+          previousVoiceMinutes:
+            Math.round((previousVoiceDurationSeconds / 60) * 100) / 100,
+          currentVoiceMemoCount,
+          avgVoiceMemoLengthSeconds:
+            currentVoiceMemoCount > 0
+              ? Math.round(
+                  (currentVoiceDurationSeconds / currentVoiceMemoCount) * 100,
+                ) / 100
+              : 0,
           currentActiveMembers: currentActiveMembers.size,
           previousActiveMembers: previousActiveMembers.size,
           currentRetentionRate,

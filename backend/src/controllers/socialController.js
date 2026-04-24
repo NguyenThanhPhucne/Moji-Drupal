@@ -1634,7 +1634,9 @@ export const deleteComment = async (req, res) => {
 
     const canDelete =
       String(comment.authorId) === String(userId) ||
-      String(post.authorId) === String(userId);
+      String(post.authorId) === String(userId) ||
+      req.user.role === "admin" ||
+      req.user.role === "moderator";
 
     if (!canDelete) {
       return res.status(403).json({ message: "You cannot delete this comment" });
@@ -1729,7 +1731,12 @@ export const deletePost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    if (String(post.authorId) !== String(userId)) {
+    const canDelete = 
+      String(post.authorId) === String(userId) ||
+      req.user.role === "admin" ||
+      req.user.role === "moderator";
+
+    if (!canDelete) {
       return res.status(403).json({ message: "You cannot delete this post" });
     }
 

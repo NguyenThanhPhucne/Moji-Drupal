@@ -74,8 +74,16 @@ const sendQueuedVoiceMemoItem = async ({
       item.imgUrl || undefined,
       normalizedAudioUrl,
       item.conversationId || undefined,
-      item.replyToId || undefined,
-      item.threadRootId || undefined,
+      {
+        replyTo: item.replyToId || undefined,
+        threadRootId: item.threadRootId || undefined,
+        clientMessageId: item.id,
+        audioMeta: {
+          durationSeconds: item.audioDurationSeconds ?? null,
+          mimeType: item.audioMimeType ?? null,
+          sizeBytes: item.audioSizeBytes ?? null,
+        },
+      },
     );
 
     return;
@@ -91,9 +99,17 @@ const sendQueuedVoiceMemoItem = async ({
     item.content,
     item.imgUrl || undefined,
     normalizedAudioUrl,
-    item.replyToId || undefined,
-    item.groupChannelId || undefined,
-    item.threadRootId || undefined,
+    {
+      replyTo: item.replyToId || undefined,
+      groupChannelId: item.groupChannelId || undefined,
+      threadRootId: item.threadRootId || undefined,
+      clientMessageId: item.id,
+      audioMeta: {
+        durationSeconds: item.audioDurationSeconds ?? null,
+        mimeType: item.audioMimeType ?? null,
+        sizeBytes: item.audioSizeBytes ?? null,
+      },
+    },
   );
 };
 
@@ -116,6 +132,7 @@ const processQueuedVoiceMemoItem = async (
   }
 
   if (Number(item.attemptCount || 0) >= MAX_VOICE_MEMO_OUTBOX_ATTEMPTS) {
+    await removeVoiceMemoOutboxItem(item.id);
     return "exhausted";
   }
 

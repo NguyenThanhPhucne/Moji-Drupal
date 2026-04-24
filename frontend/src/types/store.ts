@@ -1,5 +1,6 @@
 import type { Socket } from "socket.io-client";
 import type {
+  AudioMeta,
   Conversation,
   GroupChannelAnalyticsPayload,
   GroupChannelRole,
@@ -19,6 +20,7 @@ export interface OutgoingMessageQueueItem {
   content: string;
   imgUrl?: string;
   audioUrl?: string;
+  audioMeta?: AudioMeta;
   replyTo?: string;
   threadRootId?: string;
   queuedAt: string;
@@ -76,6 +78,7 @@ export interface ChatState {
   loading: boolean;
   replyingTo: Message | null;
   activeThreadRootId: string | null;
+  threadUnreadCounts: Record<string, number>;
   outgoingQueue: OutgoingMessageQueueItem[];
   isFlushingOutgoingQueue: boolean;
   reset: () => void;
@@ -91,17 +94,25 @@ export interface ChatState {
     imgUrl?: string,
     audioUrl?: string,
     conversationId?: string,
-    replyTo?: string,
-    threadRootId?: string,
+    options?: {
+      replyTo?: string;
+      threadRootId?: string;
+      clientMessageId?: string;
+      audioMeta?: AudioMeta;
+    },
   ) => Promise<void>;
   sendGroupMessage: (
     conversationId: string,
     content: string,
     imgUrl?: string,
     audioUrl?: string,
-    replyTo?: string,
-    groupChannelId?: string,
-    threadRootId?: string,
+    options?: {
+      replyTo?: string;
+      groupChannelId?: string;
+      threadRootId?: string;
+      clientMessageId?: string;
+      audioMeta?: AudioMeta;
+    },
   ) => Promise<void>;
   // add message
   addMessage: (message: Message) => void;

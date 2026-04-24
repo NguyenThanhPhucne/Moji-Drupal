@@ -668,6 +668,53 @@ const normalizeThreadRootId = (threadRootId) => {
   return normalized || null;
 };
 
+const normalizeClientMessageId = (clientMessageId) => {
+  const normalized = String(clientMessageId || "").trim();
+  return normalized || null;
+};
+
+const normalizeAudioMetaInput = (
+  rawAudioMeta,
+  { fallbackMimeType = null, fallbackSizeBytes = null } = {},
+) => {
+  if (!rawAudioMeta || typeof rawAudioMeta !== "object" || Array.isArray(rawAudioMeta)) {
+    rawAudioMeta = {};
+  }
+
+  const parseFiniteNumber = (value) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue < 0) {
+      return null;
+    }
+
+    return Math.round(numericValue);
+  };
+
+  const normalizedDurationSeconds = parseFiniteNumber(rawAudioMeta?.durationSeconds);
+  const normalizedMimeType = String(
+    rawAudioMeta?.mimeType || fallbackMimeType || "",
+  )
+    .trim()
+    .toLowerCase();
+  const normalizedSizeBytes =
+    parseFiniteNumber(rawAudioMeta?.sizeBytes) ??
+    parseFiniteNumber(fallbackSizeBytes);
+
+  if (
+    !normalizedDurationSeconds &&
+    !normalizedMimeType &&
+    !normalizedSizeBytes
+  ) {
+    return null;
+  }
+
+  return {
+    durationSeconds: normalizedDurationSeconds || null,
+    mimeType: normalizedMimeType || null,
+    sizeBytes: normalizedSizeBytes || null,
+  };
+};
+
 const resolveValidatedReplyTo = async ({
   replyTo,
   conversationId,
@@ -807,12 +854,20 @@ const uploadMessageImage = async (rawImgUrl) => {
 const uploadMessageAudio = async (rawAudioUrl) => {
   const normalized = String(rawAudioUrl || "").trim();
   if (!normalized) {
-    return null;
+    return {
+      audioUrl: null,
+      mimeType: null,
+      sizeBytes: null,
+    };
   }
 
   // If already an http(s) URL, trust and keep it as-is.
   if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
-    return normalized;
+    return {
+      audioUrl: normalized,
+      mimeType: null,
+      sizeBytes: null,
+    };
   }
 
   if (!normalized.startsWith("data:audio/")) {
@@ -864,10 +919,11 @@ const uploadMessageAudio = async (rawAudioUrl) => {
     return {
       mimeType: normalizedMimeType,
       audioBuffer,
+      sizeBytes: audioBuffer.length,
     };
   };
 
-  const { audioBuffer } = parseAudioDataUrl(normalized);
+  const { audioBuffer, mimeType, sizeBytes } = parseAudioDataUrl(normalized);
 
   let result;
   try {
@@ -904,7 +960,11 @@ const uploadMessageAudio = async (rawAudioUrl) => {
     throw createHttpError(502, "Audio upload provider is temporarily unavailable");
   }
 
-  return result.secure_url;
+  return {
+    audioUrl: result.secure_url,
+    mimeType,
+    sizeBytes,
+  };
 };
 
 // ─── HTTP endpoint: dedicated audio pre-upload ───────────────────────────────
@@ -989,7 +1049,13 @@ export const uploadAudio = async (req, res) => {
       return res.status(502).json({ message: "Audio upload service temporarily unavailable" });
     }
 
-    return res.status(200).json({ audioUrl: result.secure_url });
+    return res.status(200).json({
+      audioUrl: result.secure_url,
+      audioMeta: {
+        mimeType: normalizedMimeType,
+        sizeBytes: audioBuffer.length,
+      },
+    });
   } catch (error) {
     console.error("uploadAudio error:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -1327,9 +1393,11 @@ export const sendDirectMessage = async (req, res) => {
       content,
       imgUrl,
       audioUrl,
+      audioMeta,
       conversationId,
       replyTo,
       threadRootId,
+      clientMessageId,
     } = req.body;
     const senderId = req.user._id;
     const normalizedContent = String(content || "").trim();
@@ -1361,6 +1429,19 @@ export const sendDirectMessage = async (req, res) => {
         senderId,
         recipientId,
       });
+    const normalizedClientMessageId = normalizeClientMessageId(clientMessageId);
+
+    if (normalizedClientMessageId) {
+      const existingMessage = await Message.findOne({
+        conversationId: conversation._id,
+        senderId,
+        clientMessageId: normalizedClientMessageId,
+      });
+
+      if (existingMessage) {
+        return res.status(200).json({ message: existingMessage });
+      }
+    }
 
     const antiSpamResult = registerRateLimitHit({
       userId: senderId,
@@ -1379,7 +1460,11 @@ export const sendDirectMessage = async (req, res) => {
     }
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
-    const uploadedAudioUrl = await uploadMessageAudio(audioUrl);
+    const uploadedAudio = await uploadMessageAudio(audioUrl);
+    const normalizedAudioMeta = normalizeAudioMetaInput(audioMeta, {
+      fallbackMimeType: uploadedAudio?.mimeType,
+      fallbackSizeBytes: uploadedAudio?.sizeBytes,
+    });
 
     const validatedReplyTarget = await resolveValidatedReplyTo({
       replyTo,
@@ -1395,15 +1480,34 @@ export const sendDirectMessage = async (req, res) => {
       validatedReplyTarget?._id ||
       null;
 
-    let message = await Message.create({
-      conversationId: conversation._id,
-      senderId,
-      content: normalizedContent,
-      imgUrl: uploadedImgUrl,
-      audioUrl: uploadedAudioUrl,
-      replyTo: validatedReplyTarget?._id || null,
-      threadRootId: effectiveThreadRootId,
-    });
+    let message;
+    try {
+      message = await Message.create({
+        conversationId: conversation._id,
+        senderId,
+        content: normalizedContent,
+        imgUrl: uploadedImgUrl,
+        audioUrl: uploadedAudio?.audioUrl || null,
+        audioMeta: normalizedAudioMeta,
+        clientMessageId: normalizedClientMessageId,
+        replyTo: validatedReplyTarget?._id || null,
+        threadRootId: effectiveThreadRootId,
+      });
+    } catch (createError) {
+      if (createError?.code !== 11000 || !normalizedClientMessageId) {
+        throw createError;
+      }
+
+      const existingMessage = await Message.findOne({
+        conversationId: conversation._id,
+        senderId,
+        clientMessageId: normalizedClientMessageId,
+      });
+      if (!existingMessage) {
+        throw createError;
+      }
+      message = existingMessage;
+    }
 
     if (validatedReplyTarget?._id) {
       message = await message.populate("replyTo", "content senderId");
@@ -1437,16 +1541,18 @@ export const sendDirectMessage = async (req, res) => {
   }
 };
 
-export const sendGroupMessage = async (req, res) => {
+export const sendGroupMessage = async (req, res) => { // NOSONAR
   try {
     const {
       conversationId,
       content,
       imgUrl,
       audioUrl,
+      audioMeta,
       replyTo,
       groupChannelId,
       threadRootId,
+      clientMessageId,
     } = req.body;
     const senderId = req.user._id;
     const normalizedConversationId = String(conversationId || "").trim();
@@ -1513,6 +1619,19 @@ export const sendGroupMessage = async (req, res) => {
         message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
       });
     }
+    const normalizedClientMessageId = normalizeClientMessageId(clientMessageId);
+
+    if (normalizedClientMessageId) {
+      const existingMessage = await Message.findOne({
+        conversationId: normalizedConversationId,
+        senderId,
+        clientMessageId: normalizedClientMessageId,
+      });
+
+      if (existingMessage) {
+        return res.status(200).json({ message: existingMessage });
+      }
+    }
 
     const antiSpamResult = registerRateLimitHit({
       userId: senderId,
@@ -1531,7 +1650,11 @@ export const sendGroupMessage = async (req, res) => {
     }
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
-    const uploadedAudioUrl = await uploadMessageAudio(audioUrl);
+    const uploadedAudio = await uploadMessageAudio(audioUrl);
+    const normalizedAudioMeta = normalizeAudioMetaInput(audioMeta, {
+      fallbackMimeType: uploadedAudio?.mimeType,
+      fallbackSizeBytes: uploadedAudio?.sizeBytes,
+    });
     const validatedReplyTarget = await resolveValidatedReplyTo({
       replyTo,
       conversationId: normalizedConversationId,
@@ -1548,16 +1671,35 @@ export const sendGroupMessage = async (req, res) => {
       validatedReplyTarget?._id ||
       null;
 
-    let message = await Message.create({
-      conversationId: normalizedConversationId,
-      groupChannelId: effectiveGroupChannelId,
-      senderId,
-      content: normalizedContent,
-      imgUrl: uploadedImgUrl,
-      audioUrl: uploadedAudioUrl,
-      replyTo: validatedReplyTarget?._id || null,
-      threadRootId: effectiveThreadRootId,
-    });
+    let message;
+    try {
+      message = await Message.create({
+        conversationId: normalizedConversationId,
+        groupChannelId: effectiveGroupChannelId,
+        senderId,
+        content: normalizedContent,
+        imgUrl: uploadedImgUrl,
+        audioUrl: uploadedAudio?.audioUrl || null,
+        audioMeta: normalizedAudioMeta,
+        clientMessageId: normalizedClientMessageId,
+        replyTo: validatedReplyTarget?._id || null,
+        threadRootId: effectiveThreadRootId,
+      });
+    } catch (createError) {
+      if (createError?.code !== 11000 || !normalizedClientMessageId) {
+        throw createError;
+      }
+
+      const existingMessage = await Message.findOne({
+        conversationId: normalizedConversationId,
+        senderId,
+        clientMessageId: normalizedClientMessageId,
+      });
+      if (!existingMessage) {
+        throw createError;
+      }
+      message = existingMessage;
+    }
 
     if (validatedReplyTarget?._id) {
       message = await message.populate("replyTo", "content senderId");
@@ -1753,6 +1895,7 @@ export const unsendMessage = async (req, res) => {
           content: REMOVED_MESSAGE_CONTENT,
           imgUrl: null,
           audioUrl: null,
+          audioMeta: null,
           replyTo: null,
           reactions: [],
           readBy: [],
@@ -1798,19 +1941,71 @@ export const unsendMessage = async (req, res) => {
     // this step fails, avoiding partial-rollback confusion. Log discrepancy clearly.
     let updatedConversation = null;
     try {
-      updatedConversation = await Conversation.findOneAndUpdate(
-        {
-          _id: deletedMessage.conversationId,
-          "lastMessage._id": deletedMessage._id.toString(),
-        },
-        {
-          $set: {
-            "lastMessage.content": REMOVED_MESSAGE_CONTENT,
-            "lastMessage.createdAt": deletedMessage.createdAt,
-          },
-        },
-        { new: true },
+      // Check if the deleted message was the conversation's lastMessage.
+      // If so, we must find the true next-most-recent non-deleted message and
+      // promote it — otherwise the sidebar will forever show "[Message removed]".
+      const conversationForUpdate = await Conversation.findById(
+        deletedMessage.conversationId,
       );
+
+      if (conversationForUpdate) {
+        const isLastMessage =
+          String(conversationForUpdate.lastMessage?._id || "") ===
+          String(deletedMessage._id);
+
+        if (isLastMessage) {
+          // Find the most recent non-deleted message (excluding the just-deleted one)
+          const previousMessage = await Message.findOne({
+            conversationId: deletedMessage.conversationId,
+            _id: { $ne: deletedMessage._id },
+            isDeleted: { $ne: true },
+          })
+            .select("_id content imgUrl audioUrl senderId createdAt groupChannelId")
+            .sort({ createdAt: -1, _id: -1 })
+            .lean();
+
+          if (previousMessage) {
+            const previewContent =
+              String(previousMessage.content || "").trim() ||
+              (previousMessage.imgUrl ? "📷 Photo" : "") ||
+              (previousMessage.audioUrl ? "🎤 Voice message" : "");
+
+            conversationForUpdate.set({
+              lastMessage: {
+                _id: previousMessage._id,
+                content: previewContent,
+                createdAt: previousMessage.createdAt,
+                senderId: previousMessage.senderId,
+                groupChannelId: previousMessage.groupChannelId || null,
+              },
+              lastMessageAt: previousMessage.createdAt,
+            });
+          } else {
+            // No messages remain — clear lastMessage entirely
+            conversationForUpdate.set({
+              lastMessage: null,
+              lastMessageAt: conversationForUpdate.createdAt,
+            });
+          }
+
+          updatedConversation = await conversationForUpdate.save();
+        } else {
+          // Deleted message was NOT the lastMessage — only update content label
+          updatedConversation = await Conversation.findOneAndUpdate(
+            {
+              _id: deletedMessage.conversationId,
+              "lastMessage._id": deletedMessage._id.toString(),
+            },
+            {
+              $set: {
+                "lastMessage.content": REMOVED_MESSAGE_CONTENT,
+                "lastMessage.createdAt": deletedMessage.createdAt,
+              },
+            },
+            { new: true },
+          );
+        }
+      }
 
       const clearedPinnedConversation = await Conversation.findOneAndUpdate(
         {
@@ -1854,6 +2049,7 @@ export const unsendMessage = async (req, res) => {
         content: deletedMessage.content,
         imgUrl: deletedMessage.imgUrl,
         audioUrl: deletedMessage.audioUrl,
+        audioMeta: deletedMessage.audioMeta || null,
         editedAt: deletedMessage.editedAt,
         reactions: deletedMessage.reactions,
         readBy: deletedMessage.readBy,
@@ -2326,7 +2522,7 @@ export const getMessageThread = async (req, res) => {
 
     let messages = await Message.find(query)
       .select(
-        "_id conversationId groupChannelId senderId content imgUrl audioUrl replyTo threadRootId reactions isDeleted editedAt readBy createdAt updatedAt",
+        "_id conversationId groupChannelId senderId content imgUrl audioUrl audioMeta replyTo threadRootId reactions isDeleted editedAt readBy createdAt updatedAt",
       )
       .populate("replyTo", "content senderId")
       .sort({ createdAt: -1, _id: -1 })

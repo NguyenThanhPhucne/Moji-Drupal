@@ -283,7 +283,13 @@ const sendMiniChatMessage = async ({
   const imgUrl = currentWindow.imagePreview || undefined;
   setImagePreview(userId, null);
 
-  await sendDirectMessage(userId, content, imgUrl, conversationId || undefined);
+  await sendDirectMessage(
+    userId,
+    content,
+    imgUrl,
+    undefined,
+    conversationId || undefined,
+  );
 };
 
 const handleMiniChatImageSelect = (

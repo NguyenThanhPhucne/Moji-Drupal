@@ -171,6 +171,28 @@ const messageSchema = new mongoose.Schema(
     audioUrl: {
       type: String,
     },
+    audioMeta: {
+      durationSeconds: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
+      mimeType: {
+        type: String,
+        default: null,
+        trim: true,
+      },
+      sizeBytes: {
+        type: Number,
+        default: null,
+        min: 0,
+      },
+    },
+    clientMessageId: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Message",
@@ -231,6 +253,15 @@ messageSchema.index({ conversationId: 1, isDeleted: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, groupChannelId: 1, createdAt: -1 });
 messageSchema.index({ conversationId: 1, threadRootId: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1, createdAt: -1 });
+messageSchema.index(
+  { conversationId: 1, senderId: 1, clientMessageId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      clientMessageId: { $type: "string" },
+    },
+  },
+);
 messageSchema.index(
   { content: "text" },
   {

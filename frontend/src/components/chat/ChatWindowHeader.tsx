@@ -138,6 +138,30 @@ const formatUnreadCountLabel = (unreadCount: number) => {
   return unreadCount > 99 ? "99+" : String(unreadCount);
 };
 
+const formatVoiceMinutes = (value: number) => {
+  const numericValue = Number(value || 0);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return "0";
+  }
+  return numericValue.toFixed(numericValue >= 10 ? 0 : 1);
+};
+
+const formatVoiceDurationLabel = (seconds: number) => {
+  const totalSeconds = Math.max(0, Math.round(Number(seconds || 0)));
+  if (totalSeconds <= 0) {
+    return "0s";
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  if (minutes <= 0) {
+    return `${remainingSeconds}s`;
+  }
+  if (remainingSeconds <= 0) {
+    return `${minutes}m`;
+  }
+  return `${minutes}m ${remainingSeconds}s`;
+};
+
 const buildChannelSelectLabel = (channelName: string, unreadCount: number) => {
   if (unreadCount > 0) {
     return `#${channelName} (${formatUnreadCountLabel(unreadCount)})`;
@@ -2091,7 +2115,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
 
                 {!analyticsLoading && channelAnalytics && (
                   <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-5 gap-2">
                       <div className="rounded-md border border-border/60 bg-muted/20 p-2">
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Messages</p>
                         <p className="mt-0.5 text-sm font-semibold text-foreground">
@@ -2110,6 +2134,20 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                           {channelAnalytics.summary.currentRetentionRate}%
                         </p>
                       </div>
+                      <div className="rounded-md border border-border/60 bg-muted/20 p-2">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Voice mins</p>
+                        <p className="mt-0.5 text-sm font-semibold text-foreground">
+                          {formatVoiceMinutes(channelAnalytics.summary.currentVoiceMinutes)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-border/60 bg-muted/20 p-2">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Avg memo</p>
+                        <p className="mt-0.5 text-sm font-semibold text-foreground">
+                          {formatVoiceDurationLabel(
+                            channelAnalytics.summary.avgVoiceMemoLengthSeconds,
+                          )}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="max-h-[150px] space-y-1 overflow-y-auto beautiful-scrollbar pr-1">
@@ -2123,6 +2161,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                           </p>
                           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                             <span>{item.currentMessages} msgs</span>
+                            <span>
+                              {formatVoiceMinutes(item.currentVoiceMinutes)}m voice
+                            </span>
+                            <span>
+                              avg {formatVoiceDurationLabel(item.avgVoiceMemoLengthSeconds)}
+                            </span>
                             <span
                               className={cn(
                                 "font-semibold",

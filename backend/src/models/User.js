@@ -152,6 +152,19 @@ const userSchema = new mongoose.Schema(
         default: "comfortable",
       },
     },
+    role: {
+      type: String,
+      enum: ["admin", "moderator", "member", "guest"],
+      default: "member",
+    },
+    isBanned: {
+      type: Boolean,
+      default: false,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
     lastActiveAt: {
       type: Date,
     },
@@ -163,6 +176,7 @@ const userSchema = new mongoose.Schema(
 
 // Indexes for search workloads.
 userSchema.index({ displayName: 1 });
+userSchema.index({ role: 1 });
 userSchema.index(
   { displayName: "text", username: "text" },
   {

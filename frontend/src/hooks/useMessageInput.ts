@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
-import type { Conversation } from "@/types/chat";
+import type { AudioMeta, Conversation } from "@/types/chat";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { chatService } from "@/services/chatService";
@@ -23,6 +23,7 @@ const TYPING_EMIT_INTERVAL_MS = 350;
 const MESSAGE_DRAFT_STORAGE_PREFIX = "moji-message-drafts-v1";
 const MAX_VOICE_MEMO_DURATION_SECONDS = 180;
 const AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR = "AUDIO_UPLOAD_REQUIRES_ONLINE";
+const VOICE_MEMO_UPLOAD_TOAST_ID = "voice-memo-upload-progress";
 
 const VOICE_MEMO_MIME_TYPE_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -78,6 +79,7 @@ type MessageDraftState = {
   value: string;
   imagePreview: string | null;
   audioPreview: string | null;
+  audioMeta: AudioMeta | null;
 };
 
 type PersistedDraftMap = Record<string, string>;
@@ -145,6 +147,7 @@ export function useMessageInput(selectedConvo: Conversation) {
   const [typing, setTyping] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
+  const [audioMeta, setAudioMeta] = useState<AudioMeta | null>(null);
   const [focused, setFocused] = useState(false);
   
   const [isRecording, setIsRecording] = useState(false);
@@ -201,6 +204,8 @@ export function useMessageInput(selectedConvo: Conversation) {
         nextAudioPreview === undefined
           ? audioPreview || null
           : nextAudioPreview || null;
+      const normalizedAudioMeta =
+        normalizedAudioPreview === null ? null : audioMeta || null;
       const hasDraft = Boolean(
         normalizedValue.trim() || normalizedImagePreview || normalizedAudioPreview,
       );
@@ -227,6 +232,7 @@ export function useMessageInput(selectedConvo: Conversation) {
         value: normalizedValue,
         imagePreview: normalizedImagePreview,
         audioPreview: normalizedAudioPreview,
+        audioMeta: normalizedAudioMeta,
       };
 
       if (normalizedValue.trim()) {
@@ -243,7 +249,7 @@ export function useMessageInput(selectedConvo: Conversation) {
         persistedDraftTextByConversationRef.current,
       );
     },
-    [audioPreview, draftStorageKey],
+    [audioMeta, audioPreview, draftStorageKey],
   );
 
   const clearRecordingTimer = useCallback(() => {
@@ -330,8 +336,9 @@ export function useMessageInput(selectedConvo: Conversation) {
   );
 
   const setAudioPreviewWithDraft = useCallback(
-    (nextAudioPreview: string | null) => {
+    (nextAudioPreview: string | null, nextAudioMeta?: AudioMeta | null) => {
       setAudioPreview(nextAudioPreview);
+      setAudioMeta(nextAudioPreview ? nextAudioMeta || null : null);
       persistDraft(selectedConvo._id, value, imagePreview, nextAudioPreview);
     },
     [imagePreview, persistDraft, selectedConvo._id, value],
@@ -380,11 +387,13 @@ export function useMessageInput(selectedConvo: Conversation) {
       value: persistedDraftValue,
       imagePreview: null,
       audioPreview: null,
+      audioMeta: null,
     };
 
     setValue(draft.value);
     setImagePreview(draft.imagePreview);
     setAudioPreview(draft.audioPreview);
+    setAudioMeta(draft.audioMeta || null);
     setReplyingTo(null);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
@@ -466,6 +475,10 @@ export function useMessageInput(selectedConvo: Conversation) {
         const shouldShowAutoStopToast = recordingAutoStoppedRef.current;
         const mimeType = mediaRecorder.mimeType || recordingMimeTypeRef.current || "audio/webm";
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const capturedDurationSeconds = Math.max(
+          1,
+          Math.round(recordingDurationRef.current || 0),
+        );
 
         clearRecordingTimer();
         setIsRecording(false);
@@ -493,7 +506,11 @@ export function useMessageInput(selectedConvo: Conversation) {
             return;
           }
 
-          setAudioPreviewWithDraft(reader.result as string);
+          setAudioPreviewWithDraft(reader.result as string, {
+            durationSeconds: capturedDurationSeconds,
+            mimeType: mimeType || "audio/webm",
+            sizeBytes: audioBlob.size,
+          });
 
           if (shouldShowAutoStopToast) {
             toast.info("Voice memo reached 3:00 and was saved.");
@@ -595,19 +612,31 @@ export function useMessageInput(selectedConvo: Conversation) {
 
   const resolveOutgoingAudioUrl = async (rawAudioPreview: string | null) => {
     if (!rawAudioPreview) {
-      return undefined;
+      return {
+        audioUrl: undefined as string | undefined,
+        audioMetaPatch: null as AudioMeta | null,
+      };
     }
 
     if (!rawAudioPreview.startsWith("data:audio/")) {
-      return rawAudioPreview;
+      return {
+        audioUrl: rawAudioPreview,
+        audioMetaPatch: null as AudioMeta | null,
+      };
     }
 
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       throw new Error(AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR);
     }
 
-    const { audioUrl } = await chatService.uploadAudio(rawAudioPreview);
-    return audioUrl;
+    const uploadResult = await chatService.uploadAudio(rawAudioPreview);
+    return {
+      audioUrl: uploadResult.audioUrl,
+      audioMetaPatch: {
+        mimeType: uploadResult.audioMeta?.mimeType ?? null,
+        sizeBytes: uploadResult.audioMeta?.sizeBytes ?? null,
+      },
+    };
   };
 
   const restoreComposerAfterSendFailure = (
@@ -636,11 +665,13 @@ export function useMessageInput(selectedConvo: Conversation) {
     content,
     imageUrl,
     audioUrl,
+    audioMeta: nextAudioMeta,
     replyToId,
   }: {
     content: string;
     imageUrl?: string;
     audioUrl?: string;
+    audioMeta?: AudioMeta | null;
     replyToId?: string;
   }) => {
     if (selectedConvo.type === "direct") {
@@ -658,8 +689,11 @@ export function useMessageInput(selectedConvo: Conversation) {
         imageUrl,
         audioUrl,
         selectedConvo._id,
-        replyToId,
-        activeThreadRootId || undefined,
+        {
+          replyTo: replyToId,
+          threadRootId: activeThreadRootId || undefined,
+          audioMeta: nextAudioMeta || undefined,
+        },
       );
       return;
     }
@@ -669,9 +703,12 @@ export function useMessageInput(selectedConvo: Conversation) {
       content,
       imageUrl,
       audioUrl,
-      replyToId,
-      selectedConvo.group?.activeChannelId,
-      activeThreadRootId || undefined,
+      {
+        replyTo: replyToId,
+        groupChannelId: selectedConvo.group?.activeChannelId,
+        threadRootId: activeThreadRootId || undefined,
+        audioMeta: nextAudioMeta || undefined,
+      },
     );
   };
 
@@ -693,12 +730,14 @@ export function useMessageInput(selectedConvo: Conversation) {
       content,
       imgUrl,
       audioDataUrl,
+      audioMeta: nextAudioMeta,
       replyToId,
       queuedAt,
     }: {
       content: string;
       imgUrl: string | null;
       audioDataUrl: string;
+      audioMeta?: AudioMeta | null;
       replyToId?: string;
       queuedAt: string;
     }) => {
@@ -717,6 +756,9 @@ export function useMessageInput(selectedConvo: Conversation) {
         content,
         imgUrl: imgUrl ?? undefined,
         audioDataUrl,
+        audioDurationSeconds: nextAudioMeta?.durationSeconds ?? null,
+        audioMimeType: nextAudioMeta?.mimeType ?? null,
+        audioSizeBytes: nextAudioMeta?.sizeBytes ?? null,
         replyToId,
         threadRootId: activeThreadRootId || undefined,
         queuedAt,
@@ -790,8 +832,12 @@ export function useMessageInput(selectedConvo: Conversation) {
     };
   }, []);
 
-  const sendMessage = async () => {
+  const sendMessage = async () => { // NOSONAR
     if (isSendingRef.current || !user) return;
+    if (isRecording) {
+      toast.info("Finish recording before sending.");
+      return;
+    }
     const trimmed = value.trim();
     if (!trimmed && !imagePreview && !audioPreview) return;
 
@@ -800,9 +846,11 @@ export function useMessageInput(selectedConvo: Conversation) {
     const currValue = trimmed;
     const currImage = imagePreview;
     const currAudio = audioPreview;
+    const currAudioMeta = audioMeta;
     setValue("");
     setImagePreview(null);
     setAudioPreview(null);
+    setAudioMeta(null);
     persistDraft(selectedConvo._id, "", null, null);
     if (textareaRef.current) textareaRef.current.style.height = "auto";
 
@@ -815,6 +863,7 @@ export function useMessageInput(selectedConvo: Conversation) {
           content: currValue,
           imgUrl: currImage,
           audioDataUrl: currAudio,
+          audioMeta: currAudioMeta,
           replyToId,
           queuedAt,
         });
@@ -822,15 +871,31 @@ export function useMessageInput(selectedConvo: Conversation) {
       }
 
       let resolvedAudioUrl: string | undefined;
+      let resolvedAudioMeta = currAudioMeta;
+      const hasPendingVoiceMemoUpload = Boolean(
+        currAudio?.startsWith("data:audio/"),
+      );
+      if (hasPendingVoiceMemoUpload) {
+        toast.loading("Uploading voice memo...", {
+          id: VOICE_MEMO_UPLOAD_TOAST_ID,
+        });
+      }
 
       try {
-        resolvedAudioUrl = await resolveOutgoingAudioUrl(currAudio);
+        const uploadResolution = await resolveOutgoingAudioUrl(currAudio);
+        resolvedAudioUrl = uploadResolution.audioUrl;
+        if (uploadResolution.audioMetaPatch) {
+          resolvedAudioMeta = resolvedAudioMeta
+            ? { ...resolvedAudioMeta, ...uploadResolution.audioMetaPatch }
+            : uploadResolution.audioMetaPatch;
+        }
       } catch (uploadError) {
         if (currAudio?.startsWith("data:audio/") && isLikelyOfflineError(uploadError)) {
           await queueVoiceMemoForDeferredDelivery({
             content: currValue,
             imgUrl: currImage,
             audioDataUrl: currAudio,
+            audioMeta: currAudioMeta,
             replyToId,
             queuedAt,
           });
@@ -838,12 +903,17 @@ export function useMessageInput(selectedConvo: Conversation) {
         }
 
         throw uploadError;
+      } finally {
+        if (hasPendingVoiceMemoUpload) {
+          toast.dismiss(VOICE_MEMO_UPLOAD_TOAST_ID);
+        }
       }
 
       await sendMessageToConversation({
         content: currValue,
         imageUrl: currImage ?? undefined,
         audioUrl: resolvedAudioUrl,
+        audioMeta: resolvedAudioMeta,
         replyToId,
       });
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Lock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Crown, ShieldCheck, BadgeCheck, ShieldAlert, Ban, CheckCircle } from "lucide-react";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import UserAvatar from "@/components/chat/UserAvatar";
@@ -19,6 +19,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocialStore } from "@/stores/useSocialStore";
 import { getStaggerEnterClass } from "@/lib/utils";
@@ -238,8 +246,22 @@ const ProfilePage = () => { // NOSONAR
                         </span>
                       </div>
 
-                      <h1 className="social-text-main social-profile-name text-3xl font-bold tracking-tight">
+                      <h1 className="social-text-main social-profile-name text-3xl font-bold tracking-tight flex items-center gap-2">
                         {profile?.displayName || t("profile.default_name")}
+                        {profile?.isVerified && (
+                          <BadgeCheck className="size-6 text-blue-500" />
+                        )}
+                        {profile?.role === "admin" && (
+                          <Crown className="size-6 text-amber-500" />
+                        )}
+                        {profile?.role === "moderator" && (
+                          <ShieldCheck className="size-6 text-indigo-500" />
+                        )}
+                        {profile?.isBanned && (
+                          <span className="inline-flex items-center gap-1 text-sm bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium ml-2">
+                            <Ban className="size-3.5" /> Banned
+                          </span>
+                        )}
                       </h1>
                       <p className="social-text-muted social-profile-username text-sm">
                         @{profile?.username || t("profile.username_fallback")}

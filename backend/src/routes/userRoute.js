@@ -11,9 +11,12 @@ import {
   uploadAvatar,
   uploadCoverPhoto,
   removeCoverPhoto,
+  updateUserRole,
+  toggleUserBan,
+  toggleUserVerify,
 } from "../controllers/userController.js";
 import { upload } from "../middlewares/uploadMiddleware.js";
-import { protectedRoute } from "../middlewares/authMiddleware.js";
+import { protectedRoute, requireRole } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
@@ -50,5 +53,10 @@ router.post(
   uploadCoverPhoto,
 );
 router.delete("/cover-photo", protectedRoute, removeCoverPhoto);
+
+// --- Admin Routes ---
+router.patch("/admin/users/:id/role", protectedRoute, requireRole("admin"), updateUserRole);
+router.patch("/admin/users/:id/ban", protectedRoute, requireRole("admin", "moderator"), toggleUserBan);
+router.patch("/admin/users/:id/verify", protectedRoute, requireRole("admin"), toggleUserVerify);
 
 export default router;

@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import type {
+  AudioMeta,
   Conversation,
   ConversationResponse,
   GroupChannelAnalyticsPayload,
@@ -122,8 +123,12 @@ export const chatService = {
     imgUrl?: string,
     audioUrl?: string,
     conversationId?: string,
-    replyTo?: string,
-    threadRootId?: string,
+    options?: {
+      replyTo?: string;
+      threadRootId?: string;
+      clientMessageId?: string;
+      audioMeta?: AudioMeta;
+    },
   ) {
     const res = await api.post("/messages/direct", {
       recipientId,
@@ -131,8 +136,10 @@ export const chatService = {
       imgUrl,
       audioUrl,
       conversationId,
-      replyTo,
-      threadRootId,
+      replyTo: options?.replyTo,
+      threadRootId: options?.threadRootId,
+      clientMessageId: options?.clientMessageId,
+      audioMeta: options?.audioMeta,
     });
 
     return res.data.message;
@@ -143,18 +150,24 @@ export const chatService = {
     content: string = "",
     imgUrl?: string,
     audioUrl?: string,
-    replyTo?: string,
-    groupChannelId?: string,
-    threadRootId?: string,
+    options?: {
+      replyTo?: string;
+      groupChannelId?: string;
+      threadRootId?: string;
+      clientMessageId?: string;
+      audioMeta?: AudioMeta;
+    },
   ) {
     const res = await api.post("/messages/group", {
       conversationId,
       content,
       imgUrl,
       audioUrl,
-      replyTo,
-      groupChannelId,
-      threadRootId,
+      replyTo: options?.replyTo,
+      groupChannelId: options?.groupChannelId,
+      threadRootId: options?.threadRootId,
+      clientMessageId: options?.clientMessageId,
+      audioMeta: options?.audioMeta,
     });
     return res.data.message;
   },
@@ -438,8 +451,20 @@ export const chatService = {
    * Upload a base64 audio recording to Cloudinary via backend.
    * Returns the public `audioUrl` (https Cloudinary URL).
    */
-  async uploadAudio(base64Audio: string): Promise<{ audioUrl: string }> {
+  async uploadAudio(base64Audio: string): Promise<{
+    audioUrl: string;
+    audioMeta?: {
+      mimeType?: string | null;
+      sizeBytes?: number | null;
+    };
+  }> {
     const res = await api.post("/messages/audio/upload", { audio: base64Audio });
-    return res.data as { audioUrl: string };
+    return res.data as {
+      audioUrl: string;
+      audioMeta?: {
+        mimeType?: string | null;
+        sizeBytes?: number | null;
+      };
+    };
   },
 };

@@ -97,12 +97,20 @@ export interface GroupChannelAnalyticsItem {
   messageGrowthPercent: number;
   currentActiveSenders: number;
   senderRetentionPercent: number;
+  currentVoiceMinutes: number;
+  previousVoiceMinutes: number;
+  currentVoiceMemoCount: number;
+  avgVoiceMemoLengthSeconds: number;
 }
 
 export interface GroupChannelAnalyticsSummary {
   membersCount: number;
   currentMessages: number;
   previousMessages: number;
+  currentVoiceMinutes: number;
+  previousVoiceMinutes: number;
+  currentVoiceMemoCount: number;
+  avgVoiceMemoLengthSeconds: number;
   currentActiveMembers: number;
   previousActiveMembers: number;
   currentRetentionRate: number;
@@ -146,7 +154,13 @@ export interface Reaction {
   emoji: string;
 }
 
-export type MessageDeliveryState = "sending" | "queued" | "failed";
+export type MessageDeliveryState = "uploading" | "sending" | "queued" | "failed";
+
+export interface AudioMeta {
+  durationSeconds?: number | null;
+  mimeType?: string | null;
+  sizeBytes?: number | null;
+}
 
 export interface Message {
   _id: string;
@@ -157,6 +171,7 @@ export interface Message {
   content: string | null;
   imgUrl?: string | null;
   audioUrl?: string | null;
+  audioMeta?: AudioMeta | null;
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
@@ -190,6 +205,9 @@ export interface ProfileLite {
   avatarUrl?: string | null;
   bio?: string;
   lastActiveAt?: string | null;
+  role?: "admin" | "moderator" | "member" | "guest";
+  isBanned?: boolean;
+  isVerified?: boolean;
   mutualGroupsCount: number;
   mutualGroups: Array<{
     _id: string;

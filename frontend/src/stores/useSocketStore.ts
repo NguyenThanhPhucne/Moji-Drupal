@@ -1612,6 +1612,27 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       });
     });
 
+    // thread reply realtime
+    socket.on("thread-reply-new", (payload) => {
+      const eventPayload = payload as {
+        conversationId?: string;
+        threadRootId?: string;
+        message?: Message;
+      };
+
+      const conversationId = String(eventPayload?.conversationId || "").trim();
+      const threadRootId = String(eventPayload?.threadRootId || "").trim();
+      const message = eventPayload?.message;
+
+      if (!conversationId || !threadRootId || !message) {
+        return;
+      }
+
+      // addMessage already handles deduplication; the ThreadPanel derives its
+      // view from the main messages bucket filtered by threadRootId.
+      useChatStore.getState().addMessage(message);
+    });
+
     // read message
     socket.on("read-message", (payload) => {
       applyRealtimeAwareEvent({

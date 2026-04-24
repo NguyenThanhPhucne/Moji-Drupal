@@ -10,18 +10,13 @@ import {
   Frown,
   Heart,
   ThumbsUp,
-  Trash2,
-  Edit2,
-  Copy,
   MoreHorizontal,
   Bookmark,
   Link2,
   ZoomIn,
   SendHorizontal,
   Lock,
-  Unlock,
   Pin,
-  Flag,
   LoaderCircle,
   Clock3,
   AlertCircle,
@@ -30,22 +25,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useBookmarkStore } from "@/stores/useBookmarkStore";
 import { chatService, type LinkPreviewPayload } from "@/services/chatService";
 import { useLinkPreviewStore } from "@/stores/useLinkPreviewStore";
 import { safetyService } from "@/services/safetyService";
 import UserAvatar from "./UserAvatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
 import ImageLightbox from "./ImageLightbox";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
+import MessageItemContextMenu from "./message-item/MessageItemContextMenu";
+import MessageItemDeleteDialog from "./message-item/MessageItemDeleteDialog";
 
 const REACTION_EMOJI = Object.freeze({
   like: "\u{1F44D}",
@@ -224,114 +213,6 @@ const QuickReactBar = memo(function QuickReactBar({
         </button>
       ))}
     </div>
-  );
-});
-
-/* ---------- Context menu ---------- */
-const ContextMenu = memo(function ContextMenu({ // NOSONAR
-  x,
-  y,
-  isOwn,
-  isDeleted,
-  canEdit,
-  canPinMessage,
-  isPinned,
-  isForwardable,
-  onForward,
-  onToggleForwardable,
-  onTogglePin,
-  onReply,
-  onCopy,
-  onEdit,
-  canReport,
-  onReport,
-  onOpenDeleteDialog,
-  onClose,
-}: {
-  x: number;
-  y: number;
-  isOwn: boolean;
-  isDeleted: boolean;
-  canEdit: boolean;
-  canPinMessage?: boolean;
-  isPinned?: boolean;
-  isForwardable: boolean;
-  onForward: () => void;
-  onToggleForwardable?: () => void;
-  onTogglePin?: () => void;
-  onReply: () => void;
-  onCopy: () => void;
-  onEdit: () => void;
-  canReport?: boolean;
-  onReport?: () => void;
-  onOpenDeleteDialog: () => void;
-  onClose: () => void;
-}) {
-  const items = [
-    { icon: Reply, label: "Reply", onClick: onReply },
-    { icon: Copy, label: "Copy", onClick: onCopy, disabled: isDeleted },
-    { icon: SendHorizontal, label: "Forward", onClick: onForward, disabled: isDeleted || (!isForwardable && !isOwn) },
-    ...(isOwn && canEdit && !isDeleted
-      ? [{ icon: Edit2, label: "Edit", onClick: onEdit }]
-      : []),
-    ...(isOwn && onToggleForwardable && !isDeleted
-      ? [{ icon: isForwardable ? Lock : Unlock, label: isForwardable ? "Disable forwarding" : "Allow forwarding", onClick: onToggleForwardable }]
-      : []),
-    ...(canPinMessage && onTogglePin && !isDeleted
-      ? [{ icon: Pin, label: isPinned ? "Unpin message" : "Pin message", onClick: onTogglePin }]
-      : []),
-    ...(canReport && onReport && !isDeleted
-      ? [{ icon: Flag, label: "Report", onClick: onReport }]
-      : []),
-    ...(isDeleted
-      ? []
-      : [
-          {
-            icon: Trash2,
-            label: isOwn ? "Remove / Unsend..." : "Remove for me",
-            onClick: onOpenDeleteDialog,
-            danger: true,
-          },
-        ]),
-  ];
-
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="chat-context-menu-backdrop">
-      <button
-        type="button"
-        aria-label="Close menu"
-        onClick={onClose}
-        className="chat-context-menu-dismiss"
-      />
-      <div
-        role="menu"
-        style={{ left: x, top: y }}
-        className="chat-context-menu chat-context-menu--floating animate-in zoom-in-95 fade-in duration-100"
-      >
-        {items.map(({ icon: Icon, label, onClick, disabled, danger }) => (
-          <button
-            key={label}
-            type="button"
-            disabled={disabled}
-            onClick={() => {
-              onClick();
-              onClose();
-            }}
-            className={cn(
-              "chat-context-menu-item",
-              danger && "chat-context-menu-item--danger",
-              "disabled:opacity-40 disabled:cursor-not-allowed",
-            )}
-          >
-            <Icon className="size-4" />
-            {label}
-          </button>
-        ))}
-      </div>
-    </div>,
-    document.body,
   );
 });
 
@@ -619,12 +500,12 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   return (
     <div
       className={cn(
-        "chat-message-action-toolbar chat-message-action-toolbar--command absolute top-1/2 -translate-y-1/2 flex items-center gap-[3px] z-30 transition-[opacity,transform] duration-150 motion-reduce:transition-none",
+        "chat-message-action-toolbar chat-message-action-toolbar--command absolute top-2 flex items-center gap-[2px] z-30 transition-[opacity,transform] duration-150 motion-reduce:transition-none",
         isOwn
           ? "right-[calc(100%+0.3rem)]"
           : "left-[calc(100%+0.3rem)]",
         actionBarVisible
-          ? "opacity-100 pointer-events-auto translate-y-[-50%]"
+          ? "opacity-100 pointer-events-auto translate-y-0"
           : cn("opacity-0 pointer-events-none", hiddenActionOffsetClass),
       )}
     >
@@ -807,6 +688,8 @@ const MessageMetaSection = memo(function MessageMetaSection({
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] sm:text-[11px] leading-none font-semibold",
+              message.deliveryState === "uploading" &&
+                "border-primary/20 bg-primary/10 text-primary",
               message.deliveryState === "sending" &&
                 "border-primary/20 bg-primary/10 text-primary",
               message.deliveryState === "queued" &&
@@ -815,11 +698,15 @@ const MessageMetaSection = memo(function MessageMetaSection({
                 "border-destructive/30 bg-destructive/10 text-destructive",
             )}
           >
+            {message.deliveryState === "uploading" && (
+              <LoaderCircle className="size-3 animate-spin" />
+            )}
             {message.deliveryState === "sending" && (
               <LoaderCircle className="size-3 animate-spin" />
             )}
             {message.deliveryState === "queued" && <Clock3 className="size-3" />}
             {message.deliveryState === "failed" && <AlertCircle className="size-3" />}
+            {message.deliveryState === "uploading" && "Uploading"}
             {message.deliveryState === "sending" && "Sending"}
             {message.deliveryState === "queued" && "Queued"}
             {message.deliveryState === "failed" && "Failed"}
@@ -894,6 +781,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   onOpenContext,
   onOpenThread,
   metaNode,
+  threadReplyCount,
+  threadUnreadCount,
 }: {
   message: Message;
   isOwn: boolean;
@@ -916,6 +805,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   onOpenContext: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onOpenThread: () => void;
   metaNode: React.ReactNode;
+  threadReplyCount: number;
+  threadUnreadCount: number;
 }) {
   const replyPreviewText = String(message.replyTo?.content || "").trim() || "Original message unavailable";
 
@@ -927,7 +818,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
       )}
     >
       {selectedConvoType === "group" && !isOwn && isFirstInGroup && (
-        <span className="text-[11px] text-muted-foreground mb-0.5 ml-1 font-medium">
+        <span className="text-[11px] text-muted-foreground/90 mb-0.5 ml-1 font-semibold tracking-[0.01em]">
           {senderDisplayName}
         </span>
       )}
@@ -997,6 +888,29 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
         )}
       </div>
 
+      {(threadReplyCount > 0 || threadUnreadCount > 0) && (
+        <button
+          type="button"
+          onClick={onOpenThread}
+          className={cn(
+            "mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
+            threadUnreadCount > 0
+              ? "border-primary/35 bg-primary/[0.08] text-primary hover:bg-primary/[0.14]"
+              : "border-border/70 bg-muted/25 text-muted-foreground hover:bg-muted/55 hover:text-foreground",
+          )}
+        >
+          <MessageSquare className="size-3" />
+          <span>
+            {threadReplyCount} {threadReplyCount === 1 ? "reply" : "replies"}
+          </span>
+          {threadUnreadCount > 0 && (
+            <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+              {threadUnreadCount > 99 ? "99+" : threadUnreadCount}
+            </span>
+          )}
+        </button>
+      )}
+
       {metaNode}
     </div>
   );
@@ -1028,6 +942,8 @@ interface MessageItemProps {
   isPinned?: boolean;
   onTogglePin?: (messageId: string, willPin: boolean) => void;
   onOpenThread?: (messageId: string) => void;
+  threadReplyCount?: number;
+  threadUnreadCount?: number;
 }
 
 const MessageItem = memo(function MessageItem({ // NOSONAR
@@ -1047,6 +963,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   isPinned = false,
   onTogglePin,
   onOpenThread,
+  threadReplyCount = 0,
+  threadUnreadCount = 0,
 }: MessageItemProps) {
   const { user } = useAuthStore();
   const {
@@ -1558,7 +1476,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     isOwn ? "flex-row-reverse" : "flex-row",
     isNew && "message-slide-in",
     isSearchTarget && "rounded-2xl bg-primary/[0.08] ring-1 ring-primary/35",
-    isFirstInGroup ? "pt-2 pb-[1px]" : "py-[1px]",
+    isFirstInGroup ? "pt-2 pb-[2px]" : "pt-[1px] pb-[2px]",
   );
 
   const hasOnlyImage = Boolean(message.imgUrl && !message.content && !message.isDeleted && !message.audioUrl);
@@ -1574,18 +1492,16 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     "chat-bubble-received chat-message-bubble-shell chat-message-bubble-shell--peer";
   const bubbleToneClass = isOwn ? ownBubbleToneClass : peerBubbleToneClass;
   
-  let bubbleClusterClass = "";
-  if (!isFirstInGroup && !isLastInGroup) {
-    bubbleClusterClass = isOwn ? "rounded-tr-[4px] rounded-br-[4px]" : "rounded-tl-[4px] rounded-bl-[4px]";
-  } else if (!isFirstInGroup && isLastInGroup) {
-    bubbleClusterClass = isOwn ? "rounded-tr-[4px]" : "rounded-tl-[4px]";
-  } else if (isFirstInGroup && !isLastInGroup) {
-    bubbleClusterClass = isOwn ? "rounded-br-[4px]" : "rounded-bl-[4px]";
-  }
+  const bubbleClusterClass = (() => {
+    if (isFirstInGroup && isLastInGroup) return "chat-message-bubble-shell--cluster-single";
+    if (isFirstInGroup) return "chat-message-bubble-shell--cluster-start";
+    if (isLastInGroup) return "chat-message-bubble-shell--cluster-end";
+    return "chat-message-bubble-shell--cluster-middle";
+  })();
 
   const hasNoBubbleShell = hasOnlyImage || hasOnlyAudio;
 
-  const renderReadOnlyBubble = () => (
+  const renderReadOnlyBubble = () => ( // NOSONAR
     <div
       className={cn(
         "relative leading-[1.35] transition-colors duration-150 mt-0.5",
@@ -1658,6 +1574,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
                 isOwn={isOwn} 
                 standalone={hasOnlyAudio}
                 className={hasOnlyAudio ? bubbleClusterClass : undefined}
+                initialDurationSeconds={message.audioMeta?.durationSeconds ?? null}
               />
             </div>
           )}
@@ -1671,8 +1588,16 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
   const readOnlyBubbleNode = hasInteractiveMediaControls ? (
     // NOSONAR: audio bubbles contain nested native controls, so this wrapper must stay non-button.
-    <div
+    <div // NOSONAR
+      role="button"
+      tabIndex={0}
       onClick={handleBubbleClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          handleBubbleClick();
+        }
+      }}
       onDoubleClick={handleDoubleClickBubble}
       onContextMenu={handleContextMenu}
       onTouchStart={handleBubbleTouchStart}
@@ -1809,6 +1734,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
             void handleToggleBookmark();
           }}
           onOpenContext={handleOpenContextFromButton}
+          threadReplyCount={threadReplyCount}
+          threadUnreadCount={threadUnreadCount}
           metaNode={(
             <MessageMetaSection
               message={message}
@@ -1838,7 +1765,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
 
       {/* Context Menu Portal */}
       {contextMenu && (
-        <ContextMenu
+        <MessageItemContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           isOwn={isOwn}
@@ -1860,79 +1787,19 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
         />
       )}
 
-      <Dialog
+      <MessageItemDeleteDialog
         open={deleteDialogOpen}
         onOpenChange={handleDeleteDialogOpenChange}
-      >
-        <DialogContent
-          aria-describedby={undefined}
-          className="chat-modal-shell max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl transition-[border-color,background-color,box-shadow] duration-200"
-          showCloseButton={!deleteActionLoading}
-          dismissible={!deleteActionLoading}
-        >
-          <DialogHeader className="items-center text-center space-y-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
-              <Trash2 className="size-6 text-destructive" />
-            </div>
-            <div className="space-y-1.5">
-              <DialogTitle className="text-xl font-bold tracking-tight">
-                Remove this message?
-              </DialogTitle>
-              <DialogDescription className="text-[15px] font-medium leading-relaxed text-muted-foreground/80 px-2">
-                Choose the scope that fits your intent. Some participants may have
-                already seen or forwarded this message.
-              </DialogDescription>
-            </div>
-          </DialogHeader>
-
-          <div className="grid gap-3">
-            {isOwn && (
-              <button
-                type="button"
-                disabled={!!deleteActionLoading}
-                onClick={handleConfirmUnsendForEveryone}
-                className="chat-delete-scope-option chat-delete-scope-option--danger flex flex-col items-start group"
-              >
-                <p className="text-[15px] font-semibold text-destructive">Unsend for everyone</p>
-                <p className="mt-1.5 text-[13px] text-destructive/80 leading-relaxed font-medium">
-                  This message will be removed for everyone in this chat. Others
-                  may have already seen or forwarded it.
-                </p>
-                {deleteActionLoading === "for-everyone" && (
-                  <p className="mt-2 text-xs font-semibold animate-pulse text-destructive">Processing...</p>
-                )}
-              </button>
-            )}
-
-            <button
-              type="button"
-              disabled={!!deleteActionLoading}
-              onClick={handleConfirmRemoveForMe}
-              className="chat-delete-scope-option flex flex-col items-start"
-            >
-              <p className="text-[15px] font-semibold text-foreground">Remove for you</p>
-              <p className="mt-1.5 text-[13px] text-muted-foreground leading-relaxed font-medium">
-                This message will be removed from your devices only. It will
-                remain visible to other chat participants.
-              </p>
-              {deleteActionLoading === "for-me" && (
-                <p className="mt-2 text-xs font-semibold animate-pulse text-primary">Processing...</p>
-              )}
-            </button>
-          </div>
-
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              disabled={!!deleteActionLoading}
-              onClick={() => setDeleteDialogOpen(false)}
-              className="chat-modal-btn flex items-center justify-center rounded-full h-10 px-6 font-semibold"
-            >
-              Cancel
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        isOwn={isOwn}
+        loadingAction={deleteActionLoading}
+        onConfirmRemoveForMe={() => {
+          void handleConfirmRemoveForMe();
+        }}
+        onConfirmUnsendForEveryone={() => {
+          void handleConfirmUnsendForEveryone();
+        }}
+        onClose={() => setDeleteDialogOpen(false)}
+      />
 
       {/* Image Lightbox */}
       {lightboxOpen && message.imgUrl && (

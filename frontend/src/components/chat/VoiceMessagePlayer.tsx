@@ -6,6 +6,7 @@ interface VoiceMessagePlayerProps {
   isOwn?: boolean;
   standalone?: boolean;
   className?: string;
+  initialDurationSeconds?: number | null;
 }
 
 const BAR_COUNT = 24;
@@ -17,7 +18,7 @@ const buildVoicePlayerInstanceId = () => {
 
 // Pre-generate stable bar heights to look like a waveform
 const WAVEFORM_BARS = Array.from({ length: BAR_COUNT }, (_, i) => {
-  const pattern = [0.3, 0.6, 0.9, 0.7, 1.0, 0.5, 0.8, 0.4, 0.75, 0.55, 0.9, 0.65,
+  const pattern = [0.3, 0.6, 0.9, 0.7, 1, 0.5, 0.8, 0.4, 0.75, 0.55, 0.9, 0.65,
                    0.45, 0.85, 0.6, 0.95, 0.35, 0.7, 0.5, 0.8, 0.4, 0.65, 0.9, 0.3];
   return pattern[i % pattern.length];
 });
@@ -53,11 +54,21 @@ const LoadingIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className }: VoiceMessagePlayerProps) => {
+const VoiceMessagePlayer = ({
+  src,
+  isOwn = false,
+  standalone = false,
+  className,
+  initialDurationSeconds = null,
+}: VoiceMessagePlayerProps) => { // NOSONAR
   const audioRef = useRef<HTMLAudioElement>(null);
   const instanceIdRef = useRef(buildVoicePlayerInstanceId());
   const [isPlaying, setIsPlaying] = useState(false);
-  const [duration, setDuration] = useState(0);
+  const [duration, setDuration] = useState(
+    Number.isFinite(Number(initialDurationSeconds))
+      ? Math.max(0, Number(initialDurationSeconds))
+      : 0,
+  );
   const [currentTime, setCurrentTime] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [useFallbackSrc, setUseFallbackSrc] = useState(false);
@@ -77,6 +88,39 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
 
   const progress = duration > 0 ? currentTime / duration : 0;
   const activeBars = Math.round(progress * BAR_COUNT);
+  const standaloneToneClass = isOwn
+    ? "bg-primary text-primary-foreground shadow-sm"
+    : "bg-muted border border-border/50 text-foreground shadow-sm";
+  const inlineToneClass = isOwn
+    ? "bg-white/15 border border-white/20"
+    : "bg-muted/40 border border-border/30";
+  const playerToneClass = standalone ? standaloneToneClass : inlineToneClass;
+  const playerRadiusClass = className?.includes("rounded")
+    ? ""
+    : "rounded-[20px]";
+  const actionButtonToneClass = isOwn
+    ? "bg-white/20 text-white hover:bg-white/30"
+    : "bg-primary text-white hover:bg-primary/90";
+  const waveformActiveClass = isOwn ? "bg-white/90" : "bg-primary";
+  const waveformInactiveClass = isOwn
+    ? "bg-white/30 group-hover:bg-white/40"
+    : "bg-muted-foreground/30 group-hover:bg-muted-foreground/40";
+  const timeToneClass = isOwn ? "text-white/80" : "text-muted-foreground/80";
+  const hasPlayableTime = isPlaying || currentTime > 0;
+  const timeLabel = hasPlayableTime
+    ? formatTime(currentTime)
+    : formatTime(duration);
+  const actionIcon = (() => {
+    if (isBuffering || (!isLoaded && !hasError)) {
+      return <LoadingIcon className="size-4 animate-spin" />;
+    }
+
+    if (isPlaying) {
+      return <PauseIcon className="size-4" />;
+    }
+
+    return <PlayIcon className="size-4 ml-0.5" />;
+  })();
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -86,7 +130,11 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
     }
 
     setIsPlaying(false);
-    setDuration(0);
+    setDuration(
+      Number.isFinite(Number(initialDurationSeconds))
+        ? Math.max(0, Number(initialDurationSeconds))
+        : 0,
+    );
     setCurrentTime(0);
     setIsLoaded(false);
     setHasError(false);
@@ -97,7 +145,7 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
     }
-  }, [src]);
+  }, [initialDurationSeconds, src]);
 
   const tick = useCallback(() => {
     const audio = audioRef.current;
@@ -137,7 +185,7 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
     const onPlay = () => {
       setIsPlaying(true);
       setIsBuffering(false);
-      globalThis.window?.dispatchEvent(
+      globalThis.window.dispatchEvent?.(
         new CustomEvent(VOICE_PLAYER_PLAY_EVENT, {
           detail: { instanceId: instanceIdRef.current },
         }),
@@ -231,6 +279,15 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
     }
   };
 
+  const retryLoad = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    setHasError(false);
+    setIsLoaded(false);
+    setIsBuffering(true);
+    audio.load();
+  };
+
   const togglePlay = (e?: React.MouseEvent) => {
     if (e) {
       e.stopPropagation();
@@ -253,7 +310,7 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
       audio.load();
     }
 
-    globalThis.window?.dispatchEvent(
+    globalThis.window?.dispatchEvent?.(
       new CustomEvent(VOICE_PLAYER_PLAY_EVENT, {
         detail: { instanceId: instanceIdRef.current },
       }),
@@ -336,15 +393,9 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
       className={cn(
         "voice-player flex items-center gap-3 px-2.5 py-2",
         "min-w-[220px] max-w-[280px]",
-        standalone
-          ? (isOwn 
-              ? "bg-primary text-primary-foreground shadow-sm" 
-              : "bg-muted border border-border/50 text-foreground shadow-sm")
-          : (isOwn
-              ? "bg-white/15 border border-white/20"
-              : "bg-muted/40 border border-border/30"),
+        playerToneClass,
         // If standalone but no class provided to override radius, fallback to rounded-2xl
-        (!className || !className.includes("rounded")) && "rounded-[20px]",
+        playerRadiusClass,
         className
       )}
     >
@@ -355,7 +406,9 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
         preload="metadata" 
         className="hidden" 
         onError={handleAudioError}
-      />
+      >
+        <track kind="captions" />
+      </audio>
 
       {/* Prominent Play/Pause Button */}
       <button
@@ -367,67 +420,74 @@ const VoiceMessagePlayer = ({ src, isOwn = false, standalone = false, className 
           "flex size-10 shrink-0 items-center justify-center rounded-full transition-all shadow-sm active:scale-95",
           !isLoaded && !hasError && !isBuffering && "opacity-50 cursor-wait",
           hasError && "opacity-40 cursor-not-allowed",
-          isOwn 
-            ? "bg-white/20 text-white hover:bg-white/30" 
-            : "bg-primary text-white hover:bg-primary/90",
+          actionButtonToneClass,
         )}
       >
-        {isBuffering || (!isLoaded && !hasError) ? (
-          <LoadingIcon className="size-4 animate-spin" />
-        ) : isPlaying ? (
-          <PauseIcon className="size-4" />
-        ) : (
-          <PlayIcon className="size-4 ml-0.5" />
-        )}
+        {actionIcon}
       </button>
 
       {/* Waveform Column */}
       <div className="flex flex-col flex-1 min-w-0 justify-center">
-        <div
-          role="progressbar"
-          aria-label="Voice message waveform"
-          aria-valuenow={Math.round(progress * 100)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
-          tabIndex={0}
-          className="flex items-center gap-[2px] h-6 cursor-pointer select-none group"
+        <progress
+          className="sr-only"
+          max={100}
+          value={Math.round(progress * 100)}
+          aria-label="Voice message progress"
+        />
+        <button
+          type="button"
+          className="flex w-full items-center gap-[2px] h-6 cursor-pointer select-none group bg-transparent p-0 text-inherit"
           onClick={handleWaveformClick}
           onKeyDown={handleWaveformKeyDown}
+          role="slider"
+          aria-valuemin={0}
+          aria-valuemax={Math.max(1, Math.round(duration))}
+          aria-valuenow={Math.max(0, Math.round(currentTime))}
+          aria-label={`Voice waveform: ${formatTime(currentTime)} of ${formatTime(duration)}`}
         >
           {WAVEFORM_BARS.map((height, i) => {
             const isActive = i < activeBars;
+            const waveformClass = isActive ? waveformActiveClass : waveformInactiveClass;
+            const barHeight = `${Math.max(20, Math.round(height * 100))}%`;
             return (
               <span
-                key={i}
+                key={`voice-bar-${i}-${height}`}
                 className={cn(
                   "flex-1 rounded-full transition-colors duration-100",
                   isPlaying && isActive ? "voice-bar-playing" : "",
-                  isActive
-                    ? isOwn ? "bg-white/90" : "bg-primary"
-                    : isOwn ? "bg-white/30 group-hover:bg-white/40" : "bg-muted-foreground/30 group-hover:bg-muted-foreground/40",
+                  waveformClass,
                 )}
                 style={{
-                  height: `${Math.max(20, Math.round(height * 100))}%`,
-                  ["--i" as "--i"]: i,
+                  height: barHeight,
                 }}
               />
             );
           })}
-        </div>
+        </button>
       </div>
 
-      {/* Time Display */}
-      <div className={cn(
-        "text-[11px] font-medium font-mono tabular-nums min-w-[34px] text-right shrink-0",
-        isOwn ? "text-white/80" : "text-muted-foreground/80"
-      )}>
-        {hasError
-          ? "N/A"
-          : isPlaying || currentTime > 0
-            ? formatTime(currentTime)
-            : formatTime(duration)}
-      </div>
+      {/* Time / error state */}
+      {hasError ? (
+        <button
+          type="button"
+          onClick={retryLoad}
+          className={cn(
+            "shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors",
+            isOwn
+              ? "border-white/30 text-white/85 hover:bg-white/10"
+              : "border-border/70 text-muted-foreground hover:bg-muted/60",
+          )}
+        >
+          Retry
+        </button>
+      ) : (
+        <div className={cn(
+          "text-[11px] font-medium font-mono tabular-nums min-w-[34px] text-right shrink-0",
+          timeToneClass,
+        )}>
+          {timeLabel}
+        </div>
+      )}
     </div>
   );
 };

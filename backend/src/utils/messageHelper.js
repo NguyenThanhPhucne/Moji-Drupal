@@ -148,6 +148,19 @@ export const emitNewMessage = (io, conversation, message) => {
     entityId: message?._id,
     scope: conversation?._id,
   }));
+
+  // ── Thread realtime: emit targeted event for ThreadPanel subscribers ──────
+  const threadRootId = message?.threadRootId
+    ? String(message.threadRootId)
+    : null;
+
+  if (threadRootId) {
+    io.to(conversation._id.toString()).emit("thread-reply-new", {
+      conversationId: String(conversation._id),
+      threadRootId,
+      message,
+    });
+  }
   
   // Fire and forget cache invalidation
   invalidateConversationParticipantsCache(conversation).catch(console.error);

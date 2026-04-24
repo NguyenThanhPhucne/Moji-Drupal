@@ -1420,21 +1420,23 @@
 
   .chat-message-action-toolbar--command {
     filter: none;
+    gap: 0.12rem;
+    transition: opacity 150ms ease, transform 150ms ease;
   }
 
   .chat-message-action-btn--command {
     border-color: hsl(var(--enterprise-panel-border) / 0.86);
     background: hsl(var(--enterprise-panel) / 0.94);
     box-shadow: none;
-    padding: 0.3rem;
-    min-width: 1.52rem;
-    min-height: 1.52rem;
+    padding: 0.26rem;
+    min-width: 1.44rem;
+    min-height: 1.44rem;
     transform: none;
     transition:
-      background-color 120ms ease,
-      border-color 120ms ease,
-      color 120ms ease,
-      box-shadow 120ms ease;
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease;
   }
 
   .chat-message-action-btn--command:hover,

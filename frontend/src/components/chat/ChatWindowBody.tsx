@@ -88,6 +88,7 @@ const ChatWindowBody = () => {
     fetchMessages,
     pinGroupMessage,
     setActiveThreadRootId,
+    threadUnreadCounts,
   } = useChatStore();
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
@@ -116,6 +117,19 @@ const ChatWindowBody = () => {
 
     return allMessages[activeConversationId]?.items ?? EMPTY_MESSAGES;
   }, [allMessages, activeConversationId]);
+
+  const threadReplyCountByRootId = useMemo(() => {
+    const counts: Record<string, number> = {};
+    messages.forEach((messageItem) => {
+      const rootId = String(messageItem.threadRootId || "").trim();
+      if (!rootId) {
+        return;
+      }
+
+      counts[rootId] = Number(counts[rootId] || 0) + 1;
+    });
+    return counts;
+  }, [messages]);
 
   const { searchConversationId, searchMessageId } = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -482,6 +496,13 @@ const ChatWindowBody = () => {
       // from triggering the slide-in animation.
       const isNew = message._id === lastNewMessageIdRef.current;
       const isSearchTarget = message._id === highlightedMessageId;
+      const threadUnreadKey = String(activeConversationId || "").trim()
+        ? `${String(activeConversationId).trim()}:${String(message._id || "").trim()}`
+        : "";
+      const threadReplyCount = Number(threadReplyCountByRootId[message._id] || 0);
+      const threadUnreadCount = threadUnreadKey
+        ? Number(threadUnreadCounts[threadUnreadKey] || 0)
+        : 0;
 
       return (
         <MessageItem
@@ -512,6 +533,8 @@ const ChatWindowBody = () => {
           onOpenThread={(messageId) => {
             setActiveThreadRootId(messageId);
           }}
+          threadReplyCount={threadReplyCount}
+          threadUnreadCount={threadUnreadCount}
         />
       );
     },
@@ -527,6 +550,9 @@ const ChatWindowBody = () => {
       setActiveThreadRootId,
       pinnedMessage?._id,
       highlightedMessageId,
+      activeConversationId,
+      threadReplyCountByRootId,
+      threadUnreadCounts,
     ],
   );
 
