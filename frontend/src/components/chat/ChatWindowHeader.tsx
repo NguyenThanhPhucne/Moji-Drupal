@@ -1278,7 +1278,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     );
                   })()}
                   {chat.type === "group" && (
-                    <div className="chat-header-group-meta">
+                    <div className="chat-header-group-meta flex flex-wrap items-center gap-1.5">
                       <span className="chat-header-presence text-[12px] text-muted-foreground font-medium leading-none">
                         {groupPresenceText}
                       </span>
@@ -1397,7 +1397,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   aria-label="Switch active group channel"
                   aria-describedby="group-channel-shortcut-hint"
                   title="Switch group channel"
-                  className="chat-channel-select h-8 min-w-[130px] rounded-full border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/35"
+                  className="chat-channel-select chat-header-action-btn--command h-8 min-w-[130px] rounded-full border border-border/70 bg-background px-3 text-[11px] font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/35"
                 >
                   {groupedChannelOptions.map((section) => {
                     if (section.categoryId === null) {

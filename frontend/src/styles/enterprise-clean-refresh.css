@@ -259,14 +259,15 @@
   }
 
   .chat-header-shell--elevated {
-    border-bottom: 1px solid hsl(var(--enterprise-panel-border) / 0.74);
+    border-bottom: 1px solid hsl(var(--enterprise-panel-border) / 0.4);
     background:
       linear-gradient(
         180deg,
         hsl(var(--enterprise-panel) / 0.94) 0%,
         hsl(var(--enterprise-panel-soft) / 0.88) 100%
       );
-    backdrop-filter: blur(11px);
+    backdrop-filter: blur(12px) saturate(110%);
+    box-shadow: 0 4px 12px -8px hsl(220 30% 10% / 0.1);
   }
 
   .chat-header-pill-btn {

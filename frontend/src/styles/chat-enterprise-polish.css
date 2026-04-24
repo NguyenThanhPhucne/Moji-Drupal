@@ -1259,11 +1259,50 @@
     position: fixed;
     inset: 0;
     z-index: var(--z-dropdown);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    background: hsl(var(--background) / 0.15);
   }
 
   .chat-context-menu-dismiss {
     position: absolute;
     inset: 0;
+  }
+
+  /* Thread Badge */
+  .chat-thread-badge {
+    margin-top: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--border) / 0.7);
+    padding: 0.125rem 0.5rem;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 150ms ease;
+    background: hsl(var(--muted) / 0.25);
+    color: hsl(var(--muted-foreground));
+  }
+  .chat-thread-badge:hover {
+    background: hsl(var(--muted) / 0.55);
+    color: hsl(var(--foreground));
+  }
+  .chat-thread-badge--unread {
+    border-color: hsl(var(--primary) / 0.35);
+    background: hsl(var(--primary) / 0.08);
+    color: hsl(var(--primary));
+  }
+  .chat-thread-badge--unread:hover {
+    background: hsl(var(--primary) / 0.14);
+  }
+  .chat-thread-badge-count {
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    padding: 0.125rem 0.375rem;
+    font-size: 10px;
+    font-weight: 600;
+    color: hsl(var(--primary-foreground));
   }
 }
 

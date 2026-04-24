@@ -1013,11 +1013,23 @@ html[data-motion="reduced"] * {
     border-radius: max(var(--chat-bubble-peer-radius, var(--chat-bubble-radius)), 12px);
   }
 
-  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-single,
-  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-start,
-  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-middle,
-  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-end {
+  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-single {
     border-top-right-radius: var(--chat-bubble-radius);
+    border-bottom-right-radius: var(--chat-bubble-radius);
+  }
+
+  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-start {
+    border-top-right-radius: var(--chat-bubble-radius);
+    border-bottom-right-radius: var(--chat-bubble-join-radius);
+  }
+
+  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-middle {
+    border-top-right-radius: var(--chat-bubble-join-radius);
+    border-bottom-right-radius: var(--chat-bubble-join-radius);
+  }
+
+  .chat-message-bubble-shell--own.chat-message-bubble-shell--cluster-end {
+    border-top-right-radius: var(--chat-bubble-join-radius);
     border-bottom-right-radius: var(--chat-bubble-radius);
   }
 

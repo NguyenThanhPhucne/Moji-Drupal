@@ -500,7 +500,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   return (
     <div
       className={cn(
-        "chat-message-action-toolbar chat-message-action-toolbar--command absolute top-2 flex items-center gap-[2px] z-30 transition-[opacity,transform] duration-150 motion-reduce:transition-none",
+        "chat-message-action-toolbar chat-message-action-toolbar--command absolute top-2 flex items-center gap-[2px] z-30 transition-[opacity,transform] duration-100 motion-reduce:transition-none",
         isOwn
           ? "right-[calc(100%+0.3rem)]"
           : "left-[calc(100%+0.3rem)]",
@@ -893,10 +893,8 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
           type="button"
           onClick={onOpenThread}
           className={cn(
-            "mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors",
-            threadUnreadCount > 0
-              ? "border-primary/35 bg-primary/[0.08] text-primary hover:bg-primary/[0.14]"
-              : "border-border/70 bg-muted/25 text-muted-foreground hover:bg-muted/55 hover:text-foreground",
+            "chat-thread-badge",
+            threadUnreadCount > 0 && "chat-thread-badge--unread"
           )}
         >
           <MessageSquare className="size-3" />
@@ -904,7 +902,7 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
             {threadReplyCount} {threadReplyCount === 1 ? "reply" : "replies"}
           </span>
           {threadUnreadCount > 0 && (
-            <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+            <span className="chat-thread-badge-count">
               {threadUnreadCount > 99 ? "99+" : threadUnreadCount}
             </span>
           )}
