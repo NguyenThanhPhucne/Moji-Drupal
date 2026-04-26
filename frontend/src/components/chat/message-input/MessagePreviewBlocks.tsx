@@ -1,4 +1,4 @@
-import { Reply, X } from "lucide-react";
+import { Reply, X, MegaphoneOff } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import VoiceMessagePlayer from "../VoiceMessagePlayer";
 
@@ -8,6 +8,8 @@ type ReplyPreview = {
 } | null | undefined;
 
 interface MessagePreviewBlocksProps {
+  // composerContextLabel / composerModeLabel kept in interface for API
+  // compatibility but no longer rendered — context lives in the header.
   composerContextLabel: string;
   composerModeLabel: string;
   replyingTo: ReplyPreview;
@@ -20,7 +22,8 @@ interface MessagePreviewBlocksProps {
   isGroupAdmin: boolean;
 }
 
-const AnnouncementModeNotice = ({
+/** Renders only when announcement mode is ON and the user cannot send */
+const AnnouncementBanner = ({
   announcementOnly,
   isGroupAdmin,
 }: {
@@ -28,21 +31,19 @@ const AnnouncementModeNotice = ({
   isGroupAdmin: boolean;
 }) => {
   const { t } = useI18n();
-
-  if (!announcementOnly || isGroupAdmin) {
-    return null;
-  }
+  if (!announcementOnly || isGroupAdmin) return null;
 
   return (
-    <p className="px-3.5 pb-2 text-[11px] font-medium text-muted-foreground">
-      {t("chatComposer.notice.announcement_only")}
-    </p>
+    <div className="mx-3 mb-2 mt-2 flex items-center gap-2 rounded-xl border border-amber-300/50 bg-amber-50/85 px-3 py-2 dark:border-amber-500/25 dark:bg-amber-900/20">
+      <MegaphoneOff className="size-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+      <p className="text-[11.5px] font-medium leading-snug text-amber-800 dark:text-amber-300">
+        {t("chatComposer.notice.announcement_only")}
+      </p>
+    </div>
   );
 };
 
 const MessagePreviewBlocks = ({
-  composerContextLabel,
-  composerModeLabel,
   replyingTo,
   onClearReply,
   imagePreview,
@@ -56,24 +57,7 @@ const MessagePreviewBlocks = ({
 
   return (
     <>
-      <div
-        className="chat-composer-meta-row chat-composer-meta-row--command"
-        aria-live="polite"
-      >
-        <span className="chat-composer-meta-chip chat-composer-meta-chip--channel">
-          {composerContextLabel}
-        </span>
-        <span
-          className="chat-composer-meta-chip chat-composer-meta-chip--mode"
-          title={composerModeLabel}
-        >
-          {composerModeLabel}
-        </span>
-        <span className="chat-composer-meta-chip chat-composer-meta-chip--hint">
-          {t("chatComposer.hint.enter_shift_enter")}
-        </span>
-      </div>
-
+      {/* ── Reply preview strip ───────────────────────────────────── */}
       {replyingTo && (
         <div className="flex items-center gap-2 border-b border-border/20 bg-muted/10 px-3.5 py-2 animate-in fade-in slide-in-from-bottom-1 duration-150">
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -99,13 +83,13 @@ const MessagePreviewBlocks = ({
         </div>
       )}
 
-
+      {/* ── Image attachment preview ──────────────────────────────── */}
       {imagePreview && (
-        <div className="relative mx-4 mt-3 w-fit animate-in fade-in zoom-in-95 duration-200">
+        <div className="relative mx-3.5 mt-2.5 w-fit animate-in fade-in zoom-in-95 duration-200">
           <img
             src={imagePreview}
             alt={t("chatComposer.preview")}
-            className="h-24 w-24 rounded-xl border border-border/60 object-cover shadow-sm"
+            className="h-20 w-20 rounded-xl border border-border/60 object-cover shadow-sm"
           />
           <button
             type="button"
@@ -121,8 +105,9 @@ const MessagePreviewBlocks = ({
         </div>
       )}
 
+      {/* ── Voice memo preview ────────────────────────────────────── */}
       {audioPreview && (
-        <div className="relative mx-4 mt-3 animate-in fade-in zoom-in-95 duration-200 flex items-center gap-2">
+        <div className="relative mx-3.5 mt-2.5 animate-in fade-in zoom-in-95 duration-200 flex items-center gap-2">
           <div className="flex-1">
             <VoiceMessagePlayer src={audioPreview} standalone className="rounded-2xl" />
           </div>
@@ -137,10 +122,8 @@ const MessagePreviewBlocks = ({
         </div>
       )}
 
-      <AnnouncementModeNotice
-        announcementOnly={announcementOnly}
-        isGroupAdmin={isGroupAdmin}
-      />
+      {/* ── Announcement-only warning (context-aware, not always visible) */}
+      <AnnouncementBanner announcementOnly={announcementOnly} isGroupAdmin={isGroupAdmin} />
     </>
   );
 };

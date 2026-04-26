@@ -25,7 +25,9 @@
     --chat-panel-shell-radius: 1rem;
     --chat-panel-shell-border: hsl(var(--enterprise-panel-border) / 0.8);
     --chat-panel-shell-shadow: var(--enterprise-shadow-soft);
-    --chat-panel-shell-backdrop: blur(16px) saturate(1.05);
+    /* Reduced from blur(16px): parent panel is mostly covered by opaque
+       children — heavy blur triggers GPU repaint on every scroll tick */
+    --chat-panel-shell-backdrop: blur(4px);
     --chat-main-shell-background:
       radial-gradient(
         820px 260px at 105% -14%,
@@ -63,7 +65,7 @@
     --chat-panel-shell-radius: 1rem;
     --chat-panel-shell-border: hsl(var(--enterprise-panel-border) / 0.8);
     --chat-panel-shell-shadow: var(--enterprise-shadow-soft);
-    --chat-panel-shell-backdrop: blur(16px) saturate(1.05);
+    --chat-panel-shell-backdrop: blur(4px);
     --chat-main-shell-background:
       radial-gradient(
         820px 260px at 105% -14%,
@@ -268,6 +270,9 @@
       );
     backdrop-filter: blur(12px) saturate(110%);
     box-shadow: 0 4px 12px -8px hsl(220 30% 10% / 0.1);
+    /* GPU compositing: own layer to prevent scroll-induced repaint cascade */
+    will-change: transform;
+    transform: translateZ(0);
   }
 
   .chat-header-pill-btn {
@@ -281,9 +286,9 @@
     transition:
       border-color 140ms ease,
       background-color 160ms ease,
-      box-shadow 160ms ease,
-      backdrop-filter 180ms ease,
-      -webkit-backdrop-filter 180ms ease;
+      box-shadow 160ms ease;
+    /* backdrop-filter intentionally NOT transitioned:
+       animating backdrop-filter triggers full repaint (not compositor) */
   }
 
   .chat-header-pill-btn:hover {
@@ -292,8 +297,8 @@
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 0.56),
       0 14px 24px -20px hsl(var(--enterprise-accent) / 0.44);
-    backdrop-filter: blur(12px) saturate(138%);
-    -webkit-backdrop-filter: blur(12px) saturate(138%);
+    /* backdrop-filter removed from hover: cannot be compositor-only,
+       causes full repaint cascade during scroll */
   }
 
   .chat-header-pill-btn:focus-visible {
@@ -779,13 +784,16 @@
   }
 
   .chat-footer-shell--command {
-    border-top: 1px solid hsl(var(--enterprise-panel-border) / 0.76);
+    border-top: 1px solid hsl(var(--enterprise-panel-border) / 0.55);
     background:
       linear-gradient(
         180deg,
-        hsl(var(--enterprise-panel) / 0.95) 0%,
-        hsl(var(--enterprise-panel-soft) / 0.9) 100%
+        hsl(var(--enterprise-panel) / 0.97) 0%,
+        hsl(var(--enterprise-panel-soft) / 0.94) 100%
       );
+    /* Own compositor layer so scroll above doesn't force repaint */
+    will-change: transform;
+    transform: translateZ(0);
   }
 
   .chat-thread-shell--command {
@@ -824,7 +832,8 @@
   .scroll-to-bottom-fab--command {
     border-color: hsl(var(--enterprise-panel-border) / 0.72);
     background: hsl(var(--enterprise-panel) / 0.96);
-    box-shadow: 0 12px 24px -24px hsl(220 34% 14% / 0.44);
+    /* Use filter instead of box-shadow to stay on the compositor layer */
+    filter: drop-shadow(0 8px 16px hsl(220 34% 14% / 0.28));
   }
 
   .chat-input-shell--command {
@@ -841,7 +850,7 @@
     display: flex;
     align-items: flex-end;
     gap: 0.375rem;
-    padding: 0.5rem 0.625rem;
+    padding: 0.5rem 0.75rem;
   }
 
   .chat-composer-actions-row--command :where(button, textarea, input, [role="button"], [data-slot="button"]):focus-visible {
@@ -884,25 +893,27 @@
     display: none;
   }
 
+  /* Action buttons */
   .chat-composer-action-btn--command {
     flex-shrink: 0;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 2.125rem;
+    height: 2.125rem;
     border-radius: 999px;
     box-shadow: none;
     transform: none;
     margin-bottom: 3px;
+    transition: background-color 140ms ease, color 140ms ease,
+      transform 140ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease;
   }
 
   .chat-composer-action-btn--attach {
     color: hsl(var(--muted-foreground) / 0.7);
-    transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
   }
 
   .chat-composer-action-btn--attach:hover {
-    background: hsl(var(--primary) / 0.1);
+    background: hsl(var(--primary) / 0.09);
     color: hsl(var(--primary));
-    transform: none;
+    transform: scale(1.07);
   }
 
   .chat-composer-action-btn--attach.chat-composer-action-btn--active {
@@ -911,25 +922,20 @@
   }
 
   .chat-composer-action-btn--attach.chat-composer-action-btn--disabled {
-    opacity: 0.45;
+    opacity: 0.4;
     color: hsl(var(--muted-foreground) / 0.7);
     background: transparent;
   }
 
   .chat-composer-action-btn--send {
-    transition: transform 200ms ease, background-color 200ms ease, color 200ms ease, opacity 200ms ease;
-  }
-
-  .chat-composer-action-btn--command:hover,
-  .chat-composer-action-btn--command:active {
-    box-shadow: none;
-    transform: none;
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 180ms ease,
+      color 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
   }
 
   .chat-composer-action-btn--command:focus-visible,
   .chat-composer-emoji-btn--command:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 1px hsl(var(--enterprise-panel-border) / 0.92);
+    box-shadow: 0 0 0 2.5px hsl(var(--primary) / 0.3);
   }
 
   .chat-composer-action-icon--attach {
@@ -942,49 +948,60 @@
     height: 1rem;
   }
 
+  /* ── Composer input surface ──────────────────────────────────── */
   .chat-composer-input-surface--command {
     position: relative;
     flex: 1 1 auto;
     min-height: 42px;
     overflow: hidden;
-    border-radius: 14px;
-    border: 1px solid hsl(var(--border) / 0.55);
-    background: hsl(var(--background) / 0.85);
-    box-shadow: 0 1px 2px -1px hsl(220 20% 12% / 0.03);
-    transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
+    border-radius: 1.25rem;
+    border: 1.5px solid hsl(var(--border) / 0.5);
+    background: hsl(var(--background) / 0.9);
+    box-shadow:
+      0 1px 3px -1px hsl(220 20% 12% / 0.04),
+      inset 0 1px 0 hsl(0 0% 100% / 0.28);
+    transition:
+      border-color 160ms ease,
+      background-color 160ms ease,
+      box-shadow 160ms ease;
   }
 
   .chat-composer-input-surface--focused {
-    border-color: hsl(var(--primary) / 0.45);
+    border-color: hsl(var(--primary) / 0.55);
     background: hsl(var(--background));
-    box-shadow: 0 2px 4px -2px hsl(var(--primary) / 0.06), 0 0 0 3px hsl(var(--primary) / 0.08);
+    box-shadow:
+      0 2px 8px -4px hsl(var(--primary) / 0.1),
+      0 0 0 3.5px hsl(var(--primary) / 0.1),
+      inset 0 1px 0 hsl(0 0% 100% / 0.38);
   }
 
   .chat-composer-input-surface--idle {
-    border-color: hsl(var(--border) / 0.55);
+    border-color: hsl(var(--border) / 0.5);
   }
 
   .chat-composer-input-surface--idle:hover {
-    border-color: hsl(var(--border) / 0.8);
+    border-color: hsl(var(--border) / 0.75);
     background: hsl(var(--background));
-    box-shadow: 0 2px 6px -3px hsl(220 20% 12% / 0.05);
+    box-shadow:
+      0 2px 8px -4px hsl(220 20% 12% / 0.06),
+      inset 0 1px 0 hsl(0 0% 100% / 0.3);
   }
 
   .chat-composer-textarea--command {
     width: 100%;
-    max-height: 140px;
+    max-height: 160px;
     resize: none;
-    overflow: hidden;
+    overflow-y: auto;
     background: transparent;
-    padding: 0.625rem 2.5rem 0.625rem 1rem;
-    font-size: 0.925rem;
-    line-height: 1.5;
+    padding: 0.65rem 2.6rem 0.65rem 1rem;
+    font-size: 0.9125rem;
+    line-height: 1.55;
     color: hsl(var(--foreground));
     transition: color 200ms ease, opacity 200ms ease;
   }
 
   .chat-composer-textarea--command::placeholder {
-    color: hsl(var(--muted-foreground) / 0.45);
+    color: hsl(var(--muted-foreground) / 0.42);
     font-weight: 400;
   }
 
@@ -1027,50 +1044,86 @@
     background: transparent;
   }
 
+  /* Send button tone states */
   .chat-composer-send-tone {
-    transition: background-color 180ms ease, color 180ms ease, opacity 180ms ease, border-color 180ms ease;
+    transition:
+      background 180ms ease,
+      color 180ms ease,
+      opacity 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease;
   }
 
   .chat-composer-send-tone--ready {
-    background: hsl(var(--primary));
+    background: linear-gradient(
+      160deg,
+      hsl(var(--primary)) 0%,
+      hsl(var(--primary) / 0.88) 100%
+    );
     color: hsl(var(--primary-foreground));
-    box-shadow: none;
+    box-shadow:
+      0 4px 10px -4px hsl(var(--primary) / 0.5),
+      inset 0 1px 0 hsl(0 0% 100% / 0.2);
+    transform: none;
   }
 
-  .chat-composer-send-tone--ready:hover,
+  .chat-composer-send-tone--ready:hover {
+    box-shadow:
+      0 6px 14px -4px hsl(var(--primary) / 0.6),
+      inset 0 1px 0 hsl(0 0% 100% / 0.22);
+    transform: scale(1.06) translateY(-1px);
+  }
+
   .chat-composer-send-tone--ready:active {
-    background: hsl(var(--primary) / 0.92);
-    color: hsl(var(--primary-foreground));
+    transform: scale(0.96);
     box-shadow: none;
   }
 
   .chat-composer-send-tone--idle {
     background: transparent;
     color: hsl(var(--primary));
-    opacity: 0.82;
+    opacity: 0.78;
   }
 
-  .chat-composer-send-tone--idle:hover,
-  .chat-composer-send-tone--idle:active {
+  .chat-composer-send-tone--idle:hover {
     background: hsl(var(--primary) / 0.1);
     color: hsl(var(--primary));
     opacity: 1;
+    transform: scale(1.06);
   }
 
   .chat-composer-send-tone--disabled {
-    background: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
+    background: transparent;
+    color: hsl(var(--muted-foreground) / 0.5);
   }
 
   @keyframes chat-composer-char-slot-fade-in {
-    from {
-      opacity: 0;
-    }
-
-    to {
-      opacity: 1;
-    }
+    from { opacity: 0; transform: scale(0.7); }
+    to   { opacity: 1; transform: scale(1); }
   }
+
+  /* Voice recording waveform — replaces inline style */
+  @keyframes voice-bar-bounce {
+    0%, 100% { transform: scaleY(0.28); }
+    50%       { transform: scaleY(1); }
+  }
+
+  .voice-bar {
+    display: inline-block;
+    width: 3px;
+    border-radius: 999px;
+    background: hsl(var(--destructive));
+    height: 100%;
+    min-height: 4px;
+    transform-origin: bottom;
+    animation: voice-bar-bounce 0.9s ease-in-out infinite;
+  }
+
+  .voice-bar:nth-child(1) { animation-delay: 0s; }
+  .voice-bar:nth-child(2) { animation-delay: 0.1s; }
+  .voice-bar:nth-child(3) { animation-delay: 0.2s; }
+  .voice-bar:nth-child(4) { animation-delay: 0.3s; }
+  .voice-bar:nth-child(5) { animation-delay: 0.4s; }
 
   @media (min-width: 1024px) {
     .chat-composer-actions-row--command {
@@ -1121,43 +1174,6 @@
     }
   }
 
-  .chat-composer-meta-row--command {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-    padding: 0.44rem 0.74rem 0;
-  }
-
-  .chat-composer-meta-chip {
-    display: inline-flex;
-    align-items: center;
-    border: 1px solid hsl(var(--enterprise-panel-border) / 0.72);
-    border-radius: 999px;
-    padding: 0.14rem 0.5rem;
-    font-size: 0.64rem;
-    font-weight: 680;
-    letter-spacing: 0.014em;
-    color: hsl(var(--enterprise-muted));
-    background: hsl(var(--enterprise-panel-soft) / 0.82);
-  }
-
-  .chat-composer-meta-chip--channel {
-    border-color: hsl(var(--enterprise-accent) / 0.34);
-    color: hsl(var(--enterprise-accent));
-    background: hsl(var(--enterprise-accent) / 0.1);
-  }
-
-  .chat-composer-meta-chip--mode {
-    max-width: min(18rem, 52vw);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .chat-composer-meta-chip--hint {
-    color: hsl(var(--enterprise-muted) / 0.9);
-  }
 
   .chat-channel-rail {
     border-bottom-color: hsl(var(--enterprise-panel-border) / 0.76);
@@ -3566,22 +3582,49 @@
 
 /* --- Phase 5 Extended Polish --- */
 .global-search-trigger {
-  @apply hidden lg:flex items-center gap-2 min-w-[160px] max-w-[220px] px-3 py-1.5 rounded-xl border border-border/50 bg-muted/40 text-sm text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1;
-  background-color: var(--enterprise-card-bg-alpha, rgba(23, 23, 23, 0.4));
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  @apply hidden lg:flex items-center gap-2 min-w-[160px] max-w-[220px] px-2.5 py-1.5 rounded-full text-[13px] transition-all;
+  border: 1px solid hsl(var(--enterprise-panel-border) / 0.46);
+  color: hsl(var(--enterprise-muted));
+  background: hsl(var(--enterprise-panel-soft) / 0.28);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.28);
+  backdrop-filter: blur(3px) saturate(106%);
+  -webkit-backdrop-filter: blur(3px) saturate(106%);
 }
 
-.global-search-trigger:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+.global-search-trigger:hover,
+.global-search-trigger:focus-visible {
+  border-color: hsl(var(--enterprise-accent) / 0.4);
+  color: hsl(var(--enterprise-text));
+  background: hsl(var(--enterprise-accent) / 0.14);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.54),
+    0 12px 20px -20px hsl(var(--enterprise-accent) / 0.42);
+  backdrop-filter: blur(11px) saturate(138%);
+  -webkit-backdrop-filter: blur(11px) saturate(138%);
+  outline: none;
 }
 
 .global-search-trigger-mobile {
-  @apply hidden md:inline-flex lg:hidden items-center justify-center size-8 rounded-xl border border-border/50 bg-muted/40 text-muted-foreground transition-all duration-200 hover:bg-muted/70 hover:text-foreground hover:border-border/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1;
-  background-color: var(--enterprise-card-bg-alpha, rgba(23, 23, 23, 0.4));
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
+  @apply hidden md:inline-flex lg:hidden items-center justify-center size-8 rounded-full transition-all;
+  border: 1px solid hsl(var(--enterprise-panel-border) / 0.46);
+  color: hsl(var(--enterprise-muted));
+  background: hsl(var(--enterprise-panel-soft) / 0.28);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.28);
+  backdrop-filter: blur(3px) saturate(106%);
+  -webkit-backdrop-filter: blur(3px) saturate(106%);
+}
+
+.global-search-trigger-mobile:hover,
+.global-search-trigger-mobile:focus-visible {
+  border-color: hsl(var(--enterprise-accent) / 0.4);
+  color: hsl(var(--enterprise-text));
+  background: hsl(var(--enterprise-accent) / 0.14);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.54),
+    0 12px 20px -20px hsl(var(--enterprise-accent) / 0.42);
+  backdrop-filter: blur(11px) saturate(138%);
+  -webkit-backdrop-filter: blur(11px) saturate(138%);
+  outline: none;
 }
 
 .chat-sidebar-nav-tab--refined {

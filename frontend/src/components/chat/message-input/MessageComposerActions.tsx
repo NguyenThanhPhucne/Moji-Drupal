@@ -185,18 +185,10 @@ const MessageComposerActions = ({
       >
         {isRecording ? (
         <div className="flex flex-1 items-center gap-3 px-3 animate-in fade-in duration-200">
-            {/* Recording waveform animation */}
-            <div className="flex items-center gap-[2px] h-5 flex-shrink-0" aria-hidden="true">
+            {/* Recording waveform */}
+            <div className="flex items-center gap-[3px] h-5 flex-shrink-0" aria-hidden="true">
               {[0, 1, 2, 3, 4].map((i) => (
-                <span
-                  key={i}
-                  className="inline-block w-[3px] rounded-full bg-destructive"
-                  style={{
-                    height: "100%",
-                    animation: `voice-bar-bounce 0.9s ease-in-out ${i * 0.1}s infinite`,
-                    minHeight: "4px",
-                  }}
-                />
+                <span key={i} className="voice-bar" />
               ))}
             </div>
             <span className="font-mono text-sm font-semibold tabular-nums text-destructive">

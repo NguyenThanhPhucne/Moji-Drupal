@@ -1001,7 +1001,7 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
               aria-label="Open global search"
               className="global-search-trigger-mobile group"
             >
-              <Search className="size-4 text-muted-foreground/70 group-hover:text-muted-foreground transition-colors" />
+              <Search className="size-4 opacity-70 group-hover:opacity-100 transition-opacity" />
             </button>
           </DialogTrigger>
 
@@ -1010,9 +1010,9 @@ const GlobalSearchDialog = ({ globalOnly = false }: { globalOnly?: boolean }) =>
               type="button"
               className="global-search-trigger group"
             >
-              <Search className="size-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
-              <span className="flex-1 text-left text-[12px] truncate">Search...</span>
-              <kbd className="hidden sm:inline-flex items-center rounded border border-border/60 bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground/70 shrink-0">
+              <Search className="size-3.5 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity" />
+              <span className="flex-1 text-left text-[12px] truncate opacity-90">Search...</span>
+              <kbd className="hidden sm:inline-flex items-center rounded border border-[hsl(var(--enterprise-panel-border)/0.6)] bg-[hsl(var(--enterprise-panel-soft)/0.8)] px-1.5 py-0.5 text-[10px] font-semibold opacity-70 shrink-0">
                 ⌘K
               </kbd>
             </button>

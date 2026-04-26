@@ -409,10 +409,10 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
             <div className="space-y-4">
               {THREAD_SKELETON_KEYS.map((skeletonKey, i) => (
                 <div key={skeletonKey} className={cn("flex gap-3", i % 2 === 0 ? "flex-row-reverse" : "flex-row")}>
-                  <div className="size-8 animate-pulse rounded-full bg-muted/40 shrink-0" />
+                  <div className="size-8 animate-pulse rounded-full bg-muted/40 shrink-0 chat-thread-skeleton-shimmer" />
                   <div className={cn("flex flex-col gap-1.5", i % 2 === 0 ? "items-end" : "items-start")}>
-                    <div className="h-3.5 w-16 animate-pulse rounded-md bg-muted/40" />
-                    <div className="h-10 w-[200px] animate-pulse rounded-2xl bg-muted/25 border border-border/40" />
+                    <div className="h-3.5 w-16 animate-pulse rounded-md bg-muted/40 chat-thread-skeleton-shimmer" />
+                    <div className="h-10 w-[200px] animate-pulse rounded-2xl bg-muted/25 border border-border/40 chat-thread-skeleton-shimmer" />
                   </div>
                 </div>
               ))}

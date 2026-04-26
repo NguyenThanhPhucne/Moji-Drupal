@@ -755,8 +755,13 @@ html[data-motion="reduced"] * {
     border-radius: var(--chat-panel-shell-radius, 1rem);
     border-color: var(--chat-panel-shell-border, hsl(var(--border) / 0.8));
     box-shadow: var(--chat-panel-shell-shadow, var(--shadow-soft));
-    backdrop-filter: var(--chat-panel-shell-backdrop, blur(16px) saturate(1.05));
-    -webkit-backdrop-filter: var(--chat-panel-shell-backdrop, blur(16px) saturate(1.05));
+    /* Reduced from blur(16px) → blur(4px): the panel children are mostly
+       opaque so heavy blur buys nothing visually but costs full GPU repaint
+       on every scroll frame through this stacking context. */
+    backdrop-filter: var(--chat-panel-shell-backdrop, blur(4px));
+    -webkit-backdrop-filter: var(--chat-panel-shell-backdrop, blur(4px));
+    /* Containment: limit layout/style recalc to within this element */
+    contain: layout style;
   }
 
   @media (min-width: 768px) {
@@ -2937,25 +2942,31 @@ html[data-motion="reduced"] * {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
+    gap: 0.35rem;
+    min-width: 36px;
     height: 36px;
-    border-radius: 50%;
+    padding: 0 0.6rem;
+    border-radius: 999px;
     border: 1px solid hsl(var(--border) / 0.6);
     cursor: pointer;
     background: hsl(var(--background));
     color: hsl(var(--foreground) / 0.8);
-    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.12), 0 1px 3px hsl(0 0% 0% / 0.08);
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    /* GPU-composited shadow — does NOT trigger layout/paint on scroll */
+    filter: drop-shadow(0 2px 6px hsl(0 0% 0% / 0.14));
+    /* Hint browser to keep this on its own compositor layer */
+    will-change: opacity, transform;
+    transform: translateZ(0);
+    transition: opacity 0.15s ease, transform 0.15s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .scroll-to-bottom-fab:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 14px hsl(0 0% 0% / 0.18), 0 1px 4px hsl(0 0% 0% / 0.1);
+    transform: translateZ(0) translateY(-1px);
+    filter: drop-shadow(0 4px 10px hsl(0 0% 0% / 0.18));
     color: hsl(var(--foreground));
   }
 
   .scroll-to-bottom-fab:active {
-    transform: scale(0.94);
+    transform: translateZ(0) scale(0.94);
   }
 
   .scroll-fab-badge {
@@ -2982,18 +2993,23 @@ html[data-motion="reduced"] * {
   }
 
   .scroll-btn-enter {
-    animation: scrollBtnSlideUp 0.18s ease forwards;
+    opacity: 1;
+    transform: translateZ(0) translateY(0) scale(1);
+    pointer-events: auto;
   }
   .scroll-btn-exit {
-    animation: scrollBtnSlideDown 0.14s ease forwards;
+    opacity: 0;
+    transform: translateZ(0) translateY(8px) scale(0.9);
+    pointer-events: none;
   }
+  /* Keep keyframes for cases where reduced-motion is not set */
   @keyframes scrollBtnSlideUp {
-    from { opacity: 0; transform: translateY(10px) scale(0.88); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: translateZ(0) translateY(10px) scale(0.88); }
+    to   { opacity: 1; transform: translateZ(0) translateY(0) scale(1); }
   }
   @keyframes scrollBtnSlideDown {
-    from { opacity: 1; transform: translateY(0) scale(1); }
-    to   { opacity: 0; transform: translateY(8px) scale(0.9); }
+    from { opacity: 1; transform: translateZ(0) translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateZ(0) translateY(8px) scale(0.9); }
   }
 
   /* ─── Send button: active glow state ────────────────────────────── */

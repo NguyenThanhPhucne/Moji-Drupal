@@ -100,6 +100,7 @@ const ChatWindowBody = () => {
     {},
   );
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const atBottomDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
     null,
@@ -122,13 +123,30 @@ const ChatWindowBody = () => {
     const counts: Record<string, number> = {};
     messages.forEach((messageItem) => {
       const rootId = String(messageItem.threadRootId || "").trim();
-      if (!rootId) {
-        return;
-      }
-
+      if (!rootId) return;
       counts[rootId] = Number(counts[rootId] || 0) + 1;
     });
     return counts;
+  }, [messages]);
+
+  // Pre-compute grouping metadata outside renderMessageItem to avoid
+  // repeated Date constructions on every Virtuoso render pass.
+  const messageGroupMeta = useMemo(() => {
+    const THRESHOLD = 5 * 60 * 1000;
+    return messages.map((msg, index) => {
+      const prev = index > 0 ? messages[index - 1] : undefined;
+      const next = messages[index + 1];
+      const samePrev = !!prev && prev.senderId === msg.senderId && !msg.isDeleted && !prev.isDeleted;
+      const sameNext = !!next && next.senderId === msg.senderId && !msg.isDeleted && !next.isDeleted;
+      const closePrev = prev ? new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime() < THRESHOLD : false;
+      const closeNext = next ? new Date(next.createdAt).getTime() - new Date(msg.createdAt).getTime() < THRESHOLD : false;
+      const showDate = !next || !isSameDay(msg.createdAt, next.createdAt);
+      return {
+        isFirstInGroup: !samePrev || !closePrev,
+        isLastInGroup: !sameNext || !closeNext,
+        showDateDivider: showDate,
+      };
+    });
   }, [messages]);
 
   const { searchConversationId, searchMessageId } = useMemo(() => {
@@ -468,28 +486,7 @@ const ChatWindowBody = () => {
 
   const renderMessageItem = useCallback(
     (index: number, message: Message) => {
-      const prevMessage = index > 0 ? messages[index - 1] : undefined;
-      const nextMessage = messages[index + 1];
-      const showDateDivider =
-        !nextMessage || !isSameDay(message.createdAt, nextMessage.createdAt);
-
-      const sameOlderSender =
-        Boolean(prevMessage) &&
-        prevMessage?.senderId === message.senderId &&
-        !message.isDeleted &&
-        !prevMessage?.isDeleted;
-      const sameNewerSender =
-        Boolean(nextMessage) &&
-        nextMessage?.senderId === message.senderId &&
-        !message.isDeleted &&
-        !nextMessage?.isDeleted;
-      
-      const GROUPING_THRESHOLD_MS = 5 * 60 * 1000;
-      const isCloseToOlder = prevMessage && (new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime() < GROUPING_THRESHOLD_MS);
-      const isCloseToNewer = nextMessage && (new Date(nextMessage.createdAt).getTime() - new Date(message.createdAt).getTime() < GROUPING_THRESHOLD_MS);
-
-      const isFirstInGroup = !sameOlderSender || !isCloseToOlder;
-      const isLastInGroup = !sameNewerSender || !isCloseToNewer;
+      const meta = messageGroupMeta[index];
 
       // Only animate a message if it matches the latest newly arrived ID.
       // This prevents every re-render of the last item (e.g. reaction updates)
@@ -507,14 +504,14 @@ const ChatWindowBody = () => {
       return (
         <MessageItem
           message={message}
-          isFirstInGroup={isFirstInGroup}
-          isLastInGroup={isLastInGroup}
+          isFirstInGroup={meta?.isFirstInGroup ?? true}
+          isLastInGroup={meta?.isLastInGroup ?? true}
           selectedConvo={selectedConvo as NonNullable<typeof selectedConvo>}
           lastMessageStatus={lastMessageStatus}
           lastOwnMessageId={lastOwnMessage?._id ?? null}
           seenUser={directSeenUser}
           seenUsers={groupSeenUsers}
-          showDateDivider={showDateDivider}
+          showDateDivider={meta?.showDateDivider ?? false}
           isNew={isNew}
           isSearchTarget={isSearchTarget}
           onForward={() => setForwardMessageId(message._id)}
@@ -540,6 +537,7 @@ const ChatWindowBody = () => {
     },
     [
       messages,
+      messageGroupMeta,
       selectedConvo,
       lastMessageStatus,
       lastOwnMessage?._id,
@@ -847,10 +845,14 @@ const ChatWindowBody = () => {
             className="h-full beautiful-scrollbar"
             data={messages}
             atBottomStateChange={(bottom) => {
-              setIsAtBottom(bottom);
-              if (bottom) {
-                setNewMsgCount(0);
+              // Debounce to avoid a React re-render on every scroll pixel
+              if (atBottomDebounceRef.current) {
+                clearTimeout(atBottomDebounceRef.current);
               }
+              atBottomDebounceRef.current = setTimeout(() => {
+                setIsAtBottom(bottom);
+                if (bottom) setNewMsgCount(0);
+              }, 80);
             }}
             followOutput={(atBottom) => (atBottom ? "smooth" : false)}
             startReached={() => {
@@ -915,10 +917,10 @@ const ChatWindowBody = () => {
             : "scroll-btn-exit pointer-events-none",
         )}
       >
-        <ArrowDown className="size-4" />
+        <ArrowDown className="size-4 shrink-0" />
         <span className="hidden text-[11px] font-semibold sm:inline">Latest</span>
         {newMsgCount > 0 && (
-          <span className="scroll-fab-badge animate-bounce shadow-md">
+          <span className="scroll-fab-badge">
             {newMsgCount > 99 ? "99+" : newMsgCount}
           </span>
         )}

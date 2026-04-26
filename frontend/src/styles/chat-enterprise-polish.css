@@ -1323,3 +1323,142 @@
     transition: none !important;
   }
 }
+
+/* ─── Phase 3 Polish ──────────────────────────────────────────── */
+@layer components {
+
+  /* Bubble grouping — smart corner radius (Discord-style) */
+  /* Sent (right side): tail bottom-right, pillow top-right */
+  .chat-bubble--first-in-group.chat-bubble--sent {
+    border-radius: 1.25rem 1.25rem 0.5rem 1.25rem;
+  }
+  .chat-bubble--mid-in-group.chat-bubble--sent {
+    border-radius: 1.25rem 0.5rem 0.5rem 1.25rem;
+  }
+  .chat-bubble--last-in-group.chat-bubble--sent {
+    border-radius: 1.25rem 0.5rem 1.25rem 1.25rem;
+  }
+  .chat-bubble--solo.chat-bubble--sent {
+    border-radius: 1.25rem 1.25rem 1.25rem 1.25rem;
+  }
+
+  /* Received (left side): tail bottom-left, pillow top-left */
+  .chat-bubble--first-in-group.chat-bubble--received {
+    border-radius: 1.25rem 1.25rem 1.25rem 0.5rem;
+  }
+  .chat-bubble--mid-in-group.chat-bubble--received {
+    border-radius: 0.5rem 1.25rem 1.25rem 0.5rem;
+  }
+  .chat-bubble--last-in-group.chat-bubble--received {
+    border-radius: 0.5rem 1.25rem 1.25rem 1.25rem;
+  }
+  .chat-bubble--solo.chat-bubble--received {
+    border-radius: 1.25rem 1.25rem 1.25rem 1.25rem;
+  }
+
+  /* Frosted action toolbar pill */
+  .chat-message-action-toolbar-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border) / 0.55);
+    background: hsl(var(--background) / 0.88);
+    box-shadow:
+      0 4px 12px -6px hsl(220 30% 14% / 0.22),
+      inset 0 1px 0 hsl(0 0% 100% / 0.36);
+    backdrop-filter: blur(8px) saturate(1.1);
+    -webkit-backdrop-filter: blur(8px) saturate(1.1);
+    padding: 0.18rem 0.32rem;
+    opacity: 0;
+    transform: translateY(3px);
+    transition:
+      opacity 150ms ease,
+      transform 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .group:hover .chat-message-action-toolbar-pill,
+  .chat-message-action-toolbar-pill:focus-within {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .dark .chat-message-action-toolbar-pill {
+    background: hsl(var(--background) / 0.82);
+    box-shadow:
+      0 4px 14px -6px hsl(220 55% 4% / 0.52),
+      inset 0 1px 0 hsl(0 0% 100% / 0.08);
+  }
+
+  /* Thread skeleton shimmer layer */
+  .chat-thread-skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .chat-thread-skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      hsl(var(--primary) / 0.06) 40%,
+      transparent 100%
+    );
+    transform: translateX(-120%);
+    animation: threadSkeletonSheen 1.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes threadSkeletonSheen {
+    0%   { transform: translateX(-120%); }
+    100% { transform: translateX(120%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chat-thread-skeleton-shimmer::after {
+      animation: none !important;
+    }
+    .chat-message-action-toolbar-pill {
+      transition: none !important;
+      transform: none !important;
+    }
+    .chat-bubble--first-in-group,
+    .chat-bubble--mid-in-group,
+    .chat-bubble--last-in-group,
+    .chat-bubble--solo {
+      border-radius: 1.25rem !important;
+    }
+  }
+
+  /* Reaction bar shadow refinement */
+  .chat-reaction-bar-root {
+    box-shadow:
+      0 2px 8px -4px hsl(var(--primary) / 0.18),
+      0 1px 0 hsl(var(--border) / 0.5);
+  }
+
+  /* Header — crisper border + tighter ambient shadow */
+  .chat-header-shell--elevated {
+    box-shadow:
+      0 1px 0 hsl(var(--border) / 0.32),
+      0 4px 10px -6px hsl(220 30% 12% / 0.08);
+  }
+
+  .dark .chat-header-shell--elevated {
+    box-shadow:
+      0 1px 0 hsl(var(--border) / 0.5),
+      0 4px 12px -6px hsl(220 55% 4% / 0.28);
+  }
+
+  /* Action button micro-lift on hover */
+  .chat-header-action-btn--command:hover {
+    transform: scale(1.06);
+  }
+
+  /* Dropdown — GPU compositing hint */
+  .chat-header-dropdown-panel--command {
+    will-change: transform;
+  }
+}
