@@ -1,5 +1,6 @@
 import { invalidateCache } from "../libs/redis.js";
 import { withSocketEventMeta } from "./socketEventMeta.js";
+import { buildMessagePreviewContent } from "./messagePreview.js";
 
 const DEFAULT_GROUP_CHANNEL_ID = "general";
 
@@ -29,9 +30,7 @@ export const updateConversationAfterCreateMessage = (
   message,
   senderId,
 ) => {
-  const previewContent =
-    String(message.content || "").trim() ||
-    (message.imgUrl ? "📷 Photo" : "");
+  const previewContent = buildMessagePreviewContent(message);
 
   conversation.set({
     seenBy: [],
@@ -155,11 +154,22 @@ export const emitNewMessage = (io, conversation, message) => {
     : null;
 
   if (threadRootId) {
-    io.to(conversation._id.toString()).emit("thread-reply-new", {
-      conversationId: String(conversation._id),
-      threadRootId,
-      message,
-    });
+    io.to(conversation._id.toString()).emit(
+      "thread-reply-new",
+      withSocketEventMeta(
+        {
+          conversationId: String(conversation._id),
+          threadRootId,
+          message,
+        },
+        {
+          eventName: "thread-reply-new",
+          conversationId: conversation?._id,
+          entityId: message?._id,
+          scope: `thread:${conversation?._id}:${threadRootId}`,
+        },
+      ),
+    );
   }
   
   // Fire and forget cache invalidation

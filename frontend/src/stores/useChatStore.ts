@@ -908,7 +908,9 @@ export const useChatStore = create<ChatState>()(
       threadUnreadCounts: {},
       outgoingQueue: [],
       isFlushingOutgoingQueue: false,
+      isCallActive: false,
 
+      setIsCallActive: (active) => set({ isCallActive: active }),
       setReplyingTo: (message) => set({ replyingTo: message }),
       setActiveThreadRootId: (messageId) =>
         set((state) => {
@@ -1001,6 +1003,7 @@ export const useChatStore = create<ChatState>()(
           threadUnreadCounts: {},
           outgoingQueue: [],
           isFlushingOutgoingQueue: false,
+          isCallActive: false,
         });
       },
       fetchConversations: async () => {

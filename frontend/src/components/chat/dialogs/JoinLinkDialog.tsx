@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Link, Copy, CheckCircle2, RotateCcw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
@@ -12,15 +12,15 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { chatService } from "@/services/chatService";
-import type { Conversation, GroupJoinLink } from "@/types/chat";
+import type { Conversation, GroupJoinLinkMeta } from "@/types/chat";
+import { useChatStore } from "@/stores/useChatStore";
 
 export interface JoinLinkDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   chat: Conversation;
   isGroupAdmin: boolean;
-  activeGroupJoinLink: GroupJoinLink | null;
+  activeGroupJoinLink: GroupJoinLinkMeta | null;
 }
 
 export function JoinLinkDialog({
@@ -39,6 +39,7 @@ export function JoinLinkDialog({
   const [joinLinkHours, setJoinLinkHours] = useState(24);
   const [joinLinkMaxUsesInput, setJoinLinkMaxUsesInput] = useState("");
   const [joinLinkOneTime, setJoinLinkOneTime] = useState(false);
+  const { createGroupJoinLink, revokeGroupJoinLink } = useChatStore();
 
   useEffect(() => {
     if (open) {
@@ -99,7 +100,7 @@ export function JoinLinkDialog({
     try {
       setIsGenerating(true);
       setJoinLinkErrorMessage("");
-      const result = await chatService.createGroupJoinLink(chat._id, {
+      const result = await createGroupJoinLink(chat._id, {
         expiresInHours: joinLinkHours,
         maxUses,
         oneTime: joinLinkOneTime,
@@ -117,7 +118,7 @@ export function JoinLinkDialog({
       }
 
       setGeneratedJoinLink(result.joinLinkUrl);
-      setGeneratedJoinLinkExpiresAt(result.expiresAt || null);
+      setGeneratedJoinLinkExpiresAt(result.expiresAt ? new Date(result.expiresAt) : null);
       setJoinLinkOneTime(Boolean(result.oneTime));
       if (result.maxUses && !result.oneTime) {
         setJoinLinkMaxUsesInput(String(result.maxUses));
@@ -151,7 +152,7 @@ export function JoinLinkDialog({
     }
 
     try {
-      await chatService.revokeGroupJoinLink(chat._id);
+      await revokeGroupJoinLink(chat._id);
       setGeneratedJoinLink("");
       setGeneratedJoinLinkExpiresAt(null);
       toast.success("Join link revoked");

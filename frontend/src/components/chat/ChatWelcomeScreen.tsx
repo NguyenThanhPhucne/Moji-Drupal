@@ -1,7 +1,9 @@
 import { SidebarInset } from "../ui/sidebar";
 import ChatWindowHeader from "./ChatWindowHeader";
 import {
+  ArrowRight,
   Clock3,
+  MessageCircle,
   MessageSquareDashed,
   Plus,
   Users,
@@ -13,6 +15,9 @@ import NewGroupChatModal from "./NewGroupChatModal";
 import { Dialog } from "../ui/dialog";
 import { useFriendStore } from "@/stores/useFriendStore";
 import FriendListModal from "../createNewChat/FriendListModal";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { cn, formatOnlineTime } from "@/lib/utils";
+import type { Conversation } from "@/types/chat";
 
 const toConversationTimestamp = (conversation: {
   lastMessage?: { createdAt?: string } | null;
@@ -29,13 +34,86 @@ const toConversationTimestamp = (conversation: {
   return Number.isFinite(ts) ? ts : 0;
 };
 
+type LastMessageLite = {
+  content?: string | null;
+  imgUrl?: string | null;
+  audioUrl?: string | null;
+  senderId?: string | null;
+  sender?: {
+    _id?: string | null;
+    displayName?: string | null;
+  } | null;
+};
+
+const formatUnreadBadge = (count: number) => {
+  if (count > 99) {
+    return "99+";
+  }
+
+  return String(Math.max(0, count));
+};
+
+const resolveConversationDisplayName = (
+  conversation: Conversation,
+  currentUserId: string,
+) => {
+  if (conversation.type === "group") {
+    return String(conversation.group?.name || "Group conversation");
+  }
+
+  const peer = conversation.participants.find(
+    (participant) => String(participant._id) !== currentUserId,
+  );
+
+  return String(peer?.displayName || "Direct conversation");
+};
+
+const resolveConversationPreview = (
+  conversation: Conversation,
+  currentUserId: string,
+) => {
+  const lastMessage = conversation.lastMessage as LastMessageLite | null | undefined;
+  const senderId = String(
+    lastMessage?.senderId || lastMessage?.sender?._id || "",
+  );
+  const senderName = String(lastMessage?.sender?.displayName || "").trim();
+  const normalizedContent = String(lastMessage?.content || "").trim();
+
+  let fallbackContent = normalizedContent;
+  if (!fallbackContent) {
+    if (lastMessage?.audioUrl) {
+      fallbackContent = "Voice message";
+    } else if (lastMessage?.imgUrl) {
+      fallbackContent = "Photo attachment";
+    }
+  }
+
+  if (!fallbackContent) {
+    return conversation.type === "group"
+      ? `${conversation.participants.length} members`
+      : "Start your conversation";
+  }
+
+  if (senderId && senderId === currentUserId) {
+    return `You: ${fallbackContent}`;
+  }
+
+  if (conversation.type === "group" && senderName) {
+    return `${senderName}: ${fallbackContent}`;
+  }
+
+  return fallbackContent;
+};
+
 const ChatWelcomeScreen = () => {
   const conversations = useChatStore((state) => state.conversations);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
   const fetchMessages = useChatStore((state) => state.fetchMessages);
+  const user = useAuthStore((state) => state.user);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [showNewDirect, setShowNewDirect] = useState(false);
   const { getFriends } = useFriendStore();
+  const currentUserId = String(user?._id || "");
 
   const recentConversations = useMemo(
     () =>
@@ -49,9 +127,62 @@ const ChatWelcomeScreen = () => {
   );
   const latestConversation = recentConversations[0] ?? null;
 
+  const unreadConversationCount = useMemo(() => {
+    if (!currentUserId) {
+      return 0;
+    }
+
+    return conversations.filter(
+      (conversation) => Number(conversation.unreadCounts?.[currentUserId] || 0) > 0,
+    ).length;
+  }, [conversations, currentUserId]);
+
+  const totalUnreadCount = useMemo(() => {
+    if (!currentUserId) {
+      return 0;
+    }
+
+    return conversations.reduce((sum, conversation) => {
+      const unread = Number(conversation.unreadCounts?.[currentUserId] || 0);
+      return sum + (Number.isFinite(unread) ? Math.max(0, unread) : 0);
+    }, 0);
+  }, [conversations, currentUserId]);
+
+  const directConversationCount = useMemo(
+    () => conversations.filter((conversation) => conversation.type === "direct").length,
+    [conversations],
+  );
+
+  const groupConversationCount = useMemo(
+    () => conversations.filter((conversation) => conversation.type === "group").length,
+    [conversations],
+  );
+
+  const recentConversationRows = useMemo(
+    () =>
+      recentConversations.map((conversation) => {
+        const unread = Number(conversation.unreadCounts?.[currentUserId] || 0);
+        const timestamp = toConversationTimestamp(conversation);
+
+        return {
+          id: String(conversation._id || ""),
+          type: conversation.type,
+          name: resolveConversationDisplayName(conversation, currentUserId),
+          preview: resolveConversationPreview(conversation, currentUserId),
+          unread: Number.isFinite(unread) ? Math.max(0, unread) : 0,
+          timeLabel: timestamp > 0 ? formatOnlineTime(new Date(timestamp)) : "now",
+        };
+      }),
+    [currentUserId, recentConversations],
+  );
+
   const handleOpenNewDirectChat = async () => {
-    await getFriends();
-    setShowNewDirect(true);
+    try {
+      await getFriends();
+      setShowNewDirect(true);
+    } catch (error) {
+      console.error("Failed to load friends before opening direct chat", error);
+    }
   };
 
   const handleOpenConversation = async (conversationId: string) => {
@@ -73,71 +204,159 @@ const ChatWelcomeScreen = () => {
   };
 
   return (
-    <SidebarInset className="chat-shell-panel">
+    <SidebarInset className="chat-shell-panel chat-main-shell">
       <ChatWindowHeader />
 
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-background px-4 sm:px-6 lg:px-8">
-        {/* Subtle ambient gradients */}
-        <div className="pointer-events-none absolute -top-40 -right-40 h-[500px] w-[500px] rounded-full bg-primary/[0.03] blur-[100px]" />
-        <div className="pointer-events-none absolute -bottom-40 -left-40 h-[400px] w-[400px] rounded-full bg-primary/[0.02] blur-[100px]" />
-
-        <div className="relative z-10 flex w-full max-w-md flex-col items-center text-center animate-in fade-in zoom-in-95 duration-700">
-          {/* Central Icon */}
-          <div className="relative mb-8 flex size-20 items-center justify-center rounded-3xl bg-gradient-to-b from-primary/10 to-primary/5 shadow-inner ring-1 ring-primary/10">
-            <MessageSquareDashed className="size-8 text-primary/80" strokeWidth={1.5} />
-            <div className="absolute -bottom-1 -right-1 flex size-8 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border/50">
-              <Zap className="size-4 text-primary" strokeWidth={2} />
+      <div className="chat-welcome-shell">
+        <div className="chat-welcome-grid">
+          <section className="chat-welcome-hero-card">
+            <div className="chat-welcome-icon-wrap" aria-hidden="true">
+              <div className="chat-welcome-icon-main">
+                <MessageSquareDashed className="size-8 text-primary/85" strokeWidth={1.6} />
+              </div>
+              <div className="chat-welcome-icon-badge">
+                <Zap className="size-4 text-primary" strokeWidth={2.1} />
+              </div>
             </div>
-          </div>
 
-          {/* Typography */}
-          <h1 className="mb-3 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Welcome to Messages
-          </h1>
-          <p className="mb-10 text-[14px] leading-relaxed text-muted-foreground/80 max-w-[32ch]">
-            Select a conversation from the sidebar to start chatting, or create a new one.
-          </p>
-
-          {/* Actions */}
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[240px]">
-            {latestConversation && (
-              <button
-                type="button"
-                onClick={handleResumeLatestConversation}
-                className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/95 hover:shadow-lg active:scale-[0.98]"
-              >
-                <Clock3 className="size-4 transition-transform group-hover:-rotate-12" />
-                Resume Latest Chat
-              </button>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={handleOpenNewDirectChat}
-                className="flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 hover:text-foreground active:scale-[0.98]"
-              >
-                <Plus className="size-4 text-muted-foreground" />
-                Direct
-              </button>
-              
-              <button
-                type="button"
-                onClick={() => setShowNewGroup(true)}
-                className="flex items-center justify-center gap-2 rounded-xl border border-border/60 bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/50 hover:text-foreground active:scale-[0.98]"
-              >
-                <Users className="size-4 text-muted-foreground" />
-                Group
-              </button>
-            </div>
-          </div>
-
-          {/* Contextual Stats */}
-          {conversations.length > 0 && (
-            <p className="mt-10 text-[12px] font-medium text-muted-foreground/50">
-              {conversations.length} active {conversations.length === 1 ? "conversation" : "conversations"}
+            <p className="chat-welcome-kicker">Clean communication workspace</p>
+            <h1 className="chat-welcome-title">Welcome back to Messages</h1>
+            <p className="chat-welcome-copy">
+              Everything is organized for speed: jump into recent threads or start a fresh direct/group chat in one step.
             </p>
-          )}
+
+            <div className="chat-welcome-action-stack">
+              <button
+                type="button"
+                onClick={() => {
+                  if (latestConversation?._id) {
+                    void handleResumeLatestConversation();
+                    return;
+                  }
+
+                  void handleOpenNewDirectChat();
+                }}
+                className="chat-welcome-primary-btn"
+              >
+                <Clock3 className="size-4" />
+                {latestConversation ? "Resume latest chat" : "Start direct chat"}
+              </button>
+
+              <div className="chat-welcome-secondary-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleOpenNewDirectChat();
+                  }}
+                  className="chat-welcome-secondary-btn"
+                >
+                  <Plus className="size-4" />
+                  New Direct
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowNewGroup(true)}
+                  className="chat-welcome-secondary-btn"
+                >
+                  <Users className="size-4" />
+                  New Group
+                </button>
+              </div>
+            </div>
+
+            <div className="chat-welcome-stat-grid">
+              <article className="chat-welcome-stat-card">
+                <p className="chat-welcome-stat-label">Total chats</p>
+                <p className="chat-welcome-stat-value">{conversations.length}</p>
+              </article>
+
+              <article className="chat-welcome-stat-card">
+                <p className="chat-welcome-stat-label">Direct</p>
+                <p className="chat-welcome-stat-value">{directConversationCount}</p>
+              </article>
+
+              <article className="chat-welcome-stat-card">
+                <p className="chat-welcome-stat-label">Groups</p>
+                <p className="chat-welcome-stat-value">{groupConversationCount}</p>
+              </article>
+
+              <article className="chat-welcome-stat-card">
+                <p className="chat-welcome-stat-label">Unread</p>
+                <p className="chat-welcome-stat-value">{formatUnreadBadge(totalUnreadCount)}</p>
+                {unreadConversationCount > 0 && (
+                  <p className="chat-welcome-stat-note">
+                    across {formatUnreadBadge(unreadConversationCount)} conversations
+                  </p>
+                )}
+              </article>
+            </div>
+          </section>
+
+          <section className="chat-welcome-recent-card" aria-label="Recent conversations">
+            <div className="chat-welcome-recent-head">
+              <div>
+                <p className="chat-welcome-kicker">Jump back in</p>
+                <h2 className="chat-welcome-recent-title">Recent conversations</h2>
+              </div>
+              <span className="chat-welcome-recent-count">
+                {formatUnreadBadge(recentConversationRows.length)}
+              </span>
+            </div>
+
+            {recentConversationRows.length > 0 ? (
+              <ul className="chat-welcome-recent-list">
+                {recentConversationRows.map((conversation) => (
+                  <li key={conversation.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleOpenConversation(conversation.id);
+                      }}
+                      className={cn(
+                        "chat-welcome-recent-item",
+                        conversation.unread > 0 && "chat-welcome-recent-item--unread",
+                      )}
+                    >
+                      <div className="chat-welcome-recent-main">
+                        <div className="chat-welcome-recent-row">
+                          <p className="chat-welcome-recent-name">{conversation.name}</p>
+                          <span className="chat-welcome-recent-time">{conversation.timeLabel}</span>
+                        </div>
+
+                        <p className="chat-welcome-recent-preview">{conversation.preview}</p>
+
+                        <p className="chat-welcome-recent-type">
+                          {conversation.type === "group" ? (
+                            <Users className="size-3.5" />
+                          ) : (
+                            <MessageCircle className="size-3.5" />
+                          )}
+                          {conversation.type === "group" ? "Group chat" : "Direct chat"}
+                        </p>
+                      </div>
+
+                      <div className="chat-welcome-recent-tail" aria-hidden="true">
+                        {conversation.unread > 0 && (
+                          <span className="chat-welcome-recent-unread">
+                            {formatUnreadBadge(conversation.unread)}
+                          </span>
+                        )}
+                        <ArrowRight className="size-4" />
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="chat-welcome-empty-state">
+                <p className="chat-welcome-empty-title">No conversations yet</p>
+                <p className="chat-welcome-empty-copy">
+                  Create a direct or group chat to populate your recent list.
+                </p>
+              </div>
+            )}
+          </section>
         </div>
       </div>
 

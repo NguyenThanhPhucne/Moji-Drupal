@@ -32,6 +32,7 @@ import {
   Rows3,
   Grid2x2,
   AlignJustify,
+  Video,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -158,7 +159,7 @@ const PANEL_STYLE_TOGGLE_OPTIONS: Array<{
 
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
-  const { conversations, activeConversationId } = useChatStore();
+  const { conversations, activeConversationId, isCallActive, setIsCallActive } = useChatStore();
   const { user } = useAuthStore();
   const { panelStyle, setPanelStyle } = useThemeStore();
   const { getUserPresence, getLastActiveAt, onlineUsers } = useSocketStore();
@@ -758,6 +759,21 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
             </div>
 
             <GlobalSearchDialog />
+            
+            {/* WebRTC Video Call Button */}
+            {chat.type === "group" || chat.type === "direct" ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsCallActive(true)}
+                disabled={isCallActive}
+                className="chat-header-action-btn chat-header-action-btn--command chat-header-action-btn--mobile-density rounded-full hidden lg:inline-flex h-8 w-8 text-primary hover:text-primary hover:bg-primary/10 transition-colors"
+                title="Start Video Call"
+              >
+                <Video className="size-[18px]" />
+              </Button>
+            ) : null}
+
             <NotificationPreferencesDialog
               open={showNotificationPreferencesDialog}
               onOpenChange={setShowNotificationPreferencesDialog}

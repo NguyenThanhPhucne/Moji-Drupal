@@ -1,8 +1,8 @@
-import React from "react";
-import { Crown, Shield } from "lucide-react";
-import type { GroupMemberRole } from "@/types/chat";
 
-export const GroupRoleBadge = ({ role }: { role: GroupMemberRole }) => {
+import { Crown, Shield } from "lucide-react";
+import type { GroupChannelRole } from "@/types/chat";
+
+export const GroupRoleBadge = ({ role }: { role: GroupChannelRole }) => {
   if (role === "owner") {
     return (
       <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-warning/45 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">

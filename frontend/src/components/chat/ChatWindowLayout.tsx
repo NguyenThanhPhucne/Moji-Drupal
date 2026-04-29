@@ -5,6 +5,7 @@ import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowBody from "./ChatWindowBody";
 import MessageInput from "./MessageInput";
 import ThreadPanel from "./ThreadPanel";
+import JitsiCallOverlay from "./JitsiCallOverlay";
 import { useEffect, useState } from "react";
 import ChatWindowSkeleton from "../skeleton/ChatWindowSkeleton";
 import { useSocketStore } from "@/stores/useSocketStore";
@@ -162,19 +163,19 @@ const ChatWindowLayout = () => {
         <div
           role="status"
           aria-live="polite"
-          className="flex items-center justify-between gap-2 border-b border-amber-300/55 bg-[linear-gradient(180deg,hsl(42_96%_89%_/_0.95),hsl(42_92%_84%_/_0.92))] px-2.5 py-2 text-[11px] text-amber-900/90 sm:px-3"
+          className="chat-realtime-banner chat-realtime-banner--command"
         >
           <div className="flex min-w-0 items-start gap-2">
-            <span className="mt-0.5 inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg border border-amber-400/45 bg-amber-50/85">
+            <span className="chat-realtime-banner-icon">
               <WifiOff className="size-3.5" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-[11px] font-semibold tracking-[0.01em] text-amber-950">
+              <p className="chat-realtime-banner-title">
                 {isRealtimeReconnecting
                   ? "Reconnecting to live updates"
                   : "Live updates are paused"}
               </p>
-              <p className="truncate text-[10.5px] text-amber-900/85">
+              <p className="chat-realtime-banner-copy">
                 {isRealtimeReconnecting
                   ? "Messages will sync automatically when the connection is restored."
                   : "You can retry now or keep chatting while updates sync in the background."}
@@ -187,7 +188,7 @@ const ChatWindowLayout = () => {
               type="button"
               onClick={handleRetryRealtime}
               disabled={retryingRealtime}
-              className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-amber-400/70 bg-amber-50/85 px-2.5 py-1 text-[10.5px] font-semibold text-amber-950 transition-[background-color,color,border-color,box-shadow] hover:border-amber-500/65 hover:bg-amber-100/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/35 disabled:cursor-not-allowed disabled:opacity-70"
+              className="chat-realtime-banner-retry"
             >
               <RefreshCw className={retryingRealtime ? "size-3 animate-spin" : "size-3"} />
               {retryingRealtime ? "Retrying..." : "Retry"}
@@ -255,6 +256,9 @@ const ChatWindowLayout = () => {
       </div>
 
       <ThreadPanel selectedConvo={selectedConvo} />
+      
+      {/* Jitsi WebRTC Call Overlay */}
+      <JitsiCallOverlay />
     </SidebarInset>
   );
 };

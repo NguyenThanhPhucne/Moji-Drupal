@@ -1,4 +1,4 @@
-import React from "react";
+
 import { Trash2 } from "lucide-react";
 import {
   AlertDialog,
@@ -26,7 +26,6 @@ export function DeleteConversationDialog({
   onOpenChange,
   isDeleting,
   onConfirm,
-  chatType,
   chatName,
 }: DeleteConversationDialogProps) {
   return (

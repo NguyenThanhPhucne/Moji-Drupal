@@ -7,6 +7,7 @@ import { io } from "../socket/index.js";
 import mongoose from "mongoose";
 import { createHash, randomBytes } from "node:crypto";
 import { destroyImageFromUrl } from "../utils/cloudinaryHelper.js";
+import { buildMessagePreviewContent } from "../utils/messagePreview.js";
 import { getCachedData, setCachedData, invalidateCache } from "../libs/redis.js";
 import { withSocketEventMeta } from "../utils/socketEventMeta.js";
 import {
@@ -745,19 +746,6 @@ const formatConversationForClient = (conversation) => {
   };
 };
 
-const buildConversationPreviewContent = (message) => {
-  const normalizedContent = String(message?.content || "").trim();
-  if (normalizedContent) {
-    return normalizedContent;
-  }
-
-  if (message?.imgUrl) {
-    return "📷 Photo";
-  }
-
-  return "";
-};
-
 const toMongoObjectId = (value) => {
   if (value instanceof mongoose.Types.ObjectId) {
     return value;
@@ -811,6 +799,7 @@ const buildLastVisibleMessageByConversationMap = async ({
         messageId: { $first: "$_id" },
         content: { $first: "$content" },
         imgUrl: { $first: "$imgUrl" },
+        audioUrl: { $first: "$audioUrl" },
         senderId: { $first: "$senderId" },
         createdAt: { $first: "$createdAt" },
         groupChannelId: { $first: "$groupChannelId" },
@@ -828,7 +817,7 @@ const buildLastVisibleMessageByConversationMap = async ({
     const senderId = toStringId(row?.senderId);
     previewMap.set(conversationId, {
       messageId: toStringId(row?.messageId),
-      content: buildConversationPreviewContent(row),
+      content: buildMessagePreviewContent(row),
       createdAt: row?.createdAt || null,
       senderId,
       groupChannelId: row?.groupChannelId || null,
@@ -1642,7 +1631,7 @@ const syncGroupConversationLastMessage = async ({
     isDeleted: { $ne: true },
     ...filter,
   })
-    .select("_id content imgUrl senderId createdAt groupChannelId")
+    .select("_id content imgUrl audioUrl senderId createdAt groupChannelId")
     .sort({ createdAt: -1, _id: -1 });
 
   if (session) {
@@ -1658,9 +1647,7 @@ const syncGroupConversationLastMessage = async ({
     return;
   }
 
-  const previewContent =
-    String(latestMessage.content || "").trim() ||
-    (latestMessage.imgUrl ? "📷 Photo" : "");
+  const previewContent = buildMessagePreviewContent(latestMessage);
 
   conversation.lastMessageAt = latestMessage.createdAt;
   conversation.lastMessage = {

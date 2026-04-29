@@ -34,6 +34,7 @@ dist-ssr
 *.md
 *.txt
 !README.md
+!SKILL.md
 !.env.example
 backend/backend-log.txt
 frontend/.env.development

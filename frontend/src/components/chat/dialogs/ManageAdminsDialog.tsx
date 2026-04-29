@@ -1,4 +1,4 @@
-import React from "react";
+
 import {
   Dialog,
   DialogContent,
@@ -9,12 +9,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import UserAvatar from "../UserAvatar";
 import { GroupRoleBadge } from "../GroupRoleBadge";
-import type { UserProfile } from "@/types/user";
+import type { Participant } from "@/types/chat";
 
 export interface ManageAdminsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  manageableMembers: UserProfile[];
+  manageableMembers: Participant[];
   groupAdminIds: Set<string>;
   adminActionTarget: string | null;
   onToggleAdminRole: (memberId: string, checked: boolean) => void;

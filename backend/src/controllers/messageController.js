@@ -7,6 +7,7 @@ import {
   updateConversationAfterCreateMessage,
   invalidateConversationParticipantsCache
 } from "../utils/messageHelper.js";
+import { buildMessagePreviewContent } from "../utils/messagePreview.js";
 import { destroyMediaFromUrl } from "../utils/cloudinaryHelper.js";
 import { io } from "../socket/index.js";
 import {
@@ -606,19 +607,6 @@ const formatConversationSyncPayload = (conversation) => {
   };
 };
 
-const buildMessagePreviewContent = (message) => {
-  const normalizedContent = String(message?.content || "").trim();
-  if (normalizedContent) {
-    return normalizedContent;
-  }
-
-  if (message?.imgUrl) {
-    return "📷 Photo";
-  }
-
-  return "";
-};
-
 const buildUserScopedConversationSyncPayload = async ({
   conversationId,
   userId,
@@ -627,7 +615,7 @@ const buildUserScopedConversationSyncPayload = async ({
     conversationId,
     hiddenFor: { $ne: userId },
   })
-    .select("_id content imgUrl senderId createdAt groupChannelId")
+    .select("_id content imgUrl audioUrl senderId createdAt groupChannelId")
     .sort({ createdAt: -1, _id: -1 })
     .lean();
 
@@ -1965,10 +1953,7 @@ export const unsendMessage = async (req, res) => {
             .lean();
 
           if (previousMessage) {
-            const previewContent =
-              String(previousMessage.content || "").trim() ||
-              (previousMessage.imgUrl ? "📷 Photo" : "") ||
-              (previousMessage.audioUrl ? "🎤 Voice message" : "");
+            const previewContent = buildMessagePreviewContent(previousMessage);
 
             conversationForUpdate.set({
               lastMessage: {
@@ -2630,6 +2615,8 @@ const forwardToDirectRecipient = async ({ recipientId, senderId, originalMessage
       senderId,
       content: originalMessage.content,
       imgUrl: originalMessage.imgUrl,
+      audioUrl: originalMessage.audioUrl,
+      audioMeta: originalMessage.audioMeta || null,
       forwardedFrom: originalMessage.senderId,
     });
 
@@ -2744,6 +2731,8 @@ const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }
       senderId,
       content: originalMessage.content,
       imgUrl: originalMessage.imgUrl,
+      audioUrl: originalMessage.audioUrl,
+      audioMeta: originalMessage.audioMeta || null,
       forwardedFrom: originalMessage.senderId,
     });
 

@@ -25,6 +25,8 @@ export interface GroupJoinLinkMeta {
   revokedBy?: string | null;
   revokeReason?: string | null;
   isActive: boolean;
+  url?: string;
+  token?: string;
 }
 
 export type GroupChannelRole = "owner" | "admin" | "member";

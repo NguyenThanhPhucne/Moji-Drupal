@@ -444,7 +444,7 @@ function AppContent() {
 
     const snapshotToSync = localPersonalizationSnapshot;
 
-    personalizationSyncTimeoutRef.current = globalThis.setTimeout(() => {
+    personalizationSyncTimeoutRef.current = window.setTimeout(() => {
       void userService
         .updatePersonalizationPreferences(snapshotToSync)
         .then((response) => {

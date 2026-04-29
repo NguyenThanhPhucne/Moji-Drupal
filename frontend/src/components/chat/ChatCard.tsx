@@ -35,14 +35,19 @@ const ChatCardInner = ({
       data-chat-card="true"
       data-active={isActive ? "true" : "false"}
       aria-pressed={isActive}
+      aria-current={isActive ? "page" : undefined}
       aria-label={`Open conversation with ${name}`}
       className={cn(
-        "clean-card-hover chat-sidebar-card cursor-pointer rounded-[14px] px-3.5 py-2.5 select-none w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45",
+        "clean-card-hover chat-sidebar-card chat-sidebar-card--enterprise chat-sidebar-card--command relative cursor-pointer rounded-[14px] px-3.5 py-2.5 select-none w-full text-left focus-visible:outline-none",
       )}
       onClick={() => onSelect(convoId)}
     >
+      <span
+        aria-hidden="true"
+        className="chat-sidebar-card-indicator chat-sidebar-card-indicator--command absolute left-[7px] top-1/2 h-9 w-[3px] -translate-y-1/2 rounded-full bg-primary/85 opacity-0 transition-opacity duration-150"
+      />
 
-      <div className="flex flex-row items-center gap-3">
+      <div className="flex flex-row items-center gap-3 pl-1">
         {/* Avatar */}
         <div className="chat-card-avatar-wrap relative flex-shrink-0">{leftSection}</div>
 

@@ -81,8 +81,10 @@ export interface ChatState {
   threadUnreadCounts: Record<string, number>;
   outgoingQueue: OutgoingMessageQueueItem[];
   isFlushingOutgoingQueue: boolean;
+  isCallActive: boolean;
   reset: () => void;
 
+  setIsCallActive: (active: boolean) => void;
   setReplyingTo: (message: Message | null) => void;
   setActiveThreadRootId: (messageId: string | null) => void;
   setActiveConversation: (id: string | null) => void;

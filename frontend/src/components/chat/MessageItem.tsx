@@ -979,6 +979,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const { getPreview, setPreview } = useLinkPreviewStore();
 
   const [reactBarVisible, setReactBarVisible] = useState(false);
+  const [heartFeedback, setHeartFeedback] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editValue, setEditValue] = useState(message.content ?? "");
   const { tooltipDelay, maxSeenAvatars, reduceMotion } = useMessageMotionPrefs();
@@ -1002,8 +1003,10 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   const actionHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchPeekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressContextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heartFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const skipBubbleClickRef = useRef(false);
+  const articleRef = useRef<HTMLElement>(null);
   const isOwn = message.senderId === user?._id;
   const bookmarked = isBookmarked(message._id);
 
@@ -1062,8 +1065,29 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       if (longPressContextTimerRef.current) {
         globalThis.clearTimeout(longPressContextTimerRef.current);
       }
+      if (heartFeedbackTimerRef.current) {
+        globalThis.clearTimeout(heartFeedbackTimerRef.current);
+      }
     };
   }, []);
+
+  // Click-outside: dismiss Quick React bar when user clicks anywhere outside
+  // the message article. Using capture phase so it fires before other handlers.
+  useEffect(() => {
+    if (!reactBarVisible) return;
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      // Keep bar open if click is inside this message's article
+      if (articleRef.current?.contains(target)) return;
+      setReactBarVisible(false);
+    };
+
+    globalThis.document.addEventListener("click", handleOutsideClick, { capture: true });
+    return () => {
+      globalThis.document.removeEventListener("click", handleOutsideClick, { capture: true });
+    };
+  }, [reactBarVisible]);
 
   const clearLongPressContextTimer = useCallback(() => {
     if (longPressContextTimerRef.current) {
@@ -1087,7 +1111,18 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     }
 
     void handleReact(REACTION_EMOJI.love);
-  }, [handleReact, message.isDeleted]);
+
+    // Trigger heart burst visual feedback (class drives CSS ::after animation)
+    if (!reduceMotion) {
+      setHeartFeedback(true);
+      if (heartFeedbackTimerRef.current) {
+        globalThis.clearTimeout(heartFeedbackTimerRef.current);
+      }
+      heartFeedbackTimerRef.current = globalThis.setTimeout(() => {
+        setHeartFeedback(false);
+      }, 720);
+    }
+  }, [handleReact, message.isDeleted, reduceMotion]);
 
   const handleOpenDeleteDialog = useCallback(() => {
     setContextMenu(null);
@@ -1517,6 +1552,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
         bubbleClusterClass,
         message.isDeleted && "chat-message-bubble-shell--deleted opacity-65 italic",
         isBubblePressed && !message.isDeleted && "chat-message-bubble-shell--pressed",
+        // Heart burst overlay: CSS ::after animation on double-click ❤️
+        heartFeedback && !message.isDeleted && !hasNoBubbleShell && "chat-bubble-heart-feedback",
         "select-text",
       )}
     >
@@ -1682,6 +1719,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   return (
     <>
       <article
+        ref={articleRef}
         className={wrapperClassName}
         onMouseEnter={() => setIsMessageHovered(true)}
         onMouseLeave={() => {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { MessageSquareText, Send, X, Mic, MicOff, Square } from "lucide-react";
+import { MessageSquareText, MessageSquareDashed, Send, X, Mic, MicOff, Square } from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { chatService } from "@/services/chatService";
 import { useChatStore } from "@/stores/useChatStore";
@@ -433,6 +433,17 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                 </div>
               )}
 
+              {/* Replies section header — only shown when there are actual replies */}
+              {replyCount > 0 && (
+                <div className="flex items-center gap-2 pb-1 pt-0.5">
+                  <div className="flex-1 h-px bg-border/25" />
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground/50 px-1 select-none">
+                    {replyCount} {replyCount === 1 ? "reply" : "replies"}
+                  </span>
+                  <div className="flex-1 h-px bg-border/25" />
+                </div>
+              )}
+
               <div className="space-y-2">
                 {mergedThreadMessages.map((messageItem) => {
                   const isOwn = String(messageItem.senderId) === String(user?._id || "");
@@ -521,6 +532,23 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
               <div ref={messagesEndRef} />
             </>
+          )}
+
+          {/* ── Empty state: no replies yet ──────────────────────────────── */}
+          {!loadingThread && replyCount === 0 && (
+            <div className="flex flex-col items-center justify-center gap-3 py-8 px-4 text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
+              <span className="flex size-11 items-center justify-center rounded-full border border-border/50 bg-muted/30">
+                <MessageSquareDashed className="size-5 text-muted-foreground/50" />
+              </span>
+              <div>
+                <p className="text-[13px] font-semibold text-foreground/75 leading-snug">
+                  No replies yet
+                </p>
+                <p className="mt-0.5 text-[11.5px] text-muted-foreground/55 leading-relaxed">
+                  Be the first to reply in this thread.
+                </p>
+              </div>
+            </div>
           )}
         </div>
 

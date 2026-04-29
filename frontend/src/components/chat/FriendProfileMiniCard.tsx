@@ -76,7 +76,7 @@ const FriendProfileMiniCard = ({
       globalThis.clearTimeout(closeTimerRef.current);
     }
 
-    closeTimerRef.current = globalThis.setTimeout(() => {
+    closeTimerRef.current = window.setTimeout(() => {
       setOpen(false);
       closeTimerRef.current = null;
     }, 120);
