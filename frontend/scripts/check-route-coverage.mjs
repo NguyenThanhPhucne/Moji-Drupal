@@ -195,7 +195,7 @@ const collectMissingCoverage = (usageMap, declaredRouteRegexes) => {
 
     missing.push({
       usedPath,
-      sourceFiles: [...sourceFiles].toSorted((left, right) => {
+      sourceFiles: [...sourceFiles].sort((left, right) => {
         return left.localeCompare(right);
       }),
     });
@@ -205,7 +205,7 @@ const collectMissingCoverage = (usageMap, declaredRouteRegexes) => {
 };
 
 const printMissingCoverage = (missingCoverage) => {
-  const orderedMissingCoverage = missingCoverage.toSorted((left, right) => {
+  const orderedMissingCoverage = [...missingCoverage].sort((left, right) => {
     return left.usedPath.localeCompare(right.usedPath);
   });
 
