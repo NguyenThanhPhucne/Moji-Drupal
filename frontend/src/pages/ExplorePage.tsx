@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Hash, Search, SearchX, SlidersHorizontal } from "lucide-react";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialMiniChatDock from "@/components/social/SocialMiniChatDock";
 import SocialStoriesRow from "@/components/social/SocialStoriesRow";
@@ -119,7 +119,7 @@ const ExplorePage = () => {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">

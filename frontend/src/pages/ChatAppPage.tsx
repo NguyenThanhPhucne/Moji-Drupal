@@ -1,9 +1,10 @@
-import ChatWindowLayout from "@/components/chat/ChatWindowLayout";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useChatStore } from "@/stores/useChatStore";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+
+const ChatWindowLayout = lazy(() => import("@/components/chat/ChatWindowLayout"));
 
 const ChatAppPage = () => {
   const location = useLocation();
@@ -164,11 +165,13 @@ const ChatAppPage = () => {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="app-shell-bg">
         <div className="relative z-10 flex h-full w-full">
-          <ChatWindowLayout />
+          <Suspense fallback={<div className="flex-1" aria-hidden="true" />}>
+            <ChatWindowLayout />
+          </Suspense>
         </div>
       </div>
     </SidebarProvider>

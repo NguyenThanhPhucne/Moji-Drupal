@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SavedMessageSkeleton from "@/components/skeleton/SavedMessageSkeleton";
 import LoadingMoreSkeleton from "@/components/skeleton/LoadingMoreSkeleton";
@@ -924,7 +924,7 @@ const SavedMessagesPage = () => { // NOSONAR
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="saved-page-shell">
         <div className="app-shell-panel p-3 md:p-4">

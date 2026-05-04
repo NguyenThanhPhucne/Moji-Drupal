@@ -50,6 +50,8 @@ export default defineConfig({
           if (id.includes("date-fns")) {
             return "date-utils";
           }
+
+          return "vendor";
         },
       },
     },

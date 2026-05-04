@@ -12,7 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import PostComposer from "@/components/social/PostComposer";
 import SocialStoriesRow from "@/components/social/SocialStoriesRow";
@@ -555,7 +555,7 @@ const HomeFeedPage = () => {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import SocialPostCard from "@/components/social/SocialPostCard";
 import SocialTopHeader from "@/components/social/SocialTopHeader";
@@ -85,7 +85,7 @@ const PostDetailPage = () => {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-4 md:p-6">

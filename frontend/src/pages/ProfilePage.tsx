@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Lock, Crown, ShieldCheck, BadgeCheck, Ban } from "lucide-react";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import UserAvatar from "@/components/chat/UserAvatar";
 import PostComposer from "@/components/social/PostComposer";
@@ -189,7 +189,7 @@ const ProfilePage = () => { // NOSONAR
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="social-page-shell">
         <div className="app-shell-panel social-shell-panel p-3 md:p-4">

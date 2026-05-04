@@ -30,9 +30,11 @@ import { flushVoiceMemoOutbox } from "./lib/voiceMemoDelivery";
 import { userService } from "./services/userService";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import WorkspaceLoadingSkeleton from "./components/skeleton/WorkspaceLoadingSkeleton";
-import GlobalSearchDialog from "./components/chat/GlobalSearchDialog";
 import AccessibilityAnnouncer from "./components/a11y/AccessibilityAnnouncer";
-import ChatAppPage from "./pages/ChatAppPage";
+const ChatAppPage = lazy(() => import("./pages/ChatAppPage"));
+const GlobalSearchDialog = lazy(
+  () => import("./components/chat/GlobalSearchDialog"),
+);
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 const SignInPage = lazy(() => import("./pages/SignInPage"));
@@ -108,9 +110,16 @@ function AppRoutes() {
   const isAuthenticated = useAuthStore(
     (state) => Boolean(state.accessToken && state.user),
   );
+  const startPagePreference = usePersonalizationStore(
+    (state) => state.startPagePreference,
+  );
   const routeSceneKey = `${location.pathname}${location.search}`;
   const mainRef = useRef<HTMLElement | null>(null);
   const didInitialRouteAnnouncement = useRef(false);
+  const shouldShowGlobalSearch =
+    isAuthenticated &&
+    (location.pathname.startsWith("/chat") ||
+      (location.pathname === "/" && startPagePreference === "chat"));
 
   const resolveRouteLabel = useCallback(
     (pathname: string) => {
@@ -242,7 +251,11 @@ function AppRoutes() {
         className="route-scene-enter"
         key={routeSceneKey}
       >
-        {isAuthenticated ? <GlobalSearchDialog globalOnly /> : null}
+        {shouldShowGlobalSearch ? (
+          <Suspense fallback={null}>
+            <GlobalSearchDialog globalOnly />
+          </Suspense>
+        ) : null}
 
         <Routes location={location}>
           {/* public routes */}

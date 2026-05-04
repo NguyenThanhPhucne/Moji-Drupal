@@ -1,6 +1,6 @@
 import { Bell } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { LazyAppSidebar } from "@/components/sidebar/LazyAppSidebar";
 import BackToChatCard from "@/components/chat/BackToChatCard";
 import NotificationPreferencesSettings from "@/components/notifications/NotificationPreferencesSettings";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -10,7 +10,7 @@ const NotificationSettingsPage = () => {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <LazyAppSidebar />
 
       <div className="app-shell-bg notification-settings-page notification-settings-page--command">
         <div className="app-shell-panel notification-settings-shell notification-settings-shell--command p-3 md:p-4">
