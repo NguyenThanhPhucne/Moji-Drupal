@@ -7,6 +7,12 @@ import Message from "./Message.js";
 import Bookmark from "./Bookmark.js";
 import Notification from "./Notification.js";
 import ContentReport from "./ContentReport.js";
+import {
+  DISAPPEARING_MESSAGE_ALLOWED_TIMERS,
+  DEFAULT_DISAPPEARING_MESSAGE_TIMER,
+} from "../constants/disappearingMessages.js";
+
+const DISAPPEARING_TIMER_ALLOWED_VALUES = new Set(DISAPPEARING_MESSAGE_ALLOWED_TIMERS);
 
 const normalizeObjectIdValue = (value) => value?.toString?.() || String(value || "");
 
@@ -421,7 +427,15 @@ const conversationSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
-
+    disappearingMessageTimer: {
+      type: Number,
+      default: DEFAULT_DISAPPEARING_MESSAGE_TIMER, // 0 means disabled, otherwise timer in seconds
+      min: 0,
+      validate: {
+        validator: (value) => DISAPPEARING_TIMER_ALLOWED_VALUES.has(value),
+        message: `disappearingMessageTimer must be one of ${DISAPPEARING_MESSAGE_ALLOWED_TIMERS.join(", ")}`,
+      },
+    },
   },
   {
     timestamps: true,

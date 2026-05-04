@@ -67,6 +67,11 @@ interface GroupChannelAnalyticsResponse {
   analytics: GroupChannelAnalyticsPayload;
 }
 
+export interface DisappearingMessageConfigResponse {
+  allowedTimers: number[];
+  defaultTimer: number;
+}
+
 const pageLimit = 50;
 
 export const chatService = {
@@ -253,6 +258,22 @@ export const chatService = {
       isPrivate,
     });
     return res.data.conversation as Partial<Conversation>;
+  },
+
+  async fetchDisappearingMessageConfig() {
+    const res = await api.get("/conversations/config/disappearing-messages");
+    return res.data as DisappearingMessageConfigResponse;
+  },
+
+  async setDisappearingMessageTimer(conversationId: string, timer: number) {
+    const res = await api.patch(
+      `/conversations/${conversationId}/disappearing-messages`,
+      { timer },
+    );
+    return res.data as {
+      message: string;
+      timer: number;
+    };
   },
 
   async createGroupChannel(

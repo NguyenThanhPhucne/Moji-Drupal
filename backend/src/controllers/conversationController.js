@@ -16,6 +16,10 @@ import {
   applyRateLimitHeaders,
   registerRateLimitHit,
 } from "../utils/antiSpam.js";
+import {
+  DISAPPEARING_MESSAGE_ALLOWED_TIMERS,
+  DEFAULT_DISAPPEARING_MESSAGE_TIMER,
+} from "../constants/disappearingMessages.js";
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
@@ -35,6 +39,7 @@ const GROUP_CHANNEL_ROLE_OPTIONS = ["owner", "admin", "member"];
 const MAX_GROUP_MEMBERS = 256;
 const MIN_GROUP_NAME_LENGTH = 1;
 const MAX_GROUP_NAME_LENGTH = 80;
+const DISAPPEARING_TIMER_WHITELIST = new Set(DISAPPEARING_MESSAGE_ALLOWED_TIMERS);
 
 const toStringId = (value) => {
   if (value === null || value === undefined) {
@@ -2462,7 +2467,6 @@ export const setConversationPrivacy = async (req, res) => {
     const updatedConversation = await Conversation.findOneAndUpdate(
       {
         _id: conversationId,
-        type: "direct",
         "participants.userId": userId,
       },
       isPrivate
@@ -2502,6 +2506,81 @@ export const setConversationPrivacy = async (req, res) => {
     console.error("Lỗi khi cập nhật privacy conversation", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
+};
+
+export const setDisappearingMessages = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { timer } = req.body || {};
+    const userId = req.user._id;
+
+    if (!Number.isFinite(timer) || !DISAPPEARING_TIMER_WHITELIST.has(timer)) {
+      return res.status(400).json({
+        message: `Invalid timer. Allowed values: ${DISAPPEARING_MESSAGE_ALLOWED_TIMERS.join(", ")}`,
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      "participants.userId": userId,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const requesterId = String(userId);
+    const isGroupOwner = String(conversation.group?.createdBy || "") === requesterId;
+    const adminIds = Array.isArray(conversation.group?.adminIds)
+      ? conversation.group.adminIds.map(String)
+      : [];
+    const isGroupAdmin = adminIds.includes(requesterId);
+
+    if (conversation.type === "group" && !isGroupOwner && !isGroupAdmin) {
+      return res.status(403).json({ message: "Only group admins can set disappearing messages" });
+    }
+
+    conversation.disappearingMessageTimer = timer;
+    await conversation.save();
+
+    await Promise.all(
+      (conversation.participants || []).map(async (participant) => {
+        const participantId = String(participant?.userId || "").trim();
+        if (!participantId) {
+          return;
+        }
+        await invalidateCache(`conversations:${participantId}`);
+      }),
+    );
+    // Broadcast setting change
+    const io = req.app.get("io");
+    if (io) {
+       io.to(conversationId).emit("conversation:disappearing_timer_updated", {
+         conversationId,
+         timer,
+         updatedBy: userId
+       });
+    }
+
+    return res.status(200).json({
+      message: "Disappearing messages timer updated",
+      timer,
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật disappearing messages timer", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const getDisappearingMessageConfig = async (_req, res) => {
+  return res.status(200).json({
+    allowedTimers: DISAPPEARING_MESSAGE_ALLOWED_TIMERS,
+    defaultTimer: DEFAULT_DISAPPEARING_MESSAGE_TIMER,
+  });
 };
 
 export const updateGroupAdminRole = async (req, res) => {

@@ -242,6 +242,11 @@ const messageSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
+    expiresAt: {
+      type: Date,
+      default: null,
+      index: { expireAfterSeconds: 0 },
+    },
   },
   {
     timestamps: true,

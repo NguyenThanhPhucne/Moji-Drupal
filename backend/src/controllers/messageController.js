@@ -1469,6 +1469,10 @@ export const sendDirectMessage = async (req, res) => {
       null;
 
     let message;
+    let expiresAt = null;
+    if (conversation.disappearingMessageTimer && conversation.disappearingMessageTimer > 0) {
+      expiresAt = new Date(Date.now() + conversation.disappearingMessageTimer * 1000);
+    }
     try {
       message = await Message.create({
         conversationId: conversation._id,
@@ -1480,6 +1484,7 @@ export const sendDirectMessage = async (req, res) => {
         clientMessageId: normalizedClientMessageId,
         replyTo: validatedReplyTarget?._id || null,
         threadRootId: effectiveThreadRootId,
+        expiresAt,
       });
     } catch (createError) {
       if (createError?.code !== 11000 || !normalizedClientMessageId) {
@@ -1660,6 +1665,10 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
       null;
 
     let message;
+    let expiresAt = null;
+    if (conversation.disappearingMessageTimer && conversation.disappearingMessageTimer > 0) {
+      expiresAt = new Date(Date.now() + conversation.disappearingMessageTimer * 1000);
+    }
     try {
       message = await Message.create({
         conversationId: normalizedConversationId,
@@ -1672,6 +1681,7 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
         clientMessageId: normalizedClientMessageId,
         replyTo: validatedReplyTarget?._id || null,
         threadRootId: effectiveThreadRootId,
+        expiresAt,
       });
     } catch (createError) {
       if (createError?.code !== 11000 || !normalizedClientMessageId) {

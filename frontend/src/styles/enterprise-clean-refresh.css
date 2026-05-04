@@ -2687,6 +2687,33 @@
     transform: none;
   }
 
+  .chat-thread-badge {
+    border-color: hsl(var(--enterprise-panel-border) / 0.8);
+    background: hsl(var(--enterprise-panel) / 0.9);
+    color: hsl(var(--enterprise-muted) / 0.95);
+    box-shadow: none;
+  }
+
+  .chat-thread-badge:hover {
+    border-color: hsl(var(--enterprise-panel-border));
+    background: hsl(var(--enterprise-panel-soft) / 0.84);
+    color: hsl(var(--enterprise-text) / 0.9);
+    box-shadow: none;
+  }
+
+  .chat-thread-badge--unread {
+    border-color: hsl(var(--enterprise-accent) / 0.32);
+    background: hsl(var(--enterprise-accent) / 0.1);
+    color: hsl(var(--enterprise-accent));
+  }
+
+  .chat-thread-badge-count {
+    border-color: hsl(var(--enterprise-accent) / 0.28);
+    background: hsl(var(--enterprise-accent) / 0.16);
+    color: hsl(var(--enterprise-accent));
+    box-shadow: none;
+  }
+
   .chat-sidebar-shell--command {
     background: hsl(var(--enterprise-panel) / 0.96);
   }
