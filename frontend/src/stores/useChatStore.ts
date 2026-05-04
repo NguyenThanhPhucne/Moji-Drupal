@@ -34,6 +34,10 @@ const syncConversationListCacheForCurrentUser = () => {
     return;
   }
 
+  if (useChatStore.getState().privatePin) {
+    return;
+  }
+
   setCachedConversationList(currentUserId, useChatStore.getState().conversations);
 };
 
