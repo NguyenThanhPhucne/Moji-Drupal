@@ -29,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/useChatStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import type {
   Conversation,
   GroupChannelRole,
@@ -66,12 +67,11 @@ export interface ManageChannelsDialogProps {
   isGroupAdmin: boolean;
 }
 
-export function ManageChannelsDialog({
-  open,
-  onOpenChange,
-  chat,
-  isGroupAdmin,
-}: ManageChannelsDialogProps) {
+export function ManageChannelsDialog(
+  props: Readonly<ManageChannelsDialogProps>,
+) {
+  const { open, onOpenChange, chat, isGroupAdmin } = props;
+  const myUserId = String(useAuthStore((state) => state.user?._id || ""));
   const {
     updateGroupChannel,
     deleteGroupChannel,
@@ -215,14 +215,21 @@ export function ManageChannelsDialog({
     const [moved] = next.splice(idx, 1);
     next.splice(targetIdx, 0, moved);
     const ok = await reorderGroupChannels(chat._id, next);
-    if (!ok) toast.error("Could not reorder channels");
-    else toast.success("Channel order updated");
+    if (ok) {
+      toast.success("Channel order updated");
+    } else {
+      toast.error("Could not reorder channels");
+    }
   };
 
   const handleToggleSendRole = (role: GroupChannelRole, checked: boolean) => {
     setSendRoles((prev) => {
       const next = new Set(prev);
-      checked ? next.add(role) : next.delete(role);
+      if (checked) {
+        next.add(role);
+      } else {
+        next.delete(role);
+      }
       const arr = Array.from(next) as GroupChannelRole[];
       return arr.length === 0 ? ["owner", "admin", "member"] : arr;
     });
@@ -252,8 +259,11 @@ export function ManageChannelsDialog({
       return;
     }
     const result = await updateGroupChannelCategory(chat._id, categoryId, { name });
-    if (!result.ok) toast.error(result.message || "Could not update category");
-    else toast.success("Category updated");
+    if (result.ok) {
+      toast.success("Category updated");
+    } else {
+      toast.error(result.message || "Could not update category");
+    }
   };
 
   const handleMoveCategory = async (categoryId: string, direction: "up" | "down") => {
@@ -266,8 +276,11 @@ export function ManageChannelsDialog({
     const [moved] = next.splice(idx, 1);
     next.splice(targetIdx, 0, moved);
     const ok = await reorderGroupChannelCategories(chat._id, next);
-    if (!ok) toast.error("Could not reorder categories");
-    else toast.success("Category order updated");
+    if (ok) {
+      toast.success("Category order updated");
+    } else {
+      toast.error("Could not reorder categories");
+    }
   };
 
   const handleDeleteCategory = (categoryId: string) => {
@@ -302,36 +315,41 @@ export function ManageChannelsDialog({
   };
 
   const isBusy = isDeleting || isDeletingCategory;
-  const destructiveTitle = pendingAction?.type === "channel"
-    ? `Delete #${pendingAction.channelName}?`
-    : pendingAction?.type === "category"
-    ? `Delete category "${pendingAction.categoryName}"?`
-    : "Delete this item?";
-  const destructiveDesc = pendingAction?.type === "channel"
-    ? "This permanently removes all messages in this channel. This action cannot be undone."
-    : pendingAction?.type === "category"
-    ? "Channels in this category will become uncategorized. This action cannot be undone."
-    : "This action cannot be undone.";
+  let destructiveTitle = "Delete this item?";
+  let destructiveDesc = "This action cannot be undone.";
+  if (pendingAction?.type === "channel") {
+    destructiveTitle = `Delete #${pendingAction.channelName}?`;
+    destructiveDesc = "This permanently removes all messages in this channel. This action cannot be undone.";
+  } else if (pendingAction?.type === "category") {
+    destructiveTitle = `Delete category "${pendingAction.categoryName}"?`;
+    destructiveDesc = "Channels in this category will become uncategorized. This action cannot be undone.";
+  }
+
+  const confirmDeleteLabel = isDeleting
+    ? "Deleting channel..."
+    : "Yes, delete";
+
+  const deleteLabel = isDeletingCategory ? "Deleting category..." : confirmDeleteLabel;
 
   /* ─── render ─── */
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-5xl p-0 overflow-hidden">
-          <div className="border-b border-border/60 px-5 py-4">
+        <DialogContent className="chat-detail-dialog-shell chat-detail-dialog-shell--wide p-0">
+          <div className="chat-detail-dialog-header">
             <DialogHeader>
-              <DialogTitle>Channel management</DialogTitle>
-              <DialogDescription>
+              <DialogTitle className="chat-detail-dialog-title">Channel management</DialogTitle>
+              <DialogDescription className="chat-detail-dialog-description">
                 Rename, delete, reorder channels, control send permissions by role, and review activity trends.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="grid gap-4 p-4 lg:grid-cols-[1.1fr_1.3fr]">
+          <div className="chat-detail-dialog-body grid gap-4 lg:grid-cols-[1.1fr_1.3fr]">
             {/* ── Left column: channel + category list ── */}
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="chat-detail-dialog-section space-y-3 p-3">
+              <div className="chat-detail-dialog-section-header">
+                <p className="chat-detail-dialog-section-title">
                   Channels
                 </p>
               </div>
@@ -340,17 +358,17 @@ export function ManageChannelsDialog({
                 {groupChannels.map((channel, index) => {
                   const myChannelUnreadMap =
                     chat.type === "group"
-                      ? (chat.group?.channelUnreadCounts as Record<string, Record<string, number>> | undefined)
-                      : undefined;
-                  const unread = Number((myChannelUnreadMap as Record<string, number> | undefined)?.[channel.channelId] || 0);
+                      ? chat.group?.channelUnreadCounts?.[myUserId] || {}
+                      : {};
+                  const unread = Number(myChannelUnreadMap?.[channel.channelId] || 0);
                   const isSelected = selectedChannel?.channelId === channel.channelId;
 
                   return (
                     <div
                       key={channel.channelId}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg border px-2 py-1.5",
-                        isSelected ? "border-primary/40 bg-primary/10" : "border-border/60 bg-background/70",
+                        "chat-detail-dialog-row px-2 py-1.5",
+                        isSelected ? "border-primary/40 bg-primary/10" : "bg-background/70",
                       )}
                     >
                       <button
@@ -382,7 +400,7 @@ export function ManageChannelsDialog({
               </div>
 
               {/* Categories sub-panel */}
-              <div className="rounded-lg border border-border/60 bg-background/60 p-2.5">
+              <div className="chat-detail-dialog-section chat-detail-dialog-section--soft p-2.5">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Categories
                 </p>
@@ -401,10 +419,10 @@ export function ManageChannelsDialog({
                   )}
                   {groupChannelCategories.map((category, index) => (
                     <div key={category.categoryId}
-                      className="flex items-center gap-1 rounded-md border border-border/60 bg-background px-1.5 py-1">
+                      className="chat-detail-dialog-row chat-detail-dialog-row--subtle gap-1 px-1.5 py-1">
                       <Input value={categoryDrafts[category.categoryId] ?? category.name}
                         onChange={(e) => setCategoryDrafts((prev) => ({ ...prev, [category.categoryId]: e.target.value }))}
-                        className="h-7 text-xs" />
+                        className="chat-detail-dialog-input h-7 text-xs" />
                       <Button type="button" variant="ghost" size="icon" className="size-7"
                         onClick={() => void handleSaveCategoryName(category.categoryId)} title="Save name">
                         <Settings2 className="size-3.5" />
@@ -429,9 +447,9 @@ export function ManageChannelsDialog({
             </div>
 
             {/* ── Right column: channel settings + analytics ── */}
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/10 p-3">
+            <div className="chat-detail-dialog-section space-y-3 p-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Channel settings</p>
+                <p className="chat-detail-dialog-section-title">Channel settings</p>
                 {selectedChannel ? (
                   <p className="mt-0.5 text-sm font-medium text-foreground">#{selectedChannel.name}</p>
                 ) : (
@@ -444,19 +462,19 @@ export function ManageChannelsDialog({
                   <label className="block space-y-1">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Name</span>
                     <Input value={channelName} onChange={(e) => setChannelName(e.target.value)}
-                      maxLength={40} disabled={isSaving} />
+                      maxLength={40} disabled={isSaving} className="chat-detail-dialog-input" />
                   </label>
 
                   <label className="block space-y-1">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Description</span>
                     <Input value={channelDescription} onChange={(e) => setChannelDescription(e.target.value)}
-                      maxLength={120} disabled={isSaving} />
+                      maxLength={120} disabled={isSaving} className="chat-detail-dialog-input" />
                   </label>
 
                   <label className="block space-y-1">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Category</span>
                     <select value={channelCategoryId} onChange={(e) => setChannelCategoryId(e.target.value)}
-                      className="h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/35">
+                      className="chat-detail-dialog-select w-full">
                       <option value="">Uncategorized</option>
                       {groupChannelCategories.map((cat) => (
                         <option key={cat.categoryId} value={cat.categoryId}>{cat.name}</option>
@@ -464,7 +482,7 @@ export function ManageChannelsDialog({
                     </select>
                   </label>
 
-                  <div className="space-y-1.5 rounded-lg border border-border/60 bg-background/60 p-2.5">
+                  <div className="chat-detail-dialog-section chat-detail-dialog-section--soft space-y-1.5 p-2.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Send permissions</p>
                     {(["owner", "admin", "member"] as GroupChannelRole[]).map((role) => (
                       <label key={role} className="flex items-center justify-between gap-2 text-sm">
@@ -489,7 +507,7 @@ export function ManageChannelsDialog({
               )}
 
               {/* Analytics */}
-              <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+                  <div className="chat-detail-dialog-section chat-detail-dialog-section--soft p-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="size-4 text-primary" />
@@ -502,7 +520,7 @@ export function ManageChannelsDialog({
                         setAnalyticsDays(days);
                         void loadAnalytics(days);
                       }}
-                      className="h-7 rounded-md border border-border/70 bg-background px-2 text-xs">
+                      className="chat-detail-dialog-select h-7 rounded-md px-2 text-xs">
                       <option value={7}>7d</option>
                       <option value={14}>14d</option>
                       <option value={30}>30d</option>
@@ -557,19 +575,19 @@ export function ManageChannelsDialog({
 
       {/* Destructive confirmation */}
       <AlertDialog open={Boolean(pendingAction)} onOpenChange={(o) => !o && !isBusy && setPendingAction(null)}>
-        <AlertDialogContent className="max-w-md rounded-2xl p-6 gap-6 outline-none bg-background border border-border/50 shadow-2xl">
-          <AlertDialogHeader className="items-center text-center space-y-4">
+        <AlertDialogContent className="chat-detail-dialog-shell chat-detail-dialog-shell--compact chat-detail-dialog-destructive-shell p-0 gap-0 outline-none">
+          <AlertDialogHeader className="chat-detail-dialog-header items-center text-center space-y-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
               <Trash2 className="size-6 text-destructive" />
             </div>
             <div className="space-y-1.5">
-              <AlertDialogTitle className="text-xl font-bold tracking-tight">{destructiveTitle}</AlertDialogTitle>
-              <AlertDialogDescription className="text-[15px] font-medium leading-relaxed text-muted-foreground/80 px-2">
+              <AlertDialogTitle className="chat-detail-dialog-title">{destructiveTitle}</AlertDialogTitle>
+              <AlertDialogDescription className="chat-detail-dialog-description px-2">
                 {destructiveDesc}
               </AlertDialogDescription>
             </div>
           </AlertDialogHeader>
-          <AlertDialogFooter className="sm:flex-row gap-3 sm:space-x-0 pt-2 w-full">
+          <AlertDialogFooter className="chat-detail-dialog-footer chat-detail-dialog-footer--split sm:flex-row w-full pt-2">
             <AlertDialogCancel disabled={isBusy}
               className="flex-1 h-11 rounded-full border-border/60 font-semibold transition-colors hover:bg-muted/55">
               Cancel
@@ -578,7 +596,7 @@ export function ManageChannelsDialog({
               onClick={(e) => { e.preventDefault(); void handleConfirmDestructiveAction(); }}
               disabled={isBusy}
               className={cn("flex-1 h-11 rounded-full bg-destructive font-semibold text-white transition-colors hover:bg-destructive/90", isBusy && "opacity-70 pointer-events-none")}>
-              {isDeleting ? "Deleting channel..." : isDeletingCategory ? "Deleting category..." : "Yes, delete"}
+              {deleteLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

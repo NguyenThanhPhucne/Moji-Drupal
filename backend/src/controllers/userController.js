@@ -48,6 +48,10 @@ const SOCIAL_BOOLEAN_KEYS = new Set([
 const SOCIAL_ARRAY_KEYS = new Set(["mutedUserIds", "mutedConversationIds"]);
 const SOCIAL_NUMBER_KEYS = new Set(["digestWindowHours"]);
 
+const PRIVATE_PIN_MIN_LENGTH = 4;
+const PRIVATE_PIN_MAX_LENGTH = 8;
+const PRIVATE_PIN_REGEX = /^\d+$/;
+
 const PERSONALIZATION_LOCALE_VALUES = new Set(["en", "vi"]);
 const PERSONALIZATION_START_PAGE_VALUES = new Set([
   "chat",
@@ -262,19 +266,58 @@ export const authMe = async (req, res) => {
   }
 };
 
+const escapeRegex = (value) => {
+  const rawValue = String(value || "");
+  const escapeTargets = new Set([
+    "^",
+    "$",
+    ".",
+    "*",
+    "+",
+    "?",
+    "(",
+    ")",
+    "[",
+    "]",
+    "{",
+    "}",
+    "|",
+    String.fromCodePoint(92),
+  ]);
+  let escaped = "";
+
+  for (const char of rawValue) {
+    if (escapeTargets.has(char)) {
+      escaped += `\\${char}`;
+    } else {
+      escaped += char;
+    }
+  }
+
+  return escaped;
+};
+
 export const searchUserByUsername = async (req, res) => {
   try {
     const { username } = req.query;
+    const normalizedUsername = String(username || "").trim();
 
-    if (!username || username.trim() === "") {
+    if (!normalizedUsername) {
       return res
         .status(400)
         .json({ message: "Cần cung cấp username trong query." });
     }
 
-    const user = await User.findOne({ username }).select(
+    const escapedUsername = escapeRegex(normalizedUsername);
+    const usernamePattern = new RegExp(`^${escapedUsername}$`, "i");
+
+    const user = await User.findOne({ username: usernamePattern }).select(
       "_id displayName username avatarUrl",
     );
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
 
     return res.status(200).json({ user });
   } catch (error) {
@@ -314,6 +357,10 @@ export const uploadAvatar = async (req, res) => {
         new: true,
       },
     ).select("avatarUrl");
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
 
     if (!updatedUser.avatarUrl) {
       return res.status(400).json({ message: "Avatar trả về null" });
@@ -674,6 +721,10 @@ export const uploadCoverPhoto = async (req, res) => {
       { new: true },
     ).select("coverPhotoUrl");
 
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
     await invalidateCache(`auth_profile:${userId}`);
 
     return res.status(200).json({ coverPhotoUrl: updatedUser.coverPhotoUrl });
@@ -687,20 +738,113 @@ export const removeCoverPhoto = async (req, res) => {
   try {
     const userId = req.user?._id;
 
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const user = await User.findById(userId).select("coverPhotoId");
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
     if (user?.coverPhotoId) {
       await cloudinary.uploader.destroy(user.coverPhotoId);
     }
 
-    await User.findByIdAndUpdate(userId, {
+    const updatedUser = await User.findByIdAndUpdate(userId, {
       $unset: { coverPhotoUrl: "", coverPhotoId: "" },
     });
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
 
     await invalidateCache(`auth_profile:${userId}`);
 
     return res.status(200).json({ message: "Cover photo removed" });
   } catch (error) {
     console.error("Lỗi khi removeCoverPhoto", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const setPrivatePin = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const rawPin = String(req.body?.pin || "").trim();
+    const rawCurrentPin = String(req.body?.currentPin || "").trim();
+
+    if (!rawPin) {
+      return res.status(400).json({ message: "PIN không được để trống" });
+    }
+
+    if (
+      !PRIVATE_PIN_REGEX.test(rawPin) ||
+      rawPin.length < PRIVATE_PIN_MIN_LENGTH ||
+      rawPin.length > PRIVATE_PIN_MAX_LENGTH
+    ) {
+      return res.status(400).json({
+        message: `PIN phải là số ${PRIVATE_PIN_MIN_LENGTH}-${PRIVATE_PIN_MAX_LENGTH} chữ số`,
+      });
+    }
+
+    const user = await User.findById(userId).select("privatePinHash");
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    if (user.privatePinHash) {
+      if (!rawCurrentPin) {
+        return res.status(400).json({ message: "Cần nhập PIN hiện tại" });
+      }
+
+      const isCurrentValid = await bcrypt.compare(rawCurrentPin, user.privatePinHash);
+      if (!isCurrentValid) {
+        return res.status(403).json({ message: "PIN hiện tại không đúng" });
+      }
+    }
+
+    const hashedPin = await bcrypt.hash(rawPin, 10);
+    user.privatePinHash = hashedPin;
+    user.privatePinUpdatedAt = new Date();
+    await user.save();
+
+    await invalidateCache(`auth_profile:${userId}`);
+
+    return res.status(200).json({ message: "Private PIN đã được cập nhật" });
+  } catch (error) {
+    console.error("Lỗi khi setPrivatePin", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const verifyPrivatePin = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    const rawPin = String(req.body?.pin || "").trim();
+
+    if (!rawPin) {
+      return res.status(400).json({ message: "PIN không được để trống" });
+    }
+
+    const user = await User.findById(userId).select("privatePinHash");
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng" });
+    }
+
+    if (!user.privatePinHash) {
+      return res.status(400).json({ message: "Private PIN chưa được thiết lập" });
+    }
+
+    const isValid = await bcrypt.compare(rawPin, user.privatePinHash);
+    if (!isValid) {
+      return res.status(403).json({ message: "PIN không đúng" });
+    }
+
+    return res.status(200).json({ allowed: true });
+  } catch (error) {
+    console.error("Lỗi khi verifyPrivatePin", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

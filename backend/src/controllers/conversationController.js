@@ -3,6 +3,8 @@ import Message from "../models/Message.js";
 import Bookmark from "../models/Bookmark.js";
 import Notification from "../models/Notification.js";
 import ContentReport from "../models/ContentReport.js";
+import User from "../models/User.js";
+import bcrypt from "bcrypt";
 import { io } from "../socket/index.js";
 import mongoose from "mongoose";
 import { createHash, randomBytes } from "node:crypto";
@@ -619,6 +621,43 @@ const normalizeParticipants = (participants) => {
   }));
 };
 
+const resolvePrivatePinFromRequest = (req) => {
+  const rawHeader = req.headers?.["x-private-pin"];
+  if (typeof rawHeader !== "string") {
+    return "";
+  }
+
+  return rawHeader.trim();
+};
+
+const isConversationPrivateForUser = (conversation, userId) => {
+  const normalizedUserId = toStringId(userId);
+  const privateFor = Array.isArray(conversation?.privateFor)
+    ? conversation.privateFor
+    : [];
+
+  return privateFor.some(
+    (privateUserId) => toStringId(privateUserId) === normalizedUserId,
+  );
+};
+
+const verifyPrivatePinAccess = async ({ userId, pin }) => {
+  if (!pin) {
+    return { allowed: false, reason: "missing" };
+  }
+
+  const user = await User.findById(userId)
+    .select("privatePinHash")
+    .lean();
+
+  if (!user?.privatePinHash) {
+    return { allowed: false, reason: "not-set" };
+  }
+
+  const matched = await bcrypt.compare(pin, user.privatePinHash);
+  return { allowed: matched, reason: matched ? null : "invalid" };
+};
+
 const resolveJoinLinkMaxUses = (joinLink) => {
   const oneTime = Boolean(joinLink?.oneTime);
   if (oneTime) {
@@ -708,11 +747,12 @@ const normalizeGroup = (group, participants = []) => {
     createdBy: toStringId(group.createdBy),
     adminIds: (group.adminIds || []).map((adminId) => toStringId(adminId)),
     announcementOnly: Boolean(group.announcementOnly),
+    isPrivate: Boolean(group.isPrivate),
     channels,
     channelCategories: categories,
     channelUnreadCounts,
     activeChannelId,
-    joinLink: toJoinLinkMeta(group.joinLink),
+    joinLink: group.isPrivate ? null : toJoinLinkMeta(group.joinLink),
   };
 };
 
@@ -733,16 +773,18 @@ const formatConversationForClient = (conversation) => {
     ? conversation.toObject()
     : conversation;
 
+  const { privateFor, ...conversationPayload } = conversationObject || {};
+
   return {
-    ...conversationObject,
+    ...conversationPayload,
     group: normalizeGroup(
-      conversationObject?.group,
-      conversationObject?.participants,
+      conversationPayload?.group,
+      conversationPayload?.participants,
     ),
-    pinnedMessage: normalizePinnedMessage(conversationObject?.pinnedMessage),
-    unreadCounts: normalizeUnreadCounts(conversationObject?.unreadCounts),
-    seenBy: normalizeSeenBy(conversationObject?.seenBy),
-    participants: normalizeParticipants(conversationObject?.participants),
+    pinnedMessage: normalizePinnedMessage(conversationPayload?.pinnedMessage),
+    unreadCounts: normalizeUnreadCounts(conversationPayload?.unreadCounts),
+    seenBy: normalizeSeenBy(conversationPayload?.seenBy),
+    participants: normalizeParticipants(conversationPayload?.participants),
   };
 };
 
@@ -1380,8 +1422,26 @@ export const createConversation = async (req, res) => {
 export const getConversations = async (req, res) => {
   try {
     const userId = req.user._id;
+    const privatePin = resolvePrivatePinFromRequest(req);
+    let allowPrivateConversations = false;
+
+    if (privatePin) {
+      const privateAccess = await verifyPrivatePinAccess({
+        userId,
+        pin: privatePin,
+      });
+
+      if (!privateAccess.allowed) {
+        return res.status(403).json({ message: "Private PIN không hợp lệ" });
+      }
+
+      allowPrivateConversations = true;
+    }
+
     const cacheKey = `conversations:${userId}`;
-    const cached = await getCachedData(cacheKey);
+    const cached = !allowPrivateConversations
+      ? await getCachedData(cacheKey)
+      : null;
 
     if (cached) {
       try {
@@ -1410,9 +1470,15 @@ export const getConversations = async (req, res) => {
       return res.status(200).json({ conversations: cached });
     }
 
-    const conversations = await Conversation.find({
+    const conversationQuery = {
       "participants.userId": userId,
-    })
+    };
+
+    if (!allowPrivateConversations) {
+      conversationQuery.privateFor = { $ne: userId };
+    }
+
+    const conversations = await Conversation.find(conversationQuery)
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .populate({
         path: "participants.userId",
@@ -1430,6 +1496,12 @@ export const getConversations = async (req, res) => {
 
     const formatted = conversations.map((convo) => formatConversationForClient(convo));
 
+    const privateConversationIds = new Set(
+      conversations
+        .filter((convo) => isConversationPrivateForUser(convo, userId))
+        .map((convo) => toStringId(convo?._id)),
+    );
+
     const lastVisiblePreviewMap = await buildLastVisibleMessageByConversationMap({
       conversationIds: conversations.map((conversation) => conversation?._id),
       userId,
@@ -1442,6 +1514,10 @@ export const getConversations = async (req, res) => {
           previewMap: lastVisiblePreviewMap,
         }),
       )
+      .map((conversation) => ({
+        ...conversation,
+        isPrivateForMe: privateConversationIds.has(toStringId(conversation?._id)),
+      }))
       .sort((leftConversation, rightConversation) => {
         const leftLastMessageAt = leftConversation?.lastMessageAt
           ? new Date(leftConversation.lastMessageAt).getTime()
@@ -1489,7 +1565,9 @@ export const getConversations = async (req, res) => {
       console.warn("[conversations] Failed to compute response validation headers", e);
     }
 
-    await setCachedData(cacheKey, userScopedConversations, 120); // 2-minute cache: short enough for near-realtime freshness
+    if (!allowPrivateConversations) {
+      await setCachedData(cacheKey, userScopedConversations, 120); // 2-minute cache: short enough for near-realtime freshness
+    }
 
     return res.status(200).json({ conversations: userScopedConversations });
   } catch (error) {
@@ -1699,6 +1777,18 @@ export const getMessages = async (req, res) => {
       return res
         .status(readAccessError.status)
         .json({ message: readAccessError.message });
+    }
+
+    if (isConversationPrivateForUser(conversation, userId)) {
+      const privatePin = resolvePrivatePinFromRequest(req);
+      const privateAccess = await verifyPrivatePinAccess({
+        userId,
+        pin: privatePin,
+      });
+
+      if (!privateAccess.allowed) {
+        return res.status(403).json({ message: "Private PIN required" });
+      }
     }
 
     const query = {
@@ -2162,6 +2252,18 @@ export const markAsSeen = async (req, res) => {
 
     const conversation = initialLoad.conversation;
 
+    if (isConversationPrivateForUser(conversation, userId)) {
+      const privatePin = resolvePrivatePinFromRequest(req);
+      const privateAccess = await verifyPrivatePinAccess({
+        userId,
+        pin: privatePin,
+      });
+
+      if (!privateAccess.allowed) {
+        return res.status(403).json({ message: "Private PIN required" });
+      }
+    }
+
     if (conversation.type === "group") {
       const groupResult = await executeAtomicGroupMarkAsSeen({
         conversation,
@@ -2271,6 +2373,133 @@ export const updateGroupAnnouncementMode = async (req, res) => {
     return res.status(200).json({ conversation: payload });
   } catch (error) {
     console.error("Lỗi khi cập nhật announcement mode", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const updateGroupPrivacy = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { isPrivate } = req.body || {};
+    const userId = req.user._id;
+
+    if (typeof isPrivate !== "boolean") {
+      return res.status(400).json({ message: "isPrivate must be boolean" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    if (conversation.type !== "group") {
+      return res.status(400).json({ message: "Only group conversations support privacy" });
+    }
+
+    if (!isGroupParticipant(conversation, userId)) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    if (!isGroupAdmin(conversation, userId)) {
+      return res.status(403).json({ message: "Only group admins can update privacy" });
+    }
+
+    ensureNormalizedGroupState(conversation, userId);
+    conversation.group.isPrivate = isPrivate;
+
+    if (isPrivate) {
+      conversation.group.joinLink = {
+        tokenHash: null,
+        expiresAt: null,
+        createdAt: null,
+        createdBy: null,
+        maxUses: null,
+        useCount: 0,
+        oneTime: false,
+        revokedAt: new Date(),
+        revokedBy: userId,
+        revokeReason: "group-private",
+      };
+    }
+
+    await conversation.save();
+    const payload = await broadcastGroupConversationUpdated(conversation);
+
+    return res.status(200).json({ conversation: payload });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật group privacy", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const setConversationPrivacy = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { isPrivate } = req.body || {};
+    const userId = req.user._id;
+
+    if (typeof isPrivate !== "boolean") {
+      return res.status(400).json({ message: "isPrivate must be boolean" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    if (isPrivate) {
+      const user = await User.findById(userId)
+        .select("privatePinHash")
+        .lean();
+      if (!user?.privatePinHash) {
+        return res.status(400).json({ message: "Private PIN chưa được thiết lập" });
+      }
+    }
+
+    const updatedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: conversationId,
+        type: "direct",
+        "participants.userId": userId,
+      },
+      isPrivate
+        ? { $addToSet: { privateFor: userId } }
+        : { $pull: { privateFor: userId } },
+      { new: true },
+    )
+      .populate({
+        path: "participants.userId",
+        select: "displayName avatarUrl",
+      })
+      .populate({
+        path: "lastMessage.senderId",
+        select: "displayName avatarUrl",
+      })
+      .populate({
+        path: "seenBy",
+        select: "displayName avatarUrl",
+      });
+
+    if (!updatedConversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const formatted = formatConversationForClient(updatedConversation);
+    const isPrivateForMe = isConversationPrivateForUser(updatedConversation, userId);
+
+    await invalidateCache(`conversations:${userId}`);
+
+    return res.status(200).json({
+      conversation: {
+        ...formatted,
+        isPrivateForMe,
+      },
+    });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật privacy conversation", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
@@ -3796,6 +4025,10 @@ export const createGroupJoinLink = async (req, res) => {
       return res.status(400).json({ message: "Join link is available for group conversations only" });
     }
 
+    if (conversation.group?.isPrivate) {
+      return res.status(403).json({ message: "Join link is disabled for private groups" });
+    }
+
     if (!isGroupParticipant(conversation, userId)) {
       return res.status(403).json({ message: "Access denied" });
     }
@@ -3863,6 +4096,10 @@ export const revokeGroupJoinLink = async (req, res) => {
 
     if (conversation.type !== "group") {
       return res.status(400).json({ message: "Join link is available for group conversations only" });
+    }
+
+    if (conversation.group?.isPrivate) {
+      return res.status(403).json({ message: "Group is private" });
     }
 
     if (!isGroupParticipant(conversation, userId)) {
@@ -4425,8 +4662,26 @@ export const getAdminConversations = async (req, res) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
+    const normalizePagingFallback = (pageRaw, limitRaw) => {
+      const parsedPage = Number(pageRaw);
+      const parsedLimit = Number(limitRaw);
+
+      const page = Number.isFinite(parsedPage)
+        ? Math.max(1, Math.floor(parsedPage))
+        : 1;
+      const limit = Number.isFinite(parsedLimit)
+        ? Math.min(Math.max(1, Math.floor(parsedLimit)), 100)
+        : 50;
+
+      return {
+        page,
+        limit,
+        skip: (page - 1) * limit,
+      };
+    };
+
     const { normalizePaging } = await import("../utils/pagingHelper.js").catch(
-      () => ({ normalizePaging: (p, l) => ({ page: Number(p)||1, limit: Number(l)||50, skip: ((Number(p)||1)-1)*(Number(l)||50) }) })
+      () => ({ normalizePaging: normalizePagingFallback }),
     );
 
     const { page, limit, skip } = normalizePaging(req.query.page, req.query.limit);

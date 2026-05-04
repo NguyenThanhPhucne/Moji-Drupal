@@ -21,6 +21,8 @@ import {
   createGroupJoinLink,
   revokeGroupJoinLink,
   joinGroupByLink,
+  updateGroupPrivacy,
+  setConversationPrivacy,
 } from "../controllers/conversationController.js";
 import { checkFriendship } from "../middlewares/friendMiddleware.js";
 import { protectedRoute } from "../middlewares/authMiddleware.js";
@@ -33,6 +35,8 @@ router.get("/", getConversations);
 router.get("/:conversationId/messages", getMessages);
 router.patch("/:conversationId/seen", markAsSeen);
 router.patch("/:conversationId/announcement-mode", updateGroupAnnouncementMode);
+router.patch("/:conversationId/group-privacy", updateGroupPrivacy);
+router.patch("/:conversationId/privacy", setConversationPrivacy);
 router.patch("/:conversationId/admin-role", updateGroupAdminRole);
 router.post("/:conversationId/channels", createGroupChannel);
 router.patch("/:conversationId/channels/reorder", reorderGroupChannels);

@@ -48,6 +48,19 @@ export const userService = {
     return res.data;
   },
 
+  setPrivatePin: async (pin: string, currentPin?: string) => {
+    const res = await api.post("/users/private-pin", {
+      pin,
+      ...(currentPin ? { currentPin } : {}),
+    });
+    return res.data;
+  },
+
+  verifyPrivatePin: async (pin: string) => {
+    const res = await api.post("/users/private-pin/verify", { pin });
+    return res.data as { allowed: boolean };
+  },
+
   updateOnlineStatusVisibility: async (showOnlineStatus: boolean) => {
     const res = await api.patch("/users/online-status-visibility", {
       showOnlineStatus,

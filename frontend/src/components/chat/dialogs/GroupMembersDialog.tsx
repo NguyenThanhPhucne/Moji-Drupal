@@ -23,11 +23,10 @@ export interface GroupMembersDialogProps {
   groupMembersWithRole: GroupMemberWithRole[];
 }
 
-export function GroupMembersDialog({
-  open,
-  onOpenChange,
-  groupMembersWithRole,
-}: GroupMembersDialogProps) {
+export function GroupMembersDialog(
+  props: Readonly<GroupMembersDialogProps>,
+) {
+  const { open, onOpenChange, groupMembersWithRole } = props;
   const [membersAdminsOnly, setMembersAdminsOnly] = useState(false);
 
   const visibleGroupMembers = useMemo(() => {
@@ -39,17 +38,17 @@ export function GroupMembersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
-        <div className="border-b border-border/60 px-5 py-4">
+      <DialogContent className="chat-detail-dialog-shell chat-detail-dialog-shell--medium p-0">
+        <div className="chat-detail-dialog-header">
           <DialogHeader>
-            <DialogTitle>Group members</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="chat-detail-dialog-title">Group members</DialogTitle>
+            <DialogDescription className="chat-detail-dialog-description">
               {visibleGroupMembers.length} of {groupMembersWithRole.length} participants.
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <div className="border-b border-border/60 px-4 py-2.5">
+        <div className="chat-detail-dialog-section-header">
           <label className="flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
             <span>Admins only</span>
             <Switch
@@ -59,7 +58,7 @@ export function GroupMembersDialog({
           </label>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto beautiful-scrollbar p-4 space-y-2">
+        <div className="chat-detail-dialog-body max-h-[60vh] overflow-y-auto beautiful-scrollbar space-y-2">
           {visibleGroupMembers.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
               No admins found in this group.
@@ -69,7 +68,7 @@ export function GroupMembersDialog({
           {visibleGroupMembers.map((member) => (
             <div
               key={member.memberId}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5"
+              className="chat-detail-dialog-row chat-detail-dialog-row--subtle"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 <UserAvatar

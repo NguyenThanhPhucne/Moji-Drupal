@@ -8,12 +8,14 @@ import {
   updatePersonalizationPreferences,
   updateOnlineStatusVisibility,
   updateProfile,
+  setPrivatePin,
   uploadAvatar,
   uploadCoverPhoto,
   removeCoverPhoto,
   updateUserRole,
   toggleUserBan,
   toggleUserVerify,
+  verifyPrivatePin,
 } from "../controllers/userController.js";
 import { upload } from "../middlewares/uploadMiddleware.js";
 import { protectedRoute, requireRole } from "../middlewares/authMiddleware.js";
@@ -23,6 +25,8 @@ const router = express.Router();
 router.get("/me", protectedRoute, authMe);
 router.patch("/me", protectedRoute, updateProfile);
 router.post("/change-password", protectedRoute, changePassword);
+router.post("/private-pin", protectedRoute, setPrivatePin);
+router.post("/private-pin/verify", protectedRoute, verifyPrivatePin);
 router.patch(
   "/online-status-visibility",
   protectedRoute,

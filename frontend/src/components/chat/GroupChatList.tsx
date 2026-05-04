@@ -2,9 +2,11 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import GroupChatCard from "./GroupChatCard";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Inbox, Search, X } from "lucide-react";
+import { ChevronDown, Inbox, Lock, LockOpen, Search, X } from "lucide-react";
 import { cn, getStaggerEnterClass } from "@/lib/utils";
 import ConversationSkeleton from "@/components/skeleton/ConversationSkeleton";
+import { PrivatePinDialog } from "./dialogs/PrivatePinDialog";
+import { Button } from "@/components/ui/button";
 
 const CATEGORY_ORDER = ["Team", "Projects", "Support", "Social", "General"];
 const COLLAPSE_STORAGE_PREFIX = "crm.channel.collapsed";
@@ -22,12 +24,34 @@ const inferCategory = (groupName: string) => {
 const GroupChatList = () => {
   const conversations = useChatStore((state) => state.conversations);
   const convoLoading = useChatStore((state) => state.convoLoading);
+  const privatePin = useChatStore((state) => state.privatePin);
   const { user } = useAuthStore();
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState("");
+  const [showPrivateDialog, setShowPrivateDialog] = useState(false);
   const hydratedRef = useRef(false);
 
-  const groupchats = (conversations || []).filter((c) => c.type === "group");
+  const allGroupchats = (conversations || []).filter((c) => c.type === "group");
+
+  // Private groups are those where isPrivateForMe is true (user hid this group per-user)
+  const hiddenGroupIds = useMemo(() => {
+    return new Set(
+      allGroupchats
+        .filter((c) => Boolean(c.isPrivateForMe))
+        .map((c) => c._id),
+    );
+  }, [allGroupchats]);
+
+  // Only show private groups if PIN is unlocked
+  const groupchats = useMemo(() => {
+    return allGroupchats.filter((c) => {
+      if (c.isPrivateForMe && !privatePin) return false;
+      return true;
+    });
+  }, [allGroupchats, privatePin]);
+
+  const hiddenCount = hiddenGroupIds.size;
+
   const storageKey = `${COLLAPSE_STORAGE_PREFIX}:${user?._id || "guest"}`;
 
   const channelsByCategory = useMemo(() => {
@@ -68,7 +92,7 @@ const GroupChatList = () => {
 
   if (!conversations || conversations.length === 0) return null;
 
-  if (groupchats.length === 0) {
+  if (allGroupchats.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
         <div className="size-10 rounded-full bg-muted/40 flex items-center justify-center mb-2">
@@ -92,10 +116,51 @@ const GroupChatList = () => {
         <p className="chat-sidebar-section-title text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
           Channels
         </p>
-        <span className="chat-sidebar-section-count inline-flex items-center text-[10.5px] font-medium text-muted-foreground/60">
-          {groupchats.length}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {/* Hidden group count badge — only if there are hidden groups AND currently locked */}
+          {hiddenCount > 0 && !privatePin && (
+            <span className="inline-flex items-center gap-0.5 rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground/70">
+              <Lock className="size-2.5" />
+              {hiddenCount}
+            </span>
+          )}
+          <span className="chat-sidebar-section-count inline-flex items-center text-[10.5px] font-medium text-muted-foreground/60">
+            {groupchats.length}
+          </span>
+          {/* PIN lock button — only if there are hidden groups */}
+          {hiddenCount > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground transition-colors"
+              onClick={() => setShowPrivateDialog(true)}
+              aria-label="Private groups"
+              title={privatePin ? "Private groups unlocked — click to manage" : "Unlock private groups"}
+            >
+              {privatePin ? (
+                <LockOpen className="size-3.5 text-emerald-500" />
+              ) : (
+                <Lock className="size-3.5" />
+              )}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Locked state hint */}
+      {hiddenCount > 0 && !privatePin && (
+        <button
+          type="button"
+          onClick={() => setShowPrivateDialog(true)}
+          className="mx-3 mb-1.5 flex items-center gap-2 rounded-xl border border-dashed border-border/50 bg-muted/20 px-3 py-2 text-[11.5px] text-muted-foreground/60 hover:border-primary/30 hover:text-foreground/70 hover:bg-muted/35 transition-all w-[calc(100%-24px)]"
+        >
+          <Lock className="size-3 shrink-0" />
+          <span className="truncate">
+            {hiddenCount} private group{hiddenCount !== 1 ? "s" : ""} — unlock to view
+          </span>
+        </button>
+      )}
 
       {/* Inline search — only when there are more than 4 groups */}
       {groupchats.length > 4 && (
@@ -185,6 +250,12 @@ const GroupChatList = () => {
           );
         })
       )}
+
+      <PrivatePinDialog
+        open={showPrivateDialog}
+        onOpenChange={setShowPrivateDialog}
+        label="Private groups"
+      />
     </div>
   );
 };

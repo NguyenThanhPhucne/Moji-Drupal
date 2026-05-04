@@ -1,14 +1,18 @@
 import { useChatStore } from "@/stores/useChatStore";
 import DirectMessageCard from "./DirectMessageCard";
 import { getStaggerEnterClass } from "@/lib/utils";
-import { MessagesSquare, Search, X } from "lucide-react";
+import { Lock, LockOpen, MessagesSquare, Search, X } from "lucide-react";
 import ConversationSkeleton from "@/components/skeleton/ConversationSkeleton";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { PrivatePinDialog } from "./dialogs/PrivatePinDialog";
 
 const DirectMessageList = () => {
   const conversations = useChatStore((state) => state.conversations);
   const convoLoading = useChatStore((state) => state.convoLoading);
+  const privatePin = useChatStore((state) => state.privatePin);
   const [filter, setFilter] = useState("");
+  const [showPrivateDialog, setShowPrivateDialog] = useState(false);
 
   // Show skeleton on first load (no data yet)
   if (convoLoading && conversations.length === 0) {
@@ -50,9 +54,26 @@ const DirectMessageList = () => {
         <p className="chat-sidebar-section-title text-[11px] font-semibold text-muted-foreground/70 tracking-[0.04em] uppercase">
           Direct messages
         </p>
-        <span className="chat-sidebar-section-count inline-flex items-center rounded-full border border-border/65 bg-muted/35 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground/70">
-          {directConversations.length}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="chat-sidebar-section-count inline-flex items-center rounded-full border border-border/65 bg-muted/35 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground/70">
+            {directConversations.length}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-full text-muted-foreground/70 hover:text-foreground transition-colors"
+            onClick={() => setShowPrivateDialog(true)}
+            aria-label="Private chats"
+            title={privatePin ? "Private chats unlocked — click to manage" : "Unlock private chats"}
+          >
+            {privatePin ? (
+              <LockOpen className="size-3.5 text-emerald-500" />
+            ) : (
+              <Lock className="size-3.5" />
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Inline search filter */}
@@ -95,6 +116,12 @@ const DirectMessageList = () => {
           <DirectMessageCard convo={convo} />
         </div>
       ))}
+
+      <PrivatePinDialog
+        open={showPrivateDialog}
+        onOpenChange={setShowPrivateDialog}
+        label="Private messages"
+      />
     </div>
   );
 };

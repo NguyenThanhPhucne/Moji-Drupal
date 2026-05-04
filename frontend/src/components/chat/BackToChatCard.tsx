@@ -7,7 +7,8 @@ type BackToChatCardProps = {
   unreadCount?: number;
 };
 
-const BackToChatCard = ({ onClick, unreadCount = 0 }: BackToChatCardProps) => {
+const BackToChatCard = (props: Readonly<BackToChatCardProps>) => {
+  const { onClick, unreadCount = 0 } = props;
   const activatedFromPointerRef = useRef(false);
   const hasUnread = unreadCount > 0;
 
@@ -35,21 +36,18 @@ const BackToChatCard = ({ onClick, unreadCount = 0 }: BackToChatCardProps) => {
         onClick();
       }}
       className={cn(
-        "relative inline-flex items-center gap-2 select-none cursor-pointer",
-        "rounded-full border border-primary/25 bg-primary/6 px-4 py-2",
-        "text-[13px] font-semibold text-primary shadow-sm",
-        "transition-colors duration-150 hover:bg-primary/12 hover:border-primary/40",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1",
-        "group"
+        "chat-back-to-chat-pill relative inline-flex select-none cursor-pointer items-center gap-2 rounded-full px-4 py-2",
+        "text-[13px] font-semibold shadow-sm transition-colors duration-150 focus-visible:outline-none",
+        "group",
       )}
       aria-label="Back to chat"
     >
-      <MessageSquare
-        className="size-4"
-      />
+      <span className="chat-back-to-chat-pill-icon inline-flex size-7 items-center justify-center rounded-full">
+        <MessageSquare className="size-4" />
+      </span>
       Back to chat
       {hasUnread && (
-        <span className="badge-pop absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white px-1 shadow-sm">
+        <span className="chat-back-to-chat-pill-badge badge-pop absolute -top-1.5 -right-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold shadow-sm">
           {unreadCount > 9 ? "9+" : unreadCount}
         </span>
       )}

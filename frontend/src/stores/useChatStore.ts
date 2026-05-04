@@ -909,8 +909,11 @@ export const useChatStore = create<ChatState>()(
       outgoingQueue: [],
       isFlushingOutgoingQueue: false,
       isCallActive: false,
+      privatePin: null,
 
       setIsCallActive: (active) => set({ isCallActive: active }),
+      setPrivatePin: (pin) => set({ privatePin: pin ? String(pin).trim() : null }),
+      clearPrivatePin: () => set({ privatePin: null }),
       setReplyingTo: (message) => set({ replyingTo: message }),
       setActiveThreadRootId: (messageId) =>
         set((state) => {
@@ -1004,11 +1007,14 @@ export const useChatStore = create<ChatState>()(
           outgoingQueue: [],
           isFlushingOutgoingQueue: false,
           isCallActive: false,
+          privatePin: null,
         });
       },
       fetchConversations: async () => {
         const currentUserId = String(useAuthStore.getState().user?._id || "").trim();
-        const cachedConversations = currentUserId
+        const privatePin = get().privatePin;
+        const allowPrivateConversations = Boolean(privatePin);
+        const cachedConversations = !allowPrivateConversations && currentUserId
           ? getCachedConversationList(currentUserId)
           : null;
 
@@ -1051,11 +1057,11 @@ export const useChatStore = create<ChatState>()(
         set({ convoLoading: true });
 
         try {
-          const res = await chatService.fetchConversations();
+          const res = await chatService.fetchConversations({ privatePin });
           const conversations = (res as ConversationResponse).conversations;
           set({ conversations });
 
-          if (currentUserId) {
+          if (currentUserId && !allowPrivateConversations) {
             const meta = (res as any)?._etag || null;
             const lastMod = (res as any)?._lastModified || null;
             setCachedConversationList(currentUserId, conversations, {
@@ -1074,7 +1080,7 @@ export const useChatStore = create<ChatState>()(
               ? Number((error as { response?: { status?: number } }).response?.status)
               : null;
 
-          if (status === 401 || status === 403) {
+          if ((status === 401 || status === 403) && !allowPrivateConversations) {
             try {
               const { conversations } =
                 await chatService.fetchConversationsWithCookieSession();
@@ -1100,6 +1106,7 @@ export const useChatStore = create<ChatState>()(
       fetchMessages: async (conversationId, channelId) => {
         const { activeConversationId, messages, conversations } = get();
         const { user } = useAuthStore.getState();
+        const privatePin = get().privatePin;
 
         const convoId = conversationId ?? activeConversationId;
 
@@ -1134,6 +1141,7 @@ export const useChatStore = create<ChatState>()(
             convoId,
             nextCursor,
             resolvedGroupChannelId || undefined,
+            privatePin,
           );
 
           const processed = fetched.map((m) => ({
@@ -2501,6 +2509,7 @@ export const useChatStore = create<ChatState>()(
           await chatService.markAsSeen(
             normalizedActiveConversationId,
             activeGroupChannelId || undefined,
+            get().privatePin,
           );
         } catch (error) {
           if (rollbackState) {
@@ -2689,6 +2698,43 @@ export const useChatStore = create<ChatState>()(
         } catch (error) {
           get().updateConversation(previousConversation);
           console.error("Failed to update announcement mode", error);
+          return false;
+        }
+      },
+      setGroupPrivacy: async (conversationId, isPrivate) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (previousConversation?.type !== "group") {
+          return false;
+        }
+
+        get().updateConversation({
+          _id: conversationId,
+          group: {
+            ...previousConversation.group,
+            isPrivate,
+          },
+        });
+
+        try {
+          const updatedConversation = await chatService.updateGroupPrivacy(
+            conversationId,
+            isPrivate,
+          );
+
+          if (updatedConversation?._id) {
+            get().updateConversation({
+              ...updatedConversation,
+              _id: updatedConversation._id,
+            });
+          }
+
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+          console.error("Failed to update group privacy", error);
           return false;
         }
       },
@@ -2972,6 +3018,40 @@ export const useChatStore = create<ChatState>()(
             ok: false,
             message: apiMessage || "Failed to create category",
           };
+        }
+      },
+      setConversationPrivacy: async (conversationId, isPrivate) => {
+        const previousConversation = get().conversations.find(
+          (conversationItem) => conversationItem._id === conversationId,
+        );
+
+        if (!previousConversation || previousConversation.type !== "direct") {
+          return false;
+        }
+
+        get().updateConversation({
+          _id: conversationId,
+          isPrivateForMe: isPrivate,
+        });
+
+        try {
+          const updatedConversation = await chatService.setConversationPrivacy(
+            conversationId,
+            isPrivate,
+          );
+
+          if (updatedConversation?._id) {
+            get().updateConversation({
+              ...updatedConversation,
+              _id: updatedConversation._id,
+            });
+          }
+
+          return true;
+        } catch (error) {
+          get().updateConversation(previousConversation);
+          console.error("Failed to update conversation privacy", error);
+          return false;
         }
       },
       updateGroupChannelCategory: async (conversationId, categoryId, payload) => {

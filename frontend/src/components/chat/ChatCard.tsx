@@ -12,6 +12,7 @@ interface ChatCardProps {
   mentionCount?: number;
   leftSection: React.ReactNode;
   subtitle: React.ReactNode;
+  nameMeta?: React.ReactNode;
 }
 
 const ChatCardInner = ({
@@ -24,6 +25,7 @@ const ChatCardInner = ({
   mentionCount,
   leftSection,
   subtitle,
+  nameMeta,
 }: ChatCardProps) => {
   const hasUnread = (unreadCount ?? 0) > 0;
   const hasMention = (mentionCount ?? 0) > 0;
@@ -56,12 +58,13 @@ const ChatCardInner = ({
           <div className="flex items-center justify-between mb-[3px]">
             <h3
               className={cn(
-                "chat-sidebar-card-title leading-tight truncate tracking-[-0.005em]",
+                "chat-sidebar-card-title flex items-center gap-1 leading-tight truncate tracking-[-0.005em]",
                 hasUnread ? "font-semibold text-foreground" : "font-medium text-foreground/85",
                 isActive && "text-primary",
               )}
             >
-              {name}
+              <span className="truncate">{name}</span>
+              {nameMeta}
             </h3>
             <span
               className={cn(

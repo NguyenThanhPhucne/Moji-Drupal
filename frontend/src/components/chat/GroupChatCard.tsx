@@ -6,7 +6,7 @@ import GroupChatAvatar from "./GroupChatAvatar";
 import { cn } from "@/lib/utils";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSocketStore } from "@/stores/useSocketStore";
-import { Crown, Shield } from "lucide-react";
+import { Crown, Lock, Shield } from "lucide-react";
 import { memo, useCallback } from "react";
 
 const LEGACY_PHOTO_PREVIEW = "\ud83d\udcf7 Photo";
@@ -132,11 +132,23 @@ const GroupChatCardInner = ({ convo }: { convo: Conversation }) => {
   // Online member count
   const onlineSet = new Set(onlineUsers);
   const onlineMemberCount = convo.participants.filter(p => onlineSet.has(String(p._id))).length;
+  const isGroupPrivate = Boolean(convo.group?.isPrivate);
 
   return (
     <ChatCard
       convoId={convo._id}
       name={name}
+      nameMeta={
+        isGroupPrivate ? (
+          <span
+            className="inline-flex items-center text-[10px] text-muted-foreground/60"
+            title="Private group"
+            aria-label="Private group"
+          >
+            <Lock className="size-3" aria-hidden="true" />
+          </span>
+        ) : null
+      }
       timestamp={
         convo.lastMessage?.createdAt
           ? new Date(convo.lastMessage.createdAt)

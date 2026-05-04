@@ -209,6 +209,10 @@ const groupSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    isPrivate: {
+      type: Boolean,
+      default: false,
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -369,6 +373,15 @@ const conversationSchema = new mongoose.Schema(
     participants: {
       type: [participantSchema],
       required: true,
+    },
+    privateFor: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+      ],
+      default: [],
     },
     group: {
       type: groupSchema,

@@ -165,6 +165,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    privatePinHash: {
+      type: String,
+      default: null,
+    },
+    privatePinUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     lastActiveAt: {
       type: Date,
     },

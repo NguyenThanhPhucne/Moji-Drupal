@@ -70,10 +70,15 @@ interface GroupChannelAnalyticsResponse {
 const pageLimit = 50;
 
 export const chatService = {
-  async fetchConversations(opts?: { ifNoneMatch?: string | null; ifModifiedSince?: string | null }): Promise<ConversationResponse | { notModified: true; status: number } & Partial<ConversationResponse>> {
+  async fetchConversations(opts?: {
+    ifNoneMatch?: string | null;
+    ifModifiedSince?: string | null;
+    privatePin?: string | null;
+  }): Promise<ConversationResponse | { notModified: true; status: number } & Partial<ConversationResponse>> {
     const headers: Record<string, string> = {};
     if (opts?.ifNoneMatch) headers["If-None-Match"] = String(opts.ifNoneMatch);
     if (opts?.ifModifiedSince) headers["If-Modified-Since"] = String(opts.ifModifiedSince);
+    if (opts?.privatePin) headers["x-private-pin"] = String(opts.privatePin);
 
     const res = await api.get("/conversations", {
       headers,
@@ -105,6 +110,7 @@ export const chatService = {
     id: string,
     cursor?: string,
     channelId?: string,
+    privatePin?: string | null,
   ): Promise<FetchMessageProps> {
     const res = await api.get(`/conversations/${id}/messages`, {
       params: {
@@ -112,6 +118,7 @@ export const chatService = {
         ...(cursor ? { cursor } : {}),
         ...(channelId ? { channelId } : {}),
       },
+      headers: privatePin ? { "x-private-pin": String(privatePin) } : undefined,
     });
 
     return { messages: res.data.messages, cursor: res.data.nextCursor };
@@ -187,7 +194,11 @@ export const chatService = {
     };
   },
 
-  async markAsSeen(conversationId: string, channelId?: string) {
+  async markAsSeen(
+    conversationId: string,
+    channelId?: string,
+    privatePin?: string | null,
+  ) {
     const res = await api.patch(
       `/conversations/${conversationId}/seen`,
       {},
@@ -195,6 +206,7 @@ export const chatService = {
         params: {
           ...(channelId ? { channelId } : {}),
         },
+        headers: privatePin ? { "x-private-pin": String(privatePin) } : undefined,
       },
     );
     return res.data;
@@ -225,6 +237,20 @@ export const chatService = {
     const res = await api.patch(`/conversations/${conversationId}/admin-role`, {
       memberId,
       makeAdmin,
+    });
+    return res.data.conversation as Partial<Conversation>;
+  },
+
+  async updateGroupPrivacy(conversationId: string, isPrivate: boolean) {
+    const res = await api.patch(`/conversations/${conversationId}/group-privacy`, {
+      isPrivate,
+    });
+    return res.data.conversation as Partial<Conversation>;
+  },
+
+  async setConversationPrivacy(conversationId: string, isPrivate: boolean) {
+    const res = await api.patch(`/conversations/${conversationId}/privacy`, {
+      isPrivate,
     });
     return res.data.conversation as Partial<Conversation>;
   },

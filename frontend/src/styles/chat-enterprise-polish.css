@@ -1462,3 +1462,66 @@
     will-change: transform;
   }
 }
+
+/* ───────────────────────────────────────────────
+   Private PIN Dialog — Animations & Utilities
+─────────────────────────────────────────────── */
+
+@keyframes pin-shake {
+  0%   { transform: translateX(0); }
+  12%  { transform: translateX(-6px); }
+  25%  { transform: translateX(6px); }
+  37%  { transform: translateX(-5px); }
+  50%  { transform: translateX(5px); }
+  62%  { transform: translateX(-3px); }
+  75%  { transform: translateX(3px); }
+  87%  { transform: translateX(-1px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes unlock-flash {
+  0%   { box-shadow: 0 0 0 0 hsl(142 71% 45% / 0.45); }
+  50%  { box-shadow: 0 0 0 10px hsl(142 71% 45% / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(142 71% 45% / 0); }
+}
+
+.animate-pin-shake {
+  animation: pin-shake 0.62s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.animate-unlock-flash {
+  animation: unlock-flash 0.7s ease-out;
+}
+
+/* Sidebar: blurred locked private item */
+.private-locked-item {
+  filter: blur(2.5px);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.5;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+}
+
+/* Sidebar: dashed unlock hint banner */
+.private-unlock-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px dashed hsl(var(--border) / 0.5);
+  border-radius: 12px;
+  background: hsl(var(--muted) / 0.2);
+  padding: 7px 12px;
+  font-size: 11.5px;
+  color: hsl(var(--muted-foreground) / 0.65);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  width: calc(100% - 24px);
+  margin: 0 12px 6px;
+}
+
+.private-unlock-hint:hover {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--muted) / 0.4);
+  color: hsl(var(--foreground) / 0.75);
+}
+

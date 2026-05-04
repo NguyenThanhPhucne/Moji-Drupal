@@ -5,7 +5,7 @@ import type { GroupChannelRole } from "@/types/chat";
 export const GroupRoleBadge = ({ role }: { role: GroupChannelRole }) => {
   if (role === "owner") {
     return (
-      <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-warning/45 bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+      <span className="chat-role-pill chat-role-pill--owner inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
         <Crown className="size-2.5" />
         Owner
       </span>
@@ -14,7 +14,7 @@ export const GroupRoleBadge = ({ role }: { role: GroupChannelRole }) => {
 
   if (role === "admin") {
     return (
-      <span className="chat-header-context-pill inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+      <span className="chat-role-pill chat-role-pill--admin inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold">
         <Shield className="size-2.5" />
         Admin
       </span>
@@ -22,7 +22,7 @@ export const GroupRoleBadge = ({ role }: { role: GroupChannelRole }) => {
   }
 
   return (
-    <span className="chat-header-context-pill inline-flex items-center rounded-full border border-border/70 bg-muted/35 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+    <span className="chat-role-pill chat-role-pill--member inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium">
       Member
     </span>
   );

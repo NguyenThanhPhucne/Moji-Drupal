@@ -23,13 +23,16 @@ export interface JoinLinkDialogProps {
   activeGroupJoinLink: GroupJoinLinkMeta | null;
 }
 
-export function JoinLinkDialog({
-  open,
-  onOpenChange,
-  chat,
-  isGroupAdmin,
-  activeGroupJoinLink,
-}: JoinLinkDialogProps) {
+export function JoinLinkDialog(
+  props: Readonly<JoinLinkDialogProps>,
+) {
+  const {
+    open,
+    onOpenChange,
+    chat,
+    isGroupAdmin,
+    activeGroupJoinLink,
+  } = props;
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedJoinLink, setGeneratedJoinLink] = useState("");
   const [generatedJoinLinkExpiresAt, setGeneratedJoinLinkExpiresAt] = useState<Date | null>(null);
@@ -162,25 +165,43 @@ export function JoinLinkDialog({
   };
 
   const displayJoinLink = generatedJoinLink || activeGroupJoinLink?.url;
-  const displayJoinLinkExpiresAt = generatedJoinLink
-    ? generatedJoinLinkExpiresAt
-    : activeGroupJoinLink?.expiresAt
-      ? new Date(activeGroupJoinLink.expiresAt)
-      : null;
+  const displayJoinLinkExpiresAt = (() => {
+    if (generatedJoinLink) {
+      return generatedJoinLinkExpiresAt;
+    }
+
+    if (!activeGroupJoinLink?.expiresAt) {
+      return null;
+    }
+
+    return new Date(activeGroupJoinLink.expiresAt);
+  })();
+
+  const generateButtonLabel = (() => {
+    if (isGenerating) {
+      return "Generating...";
+    }
+
+    if (joinLinkCooldownSeconds > 0) {
+      return `Wait ${joinLinkCooldownSeconds}s to retry`;
+    }
+
+    return "Generate Link";
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden">
-        <div className="border-b border-border/60 px-5 py-4">
+      <DialogContent className="chat-detail-dialog-shell chat-detail-dialog-shell--medium p-0">
+        <div className="chat-detail-dialog-header">
           <DialogHeader>
-            <DialogTitle>Group join link</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="chat-detail-dialog-title">Group join link</DialogTitle>
+            <DialogDescription className="chat-detail-dialog-description">
               Create an expiring invite link for this group.
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <div className="space-y-4 p-4">
+        <div className="chat-detail-dialog-body space-y-4">
           <label className="block space-y-1">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
               Link expiry
@@ -188,7 +209,7 @@ export function JoinLinkDialog({
             <select
               value={joinLinkHours}
               onChange={(event) => setJoinLinkHours(Number(event.target.value) || 24)}
-              className="h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/35"
+              className="chat-detail-dialog-select w-full"
             >
               <option value={1}>1 hour</option>
               <option value={6}>6 hours</option>
@@ -209,11 +230,11 @@ export function JoinLinkDialog({
               onChange={(event) => setJoinLinkMaxUsesInput(event.target.value)}
               disabled={joinLinkOneTime}
               placeholder="Leave empty for unlimited"
-              className="h-10 w-full rounded-lg border border-border/70 bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/35 disabled:cursor-not-allowed disabled:opacity-65"
+              className="chat-detail-dialog-input w-full disabled:cursor-not-allowed disabled:opacity-65"
             />
           </label>
 
-          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 p-3">
+          <div className="chat-detail-dialog-row chat-detail-dialog-row--subtle">
             <div className="space-y-0.5">
               <p className="text-sm font-medium text-foreground">One-time link</p>
               <p className="text-xs text-muted-foreground">
@@ -241,11 +262,7 @@ export function JoinLinkDialog({
               }}
             >
               <Link className="mr-2 size-4" />
-              {isGenerating
-                ? "Generating..."
-                : joinLinkCooldownSeconds > 0
-                  ? `Wait ${joinLinkCooldownSeconds}s to retry`
-                  : "Generate Link"}
+              {generateButtonLabel}
             </Button>
             {joinLinkErrorMessage && (
               <p className="mt-2 text-center text-xs font-medium text-destructive">
@@ -256,7 +273,7 @@ export function JoinLinkDialog({
         </div>
 
         {displayJoinLink && (
-          <div className="border-t border-border/60 bg-muted/10 p-5 space-y-3">
+          <div className="chat-detail-dialog-footer chat-detail-dialog-footer--split flex-col items-stretch space-y-3">
             <div className="space-y-1">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                 <CheckCircle2 className="size-4 text-emerald-500" />
@@ -273,7 +290,7 @@ export function JoinLinkDialog({
               <input
                 readOnly
                 value={displayJoinLink}
-                className="h-10 flex-1 rounded-lg border border-primary/30 bg-primary/5 px-3 text-sm font-medium text-primary outline-none"
+                className="chat-detail-dialog-input flex-1 border-primary/30 bg-primary/5 text-sm font-medium text-primary"
               />
               <Button
                 type="button"

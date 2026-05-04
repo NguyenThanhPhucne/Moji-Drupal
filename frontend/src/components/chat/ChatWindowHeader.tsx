@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Users,
   Link2,
+  Lock,
   Hash,
   Plus,
   Settings2,
@@ -178,6 +179,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const [newChannelName, setNewChannelName] = useState("");
   const [newChannelDescription, setNewChannelDescription] = useState("");
   const [isCreatingChannel, setIsCreatingChannel] = useState(false);
+  const [isPrivacyUpdating, setIsPrivacyUpdating] = useState(false);
   const navigate = useNavigate();
   const {
     createConversation,
@@ -185,10 +187,12 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     fetchMessages,
     deleteConversation,
     setGroupAnnouncementMode,
+    setGroupPrivacy,
     setGroupAdminRole,
     createGroupChannel,
     setGroupActiveChannel,
     revokeGroupJoinLink,
+    setConversationPrivacy,
   } = useChatStore();
   const { removeFriend } = useFriendStore();
 
@@ -261,6 +265,9 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
   const activeGroupJoinLink =
     chat?.type === "group" ? chat.group?.joinLink || null : null;
   const hasActiveGroupJoinLink = Boolean(activeGroupJoinLink?.isActive);
+  const isGroupPrivate = chat?.type === "group" && Boolean(chat.group?.isPrivate);
+  const isDirectPrivate = chat?.type === "direct" && Boolean(chat.isPrivateForMe);
+  const isGroupHiddenForMe = chat?.type === "group" && Boolean(chat.isPrivateForMe);
   const groupChannels = useMemo(() => {
     const rawChannels =
       chat?.type === "group" ? chat.group?.channels || [] : [];
@@ -484,6 +491,67 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
     }
   };
 
+  const handleToggleGroupPrivacy = async () => {
+    if (chat.type !== "group" || !isGroupAdmin) {
+      return;
+    }
+
+    try {
+      setIsPrivacyUpdating(true);
+      const ok = await setGroupPrivacy(chat._id, !isGroupPrivate);
+      if (!ok) {
+        toast.error("Could not update group privacy");
+        return;
+      }
+
+      toast.success(isGroupPrivate ? "Group is now public" : "Group is now private");
+    } finally {
+      setIsPrivacyUpdating(false);
+    }
+  };
+
+  const handleToggleDirectPrivacy = async () => {
+    if (chat.type !== "direct") {
+      return;
+    }
+
+    try {
+      setIsPrivacyUpdating(true);
+      const ok = await setConversationPrivacy(chat._id, !isDirectPrivate);
+      if (!ok) {
+        toast.error("Could not update conversation privacy");
+        return;
+      }
+
+      toast.success(isDirectPrivate ? "Removed from private" : "Added to private");
+    } finally {
+      setIsPrivacyUpdating(false);
+    }
+  };
+
+  const handleHideGroupForMe = async () => {
+    if (chat.type !== "group") {
+      return;
+    }
+
+    try {
+      setIsPrivacyUpdating(true);
+      const ok = await setConversationPrivacy(chat._id, !isGroupHiddenForMe);
+      if (!ok) {
+        toast.error("Could not update group visibility");
+        return;
+      }
+
+      toast.success(
+        isGroupHiddenForMe
+          ? "Group is now visible in your list"
+          : "Group hidden — unlock with PIN to see it",
+      );
+    } finally {
+      setIsPrivacyUpdating(false);
+    }
+  };
+
   const handleToggleAdminRole = async (
     memberId: string,
     makeAdmin: boolean,
@@ -655,7 +723,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     const lastActiveAt = getLastActiveAt(otherUser?._id);
                     if (pres === "online") {
                         return (
-                          <span className="chat-header-direct-status chat-header-direct-status--online inline-flex items-center gap-1">
+                          <span className="chat-header-direct-status chat-header-direct-status--online">
                             <span className="chat-header-direct-status-dot" aria-hidden="true" />
                             <span className="chat-header-direct-status-label">Active now</span>
                           </span>
@@ -664,25 +732,25 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                     if (pres === "recently-active" && lastActiveAt) {
                       const timeStr = formatOnlineTime(new Date(lastActiveAt));
                       return (
-                        <span className="chat-header-direct-status chat-header-direct-status--recent inline-flex items-center gap-1 text-[12px] font-medium leading-none">
+                        <span className="chat-header-direct-status chat-header-direct-status--recent">
                           Active {timeStr} ago
                         </span>
                       );
                     }
                     return (
-                      <span className="chat-header-direct-status chat-header-direct-status--offline inline-flex items-center gap-1 text-[12px] font-medium leading-none">
+                      <span className="chat-header-direct-status chat-header-direct-status--offline">
                         Offline
                       </span>
                     );
                   })()}
                   {chat.type === "group" && (
-                    <div className="chat-header-group-meta flex flex-wrap items-center gap-1.5">
-                      <span className="chat-header-presence text-[12px] text-muted-foreground font-medium leading-none">
+                    <div className="chat-header-group-meta">
+                      <span className="chat-header-presence">
                         {groupPresenceText}
                       </span>
                       <span
                         className={cn(
-                          "chat-header-group-status inline-flex items-center gap-1 font-semibold",
+                          "chat-header-group-status",
                           announcementOnly || totalGroupUnread > 0
                             ? "chat-header-group-status--alert"
                             : "chat-header-group-status--neutral",
@@ -690,7 +758,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                         aria-live="polite"
                       >
                         {announcementOnly ? (
-                          <Megaphone className="chat-header-group-status-icon size-2.5" />
+                          <Megaphone className="chat-header-group-status-icon" />
                         ) : (
                           <span className="chat-header-group-status-dot" aria-hidden="true" />
                         )}
@@ -698,8 +766,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       </span>
 
                       {activeGroupChannel && (
-                        <span className="chat-header-context-pill chat-header-context-pill--channel inline-flex items-center rounded-full text-[10px] font-semibold">
-                          <Hash className="chat-header-context-pill-icon size-2.5" />
+                        <span className="chat-header-context-pill chat-header-context-pill--channel">
+                          <Hash className="chat-header-context-pill-icon" />
                           <span className="chat-header-context-pill-channel-name">#{activeGroupChannel.name}</span>
                           {groupChannels.length > 1 && (
                             <span className="chat-header-context-pill-channel-index">
@@ -707,7 +775,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                             </span>
                           )}
                           {activeGroupChannelUnread > 0 && (
-                            <span className="chat-header-context-pill-badge inline-flex items-center justify-center rounded-full text-[9px] font-bold">
+                            <span className="chat-header-context-pill-badge">
                               {formatUnreadCountLabel(activeGroupChannelUnread)}
                             </span>
                           )}
@@ -715,7 +783,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       )}
 
                       {currentUserGroupRole && (
-                        <span className="chat-header-context-pill chat-header-context-pill--role hidden lg:inline-flex items-center text-[10px] font-semibold">
+                        <span className="chat-header-context-pill chat-header-context-pill--role">
                           <span>You: {GROUP_ROLE_LABEL[currentUserGroupRole]}</span>
                           <span className="chat-header-context-pill-role-meta">
                             · {groupLeadershipCount} lead
@@ -893,6 +961,48 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                   </DropdownMenuItem>
                 )}
 
+                {chat.type === "group" && isGroupAdmin && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleToggleGroupPrivacy();
+                    }}
+                    disabled={isPrivacyUpdating}
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
+                  >
+                    <Lock className="h-[18px] w-[18px] text-muted-foreground" />
+                    {isGroupPrivate ? "Make group public" : "Make group private"}
+                  </DropdownMenuItem>
+                )}
+
+                {chat.type === "direct" && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleToggleDirectPrivacy();
+                    }}
+                    disabled={isPrivacyUpdating}
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
+                  >
+                    <Lock className="h-[18px] w-[18px] text-muted-foreground" />
+                    {isDirectPrivate ? "Remove from private" : "Move to private"}
+                  </DropdownMenuItem>
+                )}
+
+                {chat.type === "group" && (
+                  <DropdownMenuItem
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      void handleHideGroupForMe();
+                    }}
+                    disabled={isPrivacyUpdating}
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
+                  >
+                    <Lock className="h-[18px] w-[18px] text-muted-foreground" />
+                    {isGroupHiddenForMe ? "Unhide group (for me)" : "Hide group (for me)"}
+                  </DropdownMenuItem>
+                )}
+
                 {chat.type === "group" && isGroupCreator && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowManageAdminsDialog(true), 100)}
@@ -926,6 +1036,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                 {chat.type === "group" && isGroupAdmin && (
                   <DropdownMenuItem
                     onSelect={() => setTimeout(() => setShowJoinLinkDialog(true), 100)}
+                    disabled={isGroupPrivate}
                     className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5"
                   >
                     <Link2 className="h-[18px] w-[18px] text-muted-foreground" />
@@ -939,6 +1050,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => { // NOSONAR
                       event.preventDefault();
                       void revokeGroupJoinLink(chat._id);
                     }}
+                    disabled={isGroupPrivate}
                     className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[13px] py-1.5 text-destructive focus:bg-destructive/10 focus:text-destructive"
                   >
                     <Link2 className="h-[18px] w-[18px]" />

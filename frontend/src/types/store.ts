@@ -82,9 +82,12 @@ export interface ChatState {
   outgoingQueue: OutgoingMessageQueueItem[];
   isFlushingOutgoingQueue: boolean;
   isCallActive: boolean;
+  privatePin: string | null;
   reset: () => void;
 
   setIsCallActive: (active: boolean) => void;
+  setPrivatePin: (pin: string | null) => void;
+  clearPrivatePin: () => void;
   setReplyingTo: (message: Message | null) => void;
   setActiveThreadRootId: (messageId: string | null) => void;
   setActiveConversation: (id: string | null) => void;
@@ -167,6 +170,7 @@ export interface ChatState {
     conversationId: string,
     enabled: boolean,
   ) => Promise<boolean>;
+  setGroupPrivacy: (conversationId: string, isPrivate: boolean) => Promise<boolean>;
   setGroupAdminRole: (
     conversationId: string,
     memberId: string,
@@ -217,6 +221,10 @@ export interface ChatState {
     ok: boolean;
     message?: string;
   }>;
+  setConversationPrivacy: (
+    conversationId: string,
+    isPrivate: boolean,
+  ) => Promise<boolean>;
   updateGroupChannelCategory: (
     conversationId: string,
     categoryId: string,

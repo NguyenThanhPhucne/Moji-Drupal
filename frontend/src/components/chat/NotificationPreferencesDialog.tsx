@@ -51,17 +51,17 @@ const NotificationPreferencesDialog = ({
         </DialogTrigger>
       )}
 
-      <DialogContent className="max-w-xl p-0 overflow-hidden">
-        <div className="border-b border-border/60 px-5 py-4">
+      <DialogContent className="chat-detail-dialog-shell chat-detail-dialog-shell--medium p-0">
+        <div className="chat-detail-dialog-header">
           <DialogHeader>
-            <DialogTitle>{t("notificationPreferences.title")}</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="chat-detail-dialog-title">{t("notificationPreferences.title")}</DialogTitle>
+            <DialogDescription className="chat-detail-dialog-description">
               {t("notificationPreferences.description")}
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <NotificationPreferencesSettings className="max-h-[72vh] overflow-y-auto beautiful-scrollbar p-4" />
+        <NotificationPreferencesSettings className="chat-detail-dialog-body max-h-[72vh] overflow-y-auto beautiful-scrollbar" />
       </DialogContent>
     </Dialog>
   );

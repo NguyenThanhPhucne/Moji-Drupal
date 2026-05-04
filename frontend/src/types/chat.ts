@@ -59,6 +59,7 @@ export interface Group {
   createdBy: string;
   adminIds?: string[];
   announcementOnly?: boolean;
+  isPrivate?: boolean;
   channels?: GroupChannelMeta[];
   channelCategories?: GroupChannelCategoryMeta[];
   channelUnreadCounts?: Record<string, Record<string, number>>;
@@ -139,6 +140,7 @@ export interface Conversation {
   group: Group;
   pinnedMessage?: PinnedMessageMeta | null;
   participants: Participant[];
+  isPrivateForMe?: boolean;
   lastMessageAt: string;
   seenBy: SeenUser[];
   lastMessage: LastMessage | null;

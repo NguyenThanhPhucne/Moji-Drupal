@@ -1831,6 +1831,183 @@ export const reactToMessage = async (req, res) => {
   }
 };
 
+const resolveUnsendContext = async ({ messageId, userId }) => {
+  const message = await Message.findById(messageId);
+  if (!message) {
+    return {
+      error: { status: 404, message: "Không tìm thấy tin nhắn" },
+      message: null,
+    };
+  }
+
+  const isMember = await ensureConversationMembership(
+    message.conversationId,
+    userId,
+  );
+  if (!isMember) {
+    return {
+      error: { status: 403, message: "Không có quyền thao tác" },
+      message: null,
+    };
+  }
+
+  if (message.senderId.toString() !== userId.toString()) {
+    return {
+      error: { status: 403, message: "Không có quyền gỡ tin nhắn này" },
+      message: null,
+    };
+  }
+
+  return { error: null, message };
+};
+
+const shouldNormalizeDeletedPayload = (message) => {
+  return (
+    !message.isDeleted ||
+    message.content !== REMOVED_MESSAGE_CONTENT ||
+    message.imgUrl !== null ||
+    message.reactions.length > 0 ||
+    message.readBy.length > 0 ||
+    Boolean(message.replyTo)
+  );
+};
+
+const cleanupUnsentMedia = (message) => {
+  if (message.imgUrl) {
+    destroyMediaFromUrl(message.imgUrl, "image").catch((cleanupError) => {
+      console.error(
+        "[unsendMessage] Image cleanup failed after successful message delete",
+        cleanupError,
+      );
+    });
+  }
+
+  if (message.audioUrl) {
+    destroyMediaFromUrl(message.audioUrl, "video").catch((cleanupError) => {
+      console.error(
+        "[unsendMessage] Audio cleanup failed after successful message delete",
+        cleanupError,
+      );
+    });
+  }
+};
+
+const refreshConversationAfterDelete = async (deletedMessage) => {
+  let updatedConversation = null;
+
+  try {
+    const conversationForUpdate = await Conversation.findById(
+      deletedMessage.conversationId,
+    );
+
+    if (conversationForUpdate) {
+      const isLastMessage =
+        String(conversationForUpdate.lastMessage?._id || "") ===
+        String(deletedMessage._id);
+
+      if (isLastMessage) {
+        const previousMessage = await Message.findOne({
+          conversationId: deletedMessage.conversationId,
+          _id: { $ne: deletedMessage._id },
+          isDeleted: { $ne: true },
+        })
+          .select("_id content imgUrl audioUrl senderId createdAt groupChannelId")
+          .sort({ createdAt: -1, _id: -1 })
+          .lean();
+
+        if (previousMessage) {
+          const previewContent = buildMessagePreviewContent(previousMessage);
+
+          conversationForUpdate.set({
+            lastMessage: {
+              _id: previousMessage._id,
+              content: previewContent,
+              createdAt: previousMessage.createdAt,
+              senderId: previousMessage.senderId,
+              groupChannelId: previousMessage.groupChannelId || null,
+            },
+            lastMessageAt: previousMessage.createdAt,
+          });
+        } else {
+          conversationForUpdate.set({
+            lastMessage: null,
+            lastMessageAt: conversationForUpdate.createdAt,
+          });
+        }
+
+        updatedConversation = await conversationForUpdate.save();
+      } else {
+        updatedConversation = await Conversation.findOneAndUpdate(
+          {
+            _id: deletedMessage.conversationId,
+            "lastMessage._id": deletedMessage._id.toString(),
+          },
+          {
+            $set: {
+              "lastMessage.content": REMOVED_MESSAGE_CONTENT,
+              "lastMessage.createdAt": deletedMessage.createdAt,
+            },
+          },
+          { new: true },
+        );
+      }
+    }
+
+    const clearedPinnedConversation = await Conversation.findOneAndUpdate(
+      {
+        _id: deletedMessage.conversationId,
+        "pinnedMessage._id": deletedMessage._id.toString(),
+      },
+      {
+        $set: {
+          pinnedMessage: null,
+        },
+      },
+      { new: true },
+    );
+
+    if (clearedPinnedConversation) {
+      emitToRoomSafely({
+        roomId: deletedMessage.conversationId,
+        event: "group-conversation-updated",
+        payload: {
+          conversation: toGroupConversationUpdatePayload(clearedPinnedConversation),
+        },
+        logContext: "unsendMessage",
+      });
+    }
+  } catch (convUpdateError) {
+    console.error(
+      "[unsendMessage] Conversation preview update failed after message deletion. " +
+        "Message is deleted in DB but lastMessage preview may be stale.",
+      convUpdateError,
+    );
+  }
+
+  return updatedConversation;
+};
+
+const invalidateConversationCacheForDeletion = async (conversationId) => {
+  try {
+    const conversationToInvalidate = await Conversation.findById(
+      conversationId,
+    ).select("participants");
+    invalidateConversationParticipantsCache(conversationToInvalidate).catch(
+      (cacheError) => {
+        console.error(
+          "[unsendMessage] Failed to invalidate participant conversation cache",
+          cacheError,
+        );
+      },
+    );
+  } catch (conversationLookupError) {
+    console.error(
+      "[unsendMessage] Failed to load conversation for cache invalidation",
+      conversationLookupError,
+    );
+  }
+};
+
 export const unsendMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -1838,33 +2015,16 @@ export const unsendMessage = async (req, res) => {
     const userId = assertValidAuthUserId(req, res);
     if (!userId) return;
 
-    const message = await Message.findById(messageId);
-    if (!message)
-      return res.status(404).json({ message: "Không tìm thấy tin nhắn" });
-
-    const isMember = await ensureConversationMembership(
-      message.conversationId,
-      userId,
-    );
-    if (!isMember) {
-      return res.status(403).json({ message: "Không có quyền thao tác" });
-    }
-
-    if (message.senderId.toString() !== userId.toString()) {
+    const contextResult = await resolveUnsendContext({ messageId, userId });
+    if (contextResult.error) {
       return res
-        .status(403)
-        .json({ message: "Không có quyền gỡ tin nhắn này" });
+        .status(contextResult.error.status)
+        .json({ message: contextResult.error.message });
     }
 
-    const shouldNormalizeDeletedPayload =
-      !message.isDeleted ||
-      message.content !== REMOVED_MESSAGE_CONTENT ||
-      message.imgUrl !== null ||
-      message.reactions.length > 0 ||
-      message.readBy.length > 0 ||
-      Boolean(message.replyTo);
+    const message = contextResult.message;
 
-    if (!shouldNormalizeDeletedPayload) {
+    if (!shouldNormalizeDeletedPayload(message)) {
       return res.status(200).json({
         message,
         conversation: null,
@@ -1907,123 +2067,11 @@ export const unsendMessage = async (req, res) => {
       });
     }
 
-    if (message.imgUrl) {
-      destroyMediaFromUrl(message.imgUrl, "image").catch((cleanupError) => {
-        console.error(
-          "[unsendMessage] Image cleanup failed after successful message delete",
-          cleanupError,
-        );
-      });
-    }
+    cleanupUnsentMedia(message);
 
-    if (message.audioUrl) {
-      destroyMediaFromUrl(message.audioUrl, "video").catch((cleanupError) => {
-        console.error(
-          "[unsendMessage] Audio cleanup failed after successful message delete",
-          cleanupError,
-        );
-      });
-    }
-
-    // Update conversation preview independently — message deletion succeeds even if
-    // this step fails, avoiding partial-rollback confusion. Log discrepancy clearly.
-    let updatedConversation = null;
-    try {
-      // Check if the deleted message was the conversation's lastMessage.
-      // If so, we must find the true next-most-recent non-deleted message and
-      // promote it — otherwise the sidebar will forever show "[Message removed]".
-      const conversationForUpdate = await Conversation.findById(
-        deletedMessage.conversationId,
-      );
-
-      if (conversationForUpdate) {
-        const isLastMessage =
-          String(conversationForUpdate.lastMessage?._id || "") ===
-          String(deletedMessage._id);
-
-        if (isLastMessage) {
-          // Find the most recent non-deleted message (excluding the just-deleted one)
-          const previousMessage = await Message.findOne({
-            conversationId: deletedMessage.conversationId,
-            _id: { $ne: deletedMessage._id },
-            isDeleted: { $ne: true },
-          })
-            .select("_id content imgUrl audioUrl senderId createdAt groupChannelId")
-            .sort({ createdAt: -1, _id: -1 })
-            .lean();
-
-          if (previousMessage) {
-            const previewContent = buildMessagePreviewContent(previousMessage);
-
-            conversationForUpdate.set({
-              lastMessage: {
-                _id: previousMessage._id,
-                content: previewContent,
-                createdAt: previousMessage.createdAt,
-                senderId: previousMessage.senderId,
-                groupChannelId: previousMessage.groupChannelId || null,
-              },
-              lastMessageAt: previousMessage.createdAt,
-            });
-          } else {
-            // No messages remain — clear lastMessage entirely
-            conversationForUpdate.set({
-              lastMessage: null,
-              lastMessageAt: conversationForUpdate.createdAt,
-            });
-          }
-
-          updatedConversation = await conversationForUpdate.save();
-        } else {
-          // Deleted message was NOT the lastMessage — only update content label
-          updatedConversation = await Conversation.findOneAndUpdate(
-            {
-              _id: deletedMessage.conversationId,
-              "lastMessage._id": deletedMessage._id.toString(),
-            },
-            {
-              $set: {
-                "lastMessage.content": REMOVED_MESSAGE_CONTENT,
-                "lastMessage.createdAt": deletedMessage.createdAt,
-              },
-            },
-            { new: true },
-          );
-        }
-      }
-
-      const clearedPinnedConversation = await Conversation.findOneAndUpdate(
-        {
-          _id: deletedMessage.conversationId,
-          "pinnedMessage._id": deletedMessage._id.toString(),
-        },
-        {
-          $set: {
-            pinnedMessage: null,
-          },
-        },
-        { new: true },
-      );
-
-      if (clearedPinnedConversation) {
-        emitToRoomSafely({
-          roomId: deletedMessage.conversationId,
-          event: "group-conversation-updated",
-          payload: {
-            conversation: toGroupConversationUpdatePayload(clearedPinnedConversation),
-          },
-          logContext: "unsendMessage",
-        });
-      }
-    } catch (convUpdateError) {
-      console.error(
-        "[unsendMessage] Conversation preview update failed after message deletion. " +
-          "Message is deleted in DB but lastMessage preview may be stale.",
-        convUpdateError,
-      );
-    }
-
-    const conversationSyncPayload = formatConversationSyncPayload(updatedConversation);
+    const updatedConversation = await refreshConversationAfterDelete(deletedMessage);
+    const conversationSyncPayload =
+      formatConversationSyncPayload(updatedConversation);
 
     emitToRoomSafely({
       roomId: deletedMessage.conversationId,
@@ -2044,22 +2092,7 @@ export const unsendMessage = async (req, res) => {
       logContext: "unsendMessage",
     });
 
-    try {
-      const conversationToInvalidate = await Conversation.findById(
-        deletedMessage.conversationId,
-      ).select("participants");
-      invalidateConversationParticipantsCache(conversationToInvalidate).catch((cacheError) => {
-        console.error(
-          "[unsendMessage] Failed to invalidate participant conversation cache",
-          cacheError,
-        );
-      });
-    } catch (conversationLookupError) {
-      console.error(
-        "[unsendMessage] Failed to load conversation for cache invalidation",
-        conversationLookupError,
-      );
-    }
+    await invalidateConversationCacheForDeletion(deletedMessage.conversationId);
 
     return res.status(200).json({
       message: deletedMessage,
@@ -2906,6 +2939,10 @@ export const toggleForwardable = async (req, res) => {
     if (!assertValidMessageId(messageId, res)) return;
     const { isForwardable } = req.body;
     const senderId = req.user._id;
+
+    if (typeof isForwardable !== "boolean") {
+      return res.status(400).json({ message: "isForwardable phải là boolean" });
+    }
 
     const message = await Message.findById(messageId);
     if (!message) {

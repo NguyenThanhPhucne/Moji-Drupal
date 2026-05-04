@@ -20,20 +20,23 @@ interface FriendProfileMiniCardProps {
   disabled?: boolean;
 }
 
-const FriendProfileMiniCard = ({
-  userId,
-  displayName,
-  avatarUrl,
-  children,
-  onViewProfile,
-  onChat,
-  onRemove,
-  disabled,
-}: FriendProfileMiniCardProps) => {
+const FriendProfileMiniCard = (
+  props: Readonly<FriendProfileMiniCardProps>,
+) => {
+  const {
+    userId,
+    displayName,
+    avatarUrl,
+    children,
+    onViewProfile,
+    onChat,
+    onRemove,
+    disabled,
+  } = props;
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState<ProfileLite | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open || profile || loading) {
@@ -76,7 +79,7 @@ const FriendProfileMiniCard = ({
       globalThis.clearTimeout(closeTimerRef.current);
     }
 
-    closeTimerRef.current = window.setTimeout(() => {
+    closeTimerRef.current = globalThis.setTimeout(() => {
       setOpen(false);
       closeTimerRef.current = null;
     }, 120);
@@ -130,13 +133,13 @@ const FriendProfileMiniCard = ({
         side="top"
         align="start"
         sideOffset={10}
-        className="w-80 p-0 overflow-hidden"
+        className="chat-profile-mini-card-shell w-80 p-0 overflow-hidden"
         onMouseEnter={handleOpen}
         onMouseLeave={handleCloseSoon}
       >
-        <div className="p-4 space-y-3">
+        <div className="chat-profile-mini-card-body space-y-3 p-4">
           <div className="flex items-start gap-3">
-            <div className="size-11 rounded-full overflow-hidden bg-muted shrink-0">
+            <div className="chat-profile-mini-card-avatar size-11 overflow-hidden rounded-full shrink-0 bg-muted">
               {resolvedProfile.avatarUrl ? (
                 <img
                   src={resolvedProfile.avatarUrl}
@@ -165,8 +168,8 @@ const FriendProfileMiniCard = ({
             </div>
           </div>
 
-          <div className="rounded-lg bg-muted/40 p-3">
-            <p className="text-xs font-medium mb-1">Bio</p>
+          <div className="chat-profile-mini-card-section rounded-lg p-3">
+            <p className="chat-profile-mini-card-section-title text-xs font-medium mb-1">Bio</p>
             {loading ? (
               <div className="space-y-1.5">
                 <Skeleton className="h-3.5 w-full" />
@@ -179,7 +182,7 @@ const FriendProfileMiniCard = ({
             )}
           </div>
 
-          <div className="rounded-lg border border-border/70 p-3">
+          <div className="chat-profile-mini-card-section chat-profile-mini-card-section--secondary rounded-lg p-3">
             <p className="text-xs font-medium mb-1.5 flex items-center gap-1">
               <Users className="size-3.5" />
               Mutual groups ({resolvedProfile.mutualGroupsCount})
@@ -199,7 +202,7 @@ const FriendProfileMiniCard = ({
                 {resolvedProfile.mutualGroups.slice(0, 3).map((groupItem) => (
                   <span
                     key={groupItem._id}
-                    className="rounded-full bg-muted px-2 py-1 text-[11px]"
+                    className="chat-profile-mini-card-chip rounded-full px-2 py-1 text-[11px]"
                   >
                     {groupItem.name}
                   </span>
@@ -208,13 +211,13 @@ const FriendProfileMiniCard = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="chat-profile-mini-card-actions flex items-center gap-2">
             {onViewProfile && (
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                className="flex-1"
+                className="chat-profile-mini-card-action flex-1"
                 onClick={onViewProfile}
                 disabled={disabled}
               >
@@ -225,7 +228,7 @@ const FriendProfileMiniCard = ({
             <Button
               type="button"
               size="sm"
-              className="flex-1"
+              className="chat-profile-mini-card-action chat-profile-mini-card-action--primary flex-1"
               onClick={onChat}
               disabled={disabled}
             >
@@ -236,7 +239,7 @@ const FriendProfileMiniCard = ({
               type="button"
               size="sm"
               variant="outline"
-              className="text-destructive hover:text-destructive"
+              className="chat-profile-mini-card-action chat-profile-mini-card-action--danger text-destructive hover:text-destructive"
               onClick={onRemove}
               disabled={disabled}
             >

@@ -7,7 +7,7 @@ import UserAvatar from "./UserAvatar";
 import StatusBadge from "./StatusBadge";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useLocation, useNavigate } from "react-router-dom";
-import { CornerUpRight } from "lucide-react";
+import { CornerUpRight, Lock } from "lucide-react";
 import { memo, useCallback } from "react";
 
 const LEGACY_PHOTO_PREVIEW = "\ud83d\udcf7 Photo";
@@ -171,6 +171,8 @@ const DirectMessageCardInner = ({ convo }: { convo: Conversation }) => {
     normalizedCurrentUser,
   );
 
+  const isPrivateForMe = Boolean(convo.isPrivateForMe);
+
   const userPresence = getUserPresence(otherUser?._id);
   const lastActiveAt = getLastActiveAt(otherUser?._id);
   const activeStatusText = resolveActiveStatusText(userPresence, lastActiveAt);
@@ -179,6 +181,17 @@ const DirectMessageCardInner = ({ convo }: { convo: Conversation }) => {
     <ChatCard
       convoId={convo._id}
       name={otherUser.displayName ?? ""}
+      nameMeta={
+        isPrivateForMe ? (
+          <span
+            className="inline-flex items-center text-[10px] text-muted-foreground/60"
+            title="Private"
+            aria-label="Private conversation"
+          >
+            <Lock className="size-3" aria-hidden="true" />
+          </span>
+        ) : null
+      }
       timestamp={
         convo.lastMessage?.createdAt
           ? new Date(convo.lastMessage.createdAt)
