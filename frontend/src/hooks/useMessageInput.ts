@@ -5,7 +5,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import type { AudioMeta, Conversation } from "@/types/chat";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
-import { chatService } from "@/services/chatService";
+import { chatService, VOICE_MEMO_TOO_LARGE_ERROR } from "@/services/chatService";
 import {
   addVoiceMemoOutboxItem,
   buildVoiceMemoOutboxId,
@@ -22,6 +22,7 @@ export const MAX_MESSAGE_LENGTH = 1200;
 const TYPING_EMIT_INTERVAL_MS = 350;
 const MESSAGE_DRAFT_STORAGE_PREFIX = "moji-message-drafts-v1";
 const MAX_VOICE_MEMO_DURATION_SECONDS = 180;
+const MAX_VOICE_MEMO_UPLOAD_MB = 8;
 const AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR = "AUDIO_UPLOAD_REQUIRES_ONLINE";
 const VOICE_MEMO_UPLOAD_TOAST_ID = "voice-memo-upload-progress";
 
@@ -73,6 +74,53 @@ const isVoiceMemoOutboxLimitError = (error: unknown) => {
   }
 
   return /voice memo payload exceeds outbox size limit/i.test(error.message);
+};
+
+/**
+ * Validates message content before sending
+ * Checks for empty messages, length limits, and content quality
+ */
+const validateMessageBeforeSend = (value: string, imagePreview: string | null, audioPreview: string | null) => {
+  const normalizedContent = value.trim();
+  const hasContent = normalizedContent.length > 0;
+  const hasImage = Boolean(imagePreview);
+  const hasAudio = Boolean(audioPreview);
+  const hasMediaPayload = hasImage || hasAudio;
+
+  // Check for empty message
+  if (!hasContent && !hasMediaPayload) {
+    return {
+      valid: false,
+      error: "Tin nhắn phải có nội dung hoặc phương tiện",
+      code: "EMPTY_MESSAGE"
+    };
+  }
+
+  // Check content length
+  if (normalizedContent.length > MAX_MESSAGE_LENGTH) {
+    return {
+      valid: false,
+      error: `Nội dung vượt quá ${MAX_MESSAGE_LENGTH} ký tự`,
+      code: "CONTENT_TOO_LONG",
+      currentLength: normalizedContent.length,
+      maxLength: MAX_MESSAGE_LENGTH
+    };
+  }
+
+  // Check for excessive whitespace only
+  if (hasContent && /^\s+$/.test(normalizedContent)) {
+    return {
+      valid: false,
+      error: "Tin nhắn không được chỉ chứa khoảng trắng",
+      code: "WHITESPACE_ONLY"
+    };
+  }
+
+  return {
+    valid: true,
+    error: null,
+    code: null
+  };
 };
 
 type MessageDraftState = {
@@ -610,6 +658,25 @@ export function useMessageInput(selectedConvo: Conversation) {
     reader.readAsDataURL(file);
   };
 
+  const validateAudioSizeBeforeUpload = (audioDataUrl: string): { valid: boolean; errorMessage?: string } => {
+    const payload = String(audioDataUrl || "").split(",")[1] || "";
+    const normalizedPayload = payload.replaceAll(/\s+/g, "");
+    if (!normalizedPayload) {
+      return { valid: false, errorMessage: "Voice memo is empty" };
+    }
+
+    const estimatedBytes = Math.floor((normalizedPayload.length * 3) / 4);
+    if (!Number.isFinite(estimatedBytes) || estimatedBytes <= 0) {
+      return { valid: false, errorMessage: "Invalid voice memo format" };
+    }
+
+    if (estimatedBytes > MAX_VOICE_MEMO_UPLOAD_MB * 1024 * 1024) {
+      return { valid: false, errorMessage: `Voice memo exceeds ${MAX_VOICE_MEMO_UPLOAD_MB}MB limit` };
+    }
+
+    return { valid: true };
+  };
+
   const resolveOutgoingAudioUrl = async (rawAudioPreview: string | null) => {
     if (!rawAudioPreview) {
       return {
@@ -623,6 +690,11 @@ export function useMessageInput(selectedConvo: Conversation) {
         audioUrl: rawAudioPreview,
         audioMetaPatch: null as AudioMeta | null,
       };
+    }
+
+    const sizeValidation = validateAudioSizeBeforeUpload(rawAudioPreview);
+    if (!sizeValidation.valid) {
+      throw new Error(sizeValidation.errorMessage || "Voice memo validation failed");
     }
 
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -835,11 +907,18 @@ export function useMessageInput(selectedConvo: Conversation) {
   const sendMessage = async () => { // NOSONAR
     if (isSendingRef.current || !user) return;
     if (isRecording) {
-      toast.info("Finish recording before sending.");
+      toast.error("Kết thúc ghi âm trước khi gửi.", { duration: 3 });
       return;
     }
+
+    // Validate message before attempting to send
+    const validation = validateMessageBeforeSend(value, imagePreview, audioPreview);
+    if (!validation.valid) {
+      toast.error(validation.error, { duration: 4 });
+      return;
+    }
+
     const trimmed = value.trim();
-    if (!trimmed && !imagePreview && !audioPreview) return;
 
     isSendingRef.current = true;
 
@@ -885,8 +964,14 @@ export function useMessageInput(selectedConvo: Conversation) {
         const uploadResolution = await resolveOutgoingAudioUrl(currAudio);
         resolvedAudioUrl = uploadResolution.audioUrl;
         if (uploadResolution.audioMetaPatch) {
+          // Preserve client durationSeconds (server doesn't calculate it).
+          // Server provides: mimeType, sizeBytes. Client provides: durationSeconds.
+          // Canonical audioMeta = server values + client durationSeconds.
           resolvedAudioMeta = resolvedAudioMeta
-            ? { ...resolvedAudioMeta, ...uploadResolution.audioMetaPatch }
+            ? {
+                durationSeconds: resolvedAudioMeta.durationSeconds,
+                ...uploadResolution.audioMetaPatch,
+              }
             : uploadResolution.audioMetaPatch;
         }
       } catch (uploadError) {
@@ -926,6 +1011,10 @@ export function useMessageInput(selectedConvo: Conversation) {
         toast.error("Voice memo needs internet to upload before sending.");
       } else if (isVoiceMemoOutboxLimitError(error)) {
         toast.error("Voice memo is too large to queue offline. Please record a shorter memo.");
+      } else if (error instanceof Error && error.message === VOICE_MEMO_TOO_LARGE_ERROR) {
+        toast.error(`Voice memo exceeds ${MAX_VOICE_MEMO_UPLOAD_MB}MB. Please record a shorter one.`);
+      } else if (error instanceof Error && /exceeds|too large/i.test(error.message)) {
+        toast.error(error.message);
       } else {
         toast.error(t("chatComposer.error.send_failed"));
       }
@@ -968,6 +1057,7 @@ export function useMessageInput(selectedConvo: Conversation) {
     audioPreview,
     isRecording,
     recordingDuration,
+    recordingStream: recordingStreamRef.current,
     startRecording,
     stopRecording,
     cancelRecording,

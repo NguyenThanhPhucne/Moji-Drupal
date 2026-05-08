@@ -1,6 +1,7 @@
 import { useChatStore } from "@/stores/useChatStore";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
+import { PrivateMessageLockedView } from "./PrivateMessageLockedView";
 import {
   Profiler,
   useEffect,
@@ -104,6 +105,9 @@ const ChatWindowBody = () => {
   const [forwardMessageId, setForwardMessageId] = useState<string | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(
     null,
+  );
+  const [unlockedPrivateConversations, setUnlockedPrivateConversations] = useState<Set<string>>(
+    new Set()
   );
   const searchJumpFetchAttemptRef = useRef<Record<string, number>>({});
   const searchJumpFallbackNotifiedRef = useRef<Record<string, true>>({});
@@ -348,6 +352,36 @@ const ChatWindowBody = () => {
     );
   }, [typingUserList]);
 
+  // Reset private conversation unlock state when switching conversations
+  // This ensures users must re-enter PIN when opening a different private conversation
+  useEffect(() => {
+    const conversationId = String(activeConversationId || "");
+    if (conversationId) {
+      setUnlockedPrivateConversations((prev) => {
+        // Keep only the current conversation in the unlocked set
+        // Other conversations will require re-authentication
+        const newSet = new Set<string>();
+        if (prev.has(conversationId)) {
+          newSet.add(conversationId);
+        }
+        return newSet;
+      });
+    }
+  }, [activeConversationId]);
+
+  // Fetch messages when a private conversation is unlocked
+  useEffect(() => {
+    const conversationId = String(activeConversationId || "");
+    const isPrivate = Boolean(selectedConvo?.isPrivateForMe);
+    const isUnlocked = unlockedPrivateConversations.has(conversationId);
+
+    if (isPrivate && isUnlocked && !allMessages[conversationId]?.items?.length && !messageLoading) {
+      void fetchMessages(conversationId).catch((err) =>
+        console.error("Error fetching private conversation messages:", err),
+      );
+    }
+  }, [activeConversationId, unlockedPrivateConversations, selectedConvo?.isPrivateForMe, fetchMessages, allMessages, messageLoading]);
+
   // Fetch initial messages if not present
   useEffect(() => {
     if (
@@ -536,7 +570,6 @@ const ChatWindowBody = () => {
       );
     },
     [
-      messages,
       messageGroupMeta,
       selectedConvo,
       lastMessageStatus,
@@ -748,6 +781,23 @@ const ChatWindowBody = () => {
 
   if (!selectedConvo) return <ChatWelcomeScreen />;
 
+  // Check if conversation is private and locked
+  const isPrivate = Boolean(selectedConvo?.isPrivateForMe);
+  const isPrivateUnlocked = unlockedPrivateConversations.has(String(selectedConvo?._id || ""));
+
+  if (isPrivate && !isPrivateUnlocked) {
+    return (
+      <PrivateMessageLockedView
+        conversation={selectedConvo}
+        onUnlock={() => {
+          setUnlockedPrivateConversations(
+            (prev) => new Set([...prev, String(selectedConvo._id)])
+          );
+        }}
+      />
+    );
+  }
+
   // Show skeleton while fetching the first page of messages (avoids CLS flash)
   const isInitialLoad = messageLoading && !messages?.length;
   if (isInitialLoad) {
@@ -827,40 +877,38 @@ const ChatWindowBody = () => {
 
       <Profiler id="chat-thread" onRender={onThreadRender}>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <div
-            className={cn(
-              "flex justify-center overflow-hidden transition-[height,opacity,margin] duration-300",
-              messageLoading && messages.length > 0
-                ? "h-10 opacity-100 mt-4 mb-2"
-                : "h-0 opacity-0 mt-0 mb-0",
-            )}
-          >
-            <div className="flex flex-col gap-2 w-full max-w-[65%] items-center opacity-70">
-              <Skeleton className="h-[28px] w-[50%] rounded-2xl bg-muted/60" />
+          {/* Message loading indicator - no transition to avoid layout thrashing */}
+          {messageLoading && messages.length > 0 && (
+            <div className="flex justify-center py-2 px-3">
+              <div className="flex flex-col gap-2 w-full max-w-[65%] items-center opacity-70">
+                <Skeleton className="h-[28px] w-[50%] rounded-2xl bg-muted/60" />
+              </div>
             </div>
-          </div>
+          )}
 
           <Virtuoso
             ref={virtuosoRef}
             className="h-full beautiful-scrollbar"
             data={messages}
             atBottomStateChange={(bottom) => {
-              // Debounce to avoid a React re-render on every scroll pixel
+              // Reduced debounce from 80ms to 40ms for more responsive scroll detection
               if (atBottomDebounceRef.current) {
                 clearTimeout(atBottomDebounceRef.current);
               }
               atBottomDebounceRef.current = setTimeout(() => {
                 setIsAtBottom(bottom);
                 if (bottom) setNewMsgCount(0);
-              }, 80);
+              }, 40);
             }}
-            followOutput={(atBottom) => (atBottom ? "smooth" : false)}
+            followOutput={(atBottom) => (atBottom ? "auto" : false)}
             startReached={() => {
               if (hasMore) {
                 void fetchMoreMessages();
               }
             }}
             itemContent={renderMessageItem}
+            overscan={8}
+            increaseViewportBy={{ top: 100, bottom: 200 }}
           />
         </div>
       </Profiler>

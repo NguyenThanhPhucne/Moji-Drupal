@@ -1767,6 +1767,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       });
     });
 
+    socket.on("conversation:disappearing_timer_updated", (payload) => {
+      applyRealtimeAwareEvent({
+        eventName: "conversation:disappearing_timer_updated",
+        payload,
+        queueDuringSnapshot: true,
+        apply: () => {
+          const eventPayload = payload as {
+            conversationId?: string;
+            timer?: number;
+          };
+
+          if (!eventPayload.conversationId || eventPayload.timer === undefined) {
+            return;
+          }
+
+          useChatStore.getState().updateConversation({
+            _id: eventPayload.conversationId,
+            disappearingMessageTimer: eventPayload.timer,
+          } as Partial<Conversation> & { _id: string });
+        },
+      });
+    });
+
     // conversation deleted - from other participants
     socket.on("conversation-deleted", (payload) => {
       applyRealtimeAwareEvent({

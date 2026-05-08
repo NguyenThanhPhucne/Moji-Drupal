@@ -21,6 +21,24 @@ import { withSocketEventMeta } from "../utils/socketEventMeta.js";
 
 import { buildDirectConversationKey } from "../services/conversationService.js";
 
+/**
+ * Validates if a string is a proper URL (http, https, or data URL)
+ */
+const isValidUrl = (url) => {
+  if (!url || typeof url !== 'string') return false;
+  try {
+    // Allow http, https, and data URLs
+    if (url.startsWith('data:')) return true;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      new URL(url);
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 const UNDO_SEND_WINDOW_SECONDS = 7;
 const UNDO_SEND_WINDOW_MS = UNDO_SEND_WINDOW_SECONDS * 1000;
 const DEFAULT_GROUP_CHANNEL_ID = "general";
@@ -65,19 +83,40 @@ const normalizeEditedMessageContentInput = (rawContent) => {
     };
   }
 
-  const normalizedContent = rawContent.trim();
+  // Remove extra whitespace but preserve line breaks
+  const normalizedContent = rawContent
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('\n')
+    .trim();
+  
   if (!normalizedContent) {
     return {
       normalizedContent: null,
-      validationError: "Nội dung không được trống",
+      validationError: "Nội dung không được trống hoặc chỉ chứa khoảng trắng",
     };
   }
 
   if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
     return {
       normalizedContent: null,
-      validationError: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+      validationError: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự (hiện tại: ${normalizedContent.length})`,
     };
+  }
+
+  // Check for excessive repetition (spam prevention)
+  const lines = normalizedContent.split('\n');
+  for (const line of lines) {
+    if (line.length > 0) {
+      const charPattern = /(.+?)\1{10,}/; // More than 10 repeated sequences
+      if (charPattern.test(line)) {
+        return {
+          normalizedContent: null,
+          validationError: "Nội dung chứa quá nhiều ký tự lặp lại",
+        };
+      }
+    }
   }
 
   return {
@@ -1389,26 +1428,63 @@ export const sendDirectMessage = async (req, res) => {
     } = req.body;
     const senderId = req.user._id;
     const normalizedContent = String(content || "").trim();
-    const hasMediaPayload = Boolean(String(imgUrl || "").trim() || String(audioUrl || "").trim());
+    const normalizedImgUrl = String(imgUrl || "").trim();
+    const normalizedAudioUrl = String(audioUrl || "").trim();
 
+    // Validate conversation references
     if (!conversationId && !recipientId) {
-      return res
-        .status(400)
-        .json({ message: "Thiếu recipientId cho cuộc trò chuyện trực tiếp mới" });
+      return res.status(400).json({ message: "Cần cung cấp conversationId hoặc recipientId" });
     }
 
-    if (!normalizedContent && !hasMediaPayload) {
-      return res.status(400).json({ message: "Thiếu nội dung hoặc phương tiện" });
+    // Validate that recipient ID is a valid ObjectId if provided
+    if (recipientId && !mongoose.isValidObjectId(recipientId)) {
+      return res.status(400).json({ message: "ID người nhận không hợp lệ" });
     }
 
-    if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
+    // Check for empty message
+    const hasContent = normalizedContent.length > 0;
+    const hasImage = normalizedImgUrl.length > 0;
+    const hasAudio = normalizedAudioUrl.length > 0;
+    const hasMedia = hasImage || hasAudio;
+
+    if (!hasContent && !hasMedia) {
       return res.status(400).json({
-        message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+        message: "Tin nhắn phải có nội dung hoặc phương tiện (hình ảnh/âm thanh)",
+        code: "EMPTY_MESSAGE"
       });
     }
 
-    if (String(recipientId) === String(senderId)) {
-      return res.status(400).json({ message: "Không thể tự nhắn cho chính mình" });
+    // Validate content length
+    if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
+      return res.status(400).json({
+        message: `Nội dung vượt quá giới hạn ${MAX_MESSAGE_CONTENT_LENGTH} ký tự. Hiện tại: ${normalizedContent.length}`,
+        code: "CONTENT_TOO_LONG",
+        maxLength: MAX_MESSAGE_CONTENT_LENGTH,
+        currentLength: normalizedContent.length
+      });
+    }
+
+    // Prevent self-messaging
+    if (recipientId && String(recipientId) === String(senderId)) {
+      return res.status(400).json({
+        message: "Bạn không thể nhắn tin cho chính mình",
+        code: "SELF_MESSAGE_NOT_ALLOWED"
+      });
+    }
+
+    // Validate URLs if present
+    if (hasImage && !isValidUrl(normalizedImgUrl)) {
+      return res.status(400).json({
+        message: "URL hình ảnh không hợp lệ",
+        code: "INVALID_IMAGE_URL"
+      });
+    }
+
+    if (hasAudio && !isValidUrl(normalizedAudioUrl)) {
+      return res.status(400).json({
+        message: "URL âm thanh không hợp lệ",
+        code: "INVALID_AUDIO_URL"
+      });
     }
 
     const { conversation, isNewConversation } =
@@ -1603,13 +1679,40 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
       });
     }
 
+    if (normalizedContent && /^\s+$/.test(normalizedContent)) {
+      return res.status(400).json({ 
+        message: "Tin nhắn không được chỉ chứa khoảng trắng",
+        errorCode: "WHITESPACE_ONLY"
+      });
+    }
+
     if (!normalizedContent && !hasMediaPayload) {
-      return res.status(400).json({ message: "Thiếu nội dung hoặc phương tiện" });
+      return res.status(400).json({ 
+        message: "Tin nhắn phải có nội dung hoặc phương tiện",
+        errorCode: "EMPTY_MESSAGE"
+      });
     }
 
     if (normalizedContent.length > MAX_MESSAGE_CONTENT_LENGTH) {
       return res.status(400).json({
-        message: `Nội dung tin nhắn không được vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+        message: `Nội dung vượt quá ${MAX_MESSAGE_CONTENT_LENGTH} ký tự`,
+        errorCode: "CONTENT_TOO_LONG",
+        currentLength: normalizedContent.length,
+        maxLength: MAX_MESSAGE_CONTENT_LENGTH
+      });
+    }
+
+    if (imgUrl && !isValidUrl(imgUrl)) {
+      return res.status(400).json({
+        message: "Đường dẫn hình ảnh không hợp lệ",
+        errorCode: "INVALID_IMAGE_URL"
+      });
+    }
+
+    if (audioUrl && !isValidUrl(audioUrl)) {
+      return res.status(400).json({
+        message: "Đường dẫn âm thanh không hợp lệ",
+        errorCode: "INVALID_AUDIO_URL"
       });
     }
     const normalizedClientMessageId = normalizeClientMessageId(clientMessageId);

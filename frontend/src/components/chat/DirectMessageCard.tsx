@@ -184,11 +184,12 @@ const DirectMessageCardInner = ({ convo }: { convo: Conversation }) => {
       nameMeta={
         isPrivateForMe ? (
           <span
-            className="inline-flex items-center text-[10px] text-muted-foreground/60"
-            title="Private"
-            aria-label="Private conversation"
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30"
+            title="This conversation is locked with PIN"
+            aria-label="Private conversation - locked"
           >
-            <Lock className="size-3" aria-hidden="true" />
+            <Lock className="size-4 text-amber-600 dark:text-amber-500" aria-hidden="true" />
+            <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">LOCKED</span>
           </span>
         ) : null
       }

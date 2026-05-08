@@ -1,4 +1,5 @@
 import api from "@/lib/axios";
+import axios from "axios";
 import type {
   AudioMeta,
   Conversation,
@@ -71,6 +72,8 @@ export interface DisappearingMessageConfigResponse {
   allowedTimers: number[];
   defaultTimer: number;
 }
+
+export const VOICE_MEMO_TOO_LARGE_ERROR = "VOICE_MEMO_TOO_LARGE";
 
 const pageLimit = 50;
 
@@ -505,13 +508,28 @@ export const chatService = {
       sizeBytes?: number | null;
     };
   }> {
-    const res = await api.post("/messages/audio/upload", { audio: base64Audio });
-    return res.data as {
-      audioUrl: string;
-      audioMeta?: {
-        mimeType?: string | null;
-        sizeBytes?: number | null;
+    try {
+      const res = await api.post("/messages/audio/upload", { audio: base64Audio });
+      return res.data as {
+        audioUrl: string;
+        audioMeta?: {
+          mimeType?: string | null;
+          sizeBytes?: number | null;
+        };
       };
-    };
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = String(error.response?.data?.message || "");
+        if (
+          status === 413 ||
+          (status === 400 && /payload exceeds 8mb|exceeds 8mb/i.test(message))
+        ) {
+          throw new Error(VOICE_MEMO_TOO_LARGE_ERROR);
+        }
+      }
+
+      throw error;
+    }
   },
 };

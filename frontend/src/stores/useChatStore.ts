@@ -3029,32 +3029,49 @@ export const useChatStore = create<ChatState>()(
           (conversationItem) => conversationItem._id === conversationId,
         );
 
-        if (!previousConversation || previousConversation.type !== "direct") {
+        if (!previousConversation) {
           return false;
         }
-
-        get().updateConversation({
-          _id: conversationId,
-          isPrivateForMe: isPrivate,
-        });
-
         try {
           const updatedConversation = await chatService.setConversationPrivacy(
             conversationId,
             isPrivate,
           );
-
-          if (updatedConversation?._id) {
-            get().updateConversation({
-              ...updatedConversation,
-              _id: updatedConversation._id,
-            });
+          if (updatedConversation) {
+            set((state) => ({
+              conversations: state.conversations.map((c) =>
+                c._id === conversationId
+                  ? { ...c, ...updatedConversation }
+                  : c,
+              ),
+            }));
+            return true;
           }
-
-          return true;
+          return false;
         } catch (error) {
-          get().updateConversation(previousConversation);
-          console.error("Failed to update conversation privacy", error);
+          console.error("Failed to update privacy:", error);
+          return false;
+        }
+      },
+      setDisappearingMessageTimer: async (conversationId, timer) => {
+        try {
+          const response = await chatService.setDisappearingMessageTimer(
+            conversationId,
+            timer,
+          );
+          if (response) {
+            set((state) => ({
+              conversations: state.conversations.map((c) =>
+                c._id === conversationId
+                  ? { ...c, disappearingMessageTimer: response.timer }
+                  : c,
+              ),
+            }));
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("Failed to update disappearing message timer:", error);
           return false;
         }
       },

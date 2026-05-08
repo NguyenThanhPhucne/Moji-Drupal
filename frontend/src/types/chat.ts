@@ -147,6 +147,7 @@ export interface Conversation {
   unreadCounts: Record<string, number>; // key = userId, value = unread count
   createdAt: string;
   updatedAt: string;
+  disappearingMessageTimer?: number;
 }
 
 export interface ConversationResponse {
@@ -200,6 +201,7 @@ export interface Message {
   deliveryState?: MessageDeliveryState;
   deliveryError?: string | null;
   deliveryAttemptCount?: number;
+  expiresAt?: string | null;
 }
 
 export interface ProfileLite {

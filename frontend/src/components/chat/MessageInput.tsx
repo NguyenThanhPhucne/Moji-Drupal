@@ -8,7 +8,9 @@ import MessagePreviewBlocks from "./message-input/MessagePreviewBlocks";
 import { useMessageComposerMode } from "./message-input/useMessageComposerMode";
 import { useImageDropZone } from "./message-input/useImageDropZone";
 
-const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
+import { memo } from "react";
+
+const MessageInputComponent = ({ selectedConvo }: { selectedConvo: Conversation }) => {
   const { user } = useAuthStore();
   const {
     value,
@@ -30,6 +32,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     audioPreview,
     isRecording,
     recordingDuration,
+    recordingStream,
     startRecording,
     stopRecording,
     cancelRecording,
@@ -98,6 +101,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         onClearAudio={removeAudioPreview}
         announcementOnly={announcementOnly}
         isGroupAdmin={isGroupAdmin}
+        disappearingMessageTimer={selectedConvo.disappearingMessageTimer}
       />
 
       <MessageComposerActions
@@ -122,6 +126,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
         onSend={handleSendClick}
         isRecording={isRecording}
         recordingDuration={recordingDuration}
+        recordingStream={recordingStream}
         onStartRecording={startRecording}
         onStopRecording={stopRecording}
         onCancelRecording={cancelRecording}
@@ -129,5 +134,11 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     </MessageComposerShell>
   );
 };
+
+// Memoize to prevent re-renders from parent scroll events
+const MessageInput = memo(MessageInputComponent, (prevProps, nextProps) => {
+  // Only re-render if selectedConvo changed (deep equality check on ID is sufficient)
+  return String(prevProps.selectedConvo._id) === String(nextProps.selectedConvo._id);
+});
 
 export default MessageInput;

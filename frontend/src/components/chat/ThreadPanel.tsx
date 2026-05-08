@@ -9,6 +9,15 @@ import { cn } from "@/lib/utils";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import UserAvatar from "./UserAvatar";
 import { toast } from "sonner";
+import {
+  addVoiceMemoOutboxItem,
+  buildVoiceMemoOutboxId,
+  type VoiceMemoOutboxItem,
+} from "@/lib/voiceMemoOutbox";
+import {
+  isLikelyVoiceMemoOfflineError,
+  VOICE_MEMO_OUTBOX_TOAST_ID,
+} from "@/lib/voiceMemoDelivery";
 
 const MAX_THREAD_RECORDING_SECONDS = 180;
 const THREAD_MEMO_MIME_CANDIDATES = [
@@ -17,12 +26,22 @@ const THREAD_MEMO_MIME_CANDIDATES = [
   "audio/mp4",
   "audio/ogg;codecs=opus",
 ];
+const MAX_VOICE_MEMO_UPLOAD_MB = 8;
 const resolveThreadMime = () => {
   if (typeof MediaRecorder === "undefined") return "";
   return THREAD_MEMO_MIME_CANDIDATES.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
 };
 const fmtSeconds = (s: number) =>
   `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+const estimateAudioDataUrlBytes = (audioDataUrl: string) => {
+  const payload = String(audioDataUrl || "").split(",")[1] || "";
+  const normalizedPayload = payload.replaceAll(/\s+/g, "");
+  if (!normalizedPayload) {
+    return 0;
+  }
+  return Math.floor((normalizedPayload.length * 3) / 4);
+};
 
 
 
@@ -32,6 +51,70 @@ const THREAD_SKELETON_KEYS = [
   "thread-skeleton-c",
   "thread-skeleton-d",
 ];
+
+const queueThreadVoiceMemoForOffline = async ({
+  user,
+  selectedConvo,
+  rootMessageId,
+  content,
+  audioDataUrl,
+  audioMeta,
+}: {
+  user: any;
+  selectedConvo: Conversation;
+  rootMessageId: string;
+  content: string;
+  audioDataUrl: string;
+  audioMeta: AudioMeta | null;
+}): Promise<void> => {
+  const normalizedUserId = String(user?._id || "").trim();
+  const normalizedConversationId = String(selectedConvo._id || "").trim();
+
+  if (!normalizedUserId || !normalizedConversationId) {
+    throw new Error("Unable to queue voice memo while offline");
+  }
+
+  const baseOutboxItem: VoiceMemoOutboxItem = {
+    id: buildVoiceMemoOutboxId(),
+    userId: normalizedUserId,
+    scope: selectedConvo.type === "direct" ? "direct" : "group",
+    conversationId: normalizedConversationId,
+    content,
+    audioDataUrl,
+    audioDurationSeconds: audioMeta?.durationSeconds ?? null,
+    audioMimeType: audioMeta?.mimeType ?? null,
+    audioSizeBytes: audioMeta?.sizeBytes ?? null,
+    replyToId: undefined,
+    threadRootId: rootMessageId,
+    queuedAt: new Date().toISOString(),
+    attemptCount: 0,
+    lastError: null,
+  };
+
+  if (selectedConvo.type === "direct") {
+    const currentUserId = String(user?._id || "");
+    const otherUser = selectedConvo.participants.find(
+      (p) => String(p._id) !== currentUserId,
+    );
+    if (!otherUser?._id) {
+      throw new Error("DIRECT_RECIPIENT_NOT_FOUND");
+    }
+
+    await addVoiceMemoOutboxItem({
+      ...baseOutboxItem,
+      recipientId: String(otherUser._id),
+    });
+  } else {
+    await addVoiceMemoOutboxItem({
+      ...baseOutboxItem,
+      groupChannelId: String(selectedConvo.group?.activeChannelId || "").trim() || undefined,
+    });
+  }
+
+  toast.info("Voice memo queued. It will send when you are back online.", {
+    id: VOICE_MEMO_OUTBOX_TOAST_ID,
+  });
+};
 
 const toMessageDateLabel = (value?: string) => {
   if (!value) return "";
@@ -81,6 +164,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const [audioPreview, setAudioPreview] = useState<string | null>(null);
   const [audioMeta, setAudioMeta] = useState<AudioMeta | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const recStreamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recSecsRef = useRef(0);
@@ -88,13 +172,39 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const recCanceledRef = useRef(false);
   const recUnmountRef = useRef(false);
 
-  useEffect(() => { recUnmountRef.current = false; return () => { recUnmountRef.current = true; }; }, []);
+  useEffect(() => {
+    recUnmountRef.current = false;
+    return () => {
+      recUnmountRef.current = true;
+      // Cleanup on unmount: stop recording and release stream
+      if (recorderRef.current?.state === "recording" || recorderRef.current?.state === "paused") {
+        recCanceledRef.current = true;
+        recorderRef.current.stop();
+      }
+      if (recStreamRef.current) {
+        recStreamRef.current.getTracks().forEach((t) => t.stop());
+        recStreamRef.current = null;
+      }
+      if (recTimerRef.current) {
+        clearInterval(recTimerRef.current);
+        recTimerRef.current = null;
+      }
+      recorderRef.current = null;
+    };
+  }, []);
 
   const clearRecTimer = useCallback(() => {
-    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+    if (recTimerRef.current) {
+      clearInterval(recTimerRef.current);
+      recTimerRef.current = null;
+    }
   }, []);
 
   const releaseStream = useCallback(() => {
+    if (recStreamRef.current) {
+      recStreamRef.current.getTracks().forEach((t) => t.stop());
+      recStreamRef.current = null;
+    }
     recorderRef.current = null;
     chunksRef.current = [];
   }, []);
@@ -102,63 +212,102 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const startRecording = useCallback(async () => {
     if (isRecording) return;
     const mime = resolveThreadMime();
-    if (!mime) { toast.error("Voice recording not supported by this browser."); return; }
+    if (!mime) {
+      toast.error("Voice recording not supported by this browser.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
       const recorder = new MediaRecorder(stream, { mimeType: mime });
       recorderRef.current = recorder;
       recMimeRef.current = mime;
       recCanceledRef.current = false;
       chunksRef.current = [];
 
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      recorder.onerror = () => {
-        clearRecTimer(); setIsRecording(false); setRecordingSecs(0);
-        stream.getTracks().forEach((t) => t.stop()); releaseStream();
-        if (!recUnmountRef.current) toast.error("Recording failed.");
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
       };
+      
+      recorder.onerror = () => {
+        clearRecTimer();
+        setIsRecording(false);
+        setRecordingSecs(0);
+        recSecsRef.current = 0;
+        releaseStream();
+        if (!recUnmountRef.current) {
+          toast.error("Recording failed.");
+        }
+      };
+      
       recorder.onstop = () => {
         const canceled = recCanceledRef.current;
         const mimeType = recorder.mimeType || recMimeRef.current || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: mimeType });
         const dur = Math.max(1, Math.round(recSecsRef.current));
-        clearRecTimer(); setIsRecording(false); setRecordingSecs(0); recSecsRef.current = 0;
-        stream.getTracks().forEach((t) => t.stop()); releaseStream();
+        clearRecTimer();
+        setIsRecording(false);
+        setRecordingSecs(0);
+        recSecsRef.current = 0;
+        releaseStream();
         if (recUnmountRef.current || canceled || !blob.size) return;
         const reader = new FileReader();
         reader.onloadend = () => {
           if (recUnmountRef.current) return;
           setAudioPreview(reader.result as string);
-          setAudioMeta({ durationSeconds: dur, mimeType, sizeBytes: blob.size });
+          setAudioMeta({
+            durationSeconds: dur,
+            mimeType,
+            sizeBytes: blob.size,
+          });
         };
         reader.readAsDataURL(blob);
       };
 
       recorder.start(250);
-      setIsRecording(true); setRecordingSecs(0); recSecsRef.current = 0;
+      setIsRecording(true);
+      setRecordingSecs(0);
+      recSecsRef.current = 0;
       clearRecTimer();
       recTimerRef.current = setInterval(() => {
         const next = recSecsRef.current + 1;
         recSecsRef.current = Math.min(next, MAX_THREAD_RECORDING_SECONDS);
         setRecordingSecs(recSecsRef.current);
-        if (next >= MAX_THREAD_RECORDING_SECONDS) { clearRecTimer(); recorder.stop(); }
+        if (next >= MAX_THREAD_RECORDING_SECONDS) {
+          clearRecTimer();
+          recorder.stop();
+        }
       }, 1000);
-    } catch {
-      toast.error("Microphone access denied.");
+    } catch (err) {
+      releaseStream();
+      if (!recUnmountRef.current) {
+        toast.error("Microphone access denied.");
+      }
     }
   }, [isRecording, clearRecTimer, releaseStream]);
 
   const stopRecording = useCallback(() => {
     recCanceledRef.current = false;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    if (recorderRef.current?.state === "recording" || recorderRef.current?.state === "paused") {
+      recorderRef.current.stop();
+    }
   }, []);
 
   const cancelRecording = useCallback(() => {
     recCanceledRef.current = true;
-    clearRecTimer(); setIsRecording(false); setRecordingSecs(0); recSecsRef.current = 0;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-    setAudioPreview(null); setAudioMeta(null);
-  }, [clearRecTimer]);
+    clearRecTimer();
+    setIsRecording(false);
+    setRecordingSecs(0);
+    recSecsRef.current = 0;
+    if (recorderRef.current?.state === "recording" || recorderRef.current?.state === "paused") {
+      recorderRef.current.stop();
+    } else {
+      // If not recording, just release the stream immediately
+      releaseStream();
+    }
+    setAudioPreview(null);
+    setAudioMeta(null);
+  }, [clearRecTimer, releaseStream]);
 
   const activeConversationId = String(selectedConvo?._id || "").trim();
   const rootMessageId = String(activeThreadRootId || "").trim();
@@ -300,10 +449,58 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     try {
       let resolvedAudioUrl: string | undefined;
       let resolvedAudioMeta = capturedMeta;
+
       if (capturedAudio?.startsWith("data:audio/")) {
-        const up = await chatService.uploadAudio(capturedAudio);
-        resolvedAudioUrl = up.audioUrl;
-        if (up.audioMeta) resolvedAudioMeta = { ...capturedMeta, ...up.audioMeta };
+        // Pre-validate audio size before attempting upload
+        const audioBytes = estimateAudioDataUrlBytes(capturedAudio);
+        if (audioBytes > MAX_VOICE_MEMO_UPLOAD_MB * 1024 * 1024) {
+          throw new Error(`Voice memo exceeds ${MAX_VOICE_MEMO_UPLOAD_MB}MB limit`);
+        }
+
+        // Check offline: queue instead of uploading
+        if (typeof navigator !== "undefined" && navigator.onLine === false) {
+          await queueThreadVoiceMemoForOffline({
+            user,
+            selectedConvo,
+            rootMessageId,
+            content: normalizedContent,
+            audioDataUrl: capturedAudio,
+            audioMeta: capturedMeta,
+          });
+          textareaRef.current?.focus();
+          return;
+        }
+
+        try {
+          const up = await chatService.uploadAudio(capturedAudio);
+          resolvedAudioUrl = up.audioUrl;
+          // Preserve client durationSeconds (server doesn't calculate it).
+          // Server provides: mimeType, sizeBytes. Client provides: durationSeconds.
+          // Canonical audioMeta = server values + client durationSeconds.
+          if (up.audioMeta) {
+            resolvedAudioMeta = capturedMeta
+              ? {
+                  durationSeconds: capturedMeta.durationSeconds,
+                  ...up.audioMeta,
+                }
+              : up.audioMeta;
+          }
+        } catch (uploadError) {
+          // Retry-eligible errors: queue for later
+          if (isLikelyVoiceMemoOfflineError(uploadError)) {
+            await queueThreadVoiceMemoForOffline({
+              user,
+              selectedConvo,
+              rootMessageId,
+              content: normalizedContent,
+              audioDataUrl: capturedAudio,
+              audioMeta: capturedMeta,
+            });
+            textareaRef.current?.focus();
+            return;
+          }
+          throw uploadError;
+        }
       } else if (capturedAudio) {
         resolvedAudioUrl = capturedAudio;
       }
@@ -327,10 +524,18 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
       }
 
       textareaRef.current?.focus();
-    } catch {
+    } catch (error) {
       setComposerValue(normalizedContent);
       setAudioPreview(capturedAudio); setAudioMeta(capturedMeta);
-      toast.error("Failed to send reply.");
+      
+      if (error instanceof Error && /exceeds.*MB/i.test(error.message)) {
+        toast.error(error.message);
+      } else if (error instanceof Error && isLikelyVoiceMemoOfflineError(error)) {
+        // Already handled by offline queue above, but fallback just in case
+        toast.error("Could not send voice memo. Check your connection.");
+      } else {
+        toast.error("Failed to send reply.");
+      }
     } finally {
       setSending(false);
     }
@@ -389,6 +594,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
               <VoiceMessagePlayer
                 src={rootMessage.audioUrl}
                 initialDurationSeconds={rootMessage.audioMeta?.durationSeconds ?? null}
+                audioSizeBytes={rootMessage.audioMeta?.sizeBytes ?? null}
               />
             ) : (
               <p className="text-sm leading-relaxed text-foreground line-clamp-3">
@@ -509,6 +715,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                                 initialDurationSeconds={
                                   messageItem.audioMeta?.durationSeconds ?? null
                                 }
+                                audioSizeBytes={messageItem.audioMeta?.sizeBytes ?? null}
                               />
                             ) : (
                               <p>

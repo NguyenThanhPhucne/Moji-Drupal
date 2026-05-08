@@ -225,6 +225,10 @@ export interface ChatState {
     conversationId: string,
     isPrivate: boolean,
   ) => Promise<boolean>;
+  setDisappearingMessageTimer: (
+    conversationId: string,
+    timer: number,
+  ) => Promise<boolean>;
   updateGroupChannelCategory: (
     conversationId: string,
     categoryId: string,

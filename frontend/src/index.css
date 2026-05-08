@@ -877,6 +877,8 @@ html[data-motion="reduced"] * {
 
   .conversation-fade {
     animation: conversationShift 0.28s cubic-bezier(0.2, 0.75, 0.2, 1);
+    will-change: transform;
+    transform: translateZ(0);
   }
 
   @keyframes routeSceneEnter {
@@ -2584,6 +2586,44 @@ html[data-motion="reduced"] * {
 
   .chat-message-action-btn:active {
     transform: translateY(0) scale(var(--msg-motion-action-active-scale));
+  }
+
+  /* ── Inline Quick Reaction emoji buttons (Slack/Discord style) ── */
+  .chat-message-action-btn--emoji {
+    /* Slightly wider than icon buttons to fit the emoji comfortably */
+    padding: 0.3rem 0.45rem;
+    line-height: 1;
+    font-size: 14px;
+  }
+
+  .chat-message-action-btn--emoji:hover {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--muted) / 0.9) 0%,
+      hsl(var(--muted) / 0.6) 100%
+    );
+    border-color: hsl(var(--border) / 0.9);
+    color: inherit;
+    /* Override the primary tint so emoji stays visible */
+    box-shadow:
+      0 10px 18px -14px hsl(220 20% 16% / 0.3),
+      0 1px 0 hsl(0 0% 100% / 0.46) inset;
+    transform: translateY(-2px);
+  }
+
+  .chat-message-action-btn--emoji:active {
+    transform: translateY(0) scale(0.92);
+  }
+
+  @keyframes emojiReactPop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.45) rotate(-8deg); }
+    70%  { transform: scale(1.2) rotate(4deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+
+  .chat-message-action-btn--emoji:active span {
+    animation: emojiReactPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
 
   .chat-modal-btn {

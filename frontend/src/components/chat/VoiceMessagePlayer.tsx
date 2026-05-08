@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
+import {
+  VoicePlayerErrorUI,
+  VoicePlayerSkeleton,
+} from "./VoiceUIComponents";
+import {
+  playerRevealClass,
+  waveformBarAnimationClass,
+  focusRingAnimationClass,
+  buttonPressClass,
+} from "@/lib/voiceAnimations";
 
 interface VoiceMessagePlayerProps {
   src: string;
@@ -7,6 +17,7 @@ interface VoiceMessagePlayerProps {
   standalone?: boolean;
   className?: string;
   initialDurationSeconds?: number | null;
+  audioSizeBytes?: number | null;
 }
 
 const BAR_COUNT = 24;
@@ -28,6 +39,13 @@ const formatTime = (seconds: number) => {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m}:${s < 10 ? "0" : ""}${s}`;
+};
+
+const formatFileSize = (bytes: number | null | undefined) => {
+  if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 };
 
 const PlayIcon = ({ className }: { className?: string }) => (
@@ -60,6 +78,7 @@ const VoiceMessagePlayer = ({
   standalone = false,
   className,
   initialDurationSeconds = null,
+  audioSizeBytes = null,
 }: VoiceMessagePlayerProps) => { // NOSONAR
   const audioRef = useRef<HTMLAudioElement>(null);
   const instanceIdRef = useRef(buildVoicePlayerInstanceId());
@@ -74,7 +93,12 @@ const VoiceMessagePlayer = ({
   const [useFallbackSrc, setUseFallbackSrc] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [liveVolumes, setLiveVolumes] = useState<number[]>([]);
   const animFrameRef = useRef<number | null>(null);
+
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
 
   // Cloudinary allows on-the-fly format conversion. We force MP4 to ensure
   // Safari compatibility and to fix WebM Infinity duration bugs.
@@ -151,7 +175,43 @@ const VoiceMessagePlayer = ({
     const audio = audioRef.current;
     if (!audio) return;
     setCurrentTime(audio.currentTime);
+
+    // Update waveform if playing
     if (!audio.paused) {
+      if (analyserRef.current) {
+        const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        // Map to BAR_COUNT
+        const step = Math.max(1, Math.floor(dataArray.length / BAR_COUNT));
+        const nextVolumes: number[] = [];
+        let hasData = false;
+
+        for (let i = 0; i < BAR_COUNT; i++) {
+          let sum = 0;
+          for (let j = 0; j < step; j++) {
+            const index = i * step + j;
+            if (index < dataArray.length) {
+              sum += dataArray[index];
+            }
+          }
+          const average = sum / step;
+          const normalized = Math.min(1, average / 255);
+          nextVolumes.push(normalized);
+          if (normalized > 0.05) hasData = true;
+        }
+
+        if (hasData) {
+          setLiveVolumes(nextVolumes);
+        } else {
+          // Fallback jitter if CORS blocks data or audio is silent
+          setLiveVolumes(WAVEFORM_BARS.map(base => Math.max(0.2, Math.min(1, base + (Math.random() * 0.4 - 0.2)))));
+        }
+      } else {
+         // Pure fallback jitter
+         setLiveVolumes(WAVEFORM_BARS.map(base => Math.max(0.2, Math.min(1, base + (Math.random() * 0.4 - 0.2)))));
+      }
+
       animFrameRef.current = requestAnimationFrame(tick);
     }
   }, []);
@@ -185,6 +245,33 @@ const VoiceMessagePlayer = ({
     const onPlay = () => {
       setIsPlaying(true);
       setIsBuffering(false);
+
+      // Init AudioContext on first play
+      if (!audioContextRef.current && audioRef.current) {
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          const ctx = new AudioContextClass();
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          analyser.smoothingTimeConstant = 0.8;
+          
+          const source = ctx.createMediaElementSource(audioRef.current);
+          source.connect(analyser);
+          analyser.connect(ctx.destination);
+          
+          audioContextRef.current = ctx;
+          analyserRef.current = analyser;
+          sourceRef.current = source;
+        } catch (e) {
+          console.warn("Failed to init AudioContext for playback", e);
+        }
+      }
+
+      // Resume context if suspended
+      if (audioContextRef.current?.state === "suspended") {
+        void audioContextRef.current.resume();
+      }
+
       globalThis.window.dispatchEvent?.(
         new CustomEvent(VOICE_PLAYER_PLAY_EVENT, {
           detail: { instanceId: instanceIdRef.current },
@@ -243,6 +330,34 @@ const VoiceMessagePlayer = ({
       if (animFrameRef.current) {
         cancelAnimationFrame(animFrameRef.current);
         animFrameRef.current = null;
+      }
+      
+      // Safely disconnect audio nodes to prevent memory leaks
+      try {
+        if (sourceRef.current) {
+          sourceRef.current.disconnect();
+          sourceRef.current = null;
+        }
+      } catch (e) {
+        console.warn("Failed to disconnect audio source", e);
+      }
+      
+      try {
+        if (analyserRef.current) {
+          analyserRef.current.disconnect();
+          analyserRef.current = null;
+        }
+      } catch (e) {
+        console.warn("Failed to disconnect analyser", e);
+      }
+      
+      try {
+        if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+          void audioContextRef.current.close();
+        }
+        audioContextRef.current = null;
+      } catch (e) {
+        console.warn("Failed to close audio context", e);
       }
     };
   }, [playableSrc, tick]);
@@ -391,18 +506,25 @@ const VoiceMessagePlayer = ({
   return (
     <div
       className={cn(
-        "voice-player flex items-center gap-3 px-2.5 py-2",
-        "min-w-[220px] max-w-[280px]",
+        "voice-player flex items-center gap-2 sm:gap-3 px-2.5 py-2",
+        // Responsive sizing: full width on mobile, constrained on desktop
+        "w-full sm:w-auto sm:min-w-[220px] sm:max-w-[280px]",
+        // Responsive flex direction: column on tiny, row on larger
+        "flex-col sm:flex-row",
         playerToneClass,
-        // If standalone but no class provided to override radius, fallback to rounded-2xl
         playerRadiusClass,
+        // Smooth reveal animation
+        playerRevealClass,
         className
       )}
+      role="region"
+      aria-label="Voice message player"
     >
-      {/* Hidden native audio */}
+      {/* Hidden native audio - rendered unconditionally so it loads in background */}
       <audio 
         ref={audioRef} 
         src={playableSrc} 
+        crossOrigin="anonymous"
         preload="metadata" 
         className="hidden" 
         onError={handleAudioError}
@@ -410,83 +532,140 @@ const VoiceMessagePlayer = ({
         <track kind="captions" />
       </audio>
 
-      {/* Prominent Play/Pause Button */}
-      <button
-        type="button"
-        aria-label={isPlaying ? "Pause voice message" : "Play voice message"}
-        aria-disabled={(!isLoaded && !hasError) || undefined}
-        onClick={togglePlay}
-        className={cn(
-          "flex size-10 shrink-0 items-center justify-center rounded-full transition-all shadow-sm active:scale-95",
-          !isLoaded && !hasError && !isBuffering && "opacity-50 cursor-wait",
-          hasError && "opacity-40 cursor-not-allowed",
-          actionButtonToneClass,
-        )}
-      >
-        {actionIcon}
-      </button>
+      {/* Loading skeleton */}
+      {!isLoaded && !hasError && (
+        <VoicePlayerSkeleton className={className} />
+      )}
 
-      {/* Waveform Column */}
-      <div className="flex flex-col flex-1 min-w-0 justify-center">
-        <progress
-          className="sr-only"
-          max={100}
-          value={Math.round(progress * 100)}
-          aria-label="Voice message progress"
+      {/* Error state */}
+      {hasError && (
+        <VoicePlayerErrorUI
+          error={null}
+          onRetry={retryLoad}
+          onRefresh={() => window.location.reload()}
+          isOwn={isOwn}
         />
-        <button
-          type="button"
-          className="flex w-full items-center gap-[2px] h-6 cursor-pointer select-none group bg-transparent p-0 text-inherit"
-          onClick={handleWaveformClick}
-          onKeyDown={handleWaveformKeyDown}
-          role="slider"
-          aria-valuemin={0}
-          aria-valuemax={Math.max(1, Math.round(duration))}
-          aria-valuenow={Math.max(0, Math.round(currentTime))}
-          aria-label={`Voice waveform: ${formatTime(currentTime)} of ${formatTime(duration)}`}
-        >
-          {WAVEFORM_BARS.map((height, i) => {
-            const isActive = i < activeBars;
-            const waveformClass = isActive ? waveformActiveClass : waveformInactiveClass;
-            const barHeight = `${Math.max(20, Math.round(height * 100))}%`;
-            return (
-              <span
-                key={`voice-bar-${i}-${height}`}
-                className={cn(
-                  "flex-1 rounded-full transition-colors duration-100",
-                  isPlaying && isActive ? "voice-bar-playing" : "",
-                  waveformClass,
-                )}
-                style={{
-                  height: barHeight,
-                }}
-              />
-            );
-          })}
-        </button>
-      </div>
+      )}
 
-      {/* Time / error state */}
-      {hasError ? (
-        <button
-          type="button"
-          onClick={retryLoad}
-          className={cn(
-            "shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors",
-            isOwn
-              ? "border-white/30 text-white/85 hover:bg-white/10"
-              : "border-border/70 text-muted-foreground hover:bg-muted/60",
+      {/* Player content */}
+      {isLoaded && !hasError && (
+        <>
+
+          {/* Prominent Play/Pause Button - Enterprise touch target: 48px */}
+          <button
+            type="button"
+            aria-label={isPlaying ? "Pause voice message" : "Play voice message"}
+            aria-disabled={(!isLoaded && !hasError) || undefined}
+            aria-describedby={`voice-player-desc-${instanceIdRef.current}`}
+            onClick={togglePlay}
+            className={cn(
+              "flex size-12 sm:size-12 shrink-0 items-center justify-center rounded-full",
+              "transition-all duration-200 shadow-sm",
+              "hover:shadow-lg hover:scale-105",
+              buttonPressClass,
+              focusRingAnimationClass,
+              !isLoaded && !hasError && !isBuffering && "opacity-50 cursor-wait",
+              hasError && "opacity-40 cursor-not-allowed",
+              actionButtonToneClass,
+            )}
+          >
+            {actionIcon}
+          </button>
+
+          {/* Waveform Column - Enterprise touch target: 32px height, responsive width */}
+          <div className="flex flex-col flex-1 min-w-0 justify-center w-full sm:w-auto">
+            <progress
+              className="sr-only"
+              max={100}
+              value={Math.round(progress * 100)}
+              aria-label="Voice message progress"
+            />
+            <button
+              type="button"
+              className={cn(
+                "flex w-full sm:w-auto items-center gap-[2px] h-8 cursor-pointer select-none group",
+                "bg-transparent p-0 text-inherit",
+                "hover:opacity-80 transition-opacity duration-200",
+                focusRingAnimationClass,
+                "rounded"
+              )}
+              onClick={handleWaveformClick}
+              onKeyDown={handleWaveformKeyDown}
+              role="slider"
+              aria-valuemin={0}
+              aria-valuemax={Math.max(1, Math.round(duration))}
+              aria-valuenow={Math.max(0, Math.round(currentTime))}
+              aria-label={`Voice waveform: ${formatTime(currentTime)} of ${formatTime(duration)}`}
+              aria-description="Use arrow keys or Home/End to navigate"
+            >
+              {(liveVolumes.length && isPlaying ? liveVolumes : WAVEFORM_BARS).map((height, i) => {
+                const isActive = i < activeBars;
+                const waveformClass = isActive ? waveformActiveClass : waveformInactiveClass;
+                // Map height to percentage (minimum 20% for visibility)
+                const barHeight = `${Math.max(20, Math.round(height * 100))}%`;
+                return (
+                  <span
+                    key={`voice-bar-${i}`}
+                    className={cn(
+                      "flex-1 rounded-full transition-all",
+                      waveformBarAnimationClass,
+                      isPlaying && isActive ? "voice-bar-playing" : "",
+                      waveformClass,
+                    )}
+                    style={{
+                      height: barHeight,
+                      transform: isPlaying ? "scaleY(1)" : "scaleY(0.95)",
+                    }}
+                  />
+                );
+              })}
+            </button>
+
+            {/* Buffering progress indicator - subtle and responsive */}
+            {isBuffering && (
+              <div className="mt-1 w-full bg-muted-foreground/20 rounded-full h-0.5 overflow-hidden">
+                <div 
+                  className={cn(
+                    "bg-primary h-full transition-all",
+                    "duration-300 animate-pulse-subtle"
+                  )}
+                  style={{ width: `${Math.min((currentTime / duration) * 100, 95)}%` }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Time / error state - Enterprise sizing */}
+          <div className="flex flex-col items-end gap-0.5 shrink-0 min-w-max">
+            <div className={cn(
+              "text-sm font-medium font-mono tabular-nums",
+              timeToneClass,
+            )}>
+              {timeLabel}
+            </div>
+            {audioSizeBytes && (
+              <div className={cn(
+                "text-xs opacity-70 font-mono",
+                timeToneClass,
+              )}>
+                {formatFileSize(audioSizeBytes)}
+              </div>
+            )}
+          </div>
+
+          {/* Screen reader description */}
+          <div id={`voice-player-desc-${instanceIdRef.current}`} className="sr-only">
+            Voice message player. {formatTime(duration)} total duration, {formatFileSize(audioSizeBytes)}.
+            Currently at {formatTime(currentTime)}. Click play button to listen, or click on the waveform to jump to a position.
+          </div>
+
+          {/* Buffering announcement */}
+          {isBuffering && (
+            <span className="sr-only" aria-live="polite" aria-atomic="true">
+              Loading voice message, please wait
+            </span>
           )}
-        >
-          Retry
-        </button>
-      ) : (
-        <div className={cn(
-          "text-[11px] font-medium font-mono tabular-nums min-w-[34px] text-right shrink-0",
-          timeToneClass,
-        )}>
-          {timeLabel}
-        </div>
+        </>
       )}
     </div>
   );

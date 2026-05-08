@@ -6,6 +6,7 @@ import { format, isToday, isYesterday } from "date-fns";
 import {
   Reply,
   Smile,
+  SmilePlus,
   Sparkles,
   Frown,
   Heart,
@@ -22,6 +23,7 @@ import {
   AlertCircle,
   RotateCcw,
   MessageSquare,
+  Flame,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
@@ -466,6 +468,12 @@ function useSeenStatusPulse({
   return seenJustUpdated;
 }
 
+const INLINE_QUICK_REACTIONS = [
+  { emoji: "👍", label: "Like" },
+  { emoji: "❤️", label: "Love" },
+  { emoji: "😂", label: "Haha" },
+] as const;
+
 const MessageActionToolbar = memo(function MessageActionToolbar({
   editMode,
   isOwn,
@@ -509,24 +517,49 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
           : cn("opacity-0 pointer-events-none", hiddenActionOffsetClass),
       )}
     >
+      {/* ── Inline Quick Reactions (Slack/Discord style — 1-click) ── */}
+      {INLINE_QUICK_REACTIONS.map(({ emoji, label }) => (
+        <Tooltip key={label} delayDuration={300}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => onReact(emoji)}
+              aria-label={`React with ${label}`}
+              className="chat-message-action-btn chat-message-action-btn--emoji chat-message-action-btn--command group"
+            >
+              <span className="text-[14px] leading-none group-hover:scale-125 transition-transform duration-100 inline-block">
+                {emoji}
+              </span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">
+            {label}
+          </TooltipContent>
+        </Tooltip>
+      ))}
+
+      {/* ── More reactions picker ── */}
       <div className="relative">
         {reactBarVisible && (
           <QuickReactBar onReact={onReact} visible={true} />
         )}
-        <Tooltip delayDuration={600}>
+        <Tooltip delayDuration={400}>
           <TooltipTrigger asChild>
             <button
               type="button"
               onClick={onToggleReactBar}
-              aria-label="Add reaction"
+              aria-label="More reactions"
               className="chat-message-action-btn chat-message-action-btn--icon chat-message-action-btn--command"
             >
-              <Smile className="size-[13px] text-muted-foreground" />
+              <SmilePlus className="size-[13px] text-muted-foreground" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">React</TooltipContent>
+          <TooltipContent side="top" sideOffset={6} className="text-[11px] py-1 px-2">More</TooltipContent>
         </Tooltip>
       </div>
+
+      {/* ── Visual separator ── */}
+      <div className="mx-[2px] h-4 w-px bg-border/50 shrink-0" aria-hidden="true" />
 
       <Tooltip delayDuration={600}>
         <TooltipTrigger asChild>
@@ -673,6 +706,16 @@ const MessageMetaSection = memo(function MessageMetaSection({
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-[10px] py-1 px-2">
                       Forwarding disabled
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {message.expiresAt && !message.isDeleted && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Flame className="size-3 text-orange-500 animate-pulse" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                      Secret message
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -998,6 +1041,25 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     x: number;
     y: number;
   } | null>(null);
+
+  const [isExpired, setIsExpired] = useState(() => {
+    if (!message.expiresAt) return false;
+    return new Date(message.expiresAt).getTime() <= Date.now();
+  });
+
+  useEffect(() => {
+    if (!message.expiresAt || isExpired) return;
+    const expiresMs = new Date(message.expiresAt).getTime();
+    const timeoutMs = expiresMs - Date.now();
+    if (timeoutMs <= 0) {
+      setIsExpired(true);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setIsExpired(true);
+    }, timeoutMs);
+    return () => clearTimeout(timer);
+  }, [message.expiresAt, isExpired]);
 
   const editInputRef = useRef<HTMLInputElement>(null);
   const actionHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1610,6 +1672,7 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
                 standalone={hasOnlyAudio}
                 className={hasOnlyAudio ? bubbleClusterClass : undefined}
                 initialDurationSeconds={message.audioMeta?.durationSeconds ?? null}
+                audioSizeBytes={message.audioMeta?.sizeBytes ?? null}
               />
             </div>
           )}
@@ -1715,6 +1778,8 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
   ) : (
     readOnlyBubbleNode
   );
+
+  if (isExpired) return null;
 
   return (
     <>

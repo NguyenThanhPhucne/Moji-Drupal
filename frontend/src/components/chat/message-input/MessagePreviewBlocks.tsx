@@ -1,4 +1,4 @@
-import { Reply, X, MegaphoneOff } from "lucide-react";
+import { Reply, X, MegaphoneOff, Flame } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import VoiceMessagePlayer from "../VoiceMessagePlayer";
 
@@ -20,6 +20,7 @@ interface MessagePreviewBlocksProps {
   onClearAudio?: () => void;
   announcementOnly: boolean;
   isGroupAdmin: boolean;
+  disappearingMessageTimer?: number;
 }
 
 /** Renders only when announcement mode is ON and the user cannot send */
@@ -43,6 +44,19 @@ const AnnouncementBanner = ({
   );
 };
 
+const SecretModeBanner = ({ timer }: { timer?: number }) => {
+  if (!timer || timer <= 0) return null;
+
+  return (
+    <div className="mx-3 mb-2 mt-2 flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-50/80 px-3 py-1.5 dark:border-orange-500/20 dark:bg-orange-500/10 shadow-sm animate-in slide-in-from-bottom-2">
+      <Flame className="size-3.5 flex-shrink-0 text-orange-500 animate-pulse" />
+      <p className="text-[11.5px] font-medium leading-snug text-orange-800 dark:text-orange-300">
+        Secret mode is on
+      </p>
+    </div>
+  );
+};
+
 const MessagePreviewBlocks = ({
   replyingTo,
   onClearReply,
@@ -52,6 +66,7 @@ const MessagePreviewBlocks = ({
   onClearAudio,
   announcementOnly,
   isGroupAdmin,
+  disappearingMessageTimer,
 }: MessagePreviewBlocksProps) => {
   const { t } = useI18n();
 
@@ -124,6 +139,9 @@ const MessagePreviewBlocks = ({
 
       {/* ── Announcement-only warning (context-aware, not always visible) */}
       <AnnouncementBanner announcementOnly={announcementOnly} isGroupAdmin={isGroupAdmin} />
+
+      {/* ── Secret mode indicator */}
+      <SecretModeBanner timer={disappearingMessageTimer} />
     </>
   );
 };

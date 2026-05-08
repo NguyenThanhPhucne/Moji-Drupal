@@ -7,8 +7,22 @@ import type {
   KeyboardEvent,
   RefObject,
 } from "react";
+import { memo } from "react";
 import EmojiPicker from "../EmojiPicker";
 import { Button } from "../../ui/button";
+import { VoiceRecordingVisualizer } from "./VoiceRecordingVisualizer";
+import {
+  RecordingDurationDisplay,
+  RecordingStatusLiveRegion,
+  OfflineRecordingIndicator,
+} from "../VoiceUIComponents";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import {
+  recordingRevealClass,
+  recordingIndicatorClass,
+  buttonPressClass,
+  focusRingAnimationClass,
+} from "@/lib/voiceAnimations";
 
 const CharRing = ({ value, max }: { value: number; max: number }) => {
   const radius = 10;
@@ -108,12 +122,13 @@ interface MessageComposerActionsProps {
   // Audio state
   isRecording?: boolean;
   recordingDuration?: number;
+  recordingStream?: MediaStream | null;
   onStartRecording?: () => void;
   onStopRecording?: () => void;
   onCancelRecording?: () => void;
 }
 
-const MessageComposerActions = ({
+const MessageComposerActionsComponent = ({
   canSendInCurrentMode,
   imagePreview,
   fileInputRef,
@@ -135,11 +150,13 @@ const MessageComposerActions = ({
   onSend,
   isRecording,
   recordingDuration,
+  recordingStream,
   onStartRecording,
   onStopRecording,
   onCancelRecording,
 }: MessageComposerActionsProps) => {
   const { t } = useI18n();
+  const isOnline = useOnlineStatus();
 
   const formatDuration = (seconds?: number) => {
     if (!seconds) return "0:00";
@@ -147,6 +164,8 @@ const MessageComposerActions = ({
     const s = seconds % 60;
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
+
+  const MAX_RECORDING_DURATION = 180; // 3 minutes
 
   return (
     <div className="chat-composer-actions-row chat-composer-actions-row--command">
@@ -184,33 +203,93 @@ const MessageComposerActions = ({
         )}
       >
         {isRecording ? (
-        <div className="flex flex-1 items-center gap-3 px-3 animate-in fade-in duration-200">
-            {/* Recording waveform */}
-            <div className="flex items-center gap-[3px] h-5 flex-shrink-0" aria-hidden="true">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <span key={i} className="voice-bar" />
-              ))}
+          <>
+            {/* Recording status announcement for screen readers */}
+            <RecordingStatusLiveRegion 
+              isRecording={isRecording} 
+              duration={recordingDuration || 0}
+              maxDuration={MAX_RECORDING_DURATION}
+            />
+
+            {/* Recording UI Container - smooth reveal with animations */}
+            <div className={cn(
+              "flex flex-1 flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 py-2",
+              recordingRevealClass,
+              "rounded-lg border border-destructive/30",
+              "dark:bg-slate-800/50 bg-red-50/50",
+              "dark:border-destructive/20 border-destructive/30",
+              !isOnline && "border-amber-500/50 bg-amber-50/30 dark:bg-amber-950/20"
+            )}>
+              {/* Animated recording indicator dot */}
+              <div className={cn(
+                "relative flex items-center justify-center w-2 h-2 flex-shrink-0",
+                recordingIndicatorClass
+              )}>
+                <div className="absolute w-2 h-2 rounded-full bg-destructive dark:bg-red-400" />
+              </div>
+
+              {/* Recording waveform - Enterprise size: 32px height, responsive width */}
+              <VoiceRecordingVisualizer 
+                stream={recordingStream || null} 
+                barCount={16}
+                className="h-8 flex-1 sm:flex-none sm:w-32"
+              />
+
+              {/* Recording duration with max context */}
+              <RecordingDurationDisplay
+                current={recordingDuration || 0}
+                max={MAX_RECORDING_DURATION}
+              />
+
+              {/* Status label - hidden on very small screens */}
+              <span className="text-xs text-muted-foreground hidden sm:inline font-medium">
+                Recording…
+              </span>
+
+              {/* Offline indicator */}
+              {!isOnline && <OfflineRecordingIndicator />}
+
+              <div className="flex-1 hidden sm:block" />
+
+              {/* Action buttons - responsive layout */}
+              <div className={cn(
+                "flex w-full sm:w-auto gap-2 sm:ml-auto",
+                "flex-row justify-end"
+              )}>
+                {/* Cancel button - Enterprise size: 40px height, responsive width */}
+                <button
+                  type="button"
+                  onClick={onCancelRecording}
+                  aria-label="Cancel voice recording"
+                  className={cn(
+                    "px-3 h-10 rounded-lg text-sm font-medium transition-all",
+                    buttonPressClass,
+                    focusRingAnimationClass,
+                    "text-muted-foreground hover:text-destructive hover:bg-destructive/10",
+                    "dark:hover:bg-destructive/20"
+                  )}
+                >
+                  Cancel
+                </button>
+
+                {/* Done button - Enterprise size: 40px height, responds to recording state */}
+                <button
+                  type="button"
+                  onClick={onStopRecording}
+                  aria-label={`Stop recording and save voice memo (${formatDuration(recordingDuration)} recorded)`}
+                  className={cn(
+                    "px-4 h-10 rounded-lg text-sm font-semibold shadow-sm transition-all",
+                    buttonPressClass,
+                    focusRingAnimationClass,
+                    "bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-lg hover:scale-105",
+                    "dark:bg-primary dark:hover:bg-primary/80"
+                  )}
+                >
+                  Done
+                </button>
+              </div>
             </div>
-            <span className="font-mono text-sm font-semibold tabular-nums text-destructive">
-              {formatDuration(recordingDuration)}
-            </span>
-            <span className="text-[11.5px] text-muted-foreground/70 hidden sm:inline">Recording…</span>
-            <div className="flex-1" />
-            <button
-              type="button"
-              onClick={onCancelRecording}
-              className="px-2.5 h-7 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={onStopRecording}
-              className="px-3 h-7 rounded-lg bg-primary text-primary-foreground text-[12px] font-semibold shadow-sm hover:bg-primary/90 active:scale-[0.97] transition-all"
-            >
-              Done
-            </button>
-          </div>
+          </>
         ) : (
           <>
             <textarea
@@ -256,12 +335,12 @@ const MessageComposerActions = ({
           size="icon"
           disabled={!canSendInCurrentMode}
           className={cn(
-            "chat-composer-action-btn chat-composer-action-btn--command text-muted-foreground hover:text-primary",
+            "chat-composer-action-btn chat-composer-action-btn--command text-muted-foreground hover:text-primary focus:ring-2 focus:ring-primary/50 focus:outline-none",
             !canSendInCurrentMode && "chat-composer-action-btn--disabled",
           )}
           onClick={onStartRecording}
           title={t("chatComposer.record_audio") || "Record voice memo"}
-          aria-label="Record voice memo"
+          aria-label="Record voice memo (maximum 3 minutes)"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -312,5 +391,8 @@ const MessageComposerActions = ({
     </div>
   );
 };
+
+// Memoize to prevent re-renders from scroll events
+const MessageComposerActions = memo(MessageComposerActionsComponent);
 
 export default MessageComposerActions;
