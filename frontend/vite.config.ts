@@ -56,25 +56,16 @@ export default defineConfig({
       },
     },
   },
-  // --- THÊM PHẦN NÀY ĐỂ SỬA LỖI 401 ---
+  // --- VITE DEV SERVER PROXY ---
   server: {
     proxy: {
-      // 1. Khi gọi /api/drupal -> Chuyển hướng ngầm sang cổng 8000
-      "/api/drupal": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-        secure: false,
-        // Dòng này biến đổi: "/api/drupal/auth/..." thành "/api/auth/..." để khớp với Drupal
-        rewrite: (path) => path.replace(/^\/api\/drupal/, "/api"),
-      },
-      // 2. Khi gọi /api/node -> Chuyển hướng ngầm sang cổng 5001
-      "/api/node": {
+      // Generic /api proxy for Node.js backend (port 5001)
+      "/api": {
         target: "http://127.0.0.1:5001",
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api\/node/, "/api"),
       },
-      // 3. Socket.IO proxy cho local dev (websocket + polling)
+      // Socket.IO proxy (websocket + polling)
       "/socket.io": {
         target: "http://127.0.0.1:5001",
         changeOrigin: true,

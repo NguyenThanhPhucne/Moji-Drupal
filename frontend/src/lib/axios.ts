@@ -4,7 +4,7 @@ import axios from "axios";
 const normalizeApiBase = (rawBase: string | undefined) => {
   const value = String(rawBase || "").trim();
   if (!value) {
-    return "/api/node";
+    return "/api";
   }
 
   if (value.startsWith("http://") || value.startsWith("https://")) {
