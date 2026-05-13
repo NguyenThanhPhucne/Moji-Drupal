@@ -260,7 +260,7 @@ const bootstrapDirectConversation = async ({ page, peerId, fallbackToken }) => {
 
     const loadConversationsFromApi = async () => {
       const accessToken = useAuthStore.getState().accessToken || activeToken;
-      const response = await fetch("/api/node/conversations", {
+      const response = await fetch("/api/conversations", {
         method: "GET",
         credentials: "include",
         headers: accessToken
@@ -525,6 +525,8 @@ const runViewportAccentCheck = async ({ browser, ownerAuth, peerAuth, viewport }
       fallbackToken: ownerAuth.token,
       fallbackUser: ownerAuth.user,
     });
+
+    await page.goto(`${APP_BASE_URL}/chat`, { waitUntil: "domcontentloaded" });
 
     const bootstrap = await bootstrapDirectConversation({
       page,

@@ -173,14 +173,35 @@ function AppRoutes() {
       mainRef.current ??
       globalThis.document.getElementById("primary-main");
 
-    if (mainElement) {
-      mainElement.focus({ preventScroll: true });
-      mainElement.scrollIntoView({ block: "start", behavior: "smooth" });
+    const setSkipHash = () => {
+      if (globalThis.location.hash === "#primary-main") {
+        return;
+      }
+
+      const nextUrl = `${globalThis.location.pathname}${globalThis.location.search}#primary-main`;
+      try {
+        globalThis.history.replaceState({}, "", nextUrl);
+      } catch {
+        globalThis.location.hash = "#primary-main";
+      }
+    };
+
+    if (!mainElement) {
+      setSkipHash();
+      return;
     }
 
-    if (globalThis.location.hash !== "#primary-main") {
-      globalThis.location.hash = "#primary-main";
-    }
+    const focusMain = () => {
+      mainElement.focus({ preventScroll: true });
+      mainElement.scrollIntoView({ block: "start", behavior: "smooth" });
+    };
+
+    focusMain();
+    setSkipHash();
+
+    globalThis.requestAnimationFrame(() => {
+      focusMain();
+    });
   };
 
   useEffect(() => {
@@ -231,7 +252,13 @@ function AppRoutes() {
         aria-label={t("app.skip_to_main")}
         data-testid="skip-to-main-link"
         onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            moveFocusToMain();
+          }
+        }}
+        onKeyUp={(event) => {
+          if (event.key === " " || event.key === "Spacebar") {
             event.preventDefault();
             moveFocusToMain();
           }
@@ -274,6 +301,7 @@ function AppRoutes() {
             <Route path="/feed/home" element={<Navigate to="/feed" replace />} />
             <Route path="/feed" element={<HomeFeedPage />} />
             <Route path="/chat" element={<ChatAppPage />} />
+            <Route path="/direct/:param" element={<ChatAppPage />} />
             <Route path="/explore" element={<ExplorePage />} />
             <Route path="/post/:postId" element={<PostDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />

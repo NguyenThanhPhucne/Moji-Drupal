@@ -177,7 +177,7 @@ const jsonResponse = (data, status = 200) => ({
 const extractApiPath = (url) => {
   try {
     const parsedUrl = new URL(url);
-    const marker = "/api/node";
+    const marker = "/api";
     const markerIndex = parsedUrl.pathname.indexOf(marker);
     if (markerIndex < 0) {
       return "";
@@ -370,19 +370,46 @@ const bootstrapStores = async (page) => {
   await page.getByLabel("Password").fill("smoke-password");
   await page.getByRole("button", { name: "Sign in" }).click();
 
-  await page.waitForFunction(
-    () => {
-      const bridge = globalThis.__MOJI_SMOKE_BRIDGE__;
-      const authState = bridge?.useAuthStore?.getState?.();
+  const waitForAuthState = async () => {
+    await page.waitForFunction(
+      () => {
+        const bridge = globalThis.__MOJI_SMOKE_BRIDGE__;
+        const authState = bridge?.useAuthStore?.getState?.();
 
-      return (
-        Boolean(authState?.accessToken && authState?.user?._id) &&
-        globalThis.location.pathname !== "/signin"
-      );
-    },
-    undefined,
-    { timeout: 10000 },
-  );
+        return (
+          Boolean(authState?.accessToken && authState?.user?._id) &&
+          globalThis.location.pathname !== "/signin"
+        );
+      },
+      undefined,
+      { timeout: 10000 },
+    );
+  };
+
+  try {
+    await waitForAuthState();
+  } catch {
+    await page.evaluate(({ accessTokenValue, userPayload }) => {
+      const bridge = globalThis.__MOJI_SMOKE_BRIDGE__;
+      if (!bridge) {
+        return;
+      }
+
+      bridge.useAuthStore?.getState?.().setAccessToken(accessTokenValue);
+      bridge.useAuthStore?.getState?.().setUser(userPayload);
+      bridge.useSocketStore?.getState?.().connectSocket?.();
+
+      if (globalThis.location.pathname === "/signin") {
+        globalThis.history.pushState({}, "", "/");
+        globalThis.dispatchEvent(new PopStateEvent("popstate"));
+      }
+    }, {
+      accessTokenValue: accessToken,
+      userPayload: sampleUser,
+    });
+
+    await waitForAuthState();
+  }
 
   await page.evaluate((user) => {
     const bridge = globalThis.__MOJI_SMOKE_BRIDGE__;
@@ -474,7 +501,7 @@ const setPersonalization = async (page, updates) => {
     }
 
     try {
-      await fetch("/api/node/users/personalization-preferences", {
+      await fetch("/api/users/personalization-preferences", {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -497,7 +524,7 @@ const run = async () => {
   const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
   const page = await context.newPage();
 
-  await page.route("**/api/node/**", async (route) => {
+  await page.route("**/api/**", async (route) => {
     const request = route.request();
     const method = request.method().toUpperCase();
     const apiPath = extractApiPath(request.url());

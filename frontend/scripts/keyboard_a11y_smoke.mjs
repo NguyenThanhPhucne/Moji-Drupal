@@ -361,7 +361,7 @@ const signInViaUi = async ({ page, owner }) => {
   if (currentPath.includes("/signin")) {
     const pageFetchBootstrap = await page.evaluate(
       async ({ username, password }) => {
-        const response = await fetch("/api/node/auth/signin", {
+        const response = await fetch("/api/auth/signin", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -407,7 +407,7 @@ const signInViaUi = async ({ page, owner }) => {
     await page.goto(`${APP_BASE_URL}/feed`, { waitUntil: "networkidle" });
 
     const bootstrapSignin = await page.request.post(
-      `${APP_BASE_URL}/api/node/auth/signin`,
+      `${APP_BASE_URL}/api/auth/signin`,
       {
         data: {
           username: owner.username,
@@ -561,7 +561,7 @@ const runSkipLinkKeyboardCheck = async ({ page }) => {
     return;
   }
 
-  await page.keyboard.press("Enter");
+  await page.getByTestId("skip-to-main-link").press("Enter");
   await wait(180);
 
   const landedOnMain = await page.evaluate(() => {
@@ -717,7 +717,7 @@ const runChannelSwitchKeyboardCheck = async ({ page, fixture }) => {
     return;
   }
 
-  await navigateSpa({ page, path: "/" });
+  await navigateSpa({ page, path: "/chat" });
 
   const groupCard = page
     .locator("button[data-chat-card='true']")

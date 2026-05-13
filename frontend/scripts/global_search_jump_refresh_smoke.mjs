@@ -527,9 +527,37 @@ try {
   });
   const page = await context.newPage();
 
-  await page.goto(`${APP_BASE_URL}/?conversationId=${conversationId}`, {
+  await page.goto(`${APP_BASE_URL}/chat?conversationId=${conversationId}`, {
     waitUntil: "domcontentloaded",
   });
+
+  await page.evaluate(async ({ accessToken, user }) => {
+    const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+    const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+    useAuthStore.getState().setAccessToken(accessToken);
+    useAuthStore.getState().setUser(user);
+    useSocketStore.getState().connectSocket();
+  }, {
+    accessToken: owner.token,
+    user: owner.user,
+  });
+
+  if (new URL(page.url()).pathname.includes("/signin")) {
+    await page.evaluate(async ({ accessToken, user }) => {
+      const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+      const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+      useAuthStore.getState().setAccessToken(accessToken);
+      useAuthStore.getState().setUser(user);
+      useSocketStore.getState().connectSocket();
+    }, {
+      accessToken: owner.token,
+      user: owner.user,
+    });
+
+    await page.goto(`${APP_BASE_URL}/chat?conversationId=${conversationId}`, {
+      waitUntil: "domcontentloaded",
+    });
+  }
 
   await page.waitForFunction(
     async (targetConversationId) => {

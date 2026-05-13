@@ -313,9 +313,37 @@ const captureViewportCycle = async ({
   const checks = [];
 
   try {
-    await page.goto(`${APP_BASE_URL}/?conversationId=${conversationId}`, {
+    await page.goto(`${APP_BASE_URL}/chat?conversationId=${conversationId}`, {
       waitUntil: "domcontentloaded",
     });
+
+    await page.evaluate(async ({ accessToken, user }) => {
+      const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+      const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+      useAuthStore.getState().setAccessToken(accessToken);
+      useAuthStore.getState().setUser(user);
+      useSocketStore.getState().connectSocket();
+    }, {
+      accessToken: ownerAuth.token,
+      user: ownerAuth.user,
+    });
+
+    if (new URL(page.url()).pathname.includes("/signin")) {
+      await page.evaluate(async ({ accessToken, user }) => {
+        const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+        const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+        useAuthStore.getState().setAccessToken(accessToken);
+        useAuthStore.getState().setUser(user);
+        useSocketStore.getState().connectSocket();
+      }, {
+        accessToken: ownerAuth.token,
+        user: ownerAuth.user,
+      });
+
+      await page.goto(`${APP_BASE_URL}/chat?conversationId=${conversationId}`, {
+        waitUntil: "domcontentloaded",
+      });
+    }
 
     await page.waitForSelector(".chat-shell-panel", {
       state: "visible",

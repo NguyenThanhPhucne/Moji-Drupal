@@ -132,7 +132,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   if (!chat) {
     return (
-      <header className="chat-header sticky top-0 z-40 flex w-full items-center gap-2 px-4 py-2 md:hidden">
+      <header className="chat-header chat-header-shell chat-window-header-main sticky top-0 z-40 flex w-full items-center gap-2 px-4 py-2 md:hidden">
         <SidebarTrigger className="-ml-1 h-9 w-9 rounded-xl text-foreground" />
       </header>
     );
@@ -190,7 +190,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
   return (
     <>
-      <header className="chat-header sticky top-0 z-40 flex w-full items-center px-4 py-3">
+      <header className="chat-header chat-header-shell chat-window-header-main sticky top-0 z-40 flex w-full items-center px-4 py-3">
         <div className="chat-header-row w-full flex items-center justify-between">
           <div className="chat-header-left min-w-0">
             {/* Sidebar toggle — only on mobile */}
@@ -249,10 +249,10 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 {chat.type === "direct" && (() => {
                   const pres = getUserPresence(otherUser?._id);
                   if (pres === "online") {
-                    return <span className="text-[11px] text-emerald-500 font-medium">Active</span>;
+                    return <span className="text-[11px] text-[hsl(var(--status-success))] font-medium">Active</span>;
                   }
                   if (pres === "recently-active") {
-                    return <span className="text-[11px] text-amber-500/70 font-medium">Away</span>;
+                    return <span className="text-[11px] text-[hsl(var(--status-warning)/0.7)] font-medium">Away</span>;
                   }
                   return <span className="text-[11px] text-muted-foreground">Offline</span>;
                 })()}
@@ -261,7 +261,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           </div>
 
           {/* Right actions - minimal */}
-          <div className="flex flex-shrink-0 items-center gap-2">
+          <div className="chat-header-actions flex flex-shrink-0 items-center gap-2">
             {/* WebRTC Video Call Button */}
             {chat.type === "group" || chat.type === "direct" ? (
               <Button

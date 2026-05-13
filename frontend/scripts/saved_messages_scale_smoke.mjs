@@ -521,6 +521,34 @@ try {
     waitUntil: "domcontentloaded",
   });
 
+  await page.evaluate(async ({ accessToken, user }) => {
+    const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+    const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+    useAuthStore.getState().setAccessToken(accessToken);
+    useAuthStore.getState().setUser(user);
+    useSocketStore.getState().connectSocket();
+  }, {
+    accessToken: owner.token,
+    user: owner.user,
+  });
+
+  if (new URL(page.url()).pathname.includes("/signin")) {
+    await page.evaluate(async ({ accessToken, user }) => {
+      const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+      const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+      useAuthStore.getState().setAccessToken(accessToken);
+      useAuthStore.getState().setUser(user);
+      useSocketStore.getState().connectSocket();
+    }, {
+      accessToken: owner.token,
+      user: owner.user,
+    });
+
+    await page.goto(`${APP_BASE_URL}/saved`, {
+      waitUntil: "domcontentloaded",
+    });
+  }
+
   await page.getByRole("heading", { name: "Saved Messages" }).waitFor({
     state: "visible",
     timeout: 20000,
@@ -578,6 +606,23 @@ try {
   await page.goto(`${APP_BASE_URL}/saved`, {
     waitUntil: "domcontentloaded",
   });
+
+  if (new URL(page.url()).pathname.includes("/signin")) {
+    await page.evaluate(async ({ accessToken, user }) => {
+      const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+      const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+      useAuthStore.getState().setAccessToken(accessToken);
+      useAuthStore.getState().setUser(user);
+      useSocketStore.getState().connectSocket();
+    }, {
+      accessToken: owner.token,
+      user: owner.user,
+    });
+
+    await page.goto(`${APP_BASE_URL}/saved`, {
+      waitUntil: "domcontentloaded",
+    });
+  }
 
   await page.getByRole("heading", { name: "Saved Messages" }).waitFor({
     state: "visible",

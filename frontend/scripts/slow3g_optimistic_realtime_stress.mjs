@@ -143,6 +143,17 @@ const signInPageSession = async ({
     timeout: 30000,
   });
 
+  await page.evaluate(async ({ accessToken, user }) => {
+    const { useAuthStore } = await import("/src/stores/useAuthStore.ts");
+    const { useSocketStore } = await import("/src/stores/useSocketStore.ts");
+    useAuthStore.getState().setAccessToken(accessToken);
+    useAuthStore.getState().setUser(user);
+    useSocketStore.getState().connectSocket();
+  }, {
+    accessToken: fallbackToken || null,
+    user: fallbackUser || null,
+  });
+
   await page
     .waitForURL((url) => !url.pathname.includes("/signin"), {
       timeout: 9000,
@@ -194,18 +205,38 @@ const bootstrapConversationInStore = async ({ page, peerId }) => {
     const { useChatStore } = await import("../src/stores/useChatStore.ts");
     const { useSocketStore } = await import("../src/stores/useSocketStore.ts");
 
-    await useChatStore.getState().fetchConversations();
-    const conversations = useChatStore.getState().conversations || [];
+    const loadConversations = async () => {
+      await useChatStore.getState().fetchConversations();
+      return useChatStore.getState().conversations || [];
+    };
 
-    const targetConversation = conversations.find((conversationItem) => {
-      if (conversationItem.type !== "direct") {
-        return false;
-      }
+    let conversations = await loadConversations();
 
-      return (conversationItem.participants || []).some(
-        (participant) => String(participant?._id || "") === String(peerUserId),
-      );
-    });
+    const findDirectConversation = () => {
+      return conversations.find((conversationItem) => {
+        if (conversationItem.type !== "direct") {
+          return false;
+        }
+
+        return (conversationItem.participants || []).some((participant) => {
+          const participantId =
+            typeof participant === "string"
+              ? participant
+              : participant?._id || participant?.id;
+          return String(participantId || "") === String(peerUserId);
+        });
+      });
+    };
+
+    let targetConversation = findDirectConversation();
+
+    if (!targetConversation?._id) {
+      await useChatStore
+        .getState()
+        .createConversation("direct", "", [String(peerUserId)]);
+      conversations = await loadConversations();
+      targetConversation = findDirectConversation();
+    }
 
     if (!targetConversation?._id) {
       return {

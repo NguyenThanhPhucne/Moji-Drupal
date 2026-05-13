@@ -70,21 +70,32 @@ const ChatWindowLayout = () => {
   const activeSeenKey = selectedConvo
     ? `${String(selectedConvo._id)}:${activeSeenChannelSegment}`
     : null;
-  const layoutGroupChannels =
-    selectedConvo?.type === "group"
-      ? (selectedConvo.group?.channels || []).map((channel) => ({
-          channelId: String(channel.channelId || ""),
-          name: String(channel.name || channel.channelId || "general"),
-        }))
-      : [];
-  const layoutActiveGroupChannelId =
+  const rawGroupChannels =
+    selectedConvo?.type === "group" ? selectedConvo.group?.channels || [] : [];
+  const fallbackGroupChannelId =
     selectedConvo?.type === "group"
       ? String(
           selectedConvo.group?.activeChannelId ||
-            layoutGroupChannels[0]?.channelId ||
+            rawGroupChannels[0]?.channelId ||
             "general",
         )
       : "";
+  const layoutGroupChannels =
+    selectedConvo?.type === "group"
+      ? rawGroupChannels.length > 0
+        ? rawGroupChannels.map((channel) => ({
+            channelId: String(channel.channelId || ""),
+            name: String(channel.name || channel.channelId || "general"),
+          }))
+        : [
+            {
+              channelId: fallbackGroupChannelId,
+              name: fallbackGroupChannelId || "general",
+            },
+          ]
+      : [];
+  const layoutActiveGroupChannelId =
+    selectedConvo?.type === "group" ? fallbackGroupChannelId : "";
 
   const handleLayoutGroupChannelSwitch = (channelId: string) => {
     if (selectedConvo?.type !== "group") {
