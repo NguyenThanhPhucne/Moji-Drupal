@@ -25,7 +25,7 @@ export default function JitsiCallOverlay() {
       {/* Header bar to allow closing if Jitsi SDK gets stuck */}
       <div className="flex h-12 w-full items-center justify-between px-4 bg-background border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">
-          <div className="size-2 rounded-full bg-green-500 animate-pulse" />
+          <div className="size-2 rounded-full bg-[hsl(var(--status-success))] animate-pulse" />
           <span className="text-sm font-medium">Ongoing Call</span>
         </div>
         <button

@@ -151,13 +151,13 @@ export function PrivatePinDialog({
           <div className={cn(
             "relative flex size-14 items-center justify-center rounded-2xl transition-all duration-500",
             unlockSuccess
-              ? "bg-emerald-500/15 ring-4 ring-emerald-500/20"
+              ? "bg-[hsl(var(--status-success)/0.15)] ring-4 ring-[hsl(var(--status-success)/0.2)]"
               : isLocked
               ? "bg-muted/60 ring-4 ring-border/40"
               : "bg-primary/10 ring-4 ring-primary/20",
           )}>
             {unlockSuccess ? (
-              <Check className="size-7 text-emerald-500 animate-in zoom-in-50 duration-300" />
+              <Check className="size-7 text-[hsl(var(--status-success))] animate-in zoom-in-50 duration-300" />
             ) : isLocked ? (
               <Lock className="size-7 text-muted-foreground/70" />
             ) : (
@@ -184,29 +184,29 @@ export function PrivatePinDialog({
             "flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-[12px] transition-colors duration-300",
             isLocked
               ? "border-border/50 bg-muted/25"
-              : "border-emerald-500/30 bg-emerald-500/8",
+              : "border-[hsl(var(--status-success)/0.3)] bg-[hsl(var(--status-success)/0.08)]",
           )}>
             <span className="flex items-center gap-2 font-medium text-foreground/80">
-              <ShieldCheck className={cn("size-3.5", isLocked ? "text-muted-foreground/50" : "text-emerald-500")} />
+              <ShieldCheck className={cn("size-3.5", isLocked ? "text-muted-foreground/50" : "text-[hsl(var(--status-success))]")} />
               Status
             </span>
             <span className={cn(
               "font-semibold",
-              isLocked ? "text-muted-foreground" : "text-emerald-600 dark:text-emerald-400",
+              isLocked ? "text-muted-foreground" : "text-[hsl(var(--status-success-strong))]",
             )}>
               {isLocked ? "Locked" : "Unlocked"}
             </span>
           </div>
 
           {/* Session info */}
-          <div className="rounded-lg border border-blue-500/20 bg-blue-500/8 px-3 py-2.5 text-[11.5px] space-y-1">
-            <p className="flex items-center gap-2 font-semibold text-blue-700 dark:text-blue-400">
+          <div className="rounded-lg border border-[hsl(var(--status-info)/0.2)] bg-[hsl(var(--status-info)/0.08)] px-3 py-2.5 text-[11.5px] space-y-1">
+            <p className="flex items-center gap-2 font-semibold text-[hsl(var(--status-info-strong))]">
               <svg className="size-3.5" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
               PIN is stored in your browser session
             </p>
-            <p className="text-blue-600/80 dark:text-blue-300/70">
+            <p className="text-[hsl(var(--status-info)/0.8)]">
               You'll need to unlock again if you refresh the page or close your browser.
             </p>
           </div>

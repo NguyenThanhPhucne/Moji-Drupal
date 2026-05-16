@@ -68,7 +68,7 @@ const DirectMessageList = () => {
             title={privatePin ? "Private chats unlocked — click to manage" : "Unlock private chats"}
           >
             {privatePin ? (
-              <LockOpen className="size-3.5 text-emerald-500" />
+              <LockOpen className="size-3.5 text-[hsl(var(--status-success))]" />
             ) : (
               <Lock className="size-3.5" />
             )}

@@ -200,7 +200,7 @@ export const getMicrophoneErrorContext = (error: DOMException | null) => {
  * Offline indicator for recording
  */
 export const OfflineRecordingIndicator = () => (
-  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-500/20 dark:bg-amber-500/15 rounded text-xs font-medium text-amber-700 dark:text-amber-400 border border-amber-500/30 dark:border-amber-500/20">
+  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium border bg-[hsl(var(--status-warning)/0.2)] text-[hsl(var(--status-warning-strong))] border-[hsl(var(--status-warning)/0.3)]">
     <Wifi className="w-3 h-3" />
     <span>Will send when online</span>
   </div>
@@ -231,7 +231,7 @@ export const RecordingDurationDisplay = ({
       <span className={cn(
         "font-mono text-sm font-semibold tabular-nums",
         isDanger && "text-destructive animate-pulse",
-        isWarning && !isDanger && "text-amber-600 dark:text-amber-400",
+        isWarning && !isDanger && "text-[hsl(var(--status-warning-strong))]",
       )}>
         {formatTime(current)}
       </span>
@@ -252,7 +252,7 @@ export const RecordingDurationDisplay = ({
       {isWarning && !isDanger && (
         <span className={cn(
           "text-xs font-medium px-2 py-0.5 rounded",
-          "bg-amber-500/20 text-amber-700 dark:text-amber-400",
+          "bg-[hsl(var(--status-warning)/0.2)] text-[hsl(var(--status-warning-strong))]",
         )}>
           {timeRemaining}s left
         </span>

@@ -242,13 +242,13 @@ const ProfilePage = () => { // NOSONAR
                       <h1 className="social-text-main social-profile-name text-3xl font-bold tracking-tight flex items-center gap-2">
                         {profile?.displayName || t("profile.default_name")}
                         {profile?.isVerified && (
-                          <BadgeCheck className="size-6 text-blue-500" />
+                          <BadgeCheck className="size-6 text-[hsl(var(--status-info))]" />
                         )}
                         {profile?.role === "admin" && (
-                          <Crown className="size-6 text-amber-500" />
+                          <Crown className="size-6 text-[hsl(var(--status-warning))]" />
                         )}
                         {profile?.role === "moderator" && (
-                          <ShieldCheck className="size-6 text-indigo-500" />
+                          <ShieldCheck className="size-6 text-[hsl(var(--status-info-strong))]" />
                         )}
                         {profile?.isBanned && (
                           <span className="inline-flex items-center gap-1 text-sm bg-destructive/10 text-destructive px-2 py-0.5 rounded-full font-medium ml-2">

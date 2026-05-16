@@ -139,7 +139,7 @@ const GroupChatList = () => {
               title={privatePin ? "Private groups unlocked — click to manage" : "Unlock private groups"}
             >
               {privatePin ? (
-                <LockOpen className="size-3.5 text-emerald-500" />
+                <LockOpen className="size-3.5 text-[hsl(var(--status-success))]" />
               ) : (
                 <Lock className="size-3.5" />
               )}

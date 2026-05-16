@@ -66,7 +66,7 @@ export function SecretModeDialog({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-orange-500" />
+            <Flame className="w-5 h-5 text-[hsl(var(--status-caution))]" />
             Secret Mode
           </DialogTitle>
           <DialogDescription>
@@ -75,9 +75,9 @@ export function SecretModeDialog({
         </DialogHeader>
 
         <div className="py-4 flex flex-col gap-3">
-          <div className="bg-orange-500/10 p-4 rounded-lg flex items-start gap-3 mb-2">
-            <ShieldCheck className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-orange-800 dark:text-orange-200">
+          <div className="bg-[hsl(var(--status-caution)/0.1)] p-4 rounded-lg flex items-start gap-3 mb-2">
+            <ShieldCheck className="w-5 h-5 text-[hsl(var(--status-caution-strong))] mt-0.5 shrink-0" />
+            <p className="text-sm text-[hsl(var(--status-caution-strong))]">
               Secret mode applies to all new messages in this conversation. Existing messages are not affected.
             </p>
           </div>
@@ -94,7 +94,7 @@ export function SecretModeDialog({
                   onClick={() => setSelectedTimer(timer.value)}
                   className={`px-3 py-2 text-sm rounded-md border transition-all duration-200 flex items-center justify-center
                     ${selectedTimer === timer.value 
-                      ? 'border-orange-500 bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-100 font-medium' 
+                      ? 'border-[hsl(var(--status-caution))] bg-[hsl(var(--status-caution)/0.12)] text-[hsl(var(--status-caution-strong))] dark:bg-[hsl(var(--status-caution)/0.2)] dark:text-[hsl(var(--status-caution-muted))] font-medium' 
                       : 'border-input bg-transparent hover:bg-accent text-foreground'
                     }
                   `}
@@ -110,7 +110,7 @@ export function SecretModeDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUpdating}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isUpdating || selectedTimer === currentTimer} className="bg-orange-600 hover:bg-orange-700 text-white">
+          <Button onClick={handleSave} disabled={isUpdating || selectedTimer === currentTimer} className="bg-[hsl(var(--status-caution-strong))] hover:bg-[hsl(var(--status-caution))] text-[hsl(var(--background))]">
             {isUpdating ? "Saving..." : "Save Changes"}
           </Button>
         </DialogFooter>

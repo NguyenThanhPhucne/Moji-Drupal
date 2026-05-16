@@ -94,6 +94,21 @@
     /* Status colors */
     --online: 140 100% 50%;
     --offline: 0 0% 70%;
+    --status-success: 142 70% 42%;
+    --status-success-muted: 142 60% 52%;
+    --status-success-strong: 142 80% 34%;
+    --status-warning: 38 92% 50%;
+    --status-warning-muted: 38 92% 62%;
+    --status-warning-strong: 32 92% 42%;
+    --status-info: 210 90% 52%;
+    --status-info-muted: 210 90% 64%;
+    --status-info-strong: 210 90% 44%;
+    --status-caution: 24 94% 54%;
+    --status-caution-muted: 24 94% 64%;
+    --status-caution-strong: 20 94% 44%;
+    --status-danger: 0 84% 58%;
+    --status-danger-muted: 0 84% 68%;
+    --status-danger-strong: 0 84% 48%;
 
     /* Social reaction brand palette (RGB triplets) */
     --reaction-brand-white: 255 255 255;
@@ -240,11 +255,11 @@
     --chat-bubble-padding-x: 0.875rem;
     --chat-row-padding-y: 0.25rem;
     --chat-row-padding-x: 0.625rem;
-    --chat-bubble-radius: 13px;
+    --chat-bubble-radius: 12px;
     --chat-bubble-tail-radius: 3px;
-    --chat-bubble-join-radius: 8px;
-    --chat-bubble-own-radius: 17px;
-    --chat-bubble-peer-radius: 13px;
+    --chat-bubble-join-radius: 7px;
+    --chat-bubble-own-radius: 15px;
+    --chat-bubble-peer-radius: 12px;
   }
 
   .dark {
@@ -287,6 +302,21 @@
     --online: 140 100% 60%;
     --away: 45 100% 65%;
     --offline: 0 0% 50%;
+    --status-success: 142 70% 55%;
+    --status-success-muted: 142 65% 65%;
+    --status-success-strong: 142 75% 45%;
+    --status-warning: 38 92% 58%;
+    --status-warning-muted: 38 92% 68%;
+    --status-warning-strong: 32 92% 48%;
+    --status-info: 210 90% 60%;
+    --status-info-muted: 210 90% 70%;
+    --status-info-strong: 210 90% 52%;
+    --status-caution: 24 94% 60%;
+    --status-caution-muted: 24 94% 70%;
+    --status-caution-strong: 20 94% 50%;
+    --status-danger: 0 84% 64%;
+    --status-danger-muted: 0 84% 72%;
+    --status-danger-strong: 0 84% 54%;
 
     --destructive: 0 80% 47%;
     --destructive-foreground: 0 0% 100%;
@@ -1093,7 +1123,7 @@ html[data-motion="reduced"] * {
     pointer-events: none;
     background: linear-gradient(
       118deg,
-      hsl(0 0% 100% / 0.12) 0%,
+      hsl(0 0% 100% / 0.08) 0%,
       transparent 48%
     );
     opacity: 0;
@@ -1122,22 +1152,22 @@ html[data-motion="reduced"] * {
 
   .chat-message-bubble-surface--own {
     box-shadow:
-      0 8px 18px -14px hsl(var(--primary) / 0.52),
-      0 1px 0 hsl(0 0% 100% / 0.24) inset;
+      0 6px 14px -16px hsl(var(--primary) / 0.48),
+      0 1px 0 hsl(0 0% 100% / 0.2) inset;
   }
 
   .chat-message-bubble-surface--peer {
     box-shadow:
-      0 10px 22px -20px hsl(220 28% 16% / 0.34),
-      0 1px 0 hsl(0 0% 100% / 0.64) inset,
-      0 -1px 0 hsl(220 16% 36% / 0.1) inset;
+      0 6px 14px -18px hsl(220 28% 16% / 0.28),
+      0 1px 0 hsl(0 0% 100% / 0.5) inset,
+      0 -1px 0 hsl(220 16% 36% / 0.08) inset;
   }
 
   .dark .chat-message-bubble-surface--peer {
     box-shadow:
-      0 14px 26px -24px hsl(220 50% 4% / 0.72),
-      0 1px 0 hsl(0 0% 100% / 0.08) inset,
-      0 -1px 0 hsl(220 16% 80% / 0.08) inset;
+      0 8px 18px -20px hsl(220 50% 4% / 0.68),
+      0 1px 0 hsl(0 0% 100% / 0.06) inset,
+      0 -1px 0 hsl(220 16% 80% / 0.06) inset;
   }
 
   .chat-message-bubble-hit:hover .chat-message-bubble-surface {
@@ -2231,22 +2261,22 @@ html[data-motion="reduced"] * {
     background: linear-gradient(
       90deg,
       transparent 0%,
-      hsl(var(--foreground) / 0.03) 30%,
-      hsl(var(--foreground) / 0.08) 50%,
-      hsl(var(--foreground) / 0.03) 70%,
+      hsl(var(--foreground) / 0.02) 30%,
+      hsl(var(--foreground) / 0.06) 50%,
+      hsl(var(--foreground) / 0.02) 70%,
       transparent 100%
     );
     background-size: 200% 100%;
-    animation: premiumShimmer 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    animation: premiumShimmer 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
   .dark .skeleton-shimmer::after {
     background: linear-gradient(
       90deg,
       transparent 0%,
-      hsl(var(--foreground) / 0.06) 30%,
-      hsl(var(--foreground) / 0.12) 50%,
-      hsl(var(--foreground) / 0.06) 70%,
+      hsl(var(--foreground) / 0.04) 30%,
+      hsl(var(--foreground) / 0.09) 50%,
+      hsl(var(--foreground) / 0.04) 70%,
       transparent 100%
     );
   }

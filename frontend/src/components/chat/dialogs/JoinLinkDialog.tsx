@@ -276,7 +276,7 @@ export function JoinLinkDialog(
           <div className="chat-detail-dialog-footer chat-detail-dialog-footer--split flex-col items-stretch space-y-3">
             <div className="space-y-1">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                <CheckCircle2 className="size-4 text-emerald-500" />
+                <CheckCircle2 className="size-4 text-[hsl(var(--status-success))]" />
                 Active Link
               </h4>
               {displayJoinLinkExpiresAt && (

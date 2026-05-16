@@ -37,6 +37,7 @@ import ImageLightbox from "./ImageLightbox";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import MessageItemContextMenu from "./message-item/MessageItemContextMenu";
 import MessageItemDeleteDialog from "./message-item/MessageItemDeleteDialog";
+import { flushVoiceMemoOutbox } from "@/lib/voiceMemoDelivery";
 
 const REACTION_EMOJI = Object.freeze({
   like: "\u{1F44D}",
@@ -712,7 +713,7 @@ const MessageMetaSection = memo(function MessageMetaSection({
                 {message.expiresAt && !message.isDeleted && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <Flame className="size-3 text-orange-500 animate-pulse" />
+                      <Flame className="size-3 text-[hsl(var(--status-caution))] animate-pulse" />
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-[10px] py-1 px-2">
                       Secret message
@@ -1083,11 +1084,14 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
     return activeConversation || null;
   }, [activeConversationId, message.conversationId]);
 
+  const isVoiceMemoDraft = Boolean(
+    message.audioUrl && String(message.audioUrl).startsWith("data:audio/"),
+  );
   const canRetryDelivery =
     isOwn &&
     !message.isDeleted &&
-    String(message._id).startsWith("temp-") &&
-    (message.deliveryState === "failed" || message.deliveryState === "queued");
+    (message.deliveryState === "failed" || message.deliveryState === "queued") &&
+    (String(message._id).startsWith("temp-") || isVoiceMemoDraft);
 
 
   const senderParticipant = selectedConvo.participants.find(
@@ -1235,8 +1239,13 @@ const MessageItem = memo(function MessageItem({ // NOSONAR
       return;
     }
 
+    if (isVoiceMemoDraft) {
+      void flushVoiceMemoOutbox({ force: true });
+      return;
+    }
+
     void retryMessageDelivery(resolvedConversationId, message._id);
-  }, [canRetryDelivery, message._id, resolvedConversationId, retryMessageDelivery]);
+  }, [canRetryDelivery, isVoiceMemoDraft, message._id, resolvedConversationId, retryMessageDelivery]);
 
   const handleEditSave = useCallback(() => {
     const normalizedEditValue = editValue.trim();

@@ -35,9 +35,9 @@ const AnnouncementBanner = ({
   if (!announcementOnly || isGroupAdmin) return null;
 
   return (
-    <div className="mx-3 mb-2 mt-2 flex items-center gap-2 rounded-xl border border-amber-300/50 bg-amber-50/85 px-3 py-2 dark:border-amber-500/25 dark:bg-amber-900/20">
-      <MegaphoneOff className="size-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-      <p className="text-[11.5px] font-medium leading-snug text-amber-800 dark:text-amber-300">
+    <div className="mx-3 mb-2 mt-2 flex items-center gap-2 rounded-xl border border-[hsl(var(--status-warning)/0.35)] bg-[hsl(var(--status-warning)/0.12)] px-3 py-2">
+      <MegaphoneOff className="size-3.5 flex-shrink-0 text-[hsl(var(--status-warning-strong))]" />
+      <p className="text-[11.5px] font-medium leading-snug text-[hsl(var(--status-warning-strong))]">
         {t("chatComposer.notice.announcement_only")}
       </p>
     </div>
@@ -48,9 +48,9 @@ const SecretModeBanner = ({ timer }: { timer?: number }) => {
   if (!timer || timer <= 0) return null;
 
   return (
-    <div className="mx-3 mb-2 mt-2 flex items-center gap-2 rounded-xl border border-orange-500/30 bg-orange-50/80 px-3 py-1.5 dark:border-orange-500/20 dark:bg-orange-500/10 shadow-sm animate-in slide-in-from-bottom-2">
-      <Flame className="size-3.5 flex-shrink-0 text-orange-500 animate-pulse" />
-      <p className="text-[11.5px] font-medium leading-snug text-orange-800 dark:text-orange-300">
+    <div className="mx-3 mb-2 mt-2 flex items-center gap-2 rounded-xl border border-[hsl(var(--status-caution)/0.3)] bg-[hsl(var(--status-caution)/0.12)] px-3 py-1.5 shadow-sm animate-in slide-in-from-bottom-2">
+      <Flame className="size-3.5 flex-shrink-0 text-[hsl(var(--status-caution))] animate-pulse" />
+      <p className="text-[11.5px] font-medium leading-snug text-[hsl(var(--status-caution-strong))]">
         Secret mode is on
       </p>
     </div>

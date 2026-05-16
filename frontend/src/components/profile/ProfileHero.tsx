@@ -177,13 +177,13 @@ const ProfileHero = ({ user }: ProfileHeroProps) => {
           <h2 className="profile-hero-name flex items-center gap-1.5">
             {user.displayName}
             {user.isVerified && (
-              <BadgeCheck className="size-5 text-blue-500" />
+              <BadgeCheck className="size-5 text-[hsl(var(--status-info))]" />
             )}
             {user.role === "admin" && (
-              <Crown className="size-5 text-amber-500" />
+              <Crown className="size-5 text-[hsl(var(--status-warning))]" />
             )}
             {user.role === "moderator" && (
-              <Shield className="size-5 text-indigo-500" />
+              <Shield className="size-5 text-[hsl(var(--status-info-strong))]" />
             )}
           </h2>
           <p className="profile-hero-username">@{user.username}</p>

@@ -48,6 +48,26 @@ const isRetryEligibleNow = (item: VoiceMemoOutboxItem) => {
   return nextRetryAtTs <= Date.now();
 };
 
+const updateVoiceMemoMessageState = (
+  item: VoiceMemoOutboxItem,
+  patch: {
+    deliveryState?: "uploading" | "sending" | "queued" | "failed";
+    deliveryError?: string | null;
+    deliveryAttemptCount?: number;
+  },
+) => {
+  const normalizedConversationId = String(item.conversationId || "").trim();
+  if (!normalizedConversationId) {
+    return;
+  }
+
+  useChatStore.getState().updateMessage(
+    normalizedConversationId,
+    item.id,
+    patch,
+  );
+};
+
 const sendQueuedVoiceMemoItem = async ({
   item,
   uploadedAudioUrl,
@@ -122,12 +142,17 @@ type VoiceMemoFlushItemResult =
 
 const processQueuedVoiceMemoItem = async (
   item: VoiceMemoOutboxItem,
+  options?: { force?: boolean },
 ): Promise<VoiceMemoFlushItemResult> => {
   if (isNavigatorOffline()) {
+    updateVoiceMemoMessageState(item, {
+      deliveryState: "queued",
+      deliveryError: null,
+    });
     return "halt-offline";
   }
 
-  if (!isRetryEligibleNow(item)) {
+  if (!options?.force && !isRetryEligibleNow(item)) {
     return "skipped";
   }
 
@@ -136,12 +161,25 @@ const processQueuedVoiceMemoItem = async (
     return "exhausted";
   }
 
+  const nextAttemptCount = Number(item.attemptCount || 0) + 1;
+  updateVoiceMemoMessageState(item, {
+    deliveryState: "uploading",
+    deliveryError: null,
+    deliveryAttemptCount: nextAttemptCount,
+  });
+
   try {
     const uploadResult = await chatService.uploadAudio(item.audioDataUrl);
     const uploadedAudioUrl = String(uploadResult.audioUrl || "").trim();
     if (!uploadedAudioUrl) {
       throw new Error("Voice memo upload returned empty URL");
     }
+
+    updateVoiceMemoMessageState(item, {
+      deliveryState: "sending",
+      deliveryError: null,
+      deliveryAttemptCount: nextAttemptCount,
+    });
 
     await sendQueuedVoiceMemoItem({
       item,
@@ -152,8 +190,22 @@ const processQueuedVoiceMemoItem = async (
     return "delivered";
   } catch (error) {
     if (isLikelyVoiceMemoOfflineError(error)) {
+      updateVoiceMemoMessageState(item, {
+        deliveryState: "queued",
+        deliveryError: null,
+        deliveryAttemptCount: nextAttemptCount,
+      });
       return "halt-offline";
     }
+
+    updateVoiceMemoMessageState(item, {
+      deliveryState: "failed",
+      deliveryError:
+        error instanceof Error
+          ? error.message
+          : "Voice memo outbox send failed",
+      deliveryAttemptCount: nextAttemptCount,
+    });
 
     await markVoiceMemoOutboxItemFailed({
       item,
@@ -216,8 +268,10 @@ const notifyVoiceMemoFlushSummary = ({
 
 export const flushVoiceMemoOutbox = async ({
   silent = false,
+  force = false,
 }: {
   silent?: boolean;
+  force?: boolean;
 } = {}) => {
   const normalizedUserId = String(useAuthStore.getState().user?._id || "").trim();
 
@@ -238,7 +292,7 @@ export const flushVoiceMemoOutbox = async ({
     let exhaustedCount = 0;
 
     for (const item of queuedItems) {
-      const itemResult = await processQueuedVoiceMemoItem(item);
+      const itemResult = await processQueuedVoiceMemoItem(item, { force });
 
       if (itemResult === "halt-offline") {
         break;

@@ -72,8 +72,8 @@ export function PrivateMessageLockedView({
 
       <div className="relative z-10 flex flex-col items-center gap-6 max-w-sm w-full">
         {/* Lock icon */}
-        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/15 border border-amber-500/30 ring-4 ring-amber-500/10">
-          <Lock className="w-8 h-8 text-amber-600 dark:text-amber-500" />
+        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-[hsl(var(--status-warning)/0.15)] border border-[hsl(var(--status-warning)/0.3)] ring-4 ring-[hsl(var(--status-warning)/0.12)]">
+          <Lock className="w-8 h-8 text-[hsl(var(--status-warning-strong))]" />
         </div>
 
         {/* Title & description */}
@@ -86,14 +86,14 @@ export function PrivateMessageLockedView({
         </div>
 
         {/* Info box */}
-        <div className="w-full rounded-lg border border-blue-500/20 bg-blue-500/8 px-4 py-3 space-y-2">
-          <p className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-400">
+        <div className="w-full rounded-lg border border-[hsl(var(--status-info)/0.2)] bg-[hsl(var(--status-info)/0.08)] px-4 py-3 space-y-2">
+          <p className="flex items-center gap-2 text-xs font-semibold text-[hsl(var(--status-info-strong))]">
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             Chỉ bạn mới có thể xem tin nhắn này
           </p>
-          <p className="text-xs text-blue-600/80 dark:text-blue-300/70">
+          <p className="text-xs text-[hsl(var(--status-info)/0.8)]">
             Tin nhắn được bảo mật và không thể bị truy cập trái phép
           </p>
         </div>

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
-import type { AudioMeta, Conversation } from "@/types/chat";
+import type { AudioMeta, Conversation, Message } from "@/types/chat";
 import { toast } from "sonner";
 import { useI18n } from "@/lib/i18n";
 import { chatService, VOICE_MEMO_TOO_LARGE_ERROR } from "@/services/chatService";
@@ -13,7 +13,6 @@ import {
 } from "@/lib/voiceMemoOutbox";
 import {
   flushVoiceMemoOutbox,
-  isLikelyVoiceMemoOfflineError,
   VOICE_MEMO_OUTBOX_TOAST_ID,
 } from "@/lib/voiceMemoDelivery";
 
@@ -24,7 +23,6 @@ const MESSAGE_DRAFT_STORAGE_PREFIX = "moji-message-drafts-v1";
 const MAX_VOICE_MEMO_DURATION_SECONDS = 180;
 const MAX_VOICE_MEMO_UPLOAD_MB = 8;
 const AUDIO_UPLOAD_REQUIRES_ONLINE_ERROR = "AUDIO_UPLOAD_REQUIRES_ONLINE";
-const VOICE_MEMO_UPLOAD_TOAST_ID = "voice-memo-upload-progress";
 
 const VOICE_MEMO_MIME_TYPE_CANDIDATES = [
   "audio/webm;codecs=opus",
@@ -62,10 +60,6 @@ const isNavigatorOffline = () => {
   }
 
   return navigator.onLine === false;
-};
-
-const isLikelyOfflineError = (error: unknown) => {
-  return isAudioUploadRequiresOnlineError(error) || isLikelyVoiceMemoOfflineError(error);
 };
 
 const isVoiceMemoOutboxLimitError = (error: unknown) => {
@@ -188,6 +182,8 @@ export function useMessageInput(selectedConvo: Conversation) {
     replyingTo,
     setReplyingTo,
     activeThreadRootId,
+    addMessage,
+    removeMessageFromConversation,
   } = useChatStore();
   const { socket } = useSocketStore();
 
@@ -805,6 +801,7 @@ export function useMessageInput(selectedConvo: Conversation) {
       audioMeta: nextAudioMeta,
       replyToId,
       queuedAt,
+      clientMessageId,
     }: {
       content: string;
       imgUrl: string | null;
@@ -812,6 +809,7 @@ export function useMessageInput(selectedConvo: Conversation) {
       audioMeta?: AudioMeta | null;
       replyToId?: string;
       queuedAt: string;
+      clientMessageId?: string;
     }) => {
       const normalizedUserId = String(user?._id || "").trim();
       const normalizedConversationId = String(selectedConvo._id || "").trim();
@@ -820,8 +818,57 @@ export function useMessageInput(selectedConvo: Conversation) {
         throw new Error("Unable to queue voice memo while offline");
       }
 
+      const outboxId = String(clientMessageId || buildVoiceMemoOutboxId()).trim();
+      if (!outboxId) {
+        throw new Error("Unable to queue voice memo with empty id");
+      }
+
+      const isOnlineNow = !isNavigatorOffline();
+      const replyPreview = replyToId
+        ? {
+            _id: replyToId,
+            content: String(replyingTo?.content || ""),
+            senderId: String(replyingTo?.senderId || ""),
+            senderDisplayName: replyingTo?.senderDisplayName,
+          }
+        : null;
+      const activeGroupChannelId =
+        selectedConvo.type === "group"
+          ? String(
+              selectedConvo.group?.activeChannelId ||
+                selectedConvo.group?.channels?.[0]?.channelId ||
+                "general",
+            )
+          : null;
+
+      const optimisticMessage: Message = {
+        _id: outboxId,
+        conversationId: normalizedConversationId,
+        groupChannelId: activeGroupChannelId || undefined,
+        senderId: normalizedUserId,
+        content: content ?? "",
+        imgUrl: imgUrl ?? null,
+        audioUrl: audioDataUrl,
+        audioMeta: nextAudioMeta ?? null,
+        replyTo: replyPreview,
+        threadRootId: activeThreadRootId || null,
+        reactions: [],
+        isDeleted: false,
+        editedAt: null,
+        readBy: [],
+        hiddenFor: [],
+        createdAt: queuedAt,
+        updatedAt: queuedAt,
+        isOwn: true,
+        deliveryState: isOnlineNow ? "uploading" : "queued",
+        deliveryError: null,
+        deliveryAttemptCount: 0,
+      };
+
+      addMessage(optimisticMessage);
+
       const baseOutboxItem: VoiceMemoOutboxItem = {
-        id: buildVoiceMemoOutboxId(),
+        id: outboxId,
         userId: normalizedUserId,
         scope: selectedConvo.type === "direct" ? "direct" : "group",
         conversationId: normalizedConversationId,
@@ -838,39 +885,55 @@ export function useMessageInput(selectedConvo: Conversation) {
         lastError: null,
       };
 
-      if (selectedConvo.type === "direct") {
-        const directRecipientId = resolveSelectedDirectRecipientId();
-        if (!directRecipientId) {
-          throw new Error("DIRECT_RECIPIENT_NOT_FOUND");
-        }
+      try {
+        if (selectedConvo.type === "direct") {
+          const directRecipientId = resolveSelectedDirectRecipientId();
+          if (!directRecipientId) {
+            throw new Error("DIRECT_RECIPIENT_NOT_FOUND");
+          }
 
-        await addVoiceMemoOutboxItem({
-          ...baseOutboxItem,
-          recipientId: directRecipientId,
-        });
-      } else {
-        await addVoiceMemoOutboxItem({
-          ...baseOutboxItem,
-          groupChannelId: String(selectedConvo.group?.activeChannelId || "").trim() || undefined,
-        });
+          await addVoiceMemoOutboxItem({
+            ...baseOutboxItem,
+            recipientId: directRecipientId,
+          });
+        } else {
+          await addVoiceMemoOutboxItem({
+            ...baseOutboxItem,
+            groupChannelId: activeGroupChannelId || undefined,
+          });
+        }
+      } catch (error) {
+        removeMessageFromConversation(normalizedConversationId, outboxId);
+        throw error;
       }
 
       setReplyingTo(null);
       stopTyping();
 
-      toast.info("Voice memo queued. It will send when you are back online.", {
-        id: VOICE_MEMO_OUTBOX_TOAST_ID,
-      });
+      if (isOnlineNow) {
+        void flushVoiceMemoOutbox({ silent: true });
+      } else {
+        toast.info("Voice memo queued. It will send when you are back online.", {
+          id: VOICE_MEMO_OUTBOX_TOAST_ID,
+        });
+      }
     },
     [
+      activeThreadRootId,
+      addMessage,
+      flushVoiceMemoOutbox,
+      removeMessageFromConversation,
+      replyingTo?.content,
+      replyingTo?.senderDisplayName,
+      replyingTo?.senderId,
       resolveSelectedDirectRecipientId,
       selectedConvo._id,
       selectedConvo.group?.activeChannelId,
+      selectedConvo.group?.channels,
       selectedConvo.type,
       setReplyingTo,
       stopTyping,
       user?._id,
-      activeThreadRootId,
     ],
   );
 
@@ -937,11 +1000,20 @@ export function useMessageInput(selectedConvo: Conversation) {
       const queuedAt = new Date().toISOString();
       const replyToId = String(replyingTo?._id || "").trim() || undefined;
 
-      if (currAudio?.startsWith("data:audio/") && isNavigatorOffline()) {
+      const hasVoiceMemoPayload = Boolean(
+        currAudio?.startsWith("data:audio/"),
+      );
+
+      if (hasVoiceMemoPayload) {
+        const sizeValidation = validateAudioSizeBeforeUpload(currAudio as string);
+        if (!sizeValidation.valid) {
+          throw new Error(sizeValidation.errorMessage || "Voice memo validation failed");
+        }
+
         await queueVoiceMemoForDeferredDelivery({
           content: currValue,
           imgUrl: currImage,
-          audioDataUrl: currAudio,
+          audioDataUrl: currAudio as string,
           audioMeta: currAudioMeta,
           replyToId,
           queuedAt,
@@ -949,49 +1021,19 @@ export function useMessageInput(selectedConvo: Conversation) {
         return;
       }
 
-      let resolvedAudioUrl: string | undefined;
+      const uploadResolution = await resolveOutgoingAudioUrl(currAudio);
+      const resolvedAudioUrl = uploadResolution.audioUrl;
       let resolvedAudioMeta = currAudioMeta;
-      const hasPendingVoiceMemoUpload = Boolean(
-        currAudio?.startsWith("data:audio/"),
-      );
-      if (hasPendingVoiceMemoUpload) {
-        toast.loading("Uploading voice memo...", {
-          id: VOICE_MEMO_UPLOAD_TOAST_ID,
-        });
-      }
-
-      try {
-        const uploadResolution = await resolveOutgoingAudioUrl(currAudio);
-        resolvedAudioUrl = uploadResolution.audioUrl;
-        if (uploadResolution.audioMetaPatch) {
-          // Preserve client durationSeconds (server doesn't calculate it).
-          // Server provides: mimeType, sizeBytes. Client provides: durationSeconds.
-          // Canonical audioMeta = server values + client durationSeconds.
-          resolvedAudioMeta = resolvedAudioMeta
-            ? {
-                durationSeconds: resolvedAudioMeta.durationSeconds,
-                ...uploadResolution.audioMetaPatch,
-              }
-            : uploadResolution.audioMetaPatch;
-        }
-      } catch (uploadError) {
-        if (currAudio?.startsWith("data:audio/") && isLikelyOfflineError(uploadError)) {
-          await queueVoiceMemoForDeferredDelivery({
-            content: currValue,
-            imgUrl: currImage,
-            audioDataUrl: currAudio,
-            audioMeta: currAudioMeta,
-            replyToId,
-            queuedAt,
-          });
-          return;
-        }
-
-        throw uploadError;
-      } finally {
-        if (hasPendingVoiceMemoUpload) {
-          toast.dismiss(VOICE_MEMO_UPLOAD_TOAST_ID);
-        }
+      if (uploadResolution.audioMetaPatch) {
+        // Preserve client durationSeconds (server doesn't calculate it).
+        // Server provides: mimeType, sizeBytes. Client provides: durationSeconds.
+        // Canonical audioMeta = server values + client durationSeconds.
+        resolvedAudioMeta = resolvedAudioMeta
+          ? {
+              durationSeconds: resolvedAudioMeta.durationSeconds,
+              ...uploadResolution.audioMetaPatch,
+            }
+          : uploadResolution.audioMetaPatch;
       }
 
       await sendMessageToConversation({

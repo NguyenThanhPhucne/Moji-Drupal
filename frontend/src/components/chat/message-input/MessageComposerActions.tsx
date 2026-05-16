@@ -216,16 +216,16 @@ const MessageComposerActionsComponent = ({
               "flex flex-1 flex-col sm:flex-row items-center gap-2 sm:gap-3 px-3 py-2",
               recordingRevealClass,
               "rounded-lg border border-destructive/30",
-              "dark:bg-slate-800/50 bg-red-50/50",
+              "bg-destructive/10 dark:bg-destructive/20",
               "dark:border-destructive/20 border-destructive/30",
-              !isOnline && "border-amber-500/50 bg-amber-50/30 dark:bg-amber-950/20"
+              !isOnline && "border-[hsl(var(--status-warning)/0.5)] bg-[hsl(var(--status-warning)/0.12)] dark:bg-[hsl(var(--status-warning)/0.18)]"
             )}>
               {/* Animated recording indicator dot */}
               <div className={cn(
                 "relative flex items-center justify-center w-2 h-2 flex-shrink-0",
                 recordingIndicatorClass
               )}>
-                <div className="absolute w-2 h-2 rounded-full bg-destructive dark:bg-red-400" />
+                <div className="absolute w-2 h-2 rounded-full bg-destructive" />
               </div>
 
               {/* Recording waveform - Enterprise size: 32px height, responsive width */}
