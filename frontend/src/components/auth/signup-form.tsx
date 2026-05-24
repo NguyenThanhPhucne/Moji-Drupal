@@ -215,7 +215,11 @@ export function SignupForm({
               Professional Chat
             </div>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(255,255,255,0.24),transparent_35%),radial-gradient(circle_at_80%_30%,rgba(255,255,255,0.18),transparent_34%)]" />
-            <div className="absolute inset-0 bg-gradient-to-br from-violet-500/25 via-primary/10 to-transparent opacity-60 mix-blend-screen" />
+            <img
+              src="/placeholderSignUp.png"
+              alt="Sign-up illustration"
+              className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
+            />
             <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
                 Build your flow
