@@ -7,46 +7,75 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { userService } from "@/services/userService";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import ProfileHero from "./ProfileHero";
 import PersonalInfoForm from "./PersonalInfoForm";
 import PreferencesForm from "./PreferencesForm";
 import PrivacySettings from "./PrivacySettings";
+import SecuritySettings from "./SecuritySettings";
+import NotificationsSettings from "./NotificationsSettings";
+import StatusSettings from "./StatusSettings";
+import KeyboardShortcuts from "./KeyboardShortcuts";
 import {
   User,
   Settings,
   Shield,
   Bell,
+  Lock,
+  Keyboard,
+  Smile,
   ChevronRight,
   Search,
+  X,
 } from "lucide-react";
 import Logout from "../auth/Logout";
 import { Input } from "../ui/input";
 
-type SettingsTab = "account" | "preferences" | "notifications" | "privacy";
+type SettingsTab =
+  | "account"
+  | "status"
+  | "preferences"
+  | "notifications"
+  | "security"
+  | "privacy"
+  | "shortcuts";
 
 const TAB_TITLES: Record<SettingsTab, string> = {
-  account: "My Account",
-  preferences: "Appearance",
+  account:       "My Account",
+  status:        "Custom Status",
+  preferences:   "Appearance",
   notifications: "Notifications",
-  privacy: "Privacy & Safety",
+  security:      "Security",
+  privacy:       "Privacy & Safety",
+  shortcuts:     "Keyboard Shortcuts",
 };
 
 const NAV_GROUPS = [
   {
     label: "User Settings",
     items: [
-      { id: "account" as SettingsTab, icon: User, label: "My Account" },
-      { id: "preferences" as SettingsTab, icon: Settings, label: "Appearance" },
-      { id: "notifications" as SettingsTab, icon: Bell, label: "Notifications" },
-      { id: "privacy" as SettingsTab, icon: Shield, label: "Privacy & Safety" },
+      { id: "account"       as SettingsTab, icon: User,     label: "My Account"     },
+      { id: "status"        as SettingsTab, icon: Smile,    label: "Custom Status"  },
+      { id: "preferences"   as SettingsTab, icon: Settings, label: "Appearance"     },
+      { id: "notifications" as SettingsTab, icon: Bell,     label: "Notifications"  },
+    ],
+  },
+  {
+    label: "Security & Privacy",
+    items: [
+      { id: "security" as SettingsTab, icon: Lock,   label: "Security"       },
+      { id: "privacy"  as SettingsTab, icon: Shield, label: "Privacy & Safety" },
+    ],
+  },
+  {
+    label: "App",
+    items: [
+      { id: "shortcuts" as SettingsTab, icon: Keyboard, label: "Keyboard Shortcuts" },
     ],
   },
 ];
 
-const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
+const NAV_ITEMS    = NAV_GROUPS.flatMap((g) => g.items);
 const TAB_SEQUENCE = NAV_ITEMS.map((item) => item.id);
 
 interface ProfileDialogProps {
@@ -56,27 +85,24 @@ interface ProfileDialogProps {
 
 const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
   const { user } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<SettingsTab>("account");
+  const [activeTab, setActiveTab]         = useState<SettingsTab>("account");
   const [settingsSearch, setSettingsSearch] = useState("");
   const panelHeadingRefs = useRef<Record<SettingsTab, HTMLHeadingElement | null>>({
-    account: null,
-    preferences: null,
-    notifications: null,
-    privacy: null,
+    account: null, status: null, preferences: null,
+    notifications: null, security: null, privacy: null, shortcuts: null,
   });
   const shouldFocusPanelHeading = useRef(false);
 
   const normalizedSearch = settingsSearch.trim().toLowerCase();
   const visibleGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) =>
-      !normalizedSearch ||
-      item.label.toLowerCase().includes(normalizedSearch),
+    items: group.items.filter(
+      (item) => !normalizedSearch || item.label.toLowerCase().includes(normalizedSearch),
     ),
-  })).filter((group) => group.items.length > 0);
+  })).filter((g) => g.items.length > 0);
 
   const visibleTabSequence = useMemo(
-    () => visibleGroups.flatMap((group) => group.items.map((item) => item.id)),
+    () => visibleGroups.flatMap((g) => g.items.map((item) => item.id)),
     [visibleGroups],
   );
 
@@ -87,20 +113,13 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
   }, [activeTab, visibleTabSequence]);
 
   useEffect(() => {
-    if (!open || !shouldFocusPanelHeading.current) {
-      return;
-    }
-
+    if (!open || !shouldFocusPanelHeading.current) return;
     shouldFocusPanelHeading.current = false;
-    requestAnimationFrame(() => {
-      panelHeadingRefs.current[activeTab]?.focus();
-    });
+    requestAnimationFrame(() => { panelHeadingRefs.current[activeTab]?.focus(); });
   }, [activeTab, open]);
 
   const activateTab = (tab: SettingsTab, moveFocusToPanel = false) => {
-    if (moveFocusToPanel) {
-      shouldFocusPanelHeading.current = true;
-    }
+    if (moveFocusToPanel) shouldFocusPanelHeading.current = true;
     setActiveTab(tab);
   };
 
@@ -108,64 +127,74 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
     event: KeyboardEvent<HTMLButtonElement>,
     tabOrder: SettingsTab[],
   ) => {
-    const currentTab = event.currentTarget.dataset.settingsTab as SettingsTab;
+    const currentTab  = event.currentTarget.dataset.settingsTab as SettingsTab;
     const currentIndex = tabOrder.indexOf(currentTab);
-    if (currentIndex === -1 || tabOrder.length === 0) {
-      return;
-    }
+    if (currentIndex === -1 || tabOrder.length === 0) return;
 
     let nextIndex: number;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % tabOrder.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (currentIndex - 1 + tabOrder.length) % tabOrder.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = tabOrder.length - 1;
-    } else if (event.key === "Enter" || event.key === " ") {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown")      nextIndex = (currentIndex + 1) % tabOrder.length;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp")    nextIndex = (currentIndex - 1 + tabOrder.length) % tabOrder.length;
+    else if (event.key === "Home")                                     nextIndex = 0;
+    else if (event.key === "End")                                      nextIndex = tabOrder.length - 1;
+    else if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       activateTab(currentTab, true);
       return;
-    } else {
-      return;
-    }
+    } else return;
 
     event.preventDefault();
     const nextTab = tabOrder[nextIndex];
     activateTab(nextTab, true);
-
     const tablist = event.currentTarget.closest('[role="tablist"]');
     requestAnimationFrame(() => {
-      const nextButton = tablist?.querySelector<HTMLButtonElement>(
-        `[data-settings-tab="${nextTab}"]`,
-      );
-      nextButton?.focus();
+      (tablist?.querySelector<HTMLButtonElement>(`[data-settings-tab="${nextTab}"]`))?.focus();
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="settings-modal-root">
+      <DialogContent className="settings-modal-root" contentClassMode="fullscreen" showCloseButton={false}>
         <DialogTitle className="sr-only">User Settings</DialogTitle>
         <DialogDescription className="sr-only">
-          Manage your account, appearance, notifications, and privacy settings.
+          Manage your account, status, appearance, notifications, security, and privacy settings.
         </DialogDescription>
 
         <div className="settings-layout">
-          {/* ── Sidebar ─────────────────────── */}
+          {/* ── Sidebar ── */}
           <aside className="settings-sidebar">
+            {/* User profile header */}
+            <div className="settings-sidebar-profile">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.displayName} className="settings-sidebar-profile-avatar" />
+              ) : (
+                <div className="settings-sidebar-profile-avatar">
+                  {user?.displayName?.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="settings-sidebar-profile-info">
+                <p className="settings-sidebar-profile-name">{user?.displayName}</p>
+                <p className="settings-sidebar-profile-username">@{user?.username}</p>
+              </div>
+              <button
+                type="button"
+                className="settings-sidebar-close-btn"
+                onClick={() => setOpen(false)}
+                aria-label="Close settings"
+              >
+                <X className="size-4" />
+              </button>
+            </div>
+
             <div className="settings-sidebar-inner">
               <p id="settings-tabs-help" className="sr-only">
-                Use arrow keys to move through settings tabs. Press Enter or
-                Space to open a tab and move focus to its section.
+                Use arrow keys to move through settings tabs. Press Enter or Space to open a tab.
               </p>
 
               <div className="settings-search-shell">
                 <Search className="settings-search-icon size-3.5" />
                 <Input
                   value={settingsSearch}
-                  onChange={(event) => setSettingsSearch(event.target.value)}
+                  onChange={(e) => setSettingsSearch(e.target.value)}
                   placeholder="Search settings"
                   className="settings-search-input"
                   aria-label="Search settings sections"
@@ -180,17 +209,13 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
                   aria-label={group.label}
                   aria-describedby="settings-tabs-help"
                 >
-                  <p className="settings-nav-label">
-                    {group.label}
-                  </p>
+                  <p className="settings-nav-label">{group.label}</p>
                   {group.items.map(({ id, icon: Icon, label }) => (
                     <button
                       key={id}
                       type="button"
                       onClick={() => activateTab(id)}
-                      onKeyDown={(event) =>
-                        handleTabKeyDown(event, visibleTabSequence)
-                      }
+                      onKeyDown={(e) => handleTabKeyDown(e, visibleTabSequence)}
                       className={cn(
                         "settings-nav-item",
                         activeTab === id && "settings-nav-item--active",
@@ -219,7 +244,7 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
                 </div>
               )}
 
-              {/* Danger / Logout */}
+              {/* Logout */}
               <div className="settings-nav-group settings-nav-group--danger">
                 <div className="settings-nav-item settings-nav-item--danger">
                   <Logout />
@@ -228,36 +253,29 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
             </div>
           </aside>
 
-          {/* ── Content ─────────────────────── */}
+          {/* ── Content ── */}
           <main className="settings-content">
             <div className="settings-content-inner">
               <div className="settings-toolbar">
-                <div>
-                  <p className="settings-toolbar-eyebrow">Workspace</p>
-                  <p className="settings-toolbar-title">User Settings</p>
-                  <p className="settings-toolbar-subtitle">
-                    {TAB_TITLES[activeTab]}
+                <div className="flex items-center gap-2">
+                  <p className="settings-toolbar-title">
+                    Settings
+                    <span className="mx-1.5 text-muted-foreground/50">/</span>
+                    <span className="text-muted-foreground font-normal">{TAB_TITLES[activeTab]}</span>
                   </p>
                 </div>
                 <span className="settings-toolbar-pill">Auto-saved</span>
               </div>
 
-              <div
-                className="settings-mobile-tabs"
-                role="tablist"
-                aria-label="Settings tabs"
-                aria-describedby="settings-tabs-help"
-              >
+              {/* Mobile tab strip */}
+              <div className="settings-mobile-tabs" role="tablist" aria-label="Settings tabs" aria-describedby="settings-tabs-help">
                 {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
                   <button
                     key={id}
                     type="button"
                     onClick={() => activateTab(id)}
-                    onKeyDown={(event) => handleTabKeyDown(event, TAB_SEQUENCE)}
-                    className={cn(
-                      "settings-mobile-tab",
-                      activeTab === id && "settings-mobile-tab--active",
-                    )}
+                    onKeyDown={(e) => handleTabKeyDown(e, TAB_SEQUENCE)}
+                    className={cn("settings-mobile-tab", activeTab === id && "settings-mobile-tab--active")}
                     id={`settings-mobile-tab-${id}`}
                     role="tab"
                     data-settings-tab={id}
@@ -272,99 +290,76 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
                 ))}
               </div>
 
+              {/* ── Account ── */}
               {activeTab === "account" && (
-                <div
-                  className="settings-panel"
-                  id="settings-panel-account"
-                  role="tabpanel"
-                  aria-labelledby="settings-tab-account settings-mobile-tab-account"
-                  aria-describedby="settings-panel-desc-account"
-                >
-                  <h2
-                    ref={(element) => {
-                      panelHeadingRefs.current.account = element;
-                    }}
-                    className="settings-section-title"
-                    tabIndex={-1}
-                  >
-                    My Account
-                  </h2>
-                  <p id="settings-panel-desc-account" className="sr-only">
-                    Manage your profile details and personal information.
-                  </p>
+                <div className="settings-panel" id="settings-panel-account" role="tabpanel"
+                  aria-labelledby="settings-tab-account settings-mobile-tab-account">
+                  <h2 ref={(el) => { panelHeadingRefs.current.account = el; }}
+                    className="settings-section-title" tabIndex={-1}>My Account</h2>
                   <ProfileHero user={user} />
                   <div className="settings-section">
                     <PersonalInfoForm userInfo={user} />
                   </div>
                 </div>
               )}
+
+              {/* ── Status ── */}
+              {activeTab === "status" && (
+                <div className="settings-panel" id="settings-panel-status" role="tabpanel"
+                  aria-labelledby="settings-tab-status settings-mobile-tab-status">
+                  <h2 ref={(el) => { panelHeadingRefs.current.status = el; }}
+                    className="settings-section-title" tabIndex={-1}>Custom Status</h2>
+                  <StatusSettings />
+                </div>
+              )}
+
+              {/* ── Appearance ── */}
               {activeTab === "preferences" && (
-                <div
-                  className="settings-section settings-panel"
-                  id="settings-panel-preferences"
-                  role="tabpanel"
-                  aria-labelledby="settings-tab-preferences settings-mobile-tab-preferences"
-                  aria-describedby="settings-panel-desc-preferences"
-                >
-                  <h2
-                    ref={(element) => {
-                      panelHeadingRefs.current.preferences = element;
-                    }}
-                    className="settings-section-title"
-                    tabIndex={-1}
-                  >
-                    Appearance
-                  </h2>
-                  <p id="settings-panel-desc-preferences" className="sr-only">
-                    Configure theme and visual presentation preferences.
-                  </p>
+                <div className="settings-section settings-panel" id="settings-panel-preferences" role="tabpanel"
+                  aria-labelledby="settings-tab-preferences settings-mobile-tab-preferences">
+                  <h2 ref={(el) => { panelHeadingRefs.current.preferences = el; }}
+                    className="settings-section-title" tabIndex={-1}>Appearance</h2>
                   <PreferencesForm />
                 </div>
               )}
+
+              {/* ── Notifications ── */}
               {activeTab === "notifications" && (
-                <div
-                  className="settings-section settings-panel"
-                  id="settings-panel-notifications"
-                  role="tabpanel"
-                  aria-labelledby="settings-tab-notifications settings-mobile-tab-notifications"
-                  aria-describedby="settings-panel-desc-notifications"
-                >
-                  <h2
-                    ref={(element) => {
-                      panelHeadingRefs.current.notifications = element;
-                    }}
-                    className="settings-section-title"
-                    tabIndex={-1}
-                  >
-                    Notifications
-                  </h2>
-                  <p id="settings-panel-desc-notifications" className="sr-only">
-                    Control message, sound, and desktop notification behavior.
-                  </p>
-                  <NotificationsSection />
+                <div className="settings-section settings-panel" id="settings-panel-notifications" role="tabpanel"
+                  aria-labelledby="settings-tab-notifications settings-mobile-tab-notifications">
+                  <h2 ref={(el) => { panelHeadingRefs.current.notifications = el; }}
+                    className="settings-section-title" tabIndex={-1}>Notifications</h2>
+                  <NotificationsSettings />
                 </div>
               )}
+
+              {/* ── Security ── */}
+              {activeTab === "security" && (
+                <div className="settings-section settings-panel" id="settings-panel-security" role="tabpanel"
+                  aria-labelledby="settings-tab-security settings-mobile-tab-security">
+                  <h2 ref={(el) => { panelHeadingRefs.current.security = el; }}
+                    className="settings-section-title" tabIndex={-1}>Security</h2>
+                  <SecuritySettings />
+                </div>
+              )}
+
+              {/* ── Privacy ── */}
               {activeTab === "privacy" && (
-                <div
-                  className="settings-section settings-panel"
-                  id="settings-panel-privacy"
-                  role="tabpanel"
-                  aria-labelledby="settings-tab-privacy settings-mobile-tab-privacy"
-                  aria-describedby="settings-panel-desc-privacy"
-                >
-                  <h2
-                    ref={(element) => {
-                      panelHeadingRefs.current.privacy = element;
-                    }}
-                    className="settings-section-title"
-                    tabIndex={-1}
-                  >
-                    Privacy & Safety
-                  </h2>
-                  <p id="settings-panel-desc-privacy" className="sr-only">
-                    Review account protection and safety related settings.
-                  </p>
-                  <PrivacySettings />
+                <div className="settings-section settings-panel" id="settings-panel-privacy" role="tabpanel"
+                  aria-labelledby="settings-tab-privacy settings-mobile-tab-privacy">
+                  <h2 ref={(el) => { panelHeadingRefs.current.privacy = el; }}
+                    className="settings-section-title" tabIndex={-1}>Privacy &amp; Safety</h2>
+                  <PrivacySettings onOpenNotifications={() => activateTab("notifications", true)} />
+                </div>
+              )}
+
+              {/* ── Keyboard Shortcuts ── */}
+              {activeTab === "shortcuts" && (
+                <div className="settings-section settings-panel" id="settings-panel-shortcuts" role="tabpanel"
+                  aria-labelledby="settings-tab-shortcuts settings-mobile-tab-shortcuts">
+                  <h2 ref={(el) => { panelHeadingRefs.current.shortcuts = el; }}
+                    className="settings-section-title" tabIndex={-1}>Keyboard Shortcuts</h2>
+                  <KeyboardShortcuts />
                 </div>
               )}
             </div>
@@ -374,97 +369,5 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
     </Dialog>
   );
 };
-
-/* ─── Placeholder Notifications section ─────────────────────────────────── */
-import { Switch } from "../ui/switch";
-import { Label } from "../ui/label";
-
-function NotificationsSection() {
-  const { user, setUser } = useAuthStore();
-  const prefs = user?.notificationPreferences ?? {
-    message: true,
-    sound: true,
-    desktop: false,
-  };
-
-  const [savingKey, setSavingKey] = useState<"message" | "sound" | "desktop" | null>(null);
-
-  const updatePreference = async (key: "message" | "sound" | "desktop", value: boolean) => {
-    if (!user) {
-      return;
-    }
-
-    const previousPrefs = prefs;
-    const nextPrefs = {
-      ...previousPrefs,
-      [key]: value,
-    };
-
-    setUser({
-      ...user,
-      notificationPreferences: nextPrefs,
-    });
-
-    try {
-      setSavingKey(key);
-      const response = await userService.updateNotificationPreferences(nextPrefs);
-      if (response?.user) {
-        setUser(response.user);
-      }
-    } catch (error) {
-      console.error("Failed to update notification preferences", error);
-      setUser({
-        ...user,
-        notificationPreferences: previousPrefs,
-      });
-      toast.error("Could not update notification preferences");
-    } finally {
-      setSavingKey(null);
-    }
-  };
-
-  const rows = [
-    { id: "notif-msg", key: "message" as const, label: "Message notifications", sub: "Get notified when you receive new messages", val: prefs.message },
-    { id: "notif-sound", key: "sound" as const, label: "Notification sounds", sub: "Play a sound when messages arrive", val: prefs.sound },
-    { id: "notif-desktop", key: "desktop" as const, label: "Desktop notifications", sub: "Show native desktop push notifications", val: prefs.desktop },
-  ];
-
-  return (
-    <div
-      className="settings-card"
-      aria-busy={savingKey !== null}
-      aria-live="polite"
-      aria-label="Notification controls"
-    >
-      <div className="settings-card-header">
-        <h3 className="settings-card-title">Notification Controls</h3>
-        <p className="settings-card-desc settings-save-indicator" role="status" aria-live="polite">
-          <span
-            className={cn(
-              "settings-save-dot",
-              savingKey ? "settings-save-dot--saving" : "settings-save-dot--idle",
-            )}
-            aria-hidden="true"
-          />
-          {savingKey
-            ? "Saving preferences..."
-            : "Changes are saved instantly to your account."}
-        </p>
-      </div>
-      <div className="settings-card-body">
-      {rows.map(({ id, key, label, sub, val }) => (
-        <div key={id} className="settings-toggle-row">
-          <div>
-            <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
-            <p id={`${id}-hint`} className="text-xs text-muted-foreground mt-0.5">{sub}</p>
-          </div>
-          <Switch id={id} checked={val} disabled={savingKey === key} aria-describedby={`${id}-hint`} onCheckedChange={(checked) => updatePreference(key, checked)}
-            className="data-[state=checked]:bg-primary shrink-0 transition-colors duration-200" />
-        </div>
-      ))}
-      </div>
-    </div>
-  );
-}
 
 export default ProfileDialog;

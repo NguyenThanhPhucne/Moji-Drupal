@@ -67,7 +67,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   dismissible?: boolean;
-  contentClassMode?: "default" | "bare";
+  contentClassMode?: "default" | "bare" | "fullscreen";
 }) {
   const contentRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -93,6 +93,39 @@ function DialogContent({
     },
     [onOpenAutoFocus],
   );
+
+  if (contentClassMode === "fullscreen") {
+    return (
+      <DialogPortal data-slot="dialog-portal">
+        <DialogOverlay />
+        <DialogPrimitive.Content
+          data-slot="dialog-content"
+          ref={contentRef}
+          tabIndex={-1}
+          onOpenAutoFocus={handleOpenAutoFocus}
+          onEscapeKeyDown={(event) => {
+            if (!dismissible) { event.preventDefault(); return; }
+            onEscapeKeyDown?.(event);
+          }}
+          onPointerDownOutside={(event) => {
+            if (!dismissible) { event.preventDefault(); return; }
+            onPointerDownOutside?.(event);
+          }}
+          onInteractOutside={(event) => {
+            if (!dismissible) { event.preventDefault(); return; }
+            onInteractOutside?.(event);
+          }}
+          className={cn(
+            "fixed inset-0 z-50 pointer-events-auto outline-none",
+            className,
+          )}
+          {...props}
+        >
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    );
+  }
 
   return (
     <DialogPortal data-slot="dialog-portal">

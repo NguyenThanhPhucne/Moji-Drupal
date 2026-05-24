@@ -1,4 +1,5 @@
 import { Shield, Bell, ShieldBan } from "lucide-react";
+import { useNavigate } from "react-router";
 import { useState, type FormEvent } from "react";
 import {
   Card,
@@ -32,8 +33,13 @@ const getErrorMessage = (error: unknown, fallback: string) => {
   return maybeAxios?.response?.data?.message || maybeAxios?.message || fallback;
 };
 
-const PrivacySettings = () => {
+const PrivacySettings = ({
+  onOpenNotifications,
+}: {
+  onOpenNotifications?: () => void;
+}) => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -75,6 +81,15 @@ const PrivacySettings = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleOpenNotifications = () => {
+    if (onOpenNotifications) {
+      onOpenNotifications();
+      return;
+    }
+
+    navigate("/settings/notifications");
   };
 
   return (
@@ -183,7 +198,9 @@ const PrivacySettings = () => {
           </Dialog>
 
           <Button
+            type="button"
             variant="outline"
+            onClick={handleOpenNotifications}
             className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
           >
             <Bell className="h-4 w-4 mr-2" />

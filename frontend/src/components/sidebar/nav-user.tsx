@@ -1,5 +1,6 @@
-import { ChevronsUpDown, UserIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronsUpDown, UserIcon, Settings } from "lucide-react";
+import { useEffect } from "react";
+import { useNavigate } from "react-router";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -20,15 +21,14 @@ import {
 import type { User } from "@/types/user";
 import Logout from "../auth/Logout";
 import FriendRequestDialog from "../friendRequest/FriendRequestDialog";
-import ProfileDialog from "../profile/ProfileDialog";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useNotificationStore } from "@/stores/useNotificationStore";
 import { NotificationBadge } from "../notifications/NotificationBadge";
 
 export function NavUser({ user, compact = false }: Readonly<{ user: User; compact?: boolean }>) {
   const { isMobile } = useSidebar();
+  const navigate = useNavigate();
   const { isHubOpen: friendRequestOpen, setIsHubOpen: setfriendRequestOpen } = useNotificationStore();
-  const [profileOpen, setProfileOpen] = useState(false);
   const { getAllFriendRequests } = useFriendStore();
 
   // Load friend requests when the dialog opens
@@ -92,9 +92,14 @@ export function NavUser({ user, compact = false }: Readonly<{ user: User; compac
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onSelect={() => setTimeout(() => setProfileOpen(true), 100)}>
+                {/* Navigate to settings page (URL-based) */}
+                <DropdownMenuItem onSelect={() => navigate("/settings/account")}>
                   <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
                   Account
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => navigate("/settings/appearance")}>
+                  <Settings className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                  Preferences
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => setTimeout(() => setfriendRequestOpen(true), 100)}
@@ -123,8 +128,6 @@ export function NavUser({ user, compact = false }: Readonly<{ user: User; compac
         open={friendRequestOpen}
         setOpen={setfriendRequestOpen}
       />
-
-      <ProfileDialog open={profileOpen} setOpen={setProfileOpen} />
     </>
   );
 }

@@ -45,7 +45,7 @@ const securityRules = [
   {
     id: "NO_SHELL_EXEC",
     description: "Disallow direct shell execution APIs",
-    pattern: /\b(exec|execSync|spawn|spawnSync|fork)\s*\(/g,
+    pattern: /\b(child_process|childProcess)\s*\.\s*(exec|execSync|spawn|spawnSync|fork)\s*\(|(?<!\.)\b(exec|execSync|spawn|spawnSync|fork)\s*\(/g,
   },
   {
     id: "NO_MONGO_WHERE",

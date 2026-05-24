@@ -37,6 +37,8 @@ export interface User {
   role?: "admin" | "moderator" | "member" | "guest";
   isBanned?: boolean;
   isVerified?: boolean;
+  statusEmoji?: string;
+  statusText?: string;
   createdAt?: string;
   updatedAt?: string;
 }

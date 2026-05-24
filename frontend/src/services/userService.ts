@@ -113,4 +113,53 @@ export const userService = {
     const res = await api.patch(`/admin/users/${userId}/verify`, { isVerified });
     return res.data;
   },
+
+  deleteAccount: async () => {
+    const res = await api.delete("/users/me");
+    return res.data;
+  },
+
+  updateCustomStatus: async (payload: {
+    statusEmoji?: string;
+    statusText?: string;
+    statusClearAt?: string | null;
+  }) => {
+    const res = await api.patch("/users/custom-status", payload);
+    return res.data;
+  },
+
+  /**
+   * Get active sessions for the current user.
+   * Returns a list of devices/tokens (stub — requires backend support).
+   */
+  getUserSessions: async () => {
+    const res = await api.get("/users/me/sessions");
+    return res.data as {
+      sessions: Array<{
+        id: string;
+        device: string;
+        lastActive: string;
+        current: boolean;
+        ipAddress?: string;
+        location?: string;
+      }>;
+    };
+  },
+
+  /**
+   * Revoke a specific session token.
+   * @param sessionId - the session ID to revoke
+   */
+  revokeSession: async (sessionId: string) => {
+    const res = await api.delete(`/users/me/sessions/${sessionId}`);
+    return res.data;
+  },
+
+  /**
+   * Revoke all sessions except the current one (log out everywhere).
+   */
+  revokeAllOtherSessions: async () => {
+    const res = await api.delete("/users/me/sessions");
+    return res.data;
+  },
 };

@@ -46,9 +46,8 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const PostDetailPage = lazy(() => import("./pages/PostDetailPage"));
 const JoinGroupLinkPage = lazy(() => import("./pages/JoinGroupLinkPage"));
 const ChatContrastQaPage = lazy(() => import("./pages/ChatContrastQaPage"));
-const NotificationSettingsPage = lazy(
-  () => import("./pages/NotificationSettingsPage"),
-);
+
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const TermsPage = lazy(() => import("./pages/TermsPage"));
 const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage.tsx"));
@@ -145,6 +144,10 @@ function AppRoutes() {
 
       if (pathname.startsWith("/settings/notifications")) {
         return t("route.notifications");
+      }
+
+      if (pathname.startsWith("/settings")) {
+        return "Settings";
       }
 
       if (pathname.startsWith("/signin")) {
@@ -244,6 +247,18 @@ function AppRoutes() {
     announcePolite(t("a11y.navigation_to", { route: routeLabel }));
   }, [announcePolite, location.pathname, resolveRouteLabel, t]);
 
+  // ── Ctrl+, → Open Settings (Slack / Discord / VS Code convention) ─────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        navigate("/settings/account");
+      }
+    };
+    globalThis.addEventListener("keydown", handler);
+    return () => globalThis.removeEventListener("keydown", handler);
+  }, [navigate]);
+
   return (
     <>
       <a
@@ -308,18 +323,13 @@ function AppRoutes() {
             <Route path="/profile/me" element={<Navigate to="/profile" replace />} />
             <Route path="/profile/:userId" element={<ProfilePage />} />
             <Route path="/saved" element={<SavedMessagesPage />} />
-            <Route
-              path="/settings/notifications"
-              element={<NotificationSettingsPage />}
-            />
-            <Route
-              path="/settings/notification"
-              element={<Navigate to="/settings/notifications" replace />}
-            />
-            <Route
-              path="/notification-settings"
-              element={<Navigate to="/settings/notifications" replace />}
-            />
+            {/* ── Settings pages ── */}
+            <Route path="/settings" element={<Navigate to="/settings/account" replace />} />
+            <Route path="/settings/:tab" element={<SettingsPage />} />
+            {/* legacy aliases */}
+            <Route path="/settings/notification" element={<Navigate to="/settings/notifications" replace />} />
+            <Route path="/notification-settings"  element={<Navigate to="/settings/notifications" replace />} />
+
             <Route path="/join/group/:conversationId" element={<JoinGroupLinkPage />} />
           </Route>
 
@@ -651,6 +661,7 @@ function AppContent() {
         setIsHubOpen(true);
         return;
       }
+
 
       if (isEditableElement(event.target)) {
         return;
