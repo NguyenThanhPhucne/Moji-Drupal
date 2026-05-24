@@ -923,3 +923,58 @@ export const toggleUserVerify = async (req, res) => {
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
+
+// ─── Custom Status ───────────────────────────────────────────────────────────
+export const updateCustomStatus = async (req, res) => {
+  try {
+    const { statusEmoji, statusText, statusClearAt } = req.body;
+    const userId = req.user._id;
+
+    const update = {
+      statusEmoji: statusEmoji ?? "",
+      statusText: statusText ?? "",
+      statusClearAt: statusClearAt ? new Date(statusClearAt) : null,
+    };
+
+    const updatedUser = await User.findByIdAndUpdate(userId, update, { new: true }).select("-hashedPassword");
+
+    if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+    await invalidateCache(`auth_profile:${userId}`);
+    return res.status(200).json({ message: "Status updated", user: updatedUser });
+  } catch (error) {
+    console.error("updateCustomStatus error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── Delete Account ──────────────────────────────────────────────────────────
+export const deleteAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await User.findByIdAndDelete(userId);
+    await invalidateCache(`auth_profile:${userId}`);
+    // Clear auth cookie
+    res.clearCookie("refreshToken", { httpOnly: true, sameSite: "strict", secure: process.env.NODE_ENV === "production" });
+    return res.status(200).json({ message: "Account deleted successfully" });
+  } catch (error) {
+    console.error("deleteAccount error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── Sessions (stub — extend with real session model later) ─────────────────
+export const getUserSessions = async (req, res) => {
+  // Stub: returns empty sessions list. Wire to Session model when available.
+  return res.status(200).json({ sessions: [] });
+};
+
+export const revokeSession = async (req, res) => {
+  // Stub: no-op until real session tracking is implemented.
+  return res.status(200).json({ message: "Session revoked" });
+};
+
+export const revokeAllOtherSessions = async (req, res) => {
+  // Stub: sign out everywhere else (requires session model).
+  return res.status(200).json({ message: "All other sessions revoked" });
+};

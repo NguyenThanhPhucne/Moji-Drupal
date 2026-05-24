@@ -1123,7 +1123,7 @@ html[data-motion="reduced"] * {
     pointer-events: none;
     background: linear-gradient(
       118deg,
-      hsl(0 0% 100% / 0.08) 0%,
+      hsl(0 0% 100% / 0.06) 0%,
       transparent 48%
     );
     opacity: 0;
@@ -1152,22 +1152,22 @@ html[data-motion="reduced"] * {
 
   .chat-message-bubble-surface--own {
     box-shadow:
-      0 6px 14px -16px hsl(var(--primary) / 0.48),
-      0 1px 0 hsl(0 0% 100% / 0.2) inset;
+      0 4px 10px -14px hsl(var(--primary) / 0.42),
+      0 1px 0 hsl(0 0% 100% / 0.18) inset;
   }
 
   .chat-message-bubble-surface--peer {
     box-shadow:
-      0 6px 14px -18px hsl(220 28% 16% / 0.28),
+      0 4px 10px -16px hsl(220 28% 16% / 0.22),
       0 1px 0 hsl(0 0% 100% / 0.5) inset,
-      0 -1px 0 hsl(220 16% 36% / 0.08) inset;
+      0 -1px 0 hsl(220 16% 36% / 0.06) inset;
   }
 
   .dark .chat-message-bubble-surface--peer {
     box-shadow:
-      0 8px 18px -20px hsl(220 50% 4% / 0.68),
+      0 6px 14px -20px hsl(220 50% 4% / 0.6),
       0 1px 0 hsl(0 0% 100% / 0.06) inset,
-      0 -1px 0 hsl(220 16% 80% / 0.06) inset;
+      0 -1px 0 hsl(220 16% 80% / 0.05) inset;
   }
 
   .chat-message-bubble-hit:hover .chat-message-bubble-surface {
@@ -2502,13 +2502,13 @@ html[data-motion="reduced"] * {
   }
 
   .chat-header-shell {
-    border-bottom: 1px solid hsl(var(--border) / 0.45);
-    background: hsl(var(--background) / 0.82);
+    border-bottom: 1px solid hsl(var(--border) / 0.55);
+    background: hsl(var(--background) / 0.9);
     box-shadow:
-      0 12px 28px -20px hsl(210 40% 25% / 0.18),
-      0 1px 0 hsl(0 0% 100% / 0.55) inset;
-    backdrop-filter: saturate(160%) blur(15px);
-    -webkit-backdrop-filter: saturate(160%) blur(15px);
+      0 10px 24px -22px hsl(210 32% 20% / 0.16),
+      0 1px 0 hsl(0 0% 100% / 0.6) inset;
+    backdrop-filter: saturate(150%) blur(12px);
+    -webkit-backdrop-filter: saturate(150%) blur(12px);
     /* Ensure chat header is always above message bubbles */
     position: sticky;
     top: 0;
@@ -2618,6 +2618,41 @@ html[data-motion="reduced"] * {
     transform: translateY(0) scale(var(--msg-motion-action-active-scale));
   }
 
+  .chat-message-action-toolbar--command {
+    border-radius: 999px;
+    border: 1px solid hsl(var(--enterprise-panel-border) / 0.6);
+    background: hsl(var(--enterprise-panel) / 0.92);
+    box-shadow: 0 10px 20px -22px hsl(218 34% 18% / 0.24);
+    padding: 0.2rem 0.28rem;
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    transition:
+      opacity 150ms ease,
+      transform 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease;
+  }
+
+  .chat-message-action-btn--command {
+    border-color: hsl(var(--enterprise-panel-border) / 0.7);
+    background: linear-gradient(
+      180deg,
+      hsl(var(--enterprise-panel) / 0.96) 0%,
+      hsl(var(--enterprise-panel-soft) / 0.88) 100%
+    );
+    box-shadow:
+      0 6px 14px -14px hsl(218 30% 18% / 0.26),
+      0 1px 0 hsl(0 0% 100% / 0.4) inset;
+  }
+
+  .chat-message-action-btn--command:hover,
+  .chat-message-action-btn--command:active {
+    border-color: hsl(var(--enterprise-accent) / 0.26);
+    background: hsl(var(--enterprise-panel-soft) / 0.95);
+    box-shadow: 0 10px 18px -16px hsl(var(--enterprise-accent) / 0.3);
+  }
+
   /* ── Inline Quick Reaction emoji buttons (Slack/Discord style) ── */
   .chat-message-action-btn--emoji {
     /* Slightly wider than icon buttons to fit the emoji comfortably */
@@ -2708,17 +2743,18 @@ html[data-motion="reduced"] * {
   .chat-delete-scope-option {
     text-align: left;
     border-radius: 0.9rem;
-    border: 1px solid hsl(var(--border) / 0.72);
+    border: 1px solid hsl(var(--border) / 0.66);
     padding: 1rem;
-    background: hsl(var(--card) / 0.85);
+    background: hsl(var(--card) / 0.92);
     box-shadow: 0 8px 24px -22px hsl(210 30% 20% / 0.35);
     transition: border-color 0.16s ease, background-color 0.16s ease,
-      transform 0.12s ease;
+      box-shadow 0.16s ease, transform 0.12s ease;
   }
 
   .chat-delete-scope-option:hover {
-    border-color: hsl(var(--primary) / 0.4);
-    background: hsl(var(--muted) / 0.56);
+    border-color: hsl(var(--primary) / 0.36);
+    background: hsl(var(--muted) / 0.5);
+    box-shadow: 0 12px 24px -22px hsl(210 30% 20% / 0.28);
     transform: translateY(-1px);
   }
 
@@ -2734,17 +2770,18 @@ html[data-motion="reduced"] * {
   }
 
   .chat-modal-shell {
-    border-color: hsl(var(--border) / 0.88);
+    border-color: hsl(var(--border) / 0.82);
     background: linear-gradient(
       180deg,
       hsl(var(--background) / 0.98) 0%,
-      hsl(var(--background) / 0.94) 100%
+      hsl(var(--card) / 0.98) 100%
     );
-    backdrop-filter: saturate(150%) blur(15px);
-    -webkit-backdrop-filter: saturate(150%) blur(15px);
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
     box-shadow:
-      0 28px 52px -22px hsl(210 35% 12% / 0.38),
-      0 0 0 1px hsl(var(--primary) / 0.08);
+      0 24px 48px -28px hsl(210 30% 12% / 0.3),
+      0 1px 0 hsl(0 0% 100% / 0.6) inset,
+      0 0 0 1px hsl(var(--primary) / 0.06);
   }
 
   .chat-processing-pill {
@@ -2876,14 +2913,23 @@ html[data-motion="reduced"] * {
     min-width: 160px;
     overflow: hidden;
     border-radius: 12px;
-    border: 0.5px solid hsl(var(--border) / 0.7);
-    background: hsl(var(--popover) / 0.96);
-    backdrop-filter: blur(15px) saturate(140%);
-    -webkit-backdrop-filter: blur(15px) saturate(140%);
+    border: 1px solid hsl(var(--border) / 0.65);
+    background: hsl(var(--popover) / 0.98);
+    backdrop-filter: blur(12px) saturate(135%);
+    -webkit-backdrop-filter: blur(12px) saturate(135%);
     box-shadow:
-      0 12px 28px -12px hsl(0 0% 0% / 0.3),
+      0 16px 32px -20px hsl(0 0% 0% / 0.26),
       0 4px 10px hsl(0 0% 0% / 0.08),
-      0 1px 0 hsl(0 0% 100% / 0.1) inset;
+      0 1px 0 hsl(0 0% 100% / 0.12) inset;
+  }
+
+  .chat-context-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-dropdown);
+    backdrop-filter: blur(4px) saturate(110%);
+    -webkit-backdrop-filter: blur(4px) saturate(110%);
+    background: hsl(var(--background) / 0.18);
   }
 
   .chat-context-menu--floating {

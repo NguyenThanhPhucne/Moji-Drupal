@@ -100,17 +100,17 @@ export const userService = {
   },
 
   updateUserRole: async (userId: string, role: string) => {
-    const res = await api.patch(`/admin/users/${userId}/role`, { role });
+    const res = await api.patch(`/users/admin/users/${userId}/role`, { role });
     return res.data;
   },
 
   toggleUserBan: async (userId: string, isBanned: boolean) => {
-    const res = await api.patch(`/admin/users/${userId}/ban`, { isBanned });
+    const res = await api.patch(`/users/admin/users/${userId}/ban`, { isBanned });
     return res.data;
   },
 
   toggleUserVerify: async (userId: string, isVerified: boolean) => {
-    const res = await api.patch(`/admin/users/${userId}/verify`, { isVerified });
+    const res = await api.patch(`/users/admin/users/${userId}/verify`, { isVerified });
     return res.data;
   },
 

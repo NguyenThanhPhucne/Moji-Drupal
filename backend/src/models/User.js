@@ -165,6 +165,29 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Custom status
+    statusEmoji: {
+      type: String,
+      default: "",
+    },
+    statusText: {
+      type: String,
+      default: "",
+      maxlength: 100,
+    },
+    statusClearAt: {
+      type: Date,
+      default: null,
+    },
+    // Cover photo
+    coverPhotoUrl: {
+      type: String,
+      default: null,
+    },
+    coverPhotoId: {
+      type: String,
+      default: null,
+    },
     privatePinHash: {
       type: String,
       default: null,

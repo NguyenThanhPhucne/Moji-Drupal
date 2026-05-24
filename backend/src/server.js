@@ -21,6 +21,10 @@ import {
   startMessageCleanupCompensationWorker,
   stopMessageCleanupCompensationWorker,
 } from "./services/messageCleanupCompensationService.js";
+import {
+  startMessageExpiryCleanupWorker,
+  stopMessageExpiryCleanupWorker,
+} from "./services/messageExpiryCleanupService.js";
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import { requestSecurityGuard } from "./middlewares/requestSecurityMiddleware.js";
@@ -149,6 +153,12 @@ try {
     console.error("Failed to start compensation worker:", workerError);
   }
 
+  try {
+    await startMessageExpiryCleanupWorker();
+  } catch (workerError) {
+    console.error("Failed to start message expiry worker:", workerError);
+  }
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server started on port ${PORT}`);
     console.log("Real-time Drupal sync enabled");
@@ -169,6 +179,7 @@ const shutdownGracefully = async () => {
   console.log("\nShutting down gracefully...");
 
   await stopMessageCleanupCompensationWorker();
+  await stopMessageExpiryCleanupWorker();
   await closeDrupalSync();
   process.exit(0);
 };

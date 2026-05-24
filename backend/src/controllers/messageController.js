@@ -1525,6 +1525,7 @@ export const sendDirectMessage = async (req, res) => {
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
     const uploadedAudio = await uploadMessageAudio(audioUrl);
+    const uploadedAudioUrl = uploadedAudio?.audioUrl || null;
     const normalizedAudioMeta = normalizeAudioMetaInput(audioMeta, {
       fallbackMimeType: uploadedAudio?.mimeType,
       fallbackSizeBytes: uploadedAudio?.sizeBytes,
@@ -1555,7 +1556,7 @@ export const sendDirectMessage = async (req, res) => {
         senderId,
         content: normalizedContent,
         imgUrl: uploadedImgUrl,
-        audioUrl: uploadedAudio?.audioUrl || null,
+        audioUrl: uploadedAudioUrl,
         audioMeta: normalizedAudioMeta,
         clientMessageId: normalizedClientMessageId,
         replyTo: validatedReplyTarget?._id || null,
@@ -1563,19 +1564,36 @@ export const sendDirectMessage = async (req, res) => {
         expiresAt,
       });
     } catch (createError) {
-      if (createError?.code !== 11000 || !normalizedClientMessageId) {
-        throw createError;
-      }
+      if (createError?.code === 11000 && normalizedClientMessageId) {
+        const existingMessage = await Message.findOne({
+          conversationId: conversation._id,
+          senderId,
+          clientMessageId: normalizedClientMessageId,
+        });
 
-      const existingMessage = await Message.findOne({
-        conversationId: conversation._id,
-        senderId,
-        clientMessageId: normalizedClientMessageId,
-      });
-      if (!existingMessage) {
+        if (existingMessage) {
+          cleanupUploadedMedia({
+            imgUrl: uploadedImgUrl,
+            audioUrl: uploadedAudioUrl,
+            logContext: "sendDirectMessage",
+          });
+          message = existingMessage;
+        } else {
+          cleanupUploadedMedia({
+            imgUrl: uploadedImgUrl,
+            audioUrl: uploadedAudioUrl,
+            logContext: "sendDirectMessage",
+          });
+          throw createError;
+        }
+      } else {
+        cleanupUploadedMedia({
+          imgUrl: uploadedImgUrl,
+          audioUrl: uploadedAudioUrl,
+          logContext: "sendDirectMessage",
+        });
         throw createError;
       }
-      message = existingMessage;
     }
 
     if (validatedReplyTarget?._id) {
@@ -1747,6 +1765,7 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
 
     const uploadedImgUrl = await uploadMessageImage(imgUrl);
     const uploadedAudio = await uploadMessageAudio(audioUrl);
+    const uploadedAudioUrl = uploadedAudio?.audioUrl || null;
     const normalizedAudioMeta = normalizeAudioMetaInput(audioMeta, {
       fallbackMimeType: uploadedAudio?.mimeType,
       fallbackSizeBytes: uploadedAudio?.sizeBytes,
@@ -1779,7 +1798,7 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
         senderId,
         content: normalizedContent,
         imgUrl: uploadedImgUrl,
-        audioUrl: uploadedAudio?.audioUrl || null,
+        audioUrl: uploadedAudioUrl,
         audioMeta: normalizedAudioMeta,
         clientMessageId: normalizedClientMessageId,
         replyTo: validatedReplyTarget?._id || null,
@@ -1787,19 +1806,36 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
         expiresAt,
       });
     } catch (createError) {
-      if (createError?.code !== 11000 || !normalizedClientMessageId) {
-        throw createError;
-      }
+      if (createError?.code === 11000 && normalizedClientMessageId) {
+        const existingMessage = await Message.findOne({
+          conversationId: normalizedConversationId,
+          senderId,
+          clientMessageId: normalizedClientMessageId,
+        });
 
-      const existingMessage = await Message.findOne({
-        conversationId: normalizedConversationId,
-        senderId,
-        clientMessageId: normalizedClientMessageId,
-      });
-      if (!existingMessage) {
+        if (existingMessage) {
+          cleanupUploadedMedia({
+            imgUrl: uploadedImgUrl,
+            audioUrl: uploadedAudioUrl,
+            logContext: "sendGroupMessage",
+          });
+          message = existingMessage;
+        } else {
+          cleanupUploadedMedia({
+            imgUrl: uploadedImgUrl,
+            audioUrl: uploadedAudioUrl,
+            logContext: "sendGroupMessage",
+          });
+          throw createError;
+        }
+      } else {
+        cleanupUploadedMedia({
+          imgUrl: uploadedImgUrl,
+          audioUrl: uploadedAudioUrl,
+          logContext: "sendGroupMessage",
+        });
         throw createError;
       }
-      message = existingMessage;
     }
 
     if (validatedReplyTarget?._id) {
@@ -1999,6 +2035,30 @@ const cleanupUnsentMedia = (message) => {
     destroyMediaFromUrl(message.audioUrl, "video").catch((cleanupError) => {
       console.error(
         "[unsendMessage] Audio cleanup failed after successful message delete",
+        cleanupError,
+      );
+    });
+  }
+};
+
+const isRemoteMediaUrl = (value) => {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+};
+
+const cleanupUploadedMedia = ({ imgUrl, audioUrl, logContext }) => {
+  if (isRemoteMediaUrl(imgUrl)) {
+    destroyMediaFromUrl(imgUrl, "image").catch((cleanupError) => {
+      console.error(
+        `[${logContext}] Failed to cleanup uploaded image after create error`,
+        cleanupError,
+      );
+    });
+  }
+
+  if (isRemoteMediaUrl(audioUrl)) {
+    destroyMediaFromUrl(audioUrl, "video").catch((cleanupError) => {
+      console.error(
+        `[${logContext}] Failed to cleanup uploaded audio after create error`,
         cleanupError,
       );
     });
