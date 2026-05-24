@@ -12,46 +12,18 @@ export default defineConfig({
     },
   },
   build: {
+    // Let Vite handle chunk splitting automatically to avoid TDZ (Temporal Dead Zone)
+    // errors caused by manual chunk ordering issues in Rollup.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) {
-            return;
-          }
-
-          if (
-            id.includes("react") ||
-            id.includes("react-dom") ||
-            id.includes("react-router")
-          ) {
-            return "react-core";
-          }
-
-          if (id.includes("@radix-ui") || id.includes("lucide-react")) {
-            return "ui-kit";
-          }
-
-          if (
-            id.includes("zustand") ||
-            id.includes("socket.io-client") ||
-            id.includes("axios")
-          ) {
-            return "state-network";
-          }
-
-          if (id.includes("@emoji-mart/data")) {
-            return "emoji-data";
-          }
-
-          if (id.includes("@emoji-mart") || id.includes("emoji-mart")) {
-            return "emoji-react";
-          }
-
-          if (id.includes("date-fns")) {
-            return "date-utils";
-          }
-
-          return "vendor";
+        // Safe manual chunks — only split truly isolated leaf packages
+        // (no cross-chunk circular deps possible here)
+        manualChunks: {
+          "react-core":  ["react", "react-dom", "react-router-dom"],
+          "emoji-data":  ["@emoji-mart/data"],
+          "emoji-react": ["emoji-mart", "@emoji-mart/react"],
+          "date-utils":  ["date-fns"],
         },
       },
     },
