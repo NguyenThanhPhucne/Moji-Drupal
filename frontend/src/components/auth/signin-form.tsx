@@ -172,11 +172,7 @@ export function SigninForm({
               Team Workspace
             </div>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_18%,rgba(255,255,255,0.28),transparent_36%),radial-gradient(circle_at_74%_28%,rgba(255,255,255,0.2),transparent_32%)]" />
-            <img
-              src="/placeholder.png"
-              alt="Sign-in illustration"
-              className="absolute inset-0 h-full w-full object-cover opacity-45 mix-blend-screen"
-            />
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-primary/10 to-transparent opacity-60 mix-blend-screen" />
             <div className="absolute inset-x-6 bottom-8 rounded-2xl border border-white/30 bg-white/15 p-4 text-white backdrop-blur-md">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/80">
                 Sign-in faster
