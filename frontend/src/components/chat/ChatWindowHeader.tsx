@@ -24,6 +24,7 @@ import {
   Link2,
   Video,
   Settings2,
+  Hash,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -36,6 +37,7 @@ import { DeleteConversationDialog } from "./dialogs/DeleteConversationDialog";
 import { GroupMembersDialog } from "./dialogs/GroupMembersDialog";
 import { ManageAdminsDialog } from "./dialogs/ManageAdminsDialog";
 import { JoinLinkDialog } from "./dialogs/JoinLinkDialog";
+import { ManageChannelsDialog } from "./dialogs/ManageChannelsDialog";
 
 function resolveDirectPeer(chat: Conversation, userId?: string) {
   if (chat.type !== "direct") return null;
@@ -63,7 +65,7 @@ function getGroupMemberRole(
 }
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
-  const { conversations, activeConversationId, isCallActive, setIsCallActive, deleteConversation, toggleGroupAdminRole } =
+  const { conversations, activeConversationId, isCallActive, setIsCallActive, deleteConversation, setGroupAdminRole } =
     useChatStore();
   const { user } = useAuthStore();
   const { getUserPresence } = useSocketStore();
@@ -76,6 +78,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   const [showAdminsDialog, setShowAdminsDialog] = useState(false);
   const [showJoinLinkDialog, setShowJoinLinkDialog] = useState(false);
+  const [showChannelsDialog, setShowChannelsDialog] = useState(false);
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
@@ -163,7 +166,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     if (!chat || !isOwner) return;
     try {
       setAdminActionTarget(memberId);
-      await toggleGroupAdminRole(chat._id, memberId, checked);
+      await setGroupAdminRole(chat._id, memberId, checked);
     } finally {
       setAdminActionTarget(null);
     }
@@ -308,11 +311,21 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
 
                     {isGroupAdmin && (
                       <DropdownMenuItem
-                        onSelect={() => navigate(`/group/${chat._id}/settings`)}
+                        onSelect={() => setTimeout(() => setShowChannelsDialog(true), 100)}
+                        className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                      >
+                        <Hash className="h-4 w-4 text-muted-foreground" />
+                        Manage Channels
+                      </DropdownMenuItem>
+                    )}
+
+                    {isGroupAdmin && (
+                      <DropdownMenuItem
+                        onSelect={() => navigate(`/settings/account`)}
                         className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                       >
                         <Settings2 className="h-4 w-4 text-muted-foreground" />
-                        Group Settings
+                        Settings
                       </DropdownMenuItem>
                     )}
                   </>
@@ -366,6 +379,15 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           chat={chat}
           isGroupAdmin={isGroupAdmin}
           activeGroupJoinLink={activeGroupJoinLink}
+        />
+      )}
+
+      {isGroupAdmin && (
+        <ManageChannelsDialog
+          open={showChannelsDialog}
+          onOpenChange={setShowChannelsDialog}
+          chat={chat}
+          isGroupAdmin={isGroupAdmin}
         />
       )}
     </>

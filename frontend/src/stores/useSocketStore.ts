@@ -1543,11 +1543,20 @@ export const useSocketStore = create<SocketState>((set, get) => ({
               group?: unknown;
             };
             unreadCounts?: Record<string, number>;
+            threadStats?: {
+              threadRootId?: string;
+              replyCount?: number;
+            };
           };
 
-          const { message, conversation, unreadCounts } = eventPayload;
+          const { message, conversation, unreadCounts, threadStats } = eventPayload;
           if (!message || !conversation?._id || !conversation?.lastMessage) {
             return;
+          }
+
+          const conversationId = String(conversation._id);
+          if (threadStats) {
+            useChatStore.getState().applyThreadReplyStats(conversationId, threadStats);
           }
 
           useChatStore.getState().addMessage(message as Message);
@@ -1623,6 +1632,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             conversationId?: string;
             threadRootId?: string;
             message?: Message;
+            threadStats?: {
+              threadRootId?: string;
+              replyCount?: number;
+            };
           };
 
           const conversationId = String(eventPayload?.conversationId || "").trim();
@@ -1633,9 +1646,21 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             return;
           }
 
-          // addMessage already handles deduplication; the ThreadPanel derives its
-          // view from the main messages bucket filtered by threadRootId.
-          useChatStore.getState().addMessage(message);
+          if (eventPayload.threadStats) {
+            useChatStore
+              .getState()
+              .applyThreadReplyStats(conversationId, eventPayload.threadStats);
+          }
+
+          const existingItems =
+            useChatStore.getState().messages[conversationId]?.items || [];
+          const alreadyTracked = existingItems.some(
+            (messageItem) => String(messageItem._id) === String(message._id),
+          );
+
+          if (!alreadyTracked) {
+            useChatStore.getState().addMessage(message);
+          }
         },
       });
     });
@@ -1891,12 +1916,23 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             reactions?: unknown[];
             readBy?: unknown[];
             replyTo?: unknown;
+            threadRootId?: string;
+            threadStats?: {
+              threadRootId?: string;
+              replyCount?: number;
+            };
           };
 
           const conversationId = String(eventPayload.conversationId || "").trim();
           const messageId = String(eventPayload.messageId || "").trim();
           if (!conversationId || !messageId) {
             return;
+          }
+
+          if (eventPayload.threadStats) {
+            useChatStore
+              .getState()
+              .applyThreadReplyStats(conversationId, eventPayload.threadStats);
           }
 
           useChatStore.getState().updateMessage(conversationId, messageId, {

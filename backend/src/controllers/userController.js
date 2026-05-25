@@ -2,6 +2,7 @@ import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import User from "../models/User.js";
+import Session from "../models/Session.js";
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
 import crypto from "node:crypto";
@@ -963,18 +964,72 @@ export const deleteAccount = async (req, res) => {
   }
 };
 
-// ─── Sessions (stub — extend with real session model later) ─────────────────
+// ─── Sessions ────────────────────────────────────────────────────────────────
 export const getUserSessions = async (req, res) => {
-  // Stub: returns empty sessions list. Wire to Session model when available.
-  return res.status(200).json({ sessions: [] });
+  try {
+    const userId = req.user._id;
+    const sessions = await Session.find({ userId })
+      .sort({ lastUsedAt: -1 })
+      .select("_id lastUsedAt createdAt expiresAt userAgentHash ipAddress deviceLabel")
+      .lean();
+
+    // Get current session token from cookie to mark it
+    const currentToken = req.cookies?.refreshToken;
+
+    const mapped = sessions.map((s) => ({
+      id: String(s._id),
+      lastUsedAt: s.lastUsedAt,
+      createdAt: s.createdAt,
+      expiresAt: s.expiresAt,
+      deviceLabel: s.deviceLabel || "Unknown device",
+      ipAddress: s.ipAddress || null,
+      isCurrent: currentToken
+        ? s.userAgentHash === crypto.createHash("sha256").update(currentToken).digest("hex").slice(0, 12)
+        : false,
+    }));
+
+    return res.status(200).json({ sessions: mapped });
+  } catch (error) {
+    console.error("getUserSessions error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
 export const revokeSession = async (req, res) => {
-  // Stub: no-op until real session tracking is implemented.
-  return res.status(200).json({ message: "Session revoked" });
+  try {
+    const userId = req.user._id;
+    const { sessionId } = req.params;
+    const session = await Session.findOneAndDelete({ _id: sessionId, userId });
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    return res.status(200).json({ message: "Session revoked" });
+  } catch (error) {
+    console.error("revokeSession error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
 export const revokeAllOtherSessions = async (req, res) => {
-  // Stub: sign out everywhere else (requires session model).
-  return res.status(200).json({ message: "All other sessions revoked" });
+  try {
+    const userId = req.user._id;
+    const currentToken = req.cookies?.refreshToken;
+
+    // Delete all sessions for user except those matching the current refresh token
+    const currentSession = currentToken
+      ? await Session.findOne({ userId, refreshToken: currentToken })
+      : null;
+
+    const query = currentSession
+      ? { userId, _id: { $ne: currentSession._id } }
+      : { userId };
+
+    const result = await Session.deleteMany(query);
+    return res.status(200).json({
+      message: "All other sessions revoked",
+      count: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("revokeAllOtherSessions error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
+

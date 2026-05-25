@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { MessageSquareText, MessageSquareDashed, Send, X, Mic, MicOff, Square } from "lucide-react";
+import {
+  ArrowDown,
+  Loader2,
+  MessageSquareText,
+  MessageSquareDashed,
+  Send,
+  X,
+  Mic,
+  MicOff,
+  Square,
+} from "lucide-react";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { chatService } from "@/services/chatService";
 import { useChatStore } from "@/stores/useChatStore";
@@ -218,6 +228,9 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     sendGroupMessage,
     addMessage,
     removeMessageFromConversation,
+    applyThreadReplyStats,
+    threadReplyCounts,
+    threadUnreadCounts,
   } = useChatStore();
 
   const [threadMessages, setThreadMessages] = useState<Message[]>([]);
@@ -227,9 +240,11 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const [composerValue, setComposerValue] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const latestThreadRequestIdRef = useRef(0);
   const shouldStickToBottomRef = useRef(true);
+  const [isNearBottom, setIsNearBottom] = useState(true);
 
   // ── Voice recording state ──────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
@@ -416,9 +431,30 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     );
   }, [activeConversationMessages, rootMessageId, threadMessages]);
 
-  const replyCount = mergedThreadMessages.filter(
-    (m) => String(m._id) !== rootMessageId,
+  const threadReplyMessages = useMemo(
+    () =>
+      mergedThreadMessages.filter(
+        (messageItem) => String(messageItem._id) !== rootMessageId,
+      ),
+    [mergedThreadMessages, rootMessageId],
+  );
+
+  const loadedReplyCount = threadReplyMessages.length;
+    (messageItem) => String(messageItem._id) !== rootMessageId,
   ).length;
+  const threadStatsKey =
+    activeConversationId && rootMessageId
+      ? `${activeConversationId}:${rootMessageId}`
+      : "";
+  const replyCount =
+    threadStatsKey && threadStatsKey in threadReplyCounts
+      ? Number(threadReplyCounts[threadStatsKey] || 0)
+      : loadedReplyCount;
+  const threadUnreadCount =
+    threadStatsKey && threadStatsKey in threadUnreadCounts
+      ? Number(threadUnreadCounts[threadStatsKey] || 0)
+      : 0;
+
   const replyCountLabel = (() => {
     if (replyCount <= 0) {
       return "No replies yet";
@@ -426,6 +462,27 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
     return `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`;
   })();
+
+  const updateScrollPosition = useCallback(() => {
+    const scrollElement = scrollContainerRef.current;
+    if (!scrollElement) return;
+    const distanceFromBottom =
+      scrollElement.scrollHeight -
+      scrollElement.scrollTop -
+      scrollElement.clientHeight;
+    setIsNearBottom(distanceFromBottom < 72);
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    messagesEndRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : behavior,
+    });
+    shouldStickToBottomRef.current = true;
+    setIsNearBottom(true);
+  }, []);
 
   const loadThread = useCallback(async (cursor?: string, append = false) => {
     if (!rootMessageId) return;
@@ -473,6 +530,13 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
       });
 
       setThreadCursor(result.cursor || null);
+
+      if (activeConversationId && !append) {
+        applyThreadReplyStats(activeConversationId, {
+          threadRootId: resolvedThreadRootId || rootMessageId,
+          replyCount: result.replyCount,
+        });
+      }
     } catch (error) {
       console.error("Failed to load thread messages", error);
     } finally {
@@ -481,7 +545,12 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
         setLoadingMore(false);
       }
     }
-  }, [rootMessageId, setActiveThreadRootId]);
+  }, [
+    activeConversationId,
+    applyThreadReplyStats,
+    rootMessageId,
+    setActiveThreadRootId,
+  ]);
 
   useEffect(() => {
     if (!rootMessageId || !activeConversationId) {
@@ -495,15 +564,46 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     void loadThread(undefined, false);
   }, [rootMessageId, activeConversationId, loadThread]);
 
-  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (!rootMessageId) return;
+    const focusTimer = window.setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 140);
+    return () => window.clearTimeout(focusTimer);
+  }, [rootMessageId]);
+
+  // Auto-scroll to bottom when new replies arrive (if user is already near bottom)
   useEffect(() => {
     if (!shouldStickToBottomRef.current) {
       shouldStickToBottomRef.current = true;
       return;
     }
+    if (!isNearBottom) return;
 
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mergedThreadMessages.length]);
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    messagesEndRef.current?.scrollIntoView({
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }, [threadReplyMessages.length, isNearBottom]);
+
+  useEffect(() => {
+    if (loadingThread || !rootMessageId) return;
+    const frameId = window.requestAnimationFrame(() => {
+      updateScrollPosition();
+      if (shouldStickToBottomRef.current) {
+        scrollToBottom("auto");
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [
+    loadingThread,
+    rootMessageId,
+    threadReplyMessages.length,
+    updateScrollPosition,
+    scrollToBottom,
+  ]);
 
   const handleClose = () => {
     setActiveThreadRootId(null);
@@ -598,10 +698,10 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     <Sheet open={Boolean(rootMessageId)} onOpenChange={(open) => !open && handleClose()}>
       <SheetContent
         side="right"
-        className="w-[min(92vw,400px)] border-l border-border/70 bg-background p-0 flex flex-col"
+        className="thread-panel-sheet p-0 flex flex-col"
       >
         {/* Header */}
-        <SheetHeader className="flex-none border-b border-border/60 px-4 py-3 bg-background/85 backdrop-blur-md">
+        <SheetHeader className="thread-panel-header flex-none px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary shadow-sm">
@@ -611,8 +711,13 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                 <SheetTitle className="text-sm font-semibold leading-tight">
                   Thread
                 </SheetTitle>
-                <SheetDescription className="text-[11px] leading-none mt-0.5 text-muted-foreground">
-                  {replyCountLabel}
+                <SheetDescription className="text-[11px] leading-none mt-0.5 text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  <span>{replyCountLabel}</span>
+                  {threadUnreadCount > 0 && (
+                    <span className="thread-panel-unread-pill">
+                      {threadUnreadCount > 99 ? "99+" : threadUnreadCount} new
+                    </span>
+                  )}
                 </SheetDescription>
               </div>
             </div>
@@ -629,10 +734,8 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
         {/* Root message preview */}
         {rootMessage && (
-          <div className="flex-none border-b border-border/50 bg-muted/15 px-4 py-3">
-            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
-              Original message
-            </p>
+          <div className="thread-panel-root flex-none px-4 py-3">
+            <p className="thread-panel-root-label mb-1.5">Original message</p>
             {rootMessage.audioUrl && !rootMessage.isDeleted ? (
               <VoiceMessagePlayer
                 src={rootMessage.audioUrl}
@@ -640,7 +743,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                 audioSizeBytes={rootMessage.audioMeta?.sizeBytes ?? null}
               />
             ) : (
-              <p className="text-sm leading-relaxed text-foreground line-clamp-3">
+              <p className="text-sm leading-relaxed text-foreground line-clamp-4">
                 {rootMessage.isDeleted
                   ? "This message was removed"
                   : rootMessage.content?.trim() || "Media message"}
@@ -653,7 +756,24 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
         )}
 
         {/* Messages list */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-0.5">
+        <div className="relative flex-1 min-h-0 flex flex-col">
+          {!isNearBottom && threadReplyMessages.length > 0 && (
+            <button
+              type="button"
+              onClick={() => scrollToBottom()}
+              className="thread-panel-jump-latest"
+              aria-label="Jump to latest replies"
+            >
+              <ArrowDown className="size-3.5" />
+              Latest
+            </button>
+          )}
+
+        <div
+          ref={scrollContainerRef}
+          onScroll={updateScrollPosition}
+          className="thread-panel-scroll px-3 py-3 space-y-0.5"
+        >
           {loadingThread ? (
             <div className="space-y-4">
               {THREAD_SKELETON_KEYS.map((skeletonKey, i) => (
@@ -672,31 +792,31 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                 <div className="flex justify-center pb-3">
                   <button
                     type="button"
+                    disabled={loadingMore}
                     onClick={() => {
                       if (!loadingMore) void loadThread(threadCursor, true);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-border/70 px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    className="thread-panel-load-more"
                   >
-                    {loadingMore ? "Loading..." : "Load older replies"}
+                    {loadingMore && (
+                      <Loader2 className="size-3 animate-spin" aria-hidden />
+                    )}
+                    {loadingMore ? "Loading…" : "Load older replies"}
                   </button>
                 </div>
               )}
 
-              {/* Replies section header — only shown when there are actual replies */}
-              {replyCount > 0 && (
-                <div className="flex items-center gap-2 pb-1 pt-0.5">
-                  <div className="flex-1 h-px bg-border/25" />
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.07em] text-muted-foreground/50 px-1 select-none">
+              {(replyCount > 0 || threadReplyMessages.length > 0) && (
+                <div className="thread-panel-replies-divider">
+                  <span>
                     {replyCount} {replyCount === 1 ? "reply" : "replies"}
                   </span>
-                  <div className="flex-1 h-px bg-border/25" />
                 </div>
               )}
 
-              <div className="space-y-2">
-                {mergedThreadMessages.map((messageItem) => {
+              <div className="space-y-1.5">
+                {threadReplyMessages.map((messageItem) => {
                   const isOwn = String(messageItem.senderId) === String(user?._id || "");
-                  const isRoot = String(messageItem._id) === rootMessageId;
                   const senderName =
                     selectedConvo?.participants?.find(
                       (p) => String(p._id) === String(messageItem.senderId),
@@ -706,12 +826,10 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                     <div
                       key={messageItem._id}
                       className={cn(
-                        "flex gap-2.5 group",
+                        "thread-panel-reply-row flex gap-2.5",
                         isOwn ? "flex-row-reverse" : "flex-row",
-                        isRoot && "pb-2 border-b border-dashed border-border/40",
                       )}
                     >
-                      {/* Avatar */}
                       {!isOwn && (
                         <UserAvatar
                           type="chat"
@@ -720,25 +838,16 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                         />
                       )}
 
-                      {/* Bubble */}
                       <div
                         className={cn(
-                          "flex flex-col max-w-[80%]",
+                          "flex flex-col max-w-[82%]",
                           isOwn ? "items-end" : "items-start",
                         )}
                       >
-                        {/* Sender name + time */}
                         {!isOwn && (
-                          <div className="flex items-baseline gap-1.5 mb-0.5 px-1">
-                            <span className="text-[11px] font-semibold text-foreground/80">
-                              {senderName}
-                            </span>
-                            {isRoot && (
-                              <span className="text-[9px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">
-                                Original
-                              </span>
-                            )}
-                          </div>
+                          <span className="mb-0.5 px-1 text-[11px] font-semibold text-foreground/80">
+                            {senderName}
+                          </span>
                         )}
 
                         <div
@@ -747,7 +856,6 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                             isOwn
                               ? "chat-bubble-sent chat-message-bubble-shell--own"
                               : "chat-bubble-received chat-message-bubble-shell--peer",
-                            isRoot && !isOwn && "border-primary/40 bg-primary/[0.04] shadow-sm",
                           )}
                         >
                           <div className={cn("chat-message-bubble-surface relative z-10", isOwn ? "chat-message-bubble-surface--own" : "chat-message-bubble-surface--peer")}>
@@ -770,7 +878,6 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
                           </div>
                         </div>
 
-                        {/* Timestamp */}
                         <p className="mt-0.5 px-1 text-[10px] text-muted-foreground/70">
                           {toMessageDateLabel(messageItem.createdAt)}
                         </p>
@@ -784,26 +891,28 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
             </>
           )}
 
-          {/* ── Empty state: no replies yet ──────────────────────────────── */}
-          {!loadingThread && replyCount === 0 && (
-            <div className="flex flex-col items-center justify-center gap-3 py-8 px-4 text-center animate-in fade-in slide-in-from-bottom-2 duration-400">
-              <span className="flex size-11 items-center justify-center rounded-full border border-border/50 bg-muted/30">
-                <MessageSquareDashed className="size-5 text-muted-foreground/50" />
+          {!loadingThread &&
+            replyCount === 0 &&
+            threadReplyMessages.length === 0 && (
+            <div className="thread-panel-empty animate-in fade-in slide-in-from-bottom-2 duration-400">
+              <span className="thread-panel-empty-icon">
+                <MessageSquareDashed className="size-5" />
               </span>
               <div>
-                <p className="text-[13px] font-semibold text-foreground/75 leading-snug">
+                <p className="text-[13px] font-semibold text-foreground/80 leading-snug">
                   No replies yet
                 </p>
-                <p className="mt-0.5 text-[11.5px] text-muted-foreground/55 leading-relaxed">
-                  Be the first to reply in this thread.
+                <p className="mt-0.5 text-[11.5px] text-muted-foreground/60 leading-relaxed max-w-[14rem] mx-auto">
+                  Start the conversation — your reply appears here.
                 </p>
               </div>
             </div>
           )}
         </div>
+        </div>
 
         {/* Composer */}
-        <div className="flex-none border-t border-border/60 bg-background px-3 py-3 space-y-2">
+        <div className="thread-panel-composer flex-none px-3 pt-3 space-y-2">
           {/* Audio preview before send */}
           {audioPreview && !isRecording && (
             <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-1 duration-150">
@@ -879,7 +988,11 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
               className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-all hover:bg-primary/90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 shadow-sm"
               aria-label="Send thread reply"
             >
-              <Send className="size-4" />
+              {sending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Send className="size-4" />
+              )}
             </button>
           </div>
         </div>

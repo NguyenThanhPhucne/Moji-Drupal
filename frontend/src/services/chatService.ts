@@ -12,6 +12,7 @@ import type {
 interface FetchMessageProps {
   messages: Message[];
   cursor?: string;
+  threadReplyCounts?: Record<string, number>;
 }
 
 export interface LinkPreviewPayload {
@@ -129,7 +130,40 @@ export const chatService = {
       headers: privatePin ? { "x-private-pin": String(privatePin) } : undefined,
     });
 
-    return { messages: res.data.messages, cursor: res.data.nextCursor };
+    const threadReplyCounts =
+      res.data?.threadReplyCounts &&
+      typeof res.data.threadReplyCounts === "object" &&
+      !Array.isArray(res.data.threadReplyCounts)
+        ? (res.data.threadReplyCounts as Record<string, number>)
+        : undefined;
+
+    return {
+      messages: res.data.messages,
+      cursor: res.data.nextCursor,
+      threadReplyCounts,
+    };
+  },
+
+  async fetchConversationThreadStats(
+    conversationId: string,
+    channelId?: string,
+    privatePin?: string | null,
+  ): Promise<{ threadReplyCounts: Record<string, number> }> {
+    const res = await api.get(`/conversations/${conversationId}/thread-stats`, {
+      params: {
+        ...(channelId ? { channelId } : {}),
+      },
+      headers: privatePin ? { "x-private-pin": String(privatePin) } : undefined,
+    });
+
+    const threadReplyCounts =
+      res.data?.threadReplyCounts &&
+      typeof res.data.threadReplyCounts === "object" &&
+      !Array.isArray(res.data.threadReplyCounts)
+        ? (res.data.threadReplyCounts as Record<string, number>)
+        : {};
+
+    return { threadReplyCounts };
   },
 
   async sendDirectMessage(
@@ -195,10 +229,12 @@ export const chatService = {
       },
     });
 
+    const replyCount = Number(res.data.replyCount);
     return {
       threadRootId: String(res.data.threadRootId || messageId),
       messages: Array.isArray(res.data.messages) ? res.data.messages : [],
       cursor: res.data.nextCursor || null,
+      replyCount: Number.isFinite(replyCount) ? Math.max(0, Math.floor(replyCount)) : 0,
     };
   },
 

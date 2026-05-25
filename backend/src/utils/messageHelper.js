@@ -1,6 +1,7 @@
 import { invalidateCache } from "../libs/redis.js";
 import { withSocketEventMeta } from "./socketEventMeta.js";
 import { buildMessagePreviewContent } from "./messagePreview.js";
+import { buildThreadStatsPayload } from "./threadStats.js";
 
 const DEFAULT_GROUP_CHANNEL_ID = "general";
 
@@ -111,14 +112,29 @@ export const updateConversationAfterCreateMessage = (
   });
 };
 
-export const emitNewMessage = (io, conversation, message) => {
+export const emitNewMessage = async (io, conversation, message, options = {}) => {
   const normalizedUnreadCounts =
     conversation.unreadCounts instanceof Map
       ? Object.fromEntries(conversation.unreadCounts)
       : conversation.unreadCounts || {};
 
+  const threadRootId = message?.threadRootId
+    ? String(message.threadRootId)
+    : null;
+
+  let threadStats = options?.threadStats || null;
+  if (!threadStats && threadRootId) {
+    threadStats = await buildThreadStatsPayload({
+      conversationId: conversation._id,
+      threadRootId,
+      userId: null,
+      groupChannelId: message?.groupChannelId || null,
+    });
+  }
+
   io.to(conversation._id.toString()).emit("new-message", withSocketEventMeta({
     message,
+    ...(threadStats ? { threadStats } : {}),
     conversation: {
       _id: conversation._id,
       lastMessage: conversation.lastMessage,
@@ -148,11 +164,6 @@ export const emitNewMessage = (io, conversation, message) => {
     scope: conversation?._id,
   }));
 
-  // ── Thread realtime: emit targeted event for ThreadPanel subscribers ──────
-  const threadRootId = message?.threadRootId
-    ? String(message.threadRootId)
-    : null;
-
   if (threadRootId) {
     io.to(conversation._id.toString()).emit(
       "thread-reply-new",
@@ -161,6 +172,7 @@ export const emitNewMessage = (io, conversation, message) => {
           conversationId: String(conversation._id),
           threadRootId,
           message,
+          ...(threadStats ? { threadStats } : {}),
         },
         {
           eventName: "thread-reply-new",

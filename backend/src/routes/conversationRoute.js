@@ -25,6 +25,7 @@ import {
   setConversationPrivacy,
   setDisappearingMessages,
   getDisappearingMessageConfig,
+  getConversationThreadStats,
 } from "../controllers/conversationController.js";
 import { checkFriendship } from "../middlewares/friendMiddleware.js";
 import { protectedRoute } from "../middlewares/authMiddleware.js";
@@ -35,6 +36,7 @@ const router = express.Router();
 router.post("/", checkFriendship, createConversation);
 router.get("/config/disappearing-messages", getDisappearingMessageConfig);
 router.get("/", getConversations);
+router.get("/:conversationId/thread-stats", getConversationThreadStats);
 router.get("/:conversationId/messages", getMessages);
 router.patch("/:conversationId/seen", markAsSeen);
 router.patch("/:conversationId/announcement-mode", updateGroupAnnouncementMode);

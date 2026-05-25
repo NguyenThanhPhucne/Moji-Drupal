@@ -79,6 +79,7 @@ export interface ChatState {
   replyingTo: Message | null;
   activeThreadRootId: string | null;
   threadUnreadCounts: Record<string, number>;
+  threadReplyCounts: Record<string, number>;
   outgoingQueue: OutgoingMessageQueueItem[];
   isFlushingOutgoingQueue: boolean;
   isCallActive: boolean;
@@ -90,6 +91,17 @@ export interface ChatState {
   clearPrivatePin: () => void;
   setReplyingTo: (message: Message | null) => void;
   setActiveThreadRootId: (messageId: string | null) => void;
+  applyThreadReplyStats: (
+    conversationId: string,
+    threadStats?: {
+      threadRootId?: string;
+      replyCount?: number;
+    } | null,
+  ) => void;
+  fetchConversationThreadStats: (
+    conversationId?: string,
+    channelId?: string,
+  ) => Promise<void>;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string, channelId?: string) => Promise<void>;

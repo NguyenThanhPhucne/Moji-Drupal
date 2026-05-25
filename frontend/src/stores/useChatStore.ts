@@ -645,6 +645,80 @@ const buildThreadUnreadKey = (conversationId: unknown, threadRootId: unknown) =>
   return `${normalizedConversationId}:${normalizedThreadRootId}`;
 };
 
+const mergeThreadReplyCountsIntoState = ({
+  existingCounts,
+  conversationId,
+  countsByRootId,
+}: {
+  existingCounts: Record<string, number>;
+  conversationId: string;
+  countsByRootId?: Record<string, number> | null;
+}) => {
+  if (!countsByRootId || typeof countsByRootId !== "object") {
+    return existingCounts;
+  }
+
+  const nextCounts = { ...existingCounts };
+  Object.entries(countsByRootId).forEach(([rootId, rawCount]) => {
+    const threadKey = buildThreadUnreadKey(conversationId, rootId);
+    if (!threadKey) {
+      return;
+    }
+
+    const replyCount = Math.max(0, Math.floor(Number(rawCount) || 0));
+    if (replyCount > 0) {
+      nextCounts[threadKey] = replyCount;
+    } else {
+      delete nextCounts[threadKey];
+    }
+  });
+
+  return nextCounts;
+};
+
+const bumpThreadReplyCountOptimistic = ({
+  existingCounts,
+  conversationId,
+  threadRootId,
+}: {
+  existingCounts: Record<string, number>;
+  conversationId: string;
+  threadRootId: string;
+}) => {
+  const threadKey = buildThreadUnreadKey(conversationId, threadRootId);
+  if (!threadKey) {
+    return existingCounts;
+  }
+
+  return {
+    ...existingCounts,
+    [threadKey]: Number(existingCounts[threadKey] || 0) + 1,
+  };
+};
+
+const MAX_PERSISTED_THREAD_UNREAD_KEYS = 120;
+
+const prunePersistedThreadUnreadCounts = (
+  threadUnreadCounts: Record<string, number>,
+  activeConversationId: string | null,
+) => {
+  const entries = Object.entries(threadUnreadCounts || {});
+  if (entries.length <= MAX_PERSISTED_THREAD_UNREAD_KEYS) {
+    return threadUnreadCounts;
+  }
+
+  const activePrefix = activeConversationId
+    ? `${String(activeConversationId).trim()}:`
+    : "";
+
+  const prioritizedEntries = [
+    ...entries.filter(([key]) => activePrefix && key.startsWith(activePrefix)),
+    ...entries.filter(([key]) => !activePrefix || !key.startsWith(activePrefix)),
+  ].slice(0, MAX_PERSISTED_THREAD_UNREAD_KEYS);
+
+  return Object.fromEntries(prioritizedEntries);
+};
+
 type PendingOwnTempMessageEntry = {
   tempId: string;
   content: string;
@@ -910,6 +984,7 @@ export const useChatStore = create<ChatState>()(
       replyingTo: null,
       activeThreadRootId: null,
       threadUnreadCounts: {},
+      threadReplyCounts: {},
       outgoingQueue: [],
       isFlushingOutgoingQueue: false,
       isCallActive: false,
@@ -919,6 +994,66 @@ export const useChatStore = create<ChatState>()(
       setPrivatePin: (pin) => set({ privatePin: pin ? String(pin).trim() : null }),
       clearPrivatePin: () => set({ privatePin: null }),
       setReplyingTo: (message) => set({ replyingTo: message }),
+      applyThreadReplyStats: (conversationId, threadStats) => {
+        const normalizedConversationId = String(conversationId || "").trim();
+        const normalizedThreadRootId = String(threadStats?.threadRootId || "").trim();
+        const replyCount = Number(threadStats?.replyCount);
+
+        if (
+          !normalizedConversationId ||
+          !normalizedThreadRootId ||
+          !Number.isFinite(replyCount)
+        ) {
+          return;
+        }
+
+        set((state) => ({
+          threadReplyCounts: mergeThreadReplyCountsIntoState({
+            existingCounts: state.threadReplyCounts,
+            conversationId: normalizedConversationId,
+            countsByRootId: {
+              [normalizedThreadRootId]: replyCount,
+            },
+          }),
+        }));
+      },
+      fetchConversationThreadStats: async (conversationId, channelId) => {
+        const convoId = String(
+          conversationId || get().activeConversationId || "",
+        ).trim();
+        if (!convoId) {
+          return;
+        }
+
+        const targetConversation = get().conversations.find(
+          (conversationItem) => String(conversationItem._id) === convoId,
+        );
+        const resolvedGroupChannelId =
+          targetConversation?.type === "group"
+            ? normalizeGroupChannelId(
+                channelId ||
+                  resolveConversationActiveGroupChannelId(targetConversation),
+              )
+            : undefined;
+
+        try {
+          const { threadReplyCounts } = await chatService.fetchConversationThreadStats(
+            convoId,
+            resolvedGroupChannelId,
+            get().privatePin,
+          );
+
+          set((state) => ({
+            threadReplyCounts: mergeThreadReplyCountsIntoState({
+              existingCounts: state.threadReplyCounts,
+              conversationId: convoId,
+              countsByRootId: threadReplyCounts,
+            }),
+          }));
+        } catch (error) {
+          console.debug("Background thread stats sync failed:", error);
+        }
+      },
       setActiveThreadRootId: (messageId) =>
         set((state) => {
           const normalizedThreadRootId = String(messageId || "").trim();
@@ -969,8 +1104,13 @@ export const useChatStore = create<ChatState>()(
           (conversation) => String(conversation._id) === conversationId,
         );
 
+        const syncThreadStatsForActiveConversation = () => {
+          void get().fetchConversationThreadStats(conversationId);
+        };
+
         if (hasTargetConversation) {
           preloadMessagesForActiveConversation();
+          syncThreadStatsForActiveConversation();
           return;
         }
 
@@ -986,6 +1126,7 @@ export const useChatStore = create<ChatState>()(
             }
 
             preloadMessagesForActiveConversation();
+            syncThreadStatsForActiveConversation();
           })
           .catch((error) => {
             console.error(
@@ -1008,6 +1149,7 @@ export const useChatStore = create<ChatState>()(
           replyingTo: null,
           activeThreadRootId: null,
           threadUnreadCounts: {},
+          threadReplyCounts: {},
           outgoingQueue: [],
           isFlushingOutgoingQueue: false,
           isCallActive: false,
@@ -1141,7 +1283,8 @@ export const useChatStore = create<ChatState>()(
         set({ messageLoading: true });
 
         try {
-          const { messages: fetched, cursor } = await chatService.fetchMessages(
+          const { messages: fetched, cursor, threadReplyCounts } =
+            await chatService.fetchMessages(
             convoId,
             nextCursor,
             resolvedGroupChannelId || undefined,
@@ -1175,6 +1318,11 @@ export const useChatStore = create<ChatState>()(
                   channelId: resolvedGroupChannelId || null,
                 },
               },
+              threadReplyCounts: mergeThreadReplyCountsIntoState({
+                existingCounts: state.threadReplyCounts,
+                conversationId: convoId,
+                countsByRootId: threadReplyCounts,
+              }),
             };
           });
         } catch (error) {
@@ -1279,6 +1427,15 @@ export const useChatStore = create<ChatState>()(
         };
 
         get().addMessage(optimisticMessage);
+        if (threadRootId) {
+          set((state) => ({
+            threadReplyCounts: bumpThreadReplyCountOptimistic({
+              existingCounts: state.threadReplyCounts,
+              conversationId: normalizedOptimisticConversationId,
+              threadRootId,
+            }),
+          }));
+        }
         registerPendingOwnTempMessage({
           conversationId: normalizedOptimisticConversationId,
           tempId,
@@ -1415,6 +1572,15 @@ export const useChatStore = create<ChatState>()(
         };
 
         get().addMessage(optimisticMessage);
+        if (threadRootId) {
+          set((state) => ({
+            threadReplyCounts: bumpThreadReplyCountOptimistic({
+              existingCounts: state.threadReplyCounts,
+              conversationId,
+              threadRootId,
+            }),
+          }));
+        }
         registerPendingOwnTempMessage({
           conversationId,
           tempId,
@@ -3208,6 +3374,10 @@ export const useChatStore = create<ChatState>()(
           }
 
           await get().fetchMessages(conversationId, normalizedChannelId);
+          await get().fetchConversationThreadStats(
+            conversationId,
+            normalizedChannelId,
+          );
           return true;
         } catch (error) {
           get().updateConversation(previousConversation);
@@ -3563,6 +3733,10 @@ export const useChatStore = create<ChatState>()(
       partialize: (state) => ({
         activeConversationId: state.activeConversationId,
         outgoingQueue: state.outgoingQueue.slice(-MAX_OUTGOING_QUEUE_ITEMS),
+        threadUnreadCounts: prunePersistedThreadUnreadCounts(
+          state.threadUnreadCounts,
+          state.activeConversationId,
+        ),
       }),
       merge: (persistedState, currentState) => {
         const persisted = (persistedState as Partial<ChatState> | undefined) || {};
@@ -3576,6 +3750,11 @@ export const useChatStore = create<ChatState>()(
           outgoingQueue: Array.isArray(persisted.outgoingQueue)
             ? persisted.outgoingQueue
             : currentState.outgoingQueue,
+          threadUnreadCounts:
+            persisted.threadUnreadCounts &&
+            typeof persisted.threadUnreadCounts === "object"
+              ? persisted.threadUnreadCounts
+              : currentState.threadUnreadCounts,
         };
       },
     },

@@ -18,6 +18,10 @@ import { invalidateCache } from "../libs/redis.js";
 import { lookup as dnsLookup } from "node:dns/promises";
 import net from "node:net";
 import { withSocketEventMeta } from "../utils/socketEventMeta.js";
+import {
+  buildThreadStatsPayload,
+  countThreadReplies,
+} from "../utils/threadStats.js";
 
 import { buildDirectConversationKey } from "../services/conversationService.js";
 
@@ -1615,7 +1619,7 @@ export const sendDirectMessage = async (req, res) => {
       });
     }
 
-    emitNewMessage(io, syncedConversation, message);
+    await emitNewMessage(io, syncedConversation, message);
 
     return res.status(201).json({ message });
   } catch (error) {
@@ -1848,7 +1852,7 @@ export const sendGroupMessage = async (req, res) => { // NOSONAR
       senderId,
     });
 
-    emitNewMessage(io, syncedConversation, message);
+    await emitNewMessage(io, syncedConversation, message);
 
     return res.status(201).json({ message });
   } catch (error) {
@@ -2246,6 +2250,18 @@ export const unsendMessage = async (req, res) => {
     const conversationSyncPayload =
       formatConversationSyncPayload(updatedConversation);
 
+    const deletedThreadRootId = deletedMessage.threadRootId
+      ? String(deletedMessage.threadRootId)
+      : null;
+    const threadStats = deletedThreadRootId
+      ? await buildThreadStatsPayload({
+          conversationId: deletedMessage.conversationId,
+          threadRootId: deletedThreadRootId,
+          userId: null,
+          groupChannelId: deletedMessage.groupChannelId || null,
+        })
+      : null;
+
     emitToRoomSafely({
       roomId: deletedMessage.conversationId,
       event: "message-deleted",
@@ -2260,6 +2276,8 @@ export const unsendMessage = async (req, res) => {
         reactions: deletedMessage.reactions,
         readBy: deletedMessage.readBy,
         replyTo: deletedMessage.replyTo,
+        threadRootId: deletedThreadRootId,
+        ...(threadStats ? { threadStats } : {}),
         conversation: conversationSyncPayload,
       },
       logContext: "unsendMessage",
@@ -2728,10 +2746,19 @@ export const getMessageThread = async (req, res) => {
     }
 
     messages = messages.reverse();
+
+    const replyCount = await countThreadReplies({
+      conversationId: rootMessage.conversationId,
+      threadRootId: rootMessage._id,
+      userId,
+      groupChannelId: rootMessage.groupChannelId || null,
+    });
+
     return res.status(200).json({
       threadRootId: toStringId(rootMessage._id),
       messages,
       nextCursor,
+      replyCount,
     });
   } catch (error) {
     if (error?.status) {
@@ -2841,7 +2868,7 @@ const forwardToDirectRecipient = async ({ recipientId, senderId, originalMessage
       });
     }
 
-    emitNewMessage(io, syncedConversation, message);
+    await emitNewMessage(io, syncedConversation, message);
     return {
       ok: true,
       targetType: "recipient",
@@ -2950,7 +2977,7 @@ const forwardToGroupConversation = async ({ groupId, senderId, originalMessage }
       senderId,
     });
 
-    emitNewMessage(io, syncedConversation, message);
+    await emitNewMessage(io, syncedConversation, message);
 
     return {
       ok: true,

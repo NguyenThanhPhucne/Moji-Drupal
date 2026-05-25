@@ -90,6 +90,7 @@ const ChatWindowBody = () => {
     pinGroupMessage,
     setActiveThreadRootId,
     threadUnreadCounts,
+    threadReplyCounts,
   } = useChatStore();
   const { socket } = useSocketStore();
   const { user: currentUser } = useAuthStore();
@@ -530,7 +531,13 @@ const ChatWindowBody = () => {
       const threadUnreadKey = String(activeConversationId || "").trim()
         ? `${String(activeConversationId).trim()}:${String(message._id || "").trim()}`
         : "";
-      const threadReplyCount = Number(threadReplyCountByRootId[message._id] || 0);
+      const loadedThreadReplyCount = Number(
+        threadReplyCountByRootId[message._id] || 0,
+      );
+      const threadReplyCount =
+        threadUnreadKey && threadUnreadKey in threadReplyCounts
+          ? Number(threadReplyCounts[threadUnreadKey] || 0)
+          : loadedThreadReplyCount;
       const threadUnreadCount = threadUnreadKey
         ? Number(threadUnreadCounts[threadUnreadKey] || 0)
         : 0;
@@ -584,6 +591,7 @@ const ChatWindowBody = () => {
       activeConversationId,
       threadReplyCountByRootId,
       threadUnreadCounts,
+      threadReplyCounts,
     ],
   );
 

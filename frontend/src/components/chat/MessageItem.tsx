@@ -853,6 +853,30 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
   threadUnreadCount: number;
 }) {
   const replyPreviewText = String(message.replyTo?.content || "").trim() || "Original message unavailable";
+  const isThreadReply = Boolean(String(message.threadRootId || "").trim());
+  const hasThreadActivity = threadReplyCount > 0 || threadUnreadCount > 0;
+
+  let threadBadgeAriaLabel = "Reply in thread";
+  if (hasThreadActivity) {
+    if (threadUnreadCount > 0) {
+      threadBadgeAriaLabel = `Open thread, ${threadReplyCount} replies, ${threadUnreadCount} unread`;
+    } else {
+      const replyWord = threadReplyCount === 1 ? "reply" : "replies";
+      threadBadgeAriaLabel = `Open thread, ${threadReplyCount} ${replyWord}`;
+    }
+  }
+
+  let threadBadgeText = "Reply in thread";
+  if (hasThreadActivity) {
+    if (threadReplyCount <= 0) {
+      threadBadgeText = "New in thread";
+    } else {
+      threadBadgeText = `${threadReplyCount} ${threadReplyCount === 1 ? "reply" : "replies"}`;
+    }
+  }
+
+  const threadUnreadBadgeLabel =
+    threadUnreadCount > 99 ? "99+" : String(threadUnreadCount);
 
   return (
     <div
@@ -932,24 +956,38 @@ const MessageBubbleSection = memo(function MessageBubbleSection({
         )}
       </div>
 
-      {(threadReplyCount > 0 || threadUnreadCount > 0) && (
+      {!isThreadReply && hasThreadActivity && (
         <button
           type="button"
           onClick={onOpenThread}
+          aria-label={threadBadgeAriaLabel}
           className={cn(
             "chat-thread-badge",
-            threadUnreadCount > 0 && "chat-thread-badge--unread"
+            threadUnreadCount > 0 && "chat-thread-badge--unread",
           )}
         >
-          <MessageSquare className="size-3" />
-          <span>
-            {threadReplyCount} {threadReplyCount === 1 ? "reply" : "replies"}
-          </span>
+          {threadUnreadCount > 0 && (
+            <span className="chat-thread-badge-dot" aria-hidden />
+          )}
+          <MessageSquare className="size-3 shrink-0" aria-hidden />
+          <span>{threadBadgeText}</span>
           {threadUnreadCount > 0 && (
             <span className="chat-thread-badge-count">
-              {threadUnreadCount > 99 ? "99+" : threadUnreadCount}
+              {threadUnreadBadgeLabel}
             </span>
           )}
+        </button>
+      )}
+
+      {!isThreadReply && !hasThreadActivity && (
+        <button
+          type="button"
+          onClick={onOpenThread}
+          aria-label={threadBadgeAriaLabel}
+          className="chat-thread-badge chat-thread-badge--ghost"
+        >
+          <MessageSquare className="size-3 shrink-0" aria-hidden />
+          <span>{threadBadgeText}</span>
         </button>
       )}
 

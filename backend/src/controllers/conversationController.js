@@ -20,6 +20,10 @@ import {
   DISAPPEARING_MESSAGE_ALLOWED_TIMERS,
   DEFAULT_DISAPPEARING_MESSAGE_TIMER,
 } from "../constants/disappearingMessages.js";
+import {
+  buildAllThreadReplyCountsForConversation,
+  buildThreadReplyCountsForRoots,
+} from "../utils/threadStats.js";
 
 const DEFAULT_MESSAGE_PAGE_LIMIT = 50;
 const MAX_MESSAGE_PAGE_LIMIT = 100;
@@ -1743,6 +1747,80 @@ const syncGroupConversationLastMessage = async ({
   conversation.seenBy = [];
 };
 
+export const getConversationThreadStats = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { channelId: rawChannelId } = req.query;
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({ message: "Invalid conversation id" });
+    }
+
+    const roles = Array.isArray(req.authRoles) ? req.authRoles : [];
+    const canAccessAll =
+      roles.includes("administrator") || roles.includes("sales_manager");
+
+    const conversation = await Conversation.findById(conversationId)
+      .select("type participants group privateFor")
+      .lean();
+
+    if (!conversation) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
+
+    const readAccessError = ensureConversationReadAccess({
+      conversation,
+      userId,
+      canAccessAll,
+    });
+    if (readAccessError) {
+      return res
+        .status(readAccessError.status)
+        .json({ message: readAccessError.message });
+    }
+
+    if (isConversationPrivateForUser(conversation, userId)) {
+      const privatePin = resolvePrivatePinFromRequest(req);
+      const privateAccess = await verifyPrivatePinAccess({
+        userId,
+        pin: privatePin,
+      });
+
+      if (!privateAccess.allowed) {
+        return res.status(403).json({ message: "Private PIN required" });
+      }
+    }
+
+    const groupChannelQuery = resolveGroupChannelMessageQuery({
+      conversation,
+      rawChannelId,
+    });
+    if (groupChannelQuery.error) {
+      return res
+        .status(groupChannelQuery.error.status)
+        .json({ message: groupChannelQuery.error.message });
+    }
+
+    const threadReplyCounts = await buildAllThreadReplyCountsForConversation({
+      conversationId,
+      userId,
+      groupChannelId: groupChannelQuery.effectiveGroupChannelId || null,
+    });
+
+    return res.status(200).json({
+      conversationId: String(conversationId),
+      threadReplyCounts,
+      ...(groupChannelQuery.effectiveGroupChannelId
+        ? { channelId: groupChannelQuery.effectiveGroupChannelId }
+        : {}),
+    });
+  } catch (error) {
+    console.error("Failed to fetch conversation thread stats", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 export const getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -1843,9 +1921,18 @@ export const getMessages = async (req, res) => {
 
     messages = messages.reverse();
 
+    const rootIds = messages.map((messageItem) => String(messageItem._id || "")).filter(Boolean);
+    const threadReplyCounts = await buildThreadReplyCountsForRoots({
+      conversationId,
+      rootIds,
+      userId,
+      groupChannelId: effectiveGroupChannelId || null,
+    });
+
     return res.status(200).json({
       messages,
       nextCursor,
+      threadReplyCounts,
       ...(effectiveGroupChannelId
         ? { channelId: effectiveGroupChannelId }
         : {}),
