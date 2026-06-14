@@ -745,7 +745,6 @@
 
   .profile-presence-dot--online {
     background: hsl(var(--online));
-    animation: statusPulse 1.6s ease-out infinite;
   }
 
   .profile-presence-dot--recent {

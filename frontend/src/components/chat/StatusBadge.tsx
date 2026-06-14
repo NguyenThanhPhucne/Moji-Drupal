@@ -1,6 +1,5 @@
 import { formatOnlineTime } from "@/lib/utils";
 import { useSocketStore } from "@/stores/useSocketStore";
-import { Clock } from "lucide-react";
 
 const StatusBadge = ({
   status,
@@ -18,21 +17,15 @@ const StatusBadge = ({
 
   if (status === "online") {
     return (
-      <span className="absolute -bottom-[1px] -right-[1px] flex h-[14px] w-[14px] items-center justify-center rounded-full bg-background ring-[1.5px] ring-background">
-        {/* Pulse ring */}
-        <span className="online-pulse-ring absolute h-[9px] w-[9px]" />
-        {/* Solid dot */}
-        <span className="relative h-[9px] w-[9px] rounded-full bg-online shadow-[0_0_0_1px_hsl(var(--background)/0.72)]" />
-      </span>
+      <span className="absolute bottom-0 right-0 z-10 h-[14px] w-[14px] rounded-full border-[2.5px] border-background bg-[hsl(var(--online))]" />
     );
   }
 
   if (status === "recently-active" && lastActiveAt) {
     const timeStr = formatOnlineTime(new Date(lastActiveAt));
     return (
-      <span className="absolute -bottom-1 -right-2 flex items-center justify-center rounded-full bg-background p-[1.5px]">
-        <span className="flex h-[15px] items-center justify-center gap-0.5 rounded-full bg-warning/90 px-1.5 text-[9px] font-bold text-warning-foreground leading-none shadow-sm">
-          <Clock className="size-[7px] shrink-0" />
+      <span className="absolute -bottom-1 -right-1 z-10 flex h-[18px] items-center justify-center rounded-full border-[2.5px] border-background bg-[#1a2b1d] px-1.5 shadow-sm">
+        <span className="text-[10px] font-bold text-[hsl(var(--online))] leading-none whitespace-nowrap">
           {timeStr}
         </span>
       </span>

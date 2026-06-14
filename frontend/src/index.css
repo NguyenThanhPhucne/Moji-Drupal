@@ -92,7 +92,7 @@
     --chat-bubble-received-foreground: 222 47% 11%;
 
     /* Status colors */
-    --online: 140 100% 50%;
+    --online: 123 50% 49%;
     --offline: 0 0% 70%;
     --status-success: 142 70% 42%;
     --status-success-muted: 142 60% 52%;
@@ -299,7 +299,7 @@
     --chat-bubble-received-foreground: 210 20% 94%;
 
     /* Status colors */
-    --online: 140 100% 60%;
+    --online: 123 50% 49%;
     --away: 45 100% 65%;
     --offline: 0 0% 50%;
     --status-success: 142 70% 55%;
@@ -1356,14 +1356,7 @@ html[data-motion="reduced"] * {
 
   /* Status indicators */
   .status-online {
-    @apply bg-[hsl(var(--online))] shadow-[0_0_8px_hsl(var(--online)/0.5)];
-  }
-
-  .status-online::after {
-    content: "";
-    @apply absolute inset-0 rounded-full;
-    background: hsl(var(--online) / 0.45);
-    animation: statusPulse 1.8s ease-out infinite;
+    @apply bg-[hsl(var(--online))];
   }
 
   .status-recently-active {
@@ -5124,19 +5117,6 @@ html[data-motion="reduced"] * {
   animation: send-burst 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
-/* ── Online pulse ring (StatusBadge animated outer ring) ── */
-@keyframes online-pulse-ring {
-  0%   { transform: scale(1); opacity: 0.8; }
-  70%  { transform: scale(2.2); opacity: 0; }
-  100% { transform: scale(2.2); opacity: 0; }
-}
-
-.online-pulse-ring {
-  position: absolute;
-  border-radius: 50%;
-  background: hsl(140 100% 50% / 0.5);
-  animation: online-pulse-ring 1.8s ease-out infinite;
-}
 
 /* ── Selected chip fly-in (ForwardMessageModal chip bar) ── */
 @keyframes chip-fly-in {

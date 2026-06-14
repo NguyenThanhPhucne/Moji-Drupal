@@ -253,42 +253,42 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 )}
                 {chat.type === "direct" && (() => {
                   const pres = getUserPresence(otherUser?._id);
-                  if (pres === "online") return <span className="text-[11px] text-[hsl(var(--status-success))] font-medium">Active</span>;
-                  if (pres === "recently-active") return <span className="text-[11px] text-[hsl(var(--status-warning)/0.7)] font-medium">Away</span>;
-                  return <span className || isStartingCall}
-                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
-                  title="Start Voice Call"
-                  aria-label="Start voice call"
-                >
-                  <Phone className="size-[18px]" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleStartCall("video")}
-                  disabled={isCallActive || isStartingCall
-                  size="icon"
-                  onClick={() => handleStartCall("audio")}
-                  disabled={isCallActive}
-                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
-                  title="Start Voice Call"
-                  aria-label="Start voice call"
-                >
-                  <Phone className="size-[18px]" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleStartCall("video")}
-                  disabled={isCallActive}
-                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
-                  title="Start Video Call"
-                  aria-label="Start video call"
-                >
-                  <Video className="size-[18px]" />
-                </Button>
+                  if (pres === "online") return <span className="text-[11px] text-[hsl(var(--online))] font-medium">Active</span>;
+                  if (pres === "recently-active") return <span className="text-[11px] text-[hsl(var(--warning)/0.7)] font-medium">Away</span>;
+                  return <span className="text-[11px] text-muted-foreground font-medium">Offline</span>;
+                })()}
               </div>
-            )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+              {chat.type === "direct" && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleStartCall("audio")}
+                    disabled={isCallActive || isStartingCall}
+                    className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
+                    title="Start Voice Call"
+                    aria-label="Start voice call"
+                  >
+                    <Phone className="size-[18px]" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleStartCall("video")}
+                    disabled={isCallActive || isStartingCall}
+                    className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
+                    title="Start Video Call"
+                    aria-label="Start video call"
+                  >
+                    <Video className="size-[18px]" />
+                  </Button>
+                </>
+              )}
+              </div>
 
             <NotificationPreferencesDialog
               open={showNotifDialog}
