@@ -1,229 +1,237 @@
-import { Shield, Bell, ShieldBan } from "lucide-react";
+import { Shield, Bell, ShieldBan, KeyRound, Lock, Eye } from "lucide-react";
 import { useNavigate } from "react-router";
-import { useState, type FormEvent } from "react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { userService } from "@/services/userService";
 import { toast } from "sonner";
 import { useAuthStore } from "@/stores/useAuthStore";
-
-const getErrorMessage = (error: unknown, fallback: string) => {
-  const maybeAxios = error as {
-    response?: { data?: { message?: string } };
-    message?: string;
-  };
-
-  return maybeAxios?.response?.data?.message || maybeAxios?.message || fallback;
-};
+import { cn } from "@/lib/utils";
 
 const PrivacySettings = ({
   onOpenNotifications,
 }: {
   onOpenNotifications?: () => void;
 }) => {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const navigate = useNavigate();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const resetForm = () => {
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-  };
+  // Private PIN state
+  const [pinMode, setPinMode] = useState<"idle" | "set" | "change">("idle");
+  const [currentPin, setCurrentPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [confirmPin, setConfirmPin] = useState("");
+  const [pinSaving, setPinSaving] = useState(false);
 
-  const handleChangePassword = async (event?: FormEvent) => {
-    event?.preventDefault();
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-
-    if (newPassword.length < 5) {
-      toast.error("New password must be at least 5 characters");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      toast.error("Password confirmation does not match");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await userService.changePassword(currentPassword, newPassword);
-      toast.success("Password changed successfully");
-      resetForm();
-      setIsDialogOpen(false);
-    } catch (error) {
-      toast.error(getErrorMessage(error, "Failed to change password"));
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const hasPin = Boolean(user?.hasPrivatePin);
 
   const handleOpenNotifications = () => {
     if (onOpenNotifications) {
       onOpenNotifications();
       return;
     }
-
     navigate("/settings/notifications");
   };
 
+  const resetPin = () => {
+    setPinMode("idle");
+    setCurrentPin("");
+    setNewPin("");
+    setConfirmPin("");
+  };
+
+  const handleSavePin = async () => {
+    if (newPin.length < 4) {
+      toast.error("PIN must be at least 4 digits");
+      return;
+    }
+    if (newPin !== confirmPin) {
+      toast.error("PINs do not match");
+      return;
+    }
+    setPinSaving(true);
+    try {
+      await userService.setPrivatePin(newPin, hasPin ? currentPin : undefined);
+      if (user) setUser({ ...user, hasPrivatePin: true });
+      toast.success(hasPin ? "PIN updated" : "Private PIN set");
+      resetPin();
+    } catch (err) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? "Failed to set PIN");
+    } finally {
+      setPinSaving(false);
+    }
+  };
+
   return (
-    <Card className="settings-card">
-      <CardHeader className="settings-card-header">
-        <CardTitle className="settings-card-title flex items-center gap-2">
-          <Shield className="h-4.5 w-4.5 text-primary" />
-          Privacy & Security
-        </CardTitle>
-        <CardDescription className="settings-card-desc">
-          Manage your privacy and security preferences
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="settings-card-body p-0">
-        <div className="p-4 space-y-3 border-b border-border/30">
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
-              >
-                <Shield className="h-4 w-4 mr-2" />
-                Change password
-              </Button>
-            </DialogTrigger>
-            <DialogContent
-              dismissible={!isSubmitting}
-              showCloseButton={!isSubmitting}
-            >
-              <DialogHeader className="modal-stagger-item">
-                <DialogTitle>Change password</DialogTitle>
-                <DialogDescription>
-                  Enter your current password and choose a new one.
-                </DialogDescription>
-              </DialogHeader>
-
-              <form
-                className="space-y-4 modal-stagger-item"
-                onSubmit={handleChangePassword}
-                autoComplete="on"
-              >
-                <Input
-                  type="text"
-                  name="username"
-                  autoComplete="username"
-                  value={user?.username || user?.email || "current-user"}
-                  readOnly
-                  tabIndex={-1}
-                  className="sr-only"
-                  aria-hidden="true"
-                />
-
-                <div className="space-y-2">
-                  <Label htmlFor="current-password">Current password</Label>
-                  <Input
-                    id="current-password"
-                    data-autofocus="true"
-                    type="password"
-                    autoComplete="current-password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm new password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                  />
-                </div>
-
-                <DialogFooter className="modal-stagger-item">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      resetForm();
-                      setIsDialogOpen(false);
-                    }}
-                    disabled={isSubmitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? "Saving..." : "Save new password"}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-
-          <Button
+    <div className="space-y-4">
+      {/* ── Privacy Overview ── */}
+      <div className="settings-card">
+        <div className="settings-card-header">
+          <h3 className="settings-card-title flex items-center gap-2">
+            <Shield className="size-4 text-primary" /> Privacy & Security
+          </h3>
+          <p className="settings-card-desc">
+            Manage your privacy controls and security preferences.
+          </p>
+        </div>
+        <div className="settings-card-body divide-y divide-border/40">
+          {/* Quick links */}
+          <button
             type="button"
-            variant="outline"
+            onClick={() => navigate("/settings/security")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors group"
+          >
+            <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-primary/8 flex items-center justify-center group-hover:bg-primary/12 transition-colors">
+              <Lock className="size-4 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Password & Sessions</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Change password, manage active sessions</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
             onClick={handleOpenNotifications}
-            className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-muted/30 transition-colors group"
           >
-            <Bell className="h-4 w-4 mr-2" />
-            Notification settings
-          </Button>
+            <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-blue-500/8 flex items-center justify-center group-hover:bg-blue-500/12 transition-colors">
+              <Bell className="size-4 text-blue-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Notification Settings</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Control when and how you get notified</p>
+            </div>
+          </button>
 
-          <Button
-            variant="outline"
-            className="w-full justify-start border-border/50 bg-background hover:bg-muted/60"
-          >
-            <ShieldBan className="size-4 mr-2" />
-            Block & Report
-          </Button>
+          <div className="flex items-center gap-3 px-4 py-3.5 opacity-50 cursor-not-allowed">
+            <div className="flex-shrink-0 w-9 h-9 rounded-xl bg-amber-500/8 flex items-center justify-center">
+              <ShieldBan className="size-4 text-amber-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">Blocked Users</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Manage your block list — coming soon</p>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div className="p-4 bg-destructive/5">
-          <h4 className="font-medium mb-3 text-destructive">Danger zone</h4>
-          <Button variant="destructive" className="w-full shadow-sm">
-            Delete account
-          </Button>
+      {/* ── Private PIN ── */}
+      <div className="settings-card">
+        <div className="settings-card-header">
+          <h3 className="settings-card-title flex items-center gap-2">
+            <KeyRound className="size-4 text-primary" /> Private PIN
+          </h3>
+          <p className="settings-card-desc">
+            {hasPin
+              ? "Your private PIN is set. It protects hidden conversations and sensitive actions."
+              : "Set a PIN to protect hidden conversations and sensitive actions."}
+          </p>
         </div>
-      </CardContent>
-    </Card>
+        <div className="settings-card-body">
+          {pinMode === "idle" ? (
+            <div className="p-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+                  hasPin ? "bg-green-500/10" : "bg-muted/50"
+                )}>
+                  {hasPin ? (
+                    <Eye className="size-4 text-green-500" />
+                  ) : (
+                    <KeyRound className="size-4 text-muted-foreground" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    {hasPin ? "PIN is active" : "No PIN set"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {hasPin ? "Your hidden chats are protected" : "Hidden conversations are unprotected"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPinMode(hasPin ? "change" : "set")}
+                className="settings-field-btn settings-field-btn--save text-xs"
+              >
+                {hasPin ? "Change PIN" : "Set PIN"}
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+              {hasPin && pinMode === "change" && (
+                <div className="settings-field">
+                  <label className="settings-field-label" htmlFor="priv-cur-pin">Current PIN</label>
+                  <Input
+                    id="priv-cur-pin"
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={8}
+                    value={currentPin}
+                    onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ""))}
+                    placeholder="Enter current PIN"
+                    className="settings-field-input"
+                    autoComplete="off"
+                  />
+                </div>
+              )}
+              <div className="settings-field">
+                <label className="settings-field-label" htmlFor="priv-new-pin">
+                  {hasPin ? "New PIN" : "Create PIN"}
+                </label>
+                <Input
+                  id="priv-new-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="4–8 digits"
+                  className="settings-field-input"
+                  autoComplete="off"
+                />
+              </div>
+              <div className="settings-field">
+                <label className="settings-field-label" htmlFor="priv-conf-pin">Confirm PIN</label>
+                <Input
+                  id="priv-conf-pin"
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={8}
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Re-enter PIN"
+                  className={cn(
+                    "settings-field-input",
+                    confirmPin && confirmPin !== newPin && "border-destructive/60",
+                    confirmPin && confirmPin === newPin && "border-green-500/60",
+                  )}
+                  autoComplete="off"
+                />
+                {confirmPin && confirmPin !== newPin && (
+                  <p className="mt-1 text-[11px] text-destructive">PINs do not match</p>
+                )}
+              </div>
+              <div className="settings-field-actions">
+                <button type="button" onClick={resetPin} className="settings-field-btn settings-field-btn--cancel">
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={pinSaving || !newPin || newPin !== confirmPin}
+                  onClick={handleSavePin}
+                  className="settings-field-btn settings-field-btn--save"
+                >
+                  {pinSaving ? "Saving…" : hasPin ? "Update PIN" : "Set PIN"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
