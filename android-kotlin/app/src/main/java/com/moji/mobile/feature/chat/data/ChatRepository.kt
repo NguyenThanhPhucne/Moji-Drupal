@@ -1,8 +1,10 @@
 package com.moji.mobile.feature.chat.data
 
+import com.moji.mobile.core.model.AudioMeta
 import com.moji.mobile.core.model.Conversation
 import com.moji.mobile.core.model.Message
 import com.moji.mobile.core.model.MessageReaction
+import com.moji.mobile.core.network.dto.AudioMetaDto
 import com.moji.mobile.core.network.dto.DirectMessageRequestDto
 import com.moji.mobile.core.network.dto.GroupMessageRequestDto
 import com.moji.mobile.core.network.dto.toDomain
@@ -32,14 +34,31 @@ class ChatRepository @Inject constructor(
         content: String,
         conversationId: String? = null,
         replyTo: String? = null,
+        replyToId: String? = null,  // ✨ NEW
+        threadRootId: String? = null,  // ✨ NEW
+        audioUrl: String? = null,  // ✨ NEW - voice memo URL
+        audioMeta: AudioMeta? = null,  // ✨ NEW - voice memo metadata
+        imgUrl: String? = null,  // ✨ NEW - image URL
     ): Result<Message> {
         return runCatching {
+            val audioMetaDto = audioMeta?.let {
+                AudioMetaDto(
+                    durationSeconds = it.durationSeconds,
+                    mimeType = it.mimeType,
+                    sizeBytes = it.sizeBytes,
+                )
+            }
             val response = chatApi.sendDirectMessage(
                 DirectMessageRequestDto(
                     recipientId = recipientId,
                     content = content,
                     conversationId = conversationId,
                     replyTo = replyTo,
+                    replyToId = replyToId,  // ✨ NEW
+                    threadRootId = threadRootId,  // ✨ NEW
+                    audioUrl = audioUrl,  // ✨ NEW
+                    audioMeta = audioMetaDto,  // ✨ NEW
+                    imgUrl = imgUrl,  // ✨ NEW
                 ),
             )
             response.message.toDomain(defaultConversationId = conversationId.orEmpty())
@@ -50,13 +69,30 @@ class ChatRepository @Inject constructor(
         conversationId: String,
         content: String,
         replyTo: String? = null,
+        replyToId: String? = null,  // ✨ NEW
+        threadRootId: String? = null,  // ✨ NEW
+        audioUrl: String? = null,  // ✨ NEW - voice memo URL
+        audioMeta: AudioMeta? = null,  // ✨ NEW - voice memo metadata
+        imgUrl: String? = null,  // ✨ NEW - image URL
     ): Result<Message> {
         return runCatching {
+            val audioMetaDto = audioMeta?.let {
+                AudioMetaDto(
+                    durationSeconds = it.durationSeconds,
+                    mimeType = it.mimeType,
+                    sizeBytes = it.sizeBytes,
+                )
+            }
             val response = chatApi.sendGroupMessage(
                 GroupMessageRequestDto(
                     conversationId = conversationId,
                     content = content,
                     replyTo = replyTo,
+                    replyToId = replyToId,  // ✨ NEW
+                    threadRootId = threadRootId,  // ✨ NEW
+                    audioUrl = audioUrl,  // ✨ NEW
+                    audioMeta = audioMetaDto,  // ✨ NEW
+                    imgUrl = imgUrl,  // ✨ NEW
                 ),
             )
             response.message.toDomain(defaultConversationId = conversationId)

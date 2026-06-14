@@ -77,17 +77,31 @@ data class MessageDto(
     val senderDisplayName: String? = null,
     val content: String? = null,
     @SerializedName("imgUrl") val imageUrl: String? = null,
+    @SerializedName("audioUrl") val audioUrl: String? = null,  // ✨ NEW
+    val audioMeta: Any? = null,  // ✨ NEW - can be Map or AudioMetaDto
     val replyTo: Any? = null,
+    val replyToId: String? = null,  // ✨ NEW
+    val threadRootId: String? = null,  // ✨ NEW
     val reactions: List<MessageReactionDto>? = null,
     val isDeleted: Boolean? = null,
     val editedAt: String? = null,
     val readBy: List<Any>? = null,
     val createdAt: String? = null,
+    val deliveryState: String? = null,  // ✨ NEW - uploading|sending|queued|failed
+    val deliveryError: String? = null,  // ✨ NEW
+    val deliveryAttemptCount: Int? = null,  // ✨ NEW
 )
 
 data class MessageReactionDto(
     val userId: Any? = null,
     val emoji: String? = null,
+)
+
+// ✨ NEW - Audio metadata DTO
+data class AudioMetaDto(
+    val durationSeconds: Int? = null,
+    val mimeType: String? = null,
+    val sizeBytes: Long? = null,
 )
 
 private fun MessageReactionDto.toDomainOrNull(): MessageReaction? {
@@ -97,6 +111,39 @@ private fun MessageReactionDto.toDomainOrNull(): MessageReaction? {
         userId = normalizedUserId,
         emoji = normalizedEmoji,
     )
+}
+
+// ✨ NEW - Convert audioMeta Any to AudioMeta domain model
+private fun Any?.toAudioMetaOrNull(): com.moji.mobile.core.model.AudioMeta? {
+    return when (this) {
+        null -> null
+        is Map<*, *> -> {
+            val durationSeconds = this["durationSeconds"]?.let {
+                when (it) {
+                    is Number -> it.toInt()
+                    is String -> it.toIntOrNull()
+                    else -> null
+                }
+            }
+            val mimeType = this["mimeType"]?.toString()?.trim()
+                ?.takeIf { it.isNotBlank() }
+            val sizeBytes = this["sizeBytes"]?.let {
+                when (it) {
+                    is Number -> it.toLong()
+                    is String -> it.toLongOrNull()
+                    else -> null
+                }
+            }
+            if (durationSeconds != null || mimeType != null || sizeBytes != null) {
+                com.moji.mobile.core.model.AudioMeta(
+                    durationSeconds = durationSeconds,
+                    mimeType = mimeType,
+                    sizeBytes = sizeBytes,
+                )
+            } else null
+        }
+        else -> null
+    }
 }
 
 private fun Any?.toReplyPreviewOrNull(): MessageReplyPreview? {
@@ -146,12 +193,19 @@ fun MessageDto.toDomain(defaultConversationId: String): Message {
         senderDisplayName = senderDisplayName ?: "Unknown",
         content = content.orEmpty(),
         imageUrl = imageUrl,
+        audioUrl = audioUrl,  // ✨ NEW
+        audioMeta = audioMeta.toAudioMetaOrNull(),  // ✨ NEW
         replyTo = replyTo.toReplyPreviewOrNull(),
         reactions = reactions.orEmpty().mapNotNull { it.toDomainOrNull() },
         readBy = readBy.orEmpty().mapNotNull { it.toIdStringOrNull() },
         createdAt = createdAt.orEmpty(),
         isDeleted = isDeleted ?: false,
         editedAt = editedAt,
+        threadRootId = threadRootId,  // ✨ NEW
+        replyToId = replyToId,  // ✨ NEW
+        deliveryState = deliveryState,  // ✨ NEW
+        deliveryError = deliveryError,  // ✨ NEW
+        deliveryAttemptCount = deliveryAttemptCount ?: 0,  // ✨ NEW
     )
 }
 
@@ -163,15 +217,23 @@ data class DirectMessageRequestDto(
     val recipientId: String,
     val content: String,
     val imgUrl: String? = null,
+    val audioUrl: String? = null,  // ✨ NEW - voice memo URL
+    val audioMeta: AudioMetaDto? = null,  // ✨ NEW - voice memo metadata
     val conversationId: String? = null,
     val replyTo: String? = null,
+    val replyToId: String? = null,  // ✨ NEW
+    val threadRootId: String? = null,  // ✨ NEW
 )
 
 data class GroupMessageRequestDto(
     val conversationId: String,
     val content: String,
     val imgUrl: String? = null,
+    val audioUrl: String? = null,  // ✨ NEW - voice memo URL
+    val audioMeta: AudioMetaDto? = null,  // ✨ NEW - voice memo metadata
     val replyTo: String? = null,
+    val replyToId: String? = null,  // ✨ NEW
+    val threadRootId: String? = null,  // ✨ NEW
 )
 
 data class MarkAsSeenResponseDto(
