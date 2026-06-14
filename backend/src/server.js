@@ -28,11 +28,15 @@ import {
 import cookieParser from "cookie-parser";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import { requestSecurityGuard } from "./middlewares/requestSecurityMiddleware.js";
+import { requestContext } from "./middlewares/requestContextMiddleware.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import fs from "node:fs";
 import { app, server } from "./socket/index.js";
 import { v2 as cloudinary } from "cloudinary";
+import { createHttpError } from "./utils/httpErrors.js";
+import { logger } from "./utils/logger.js";
 
 dotenv.config();
 
@@ -99,6 +103,7 @@ const corsOptions = {
 // middlewares
 // CORS MUST be before express.json() to ensure headers are added even on Payload errors
 app.use(cors(corsOptions));
+app.use(requestContext);
 
 // Chat image messages are sent as base64 data URLs, which are larger than default 100kb.
 app.use(express.json({ limit: "25mb" }));
@@ -141,6 +146,12 @@ app.use("/api/social", socialRoute);
 app.use("/api/safety", safetyRoute);
 app.use("/api/maintenance", maintenanceRoute);
 
+app.use((req, res, next) => {
+  next(createHttpError(404, "Not found"));
+});
+
+app.use(errorHandler);
+
 try {
   await connectDB();
 
@@ -150,21 +161,25 @@ try {
   try {
     await startMessageCleanupCompensationWorker();
   } catch (workerError) {
-    console.error("Failed to start compensation worker:", workerError);
+    logger.error("Failed to start compensation worker", {
+      error: workerError?.message || workerError,
+    });
   }
 
   try {
     await startMessageExpiryCleanupWorker();
   } catch (workerError) {
-    console.error("Failed to start message expiry worker:", workerError);
+    logger.error("Failed to start message expiry worker", {
+      error: workerError?.message || workerError,
+    });
   }
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server started on port ${PORT}`);
-    console.log("Real-time Drupal sync enabled");
+    logger.info(`Server started on port ${PORT}`);
+    logger.info("Real-time Drupal sync enabled");
   });
 } catch (error) {
-  console.error("Failed to start server:", error);
+  logger.error("Failed to start server", { error: error?.message || error });
   process.exit(1);
 }
 
@@ -176,7 +191,7 @@ const shutdownGracefully = async () => {
   }
 
   shutdownTriggered = true;
-  console.log("\nShutting down gracefully...");
+  logger.info("Shutting down gracefully...");
 
   await stopMessageCleanupCompensationWorker();
   await stopMessageExpiryCleanupWorker();

@@ -26,7 +26,7 @@ const MessageComposerShell = ({
     <section
       className={cn(
         // Full-width, breathing room at bottom
-        "clean-composer-shell relative z-10 flex w-full shrink-0 flex-col px-3 pb-1",
+        "clean-composer-shell chat-input-shell--command relative z-10 flex w-full shrink-0 flex-col px-3 pb-1",
         isDragOver && "drop-zone-active",
       )}
       aria-label={t("chatComposer.input_area")}

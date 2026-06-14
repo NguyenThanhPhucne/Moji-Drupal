@@ -130,18 +130,18 @@ export const userService = {
 
   /**
    * Get active sessions for the current user.
-   * Returns a list of devices/tokens (stub — requires backend support).
    */
   getUserSessions: async () => {
     const res = await api.get("/users/me/sessions");
     return res.data as {
       sessions: Array<{
         id: string;
-        device: string;
-        lastActive: string;
-        current: boolean;
-        ipAddress?: string;
-        location?: string;
+        deviceLabel: string;
+        lastUsedAt: string;
+        createdAt: string;
+        expiresAt?: string;
+        isCurrent: boolean;
+        ipAddress?: string | null;
       }>;
     };
   },

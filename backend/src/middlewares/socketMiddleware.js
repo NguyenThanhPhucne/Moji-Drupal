@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { randomUUID } from "node:crypto";
 import User from "../models/User.js";
+import { logger } from "../utils/logger.js";
 
 const MONGO_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
@@ -10,7 +11,9 @@ const verifySocketToken = (token) => {
   try {
     return jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
   } catch (error) {
-    console.warn("Socket token verification failed:", error?.message || error);
+    logger.debug("Socket token verification failed", {
+      error: error?.message || error,
+    });
     return null;
   }
 };

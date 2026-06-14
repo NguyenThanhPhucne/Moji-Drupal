@@ -253,12 +253,14 @@ export default function SettingsPage() {
           <div className="sp-toolbar" aria-label="Current settings section">
             <p className="sp-toolbar-title">
               <span>Settings</span>
+                {" "}
               <span className="sp-toolbar-sep" aria-hidden="true">/</span>
+                {" "}
               <span className="sp-toolbar-current">{TAB_TITLES[activeTab]}</span>
             </p>
             <span className="sp-toolbar-pill">
-              <span className="sp-toolbar-dot" aria-hidden="true" />
-              Auto-saved
+              <span className="sp-toolbar-dot" aria-hidden="true">•</span>
+              <span>Auto-saved</span>
             </span>
           </div>
 

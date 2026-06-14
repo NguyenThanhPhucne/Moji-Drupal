@@ -1,5 +1,6 @@
 import mysql from "mysql2/promise";
 import User from "../models/User.js";
+import { logger } from "../utils/logger.js";
 
 /**
  * Drupal Database Sync Service
@@ -7,12 +8,34 @@ import User from "../models/User.js";
  */
 
 let drupalDbPool = null;
+let drupalSyncDisabled = false;
+
+const isExpectedDrupalDbError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("connect econnrefused") ||
+    message.includes("connection is closed") ||
+    message.includes("pool is closed") ||
+    message.includes("unknown database")
+  );
+};
+
+const disableDrupalSync = (reason, error) => {
+  if (drupalSyncDisabled) {
+    return;
+  }
+
+  drupalSyncDisabled = true;
+  logger.warn(`Drupal sync disabled: ${reason}`, {
+    error: error?.message || error,
+  });
+};
 
 /**
  * Initialize Drupal database connection pool
  */
 export function initDrupalSync() {
-  if (drupalDbPool) {
+  if (drupalDbPool || drupalSyncDisabled) {
     return drupalDbPool;
   }
 
@@ -33,7 +56,7 @@ export function initDrupalSync() {
     console.log("Drupal database pool initialized");
     return drupalDbPool;
   } catch (error) {
-    console.error("Failed to initialize Drupal database pool:", error.message);
+    disableDrupalSync("failed to initialize database pool", error);
     return null;
   }
 }
@@ -43,7 +66,7 @@ export function initDrupalSync() {
  * @param {Object} conversation - Mongoose conversation document
  */
 export async function syncConversationToDrupal(conversation) {
-  if (!drupalDbPool) {
+  if (!drupalDbPool || drupalSyncDisabled) {
     console.warn("Drupal sync skipped: database pool not initialized");
     return;
   }
@@ -94,7 +117,14 @@ export async function syncConversationToDrupal(conversation) {
 
     console.log(`Synced conversation ${conversationId} to Drupal`);
   } catch (error) {
-    console.error("Failed to sync conversation to Drupal:", error.message);
+    if (isExpectedDrupalDbError(error)) {
+      disableDrupalSync("database connection unavailable", error);
+      return;
+    }
+
+    logger.error("Failed to sync conversation to Drupal", {
+      error: error?.message || error,
+    });
   }
 }
 
@@ -104,7 +134,7 @@ export async function syncConversationToDrupal(conversation) {
  * @param {Array} participants - Array of participant objects
  */
 async function syncParticipantsToDrupal(conversationId, participants) {
-  if (!participants || participants.length === 0) {
+  if (!participants || participants.length === 0 || drupalSyncDisabled) {
     return;
   }
 
@@ -165,7 +195,14 @@ async function syncParticipantsToDrupal(conversationId, participants) {
       `Synced ${participants.length} participants for conversation ${conversationId}`,
     );
   } catch (error) {
-    console.error("Failed to sync participants to Drupal:", error.message);
+    if (isExpectedDrupalDbError(error)) {
+      disableDrupalSync("database connection unavailable", error);
+      return;
+    }
+
+    logger.error("Failed to sync participants to Drupal", {
+      error: error?.message || error,
+    });
   }
 }
 
@@ -175,7 +212,7 @@ async function syncParticipantsToDrupal(conversationId, participants) {
  * @param {Number} messageCount - Number of messages
  */
 export async function updateMessageCountInDrupal(conversationId, messageCount) {
-  if (!drupalDbPool) {
+  if (!drupalDbPool || drupalSyncDisabled) {
     return;
   }
 
@@ -189,7 +226,14 @@ export async function updateMessageCountInDrupal(conversationId, messageCount) {
       `Updated message count for conversation ${conversationId}: ${messageCount}`,
     );
   } catch (error) {
-    console.error("Failed to update message count in Drupal:", error.message);
+    if (isExpectedDrupalDbError(error)) {
+      disableDrupalSync("database connection unavailable", error);
+      return;
+    }
+
+    logger.error("Failed to update message count in Drupal", {
+      error: error?.message || error,
+    });
   }
 }
 
@@ -199,7 +243,7 @@ export async function updateMessageCountInDrupal(conversationId, messageCount) {
  * @param {Number} delta - Increment/decrement amount
  */
 export async function adjustMessageCountInDrupal(conversationId, delta) {
-  if (!drupalDbPool || !Number.isFinite(delta) || delta === 0) {
+  if (!drupalDbPool || drupalSyncDisabled || !Number.isFinite(delta) || delta === 0) {
     return;
   }
 
@@ -209,7 +253,14 @@ export async function adjustMessageCountInDrupal(conversationId, delta) {
       [delta, Math.floor(Date.now() / 1000), conversationId],
     );
   } catch (error) {
-    console.error("Failed to adjust message count in Drupal:", error.message);
+    if (isExpectedDrupalDbError(error)) {
+      disableDrupalSync("database connection unavailable", error);
+      return;
+    }
+
+    logger.error("Failed to adjust message count in Drupal", {
+      error: error?.message || error,
+    });
   }
 }
 
@@ -218,7 +269,7 @@ export async function adjustMessageCountInDrupal(conversationId, delta) {
  * @param {String} conversationId - Conversation ID
  */
 export async function deleteConversationFromDrupal(conversationId) {
-  if (!drupalDbPool) {
+  if (!drupalDbPool || drupalSyncDisabled) {
     return;
   }
 
@@ -237,7 +288,14 @@ export async function deleteConversationFromDrupal(conversationId) {
 
     console.log(`Deleted conversation ${conversationId} from Drupal`);
   } catch (error) {
-    console.error("Failed to delete conversation from Drupal:", error.message);
+    if (isExpectedDrupalDbError(error)) {
+      disableDrupalSync("database connection unavailable", error);
+      return;
+    }
+
+    logger.error("Failed to delete conversation from Drupal", {
+      error: error?.message || error,
+    });
   }
 }
 
@@ -248,6 +306,7 @@ export async function closeDrupalSync() {
   if (drupalDbPool) {
     await drupalDbPool.end();
     drupalDbPool = null;
+    drupalSyncDisabled = false;
     console.log("Drupal database pool closed");
   }
 }

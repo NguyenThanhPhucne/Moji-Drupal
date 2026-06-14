@@ -398,6 +398,19 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     setAudioMeta(null);
   }, [clearRecTimer, releaseStream]);
 
+  const restoreThreadComposerAfterSendFailure = useCallback(
+    (failedContent: string, failedAudioPreview: string | null, failedAudioMeta: AudioMeta | null) => {
+      setComposerValue(failedContent);
+      setAudioPreview(failedAudioPreview);
+      setAudioMeta(failedAudioPreview ? failedAudioMeta : null);
+
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    },
+    [],
+  );
+
   const activeConversationId = String(selectedConvo?._id || "").trim();
   const rootMessageId = String(activeThreadRootId || "").trim();
   const activeConversationMessages = messages[activeConversationId]?.items || [];
@@ -440,8 +453,6 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   );
 
   const loadedReplyCount = threadReplyMessages.length;
-    (messageItem) => String(messageItem._id) !== rootMessageId,
-  ).length;
   const threadStatsKey =
     activeConversationId && rootMessageId
       ? `${activeConversationId}:${rootMessageId}`
@@ -475,8 +486,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const reduceMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      globalThis.window?.matchMedia("(prefers-reduced-motion: reduce)").matches ?? false;
     messagesEndRef.current?.scrollIntoView({
       behavior: reduceMotion ? "auto" : behavior,
     });
@@ -566,10 +576,14 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
   useEffect(() => {
     if (!rootMessageId) return;
-    const focusTimer = window.setTimeout(() => {
+    const focusTimer = globalThis.window?.setTimeout(() => {
       textareaRef.current?.focus();
     }, 140);
-    return () => window.clearTimeout(focusTimer);
+    return () => {
+      if (typeof focusTimer === "number") {
+        globalThis.window?.clearTimeout(focusTimer);
+      }
+    };
   }, [rootMessageId]);
 
   // Auto-scroll to bottom when new replies arrive (if user is already near bottom)
@@ -581,8 +595,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     if (!isNearBottom) return;
 
     const reduceMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      globalThis.window?.matchMedia("(prefers-reduced-motion: reduce)").matches ?? false;
     messagesEndRef.current?.scrollIntoView({
       behavior: reduceMotion ? "auto" : "smooth",
     });
@@ -590,13 +603,17 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
   useEffect(() => {
     if (loadingThread || !rootMessageId) return;
-    const frameId = window.requestAnimationFrame(() => {
+    const frameId = globalThis.window?.requestAnimationFrame(() => {
       updateScrollPosition();
       if (shouldStickToBottomRef.current) {
         scrollToBottom("auto");
       }
     });
-    return () => window.cancelAnimationFrame(frameId);
+    return () => {
+      if (typeof frameId === "number") {
+        globalThis.window?.cancelAnimationFrame(frameId);
+      }
+    };
   }, [
     loadingThread,
     rootMessageId,
@@ -606,8 +623,16 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   ]);
 
   const handleClose = () => {
+    if (isRecording) {
+      cancelRecording();
+    }
     setActiveThreadRootId(null);
     setComposerValue("");
+    setAudioPreview(null);
+    setAudioMeta(null);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
   };
 
   const handleSendThreadReply = useCallback(async () => {
@@ -618,7 +643,9 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
     setSending(true);
     const capturedAudio = audioPreview;
     const capturedMeta = audioMeta;
-    setComposerValue(""); setAudioPreview(null); setAudioMeta(null);
+    setComposerValue("");
+    setAudioPreview(null);
+    setAudioMeta(null);
 
     try {
       const resolvedAudioUrl = capturedAudio || undefined;
@@ -671,8 +698,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
       textareaRef.current?.focus();
     } catch (error) {
-      setComposerValue(normalizedContent);
-      setAudioPreview(capturedAudio); setAudioMeta(capturedMeta);
+      restoreThreadComposerAfterSendFailure(normalizedContent, capturedAudio, capturedMeta);
       
       if (error instanceof Error && /exceeds.*MB/i.test(error.message)) {
         toast.error(error.message);

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Eye, EyeOff, Lock, Trash2, Check, ShieldCheck, AlertTriangle, Info } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Eye, EyeOff, Lock, Trash2, Check, ShieldCheck, AlertTriangle, Info, Monitor, LogOut, Loader2, Globe } from "lucide-react";
 import { userService } from "@/services/userService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { toast } from "sonner";
@@ -55,6 +55,29 @@ const SECURITY_TIPS = [
   { icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-500/10", title: "Never share your password", desc: "Moji staff will never ask for your password. Treat it like a PIN — keep it private at all times." },
 ];
 
+/* ─── Session type ─────────────────────────────────────────────────────── */
+interface SessionInfo {
+  id: string;
+  deviceLabel: string;
+  lastUsedAt: string;
+  createdAt: string;
+  expiresAt?: string;
+  isCurrent: boolean;
+  ipAddress?: string | null;
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
 const SecuritySettings = () => {
   const { user, signOut } = useAuthStore();
 
@@ -67,6 +90,12 @@ const SecuritySettings = () => {
   const [deleteOpen, setDeleteOpen]       = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting]           = useState(false);
+
+  // Sessions state
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
 
   const strength   = getStrength(newPw);
   const matchesNew = confirmPw.length > 0 && confirmPw === newPw;
@@ -100,6 +129,51 @@ const SecuritySettings = () => {
       signOut();
     } finally { setDeleting(false); }
   };
+
+  // ─── Session handlers ────────────────────────────────────────────────
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const data = await userService.getUserSessions();
+      setSessions(data.sessions);
+    } catch {
+      // silently fail — sessions are optional
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSessions();
+  }, [fetchSessions]);
+
+  const handleRevokeSession = async (sessionId: string) => {
+    setRevokingId(sessionId);
+    try {
+      await userService.revokeSession(sessionId);
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      toast.success("Session revoked");
+    } catch {
+      toast.error("Failed to revoke session");
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleRevokeAllOther = async () => {
+    setRevokingAll(true);
+    try {
+      await userService.revokeAllOtherSessions();
+      setSessions((prev) => prev.filter((s) => s.isCurrent));
+      toast.success("All other sessions revoked");
+    } catch {
+      toast.error("Failed to revoke sessions");
+    } finally {
+      setRevokingAll(false);
+    }
+  };
+
+  const otherSessionCount = sessions.filter((s) => !s.isCurrent).length;
 
   return (
     <div className="space-y-4">
@@ -156,6 +230,117 @@ const SecuritySettings = () => {
               </div>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* ── Active Sessions ── */}
+      <div className="settings-card">
+        <div className="settings-card-header">
+          <h3 className="settings-card-title flex items-center gap-2">
+            <Monitor className="size-4 text-primary" /> Active Sessions
+          </h3>
+          <p className="settings-card-desc">
+            Devices where you're currently logged in.
+            {otherSessionCount > 0 && (
+              <> You have <strong className="font-semibold text-foreground">{otherSessionCount}</strong> other active session{otherSessionCount !== 1 ? "s" : ""}.</>
+            )}
+          </p>
+        </div>
+        <div className="settings-card-body divide-y divide-border/40">
+          {sessionsLoading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              <span className="text-sm">Loading sessions…</span>
+            </div>
+          ) : sessions.length === 0 ? (
+            <div className="text-center py-8">
+              <Monitor className="size-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No active sessions found</p>
+            </div>
+          ) : (
+            <>
+              {sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={cn(
+                    "flex items-center justify-between gap-4 p-4 transition-colors",
+                    session.isCurrent && "bg-primary/[0.03]",
+                    !session.isCurrent && "hover:bg-muted/20",
+                  )}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className={cn(
+                      "flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
+                      session.isCurrent ? "bg-primary/10" : "bg-muted/50",
+                    )}>
+                      <Monitor className={cn("size-4", session.isCurrent ? "text-primary" : "text-muted-foreground")} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {session.deviceLabel}
+                        </p>
+                        {session.isCurrent && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider bg-primary/10 text-primary">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[11px] text-muted-foreground">
+                          Last active: {formatRelativeTime(session.lastUsedAt)}
+                        </span>
+                        {session.ipAddress && (
+                          <>
+                            <span className="text-muted-foreground/30">·</span>
+                            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                              <Globe className="size-3" />
+                              {session.ipAddress}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!session.isCurrent && (
+                    <button
+                      type="button"
+                      disabled={revokingId === session.id}
+                      onClick={() => handleRevokeSession(session.id)}
+                      className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-destructive/80 hover:text-destructive hover:bg-destructive/8 transition-colors disabled:opacity-50"
+                      aria-label={`Revoke session ${session.deviceLabel}`}
+                    >
+                      {revokingId === session.id ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <LogOut className="size-3" />
+                      )}
+                      Revoke
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              {otherSessionCount > 0 && (
+                <div className="p-4">
+                  <button
+                    type="button"
+                    disabled={revokingAll}
+                    onClick={handleRevokeAllOther}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-destructive border border-destructive/30 hover:bg-destructive/8 transition-colors disabled:opacity-50"
+                  >
+                    {revokingAll ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <LogOut className="size-3.5" />
+                    )}
+                    Sign out of all other sessions
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 

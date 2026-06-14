@@ -35,7 +35,7 @@ const MessageItemDeleteDialog = ({
         dismissible={!loadingAction}
       >
         <DialogHeader className="items-center text-center space-y-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
+          <div className="dialog-danger-icon ring-8 ring-destructive/10">
             <Trash2 className="size-6 text-destructive" />
           </div>
           <div className="space-y-1.5">
@@ -98,7 +98,7 @@ const MessageItemDeleteDialog = ({
             type="button"
             disabled={!!loadingAction}
             onClick={onClose}
-            className="chat-modal-btn flex items-center justify-center rounded-full h-10 px-6 font-semibold"
+            className="chat-modal-btn chat-modal-btn--secondary flex items-center justify-center rounded-full h-10 px-6 font-semibold"
           >
             Cancel
           </button>

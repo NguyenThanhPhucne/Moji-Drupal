@@ -1,15 +1,18 @@
 import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { JitsiMeeting } from "@jitsi/react-sdk";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Phone, Video } from "lucide-react";
 
 export default function JitsiCallOverlay() {
-  const { isCallActive, activeConversationId, setIsCallActive } = useChatStore();
+  const { isCallActive, activeConversationId, setIsCallActive, callMode } = useChatStore();
   const { user } = useAuthStore();
 
   if (!isCallActive || !activeConversationId) {
     return null;
   }
+
+  const isVoiceCall = callMode === "audio";
+  const callLabel = isVoiceCall ? "Voice Call" : "Video Call";
 
   // Generate a predictable but unique room name for this conversation
   const roomName = `MojiChat-Room-${activeConversationId.replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -26,7 +29,8 @@ export default function JitsiCallOverlay() {
       <div className="flex h-12 w-full items-center justify-between px-4 bg-background border-b border-border/50 shrink-0">
         <div className="flex items-center gap-2">
           <div className="size-2 rounded-full bg-[hsl(var(--status-success))] animate-pulse" />
-          <span className="text-sm font-medium">Ongoing Call</span>
+          {isVoiceCall ? <Phone className="size-4 text-primary" /> : <Video className="size-4 text-primary" />}
+          <span className="text-sm font-medium">Ongoing {callLabel}</span>
         </div>
         <button
           type="button"
@@ -45,7 +49,7 @@ export default function JitsiCallOverlay() {
           roomName={roomName}
           configOverwrite={{
             startWithAudioMuted: false,
-            startWithVideoMuted: false,
+            startWithVideoMuted: isVoiceCall,
             disableModeratorIndicator: true,
             startScreenSharing: false,
             enableEmailInStats: false,
@@ -77,7 +81,9 @@ export default function JitsiCallOverlay() {
           spinner={() => (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background">
               <Loader2 className="size-8 animate-spin text-primary" />
-              <p className="text-sm text-muted-foreground animate-pulse">Connecting to secure call server...</p>
+              <p className="text-sm text-muted-foreground animate-pulse">
+                Connecting to secure {callLabel.toLowerCase()} room...
+              </p>
             </div>
           )}
         />

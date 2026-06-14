@@ -162,6 +162,33 @@ const getClientIp = (req) => {
 const getClientUserAgent = (req) =>
   String(req.headers["user-agent"] || "").slice(0, 512);
 
+/**
+ * Parse a human-readable device label from a raw User-Agent string.
+ * Examples: "Chrome on macOS", "Firefox on Windows", "Safari on iOS"
+ */
+const parseDeviceLabel = (ua) => {
+  if (!ua) return "Unknown device";
+  const raw = String(ua);
+
+  // Detect browser
+  let browser = "Browser";
+  if (/Edg\//i.test(raw))        browser = "Edge";
+  else if (/OPR\//i.test(raw))   browser = "Opera";
+  else if (/Chrome\//i.test(raw)) browser = "Chrome";
+  else if (/Firefox\//i.test(raw)) browser = "Firefox";
+  else if (/Safari\//i.test(raw)) browser = "Safari";
+
+  // Detect OS
+  let os = "";
+  if (/Windows/i.test(raw))       os = "Windows";
+  else if (/Mac OS X/i.test(raw)) os = "macOS";
+  else if (/Android/i.test(raw))  os = "Android";
+  else if (/iPhone|iPad/i.test(raw)) os = "iOS";
+  else if (/Linux/i.test(raw))    os = "Linux";
+
+  return os ? `${browser} on ${os}` : browser;
+};
+
 const getAuthRateLimitIdentity = (req, identifier = "") => {
   const ip = getClientIp(req);
   const normalizedIdentifier = String(identifier || "").trim().toLowerCase();
@@ -345,6 +372,9 @@ const issueSessionTokens = async (req, res, user, payload = {}) => {
   });
   const fingerprint = buildSessionFingerprint(req);
 
+  const rawUserAgent = getClientUserAgent(req);
+  const rawIp = getClientIp(req);
+
   await Session.create({
     userId: user._id,
     tokenFamily: crypto.randomUUID(),
@@ -355,6 +385,10 @@ const issueSessionTokens = async (req, res, user, payload = {}) => {
     rotationCount: 0,
     userAgentHash: fingerprint.userAgentHash,
     ipHash: fingerprint.ipHash,
+    // Enterprise metadata for Active Sessions UI
+    deviceLabel: parseDeviceLabel(rawUserAgent),
+    ipAddress: rawIp && rawIp !== "unknown" ? rawIp : null,
+    userAgent: rawUserAgent || null,
   });
 
   await pruneActiveSessions(user._id);

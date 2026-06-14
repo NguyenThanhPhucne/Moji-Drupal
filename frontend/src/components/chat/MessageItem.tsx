@@ -473,6 +473,8 @@ const INLINE_QUICK_REACTIONS = [
   { emoji: "👍", label: "Like" },
   { emoji: "❤️", label: "Love" },
   { emoji: "😂", label: "Haha" },
+  { emoji: "🔥", label: "Fire" },
+  { emoji: "👏", label: "Applause" },
 ] as const;
 
 const MessageActionToolbar = memo(function MessageActionToolbar({
@@ -509,7 +511,7 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
   return (
     <div
       className={cn(
-        "chat-message-action-toolbar chat-message-action-toolbar--command absolute top-2 flex items-center gap-[2px] z-30 transition-[opacity,transform] duration-100 motion-reduce:transition-none",
+        "chat-message-action-toolbar chat-message-action-toolbar--command chat-message-action-toolbar-pill chat-msg-action-bar absolute top-2 flex items-center gap-0.5 z-30 rounded-full border border-border/65 bg-background/95 px-1.5 py-1 shadow-sm backdrop-blur-sm transition-[opacity,transform,filter] duration-150 motion-reduce:transition-none",
         isOwn
           ? "right-[calc(100%+0.3rem)]"
           : "left-[calc(100%+0.3rem)]",
@@ -520,13 +522,13 @@ const MessageActionToolbar = memo(function MessageActionToolbar({
     >
       {/* ── Inline Quick Reactions (Slack/Discord style — 1-click) ── */}
       {INLINE_QUICK_REACTIONS.map(({ emoji, label }) => (
-        <Tooltip key={label} delayDuration={300}>
+        <Tooltip key={label} delayDuration={180}>
           <TooltipTrigger asChild>
             <button
               type="button"
               onClick={() => onReact(emoji)}
               aria-label={`React with ${label}`}
-              className="chat-message-action-btn chat-message-action-btn--emoji chat-message-action-btn--command group"
+              className="chat-message-action-btn chat-message-action-btn--emoji chat-message-action-btn--command group rounded-full"
             >
               <span className="text-[14px] leading-none group-hover:scale-125 transition-transform duration-100 inline-block">
                 {emoji}

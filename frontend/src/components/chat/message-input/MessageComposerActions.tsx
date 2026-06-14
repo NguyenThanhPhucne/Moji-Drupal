@@ -329,7 +329,7 @@ const MessageComposerActionsComponent = ({
       )}
       </div>
 
-      {!isRecording && !hasSendableMessage && !value.trim() && (
+      {!isRecording && (
         <Button
           variant="ghost"
           size="icon"

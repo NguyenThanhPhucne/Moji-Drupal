@@ -236,6 +236,7 @@ export function useMessageInput(selectedConvo: Conversation) {
       nextValue: string,
       nextImagePreview: string | null,
       nextAudioPreview?: string | null,
+      nextAudioMeta?: AudioMeta | null,
     ) => {
       const normalizedConversationId = String(conversationId || "").trim();
       if (!normalizedConversationId) {
@@ -248,8 +249,14 @@ export function useMessageInput(selectedConvo: Conversation) {
         nextAudioPreview === undefined
           ? audioPreview || null
           : nextAudioPreview || null;
-      const normalizedAudioMeta =
-        normalizedAudioPreview === null ? null : audioMeta || null;
+      let normalizedAudioMeta: AudioMeta | null = null;
+      if (normalizedAudioPreview !== null) {
+        if (nextAudioMeta === undefined) {
+          normalizedAudioMeta = audioMeta || null;
+        } else {
+          normalizedAudioMeta = nextAudioMeta || null;
+        }
+      }
       const hasDraft = Boolean(
         normalizedValue.trim() || normalizedImagePreview || normalizedAudioPreview,
       );
@@ -383,7 +390,13 @@ export function useMessageInput(selectedConvo: Conversation) {
     (nextAudioPreview: string | null, nextAudioMeta?: AudioMeta | null) => {
       setAudioPreview(nextAudioPreview);
       setAudioMeta(nextAudioPreview ? nextAudioMeta || null : null);
-      persistDraft(selectedConvo._id, value, imagePreview, nextAudioPreview);
+      persistDraft(
+        selectedConvo._id,
+        value,
+        imagePreview,
+        nextAudioPreview,
+        nextAudioPreview ? nextAudioMeta || null : null,
+      );
     },
     [imagePreview, persistDraft, selectedConvo._id, value],
   );
@@ -711,15 +724,18 @@ export function useMessageInput(selectedConvo: Conversation) {
     failedValue: string,
     failedImagePreview: string | null,
     failedAudioPreview: string | null,
+    failedAudioMeta?: AudioMeta | null,
   ) => {
     setValue(failedValue);
     setImagePreview(failedImagePreview);
     setAudioPreview(failedAudioPreview);
+    setAudioMeta(failedAudioPreview ? failedAudioMeta ?? null : null);
     persistDraft(
       selectedConvo._id,
       failedValue,
       failedImagePreview ?? null,
       failedAudioPreview,
+      failedAudioPreview ? failedAudioMeta ?? null : null,
     );
 
     if (textareaRef.current) {
@@ -1047,7 +1063,7 @@ export function useMessageInput(selectedConvo: Conversation) {
       setReplyingTo(null);
       stopTyping();
     } catch (error) {
-      restoreComposerAfterSendFailure(currValue, currImage, currAudio);
+      restoreComposerAfterSendFailure(currValue, currImage, currAudio, currAudioMeta);
 
       if (isAudioUploadRequiresOnlineError(error)) {
         toast.error("Voice memo needs internet to upload before sending.");

@@ -260,7 +260,9 @@ const ProfileDialog = ({ open, setOpen }: ProfileDialogProps) => {
                 <div className="flex items-center gap-2">
                   <p className="settings-toolbar-title">
                     Settings
+                    {" "}
                     <span className="mx-1.5 text-muted-foreground/50">/</span>
+                    {" "}
                     <span className="text-muted-foreground font-normal">{TAB_TITLES[activeTab]}</span>
                   </p>
                 </div>

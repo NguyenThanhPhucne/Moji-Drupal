@@ -83,10 +83,12 @@ export interface ChatState {
   outgoingQueue: OutgoingMessageQueueItem[];
   isFlushingOutgoingQueue: boolean;
   isCallActive: boolean;
+  callMode: "audio" | "video";
   privatePin: string | null;
   reset: () => void;
 
   setIsCallActive: (active: boolean) => void;
+  setCallMode: (mode: "audio" | "video") => void;
   setPrivatePin: (pin: string | null) => void;
   clearPrivatePin: () => void;
   setReplyingTo: (message: Message | null) => void;

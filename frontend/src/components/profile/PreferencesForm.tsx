@@ -144,11 +144,12 @@ const PreferencesForm = () => {
     personalizationSnapshot,
     DEFAULT_PERSONALIZATION_SNAPSHOT,
   );
-  const personalizationStatusLabel = user?._id
-    ? isPersonalizationSynced
+  let personalizationStatusLabel = "Saved locally";
+  if (user?._id) {
+    personalizationStatusLabel = isPersonalizationSynced
       ? "Saved to account"
-      : "Syncing changes..."
-    : "Saved locally";
+      : "Syncing changes...";
+  }
 
   useEffect(() => {
     setOnlineStatus(user?.showOnlineStatus !== false);

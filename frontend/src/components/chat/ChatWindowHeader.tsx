@@ -22,6 +22,7 @@ import {
   Users,
   ShieldCheck,
   Link2,
+  Phone,
   Video,
   Settings2,
   Hash,
@@ -65,7 +66,7 @@ function getGroupMemberRole(
 }
 
 const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
-  const { conversations, activeConversationId, isCallActive, setIsCallActive, deleteConversation, setGroupAdminRole } =
+  const { conversations, activeConversationId, isCallActive, setIsCallActive, setCallMode, deleteConversation, setGroupAdminRole } =
     useChatStore();
   const { user } = useAuthStore();
   const { getUserPresence } = useSocketStore();
@@ -172,16 +173,21 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     }
   };
 
+  const handleStartCall = (mode: "audio" | "video") => {
+    setCallMode(mode);
+    setIsCallActive(true);
+  };
+
   return (
     <>
-      <header className="chat-header chat-header-shell chat-window-header-main sticky top-0 z-40 flex w-full items-center px-4 py-3">
+      <header className="chat-header chat-header-shell chat-header-shell--elevated chat-window-header-main sticky top-0 z-40 flex w-full items-center px-4 py-3">
         <div className="chat-header-row w-full flex items-center justify-between">
           {/* Left — identity */}
           <div className="chat-header-left min-w-0">
             <SidebarTrigger className="-ml-0.5 h-9 w-9 rounded-xl text-foreground md:hidden" />
             <div
               className={cn(
-                "chat-header-identity min-w-0 flex items-center gap-3 rounded-lg px-2 py-1.5",
+                "chat-header-identity chat-header-identity--compact min-w-0 flex items-center gap-3 rounded-lg px-2 py-1.5",
                 chat.type === "direct" ? "hover:bg-muted/40" : "",
               )}
             >
@@ -234,21 +240,36 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
           {/* Right — actions */}
           <div className="chat-header-actions flex flex-shrink-0 items-center gap-2">
             {(chat.type === "group" || chat.type === "direct") && (
-              <Button
-                variant="ghost" size="icon"
-                onClick={() => setIsCallActive(true)}
-                disabled={isCallActive}
-                className="rounded-full hidden lg:inline-flex h-8 w-8 text-foreground/70 hover:text-primary hover:bg-primary/10 transition-colors"
-                title="Start Video Call"
-              >
-                <Video className="size-[18px]" />
-              </Button>
+              <div className="hidden lg:inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur-sm">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleStartCall("audio")}
+                  disabled={isCallActive}
+                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
+                  title="Start Voice Call"
+                  aria-label="Start voice call"
+                >
+                  <Phone className="size-[18px]" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleStartCall("video")}
+                  disabled={isCallActive}
+                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
+                  title="Start Video Call"
+                  aria-label="Start video call"
+                >
+                  <Video className="size-[18px]" />
+                </Button>
+              </div>
             )}
 
             <NotificationPreferencesDialog
               open={showNotifDialog}
               onOpenChange={setShowNotifDialog}
-              triggerClassName="rounded-full hidden lg:inline-flex h-8 w-8 text-foreground/70 hover:text-primary hover:bg-primary/10 transition-colors"
+              triggerClassName="chat-header-action-btn chat-header-action-btn--command rounded-full hidden lg:inline-flex h-8 w-8"
             />
 
             <DropdownMenu>
@@ -257,18 +278,21 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   variant="ghost" size="icon"
                   disabled={isDeleting}
                   aria-label="More options"
-                  className="rounded-full h-8 w-8 text-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors"
+                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
                 >
                   <MoreVertical className="h-[18px] w-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52 rounded-xl shadow-lg border-border/60 overflow-hidden p-1">
+              <DropdownMenuContent
+                align="end"
+                className="chat-header-dropdown chat-header-dropdown-panel--command w-52 overflow-hidden p-1"
+              >
 
                 {/* Direct chat options */}
                 {chat.type === "direct" && otherUser?._id && (
                   <DropdownMenuItem
                     onSelect={() => navigate(`/profile/${String(otherUser._id)}`)}
-                    className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                    className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                   >
                     <UserCircle className="h-4 w-4 text-muted-foreground" />
                     View profile
@@ -280,7 +304,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   <>
                     <DropdownMenuItem
                       onSelect={() => setTimeout(() => setShowMembersDialog(true), 100)}
-                      className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                      className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                     >
                       <Users className="h-4 w-4 text-muted-foreground" />
                       Members
@@ -291,7 +315,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     {isOwner && (
                       <DropdownMenuItem
                         onSelect={() => setTimeout(() => setShowAdminsDialog(true), 100)}
-                        className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                        className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                       >
                         <ShieldCheck className="h-4 w-4 text-muted-foreground" />
                         Manage Admins
@@ -302,7 +326,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     {isGroupAdmin && (
                       <DropdownMenuItem
                         onSelect={() => setTimeout(() => setShowJoinLinkDialog(true), 100)}
-                        className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                        className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                       >
                         <Link2 className="h-4 w-4 text-muted-foreground" />
                         Invite Link
@@ -312,7 +336,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     {isGroupAdmin && (
                       <DropdownMenuItem
                         onSelect={() => setTimeout(() => setShowChannelsDialog(true), 100)}
-                        className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                        className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                       >
                         <Hash className="h-4 w-4 text-muted-foreground" />
                         Manage Channels
@@ -322,7 +346,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                     {isGroupAdmin && (
                       <DropdownMenuItem
                         onSelect={() => navigate(`/settings/account`)}
-                        className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
+                        className="chat-header-dropdown-item chat-header-dropdown-item--command gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                       >
                         <Settings2 className="h-4 w-4 text-muted-foreground" />
                         Settings
@@ -334,7 +358,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                 <DropdownMenuSeparator className="my-1" />
                 <DropdownMenuItem
                   onSelect={() => setTimeout(() => setShowDeleteDialog(true), 100)}
-                  className="gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2 text-destructive focus:bg-destructive/10 focus:text-destructive"
+                  className="chat-header-dropdown-item chat-header-dropdown-item--command chat-header-dropdown-item--danger gap-2 cursor-pointer rounded-lg font-medium text-[12px] py-2"
                 >
                   <Trash2 className="h-4 w-4" />
                   {chat.type === "group" && isOwner ? "Delete group" : "Leave / Delete"}
@@ -358,7 +382,7 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
       <GroupMembersDialog
         open={showMembersDialog}
         onOpenChange={setShowMembersDialog}
-        groupMembersWithRole={groupMembersWithRole as any}
+        groupMembersWithRole={groupMembersWithRole}
       />
 
       {isOwner && (

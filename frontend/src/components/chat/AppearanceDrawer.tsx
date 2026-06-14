@@ -239,6 +239,49 @@ const TIMESTAMP_STYLE_OPTIONS: Array<{
   },
 ];
 
+type BubblePreviewTone = "sent" | "received";
+type BubblePreviewAlign = "start" | "end";
+
+const BubblePreview = ({
+  align,
+  tone,
+  text,
+  bubbleClassName,
+  rowClassName,
+}: {
+  align: BubblePreviewAlign;
+  tone: BubblePreviewTone;
+  text: string;
+  bubbleClassName?: string;
+  rowClassName?: string;
+}) => {
+  const toneClassName =
+    tone === "sent"
+      ? "chat-bubble-sent chat-bubble-shape-sent"
+      : "chat-bubble-received chat-bubble-shape-received";
+
+  return (
+    <div
+      className={cn(
+        "chat-message-row flex",
+        align === "end" ? "justify-end" : "justify-start",
+        rowClassName,
+      )}
+    >
+      <div
+        className={cn(
+          "chat-bubble-shell",
+          toneClassName,
+          "max-w-[75%]",
+          bubbleClassName,
+        )}
+      >
+        {text}
+      </div>
+    </div>
+  );
+};
+
 const NOTIFICATION_GROUPING_OPTIONS: Array<{
   id: NotificationGroupingPreference;
   labelKey: TranslationKey;
@@ -706,16 +749,20 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
             <div className="mt-4 rounded-xl border border-border/60 bg-muted/20 p-3">
               <p className="text-[11px] text-muted-foreground mb-2 font-medium">Preview</p>
               <div className="flex flex-col gap-1.5">
-                <div className="chat-message-row flex justify-end p-0">
-                  <div className="chat-bubble-shell chat-bubble-sent chat-bubble-shape-sent max-w-[75%] text-[13px] font-medium">
-                    Hey! How are you?
-                  </div>
-                </div>
-                <div className="chat-message-row flex justify-start p-0">
-                  <div className="chat-bubble-shell chat-bubble-received chat-bubble-shape-received max-w-[75%] text-[13px]">
-                    I'm doing great, thanks!
-                  </div>
-                </div>
+                <BubblePreview
+                  align="end"
+                  tone="sent"
+                  text="Hey! How are you?"
+                  rowClassName="p-0"
+                  bubbleClassName="text-[13px] font-medium"
+                />
+                <BubblePreview
+                  align="start"
+                  tone="received"
+                  text="I'm doing great, thanks!"
+                  rowClassName="p-0"
+                  bubbleClassName="text-[13px]"
+                />
               </div>
             </div>
           </section>
@@ -900,16 +947,16 @@ const AppearanceDrawer = memo(function AppearanceDrawer({ open, onClose }: Appea
               </div>
 
               <div className="space-y-1.5">
-                <div className="chat-message-row flex justify-start">
-                  <div className="chat-bubble-shell chat-bubble-received chat-bubble-shape-received max-w-[75%]">
-                    Can we review this release plan?
-                  </div>
-                </div>
-                <div className="chat-message-row flex justify-end">
-                  <div className="chat-bubble-shell chat-bubble-sent chat-bubble-shape-sent max-w-[75%]">
-                    Sure, I just polished the final UI pass.
-                  </div>
-                </div>
+                <BubblePreview
+                  align="start"
+                  tone="received"
+                  text="Can we review this release plan?"
+                />
+                <BubblePreview
+                  align="end"
+                  tone="sent"
+                  text="Sure, I just polished the final UI pass."
+                />
               </div>
 
               <div className="mt-2 flex items-center justify-end gap-2">

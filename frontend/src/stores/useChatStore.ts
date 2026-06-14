@@ -988,9 +988,14 @@ export const useChatStore = create<ChatState>()(
       outgoingQueue: [],
       isFlushingOutgoingQueue: false,
       isCallActive: false,
+      callMode: "video",
       privatePin: null,
 
-      setIsCallActive: (active) => set({ isCallActive: active }),
+      setIsCallActive: (active) => set((state) => ({
+        isCallActive: active,
+        callMode: active ? state.callMode : "video",
+      })),
+      setCallMode: (mode) => set({ callMode: mode }),
       setPrivatePin: (pin) => set({ privatePin: pin ? String(pin).trim() : null }),
       clearPrivatePin: () => set({ privatePin: null }),
       setReplyingTo: (message) => set({ replyingTo: message }),
@@ -1153,6 +1158,7 @@ export const useChatStore = create<ChatState>()(
           outgoingQueue: [],
           isFlushingOutgoingQueue: false,
           isCallActive: false,
+          callMode: "video",
           privatePin: null,
         });
       },

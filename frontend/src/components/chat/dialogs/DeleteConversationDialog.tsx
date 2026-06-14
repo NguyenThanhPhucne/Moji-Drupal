@@ -41,7 +41,7 @@ export function DeleteConversationDialog(
         aria-busy={isDeleting}
       >
         <AlertDialogHeader className="chat-detail-dialog-header items-center text-center space-y-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/12 ring-8 ring-destructive/10">
+          <div className="dialog-danger-icon ring-8 ring-destructive/10">
             <Trash2 className="size-6 text-destructive" />
           </div>
           <div className="space-y-1.5">
@@ -57,7 +57,7 @@ export function DeleteConversationDialog(
         <AlertDialogFooter className="chat-detail-dialog-footer chat-detail-dialog-footer--split sm:flex-row w-full pt-2">
           <AlertDialogCancel
             disabled={isDeleting}
-            className="flex-1 h-11 rounded-full border-border/60 font-semibold transition-colors hover:bg-muted/55"
+            className="chat-modal-btn chat-modal-btn--secondary flex-1 h-11 rounded-full border-border/60 font-semibold"
           >
             Cancel
           </AlertDialogCancel>
@@ -68,8 +68,7 @@ export function DeleteConversationDialog(
             }}
             disabled={isDeleting}
             className={cn(
-              "flex-1 h-11 rounded-full bg-destructive font-semibold text-white transition-colors",
-              "hover:bg-destructive/90",
+              "chat-modal-btn chat-modal-btn--danger flex-1 h-11 rounded-full font-semibold",
               isDeleting && "opacity-70 pointer-events-none",
             )}
           >

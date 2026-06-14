@@ -970,11 +970,14 @@ export const getUserSessions = async (req, res) => {
     const userId = req.user._id;
     const sessions = await Session.find({ userId })
       .sort({ lastUsedAt: -1 })
-      .select("_id lastUsedAt createdAt expiresAt userAgentHash ipAddress deviceLabel")
+      .select("_id lastUsedAt createdAt expiresAt ipAddress deviceLabel refreshToken")
       .lean();
 
-    // Get current session token from cookie to mark it
+    // Identify the current session by matching the refresh token cookie
     const currentToken = req.cookies?.refreshToken;
+    const currentSessionId = currentToken
+      ? sessions.find((s) => s.refreshToken === currentToken)?._id
+      : null;
 
     const mapped = sessions.map((s) => ({
       id: String(s._id),
@@ -983,8 +986,8 @@ export const getUserSessions = async (req, res) => {
       expiresAt: s.expiresAt,
       deviceLabel: s.deviceLabel || "Unknown device",
       ipAddress: s.ipAddress || null,
-      isCurrent: currentToken
-        ? s.userAgentHash === crypto.createHash("sha256").update(currentToken).digest("hex").slice(0, 12)
+      isCurrent: currentSessionId
+        ? String(s._id) === String(currentSessionId)
         : false,
     }));
 

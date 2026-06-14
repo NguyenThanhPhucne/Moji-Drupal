@@ -44,6 +44,19 @@ const sessionSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // ── Enterprise session metadata ──────────────────────────
+    deviceLabel: {
+      type: String,
+      default: null,
+    },
+    ipAddress: {
+      type: String,
+      default: null,
+    },
+    userAgent: {
+      type: String,
+      default: null,
+    },
     revokedAt: {
       type: Date,
       default: null,

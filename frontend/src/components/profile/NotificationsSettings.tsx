@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Bell, Moon, Volume2, VolumeX } from "lucide-react";
+import { useNavigate } from "react-router";
+import { Bell, Moon, Volume2, VolumeX, ArrowRight } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -32,32 +33,33 @@ function loadSound(): NotifSound {
 
 const NotificationsSettings = () => {
   const { user, setUser } = useAuthStore();
+  const navigate = useNavigate();
   const prefs = user?.notificationPreferences ?? { message: true, sound: true, desktop: false };
   const [savingKey, setSavingKey] = useState<"message" | "sound" | "desktop" | null>(null);
 
-  const [qh, setQhState] = useState<QuietHours>(defaultQH);
-  useEffect(() => { setQhState(loadQH()); }, []);
+  const [quietHours, setQuietHours] = useState<QuietHours>(defaultQH);
+  useEffect(() => { setQuietHours(loadQH()); }, []);
   const updateQH = (patch: Partial<QuietHours>) => {
-    const next = { ...qh, ...patch };
-    setQhState(next);
+    const next = { ...quietHours, ...patch };
+    setQuietHours(next);
     saveQH(next);
   };
 
-  const [sound, setSoundState] = useState<NotifSound>("default");
-  useEffect(() => { setSoundState(loadSound()); }, []);
+  const [notificationSound, setNotificationSound] = useState<NotifSound>("default");
+  useEffect(() => { setNotificationSound(loadSound()); }, []);
   const updateSound = (s: NotifSound) => {
-    setSoundState(s);
+    setNotificationSound(s);
     localStorage.setItem(SOUND_KEY, s);
   };
   const previewSound = () => {
-    if (sound === "none") { toast("🔇 Sounds are muted"); return; }
+    if (notificationSound === "none") { toast("🔇 Sounds are muted"); return; }
     try {
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = sound === "chime" ? "sine" : "triangle";
-      osc.frequency.value = sound === "chime" ? 880 : 660;
+      osc.type = notificationSound === "chime" ? "sine" : "triangle";
+      osc.frequency.value = notificationSound === "chime" ? 880 : 660;
       gain.gain.setValueAtTime(0.18, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
       osc.start(ctx.currentTime);
@@ -123,23 +125,23 @@ const NotificationsSettings = () => {
           <p className="settings-card-desc">Mute sounds &amp; desktop notifications during selected hours.</p>
         </div>
         <div className="settings-card-body">
-          <div className="settings-toggle-row">
+            <div className="settings-toggle-row">
             <div>
-              <Label htmlFor="qh-toggle" className="text-sm font-medium">Enable Quiet Hours</Label>
+                <Label htmlFor="qh-toggle" className="text-sm font-medium">Enable Quiet Hours</Label>
               <p className="text-xs text-muted-foreground mt-0.5">No sounds or desktop popups during this window</p>
             </div>
-            <Switch id="qh-toggle" checked={qh.enabled} onCheckedChange={(v) => updateQH({ enabled: v })}
+            <Switch id="qh-toggle" checked={quietHours.enabled} onCheckedChange={(v) => updateQH({ enabled: v })}
               className="data-[state=checked]:bg-primary shrink-0" />
           </div>
-          {qh.enabled && (
+          {quietHours.enabled && (
             <div className="mt-4 flex flex-wrap gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
               <label className="flex-1 min-w-[120px]">
                 <span className="settings-field-label mb-1 block">From</span>
-                <input type="time" value={qh.from} onChange={(e) => updateQH({ from: e.target.value })} className="settings-field-input" />
+                <input type="time" value={quietHours.from} onChange={(e) => updateQH({ from: e.target.value })} className="settings-field-input" />
               </label>
               <label className="flex-1 min-w-[120px]">
                 <span className="settings-field-label mb-1 block">To</span>
-                <input type="time" value={qh.to} onChange={(e) => updateQH({ to: e.target.value })} className="settings-field-input" />
+                <input type="time" value={quietHours.to} onChange={(e) => updateQH({ to: e.target.value })} className="settings-field-input" />
               </label>
             </div>
           )}
@@ -158,7 +160,7 @@ const NotificationsSettings = () => {
           <div className="flex flex-wrap gap-2">
             {SOUND_OPTIONS.map(({ id, label }) => (
               <button key={id} type="button" onClick={() => updateSound(id)}
-                className={cn("settings-sound-chip", sound === id && "settings-sound-chip--active")}>
+                className={cn("settings-sound-chip", notificationSound === id && "settings-sound-chip--active")}>
                 {id === "none" ? <VolumeX className="size-3.5 shrink-0" /> : <Volume2 className="size-3.5 shrink-0" />}
                 {label}
               </button>
@@ -166,6 +168,27 @@ const NotificationsSettings = () => {
           </div>
           <button type="button" onClick={previewSound} className="mt-3 settings-security-trigger">
             <Volume2 className="size-3.5" /> Preview sound
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-card border-dashed border-border/60 bg-muted/15">
+        <div className="settings-card-header">
+          <h3 className="settings-card-title flex items-center gap-2">
+            <Bell className="size-4 text-primary" /> Advanced notification preferences
+          </h3>
+          <p className="settings-card-desc">
+            Open the dedicated page for digest timing, notification density, and per-channel presets.
+          </p>
+        </div>
+        <div className="settings-card-body p-4 pt-0">
+          <button
+            type="button"
+            onClick={() => navigate("/settings/notifications")}
+            className="settings-security-trigger"
+          >
+            Open advanced preferences
+            <ArrowRight className="size-3.5" />
           </button>
         </div>
       </div>
