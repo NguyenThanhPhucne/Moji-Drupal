@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import UserAvatar from "./UserAvatar";
 import { toast } from "sonner";
+import { useI18n } from "@/lib/i18n";
 import {
   addVoiceMemoOutboxItem,
   buildVoiceMemoOutboxId,
@@ -220,6 +221,7 @@ interface ThreadPanelProps {
 
 const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
   const { user } = useAuthStore();
+  const { t } = useI18n();
   const {
     messages,
     activeThreadRootId,
@@ -468,10 +470,11 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
 
   const replyCountLabel = (() => {
     if (replyCount <= 0) {
-      return "No replies yet";
+      return t("thread.no_replies_yet");
     }
 
-    return `${replyCount} ${replyCount === 1 ? "reply" : "replies"}`;
+    const label = replyCount === 1 ? t("thread.reply") : t("thread.replies");
+    return `${replyCount} ${label}`;
   })();
 
   const updateScrollPosition = useCallback(() => {
@@ -960,7 +963,7 @@ const ThreadPanel = ({ selectedConvo }: ThreadPanelProps) => {
           {isRecording && (
             <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 animate-in fade-in duration-150">
               <span className="size-2 rounded-full bg-destructive animate-pulse shrink-0" />
-              <span className="text-xs font-medium text-destructive flex-1">Recording {fmtSeconds(recordingSecs)}</span>
+              <span className="text-sm font-bold text-destructive/80 flex-1 animate-pulse">Recording {fmtSeconds(recordingSecs)}</span>
               <button type="button" onClick={cancelRecording} aria-label="Cancel recording"
                 className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors">
                 Cancel

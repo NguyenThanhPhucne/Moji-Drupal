@@ -27,7 +27,7 @@ import {
   Settings2,
   Hash,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import FriendProfileMiniCard from "./FriendProfileMiniCard";
@@ -84,6 +84,8 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isFriendActionLoading, setIsFriendActionLoading] = useState(false);
   const [adminActionTarget, setAdminActionTarget] = useState<string | null>(null);
+  const [isStartingCall, setIsStartingCall] = useState(false);
+  const callDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   chat =
     chat ??
@@ -151,6 +153,14 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      if (callDebounceRef.current) {
+        clearTimeout(callDebounceRef.current);
+      }
+    };
+  }, []);
+
   const handleRemoveFriend = async () => {
     if (!otherUser?._id) return;
     try {
@@ -174,8 +184,22 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
   };
 
   const handleStartCall = (mode: "audio" | "video") => {
+    if (isCallActive || isStartingCall) return;
+    
+    setIsStartingCall(true);
     setCallMode(mode);
     setIsCallActive(true);
+    
+    // Clear any pending timeout
+    if (callDebounceRef.current) {
+      clearTimeout(callDebounceRef.current);
+    }
+    
+    // Reset the starting state after a short delay
+    callDebounceRef.current = setTimeout(() => {
+      setIsStartingCall(false);
+      callDebounceRef.current = null;
+    }, 300);
   };
 
   return (
@@ -231,18 +255,18 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                   const pres = getUserPresence(otherUser?._id);
                   if (pres === "online") return <span className="text-[11px] text-[hsl(var(--status-success))] font-medium">Active</span>;
                   if (pres === "recently-active") return <span className="text-[11px] text-[hsl(var(--status-warning)/0.7)] font-medium">Away</span>;
-                  return <span className="text-[11px] text-muted-foreground">Offline</span>;
-                })()}
-              </div>
-            </div>
-          </div>
-
-          {/* Right — actions */}
-          <div className="chat-header-actions flex flex-shrink-0 items-center gap-2">
-            {(chat.type === "group" || chat.type === "direct") && (
-              <div className="hidden lg:inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/80 p-1 shadow-sm backdrop-blur-sm">
+                  return <span className || isStartingCall}
+                  className="chat-header-action-btn chat-header-action-btn--command rounded-full h-8 w-8"
+                  title="Start Voice Call"
+                  aria-label="Start voice call"
+                >
+                  <Phone className="size-[18px]" />
+                </Button>
                 <Button
                   variant="ghost"
+                  size="icon"
+                  onClick={() => handleStartCall("video")}
+                  disabled={isCallActive || isStartingCall
                   size="icon"
                   onClick={() => handleStartCall("audio")}
                   disabled={isCallActive}

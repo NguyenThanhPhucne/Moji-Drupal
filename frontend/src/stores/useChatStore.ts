@@ -3738,6 +3738,7 @@ export const useChatStore = create<ChatState>()(
       // Persist lightweight client state only; conversation/message bodies remain server-driven.
       partialize: (state) => ({
         activeConversationId: state.activeConversationId,
+        callMode: state.callMode,
         outgoingQueue: state.outgoingQueue.slice(-MAX_OUTGOING_QUEUE_ITEMS),
         threadUnreadCounts: prunePersistedThreadUnreadCounts(
           state.threadUnreadCounts,

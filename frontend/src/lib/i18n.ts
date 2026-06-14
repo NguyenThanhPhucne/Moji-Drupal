@@ -203,6 +203,13 @@ const EN_TRANSLATIONS = {
   "chatComposer.preview": "preview",
   "chatComposer.preview_image": "Image",
   "chatComposer.voice_attachment": "Voice message",
+  "thread.no_replies_yet": "No replies yet",
+  "thread.reply": "reply",
+  "thread.replies": "replies",
+  "chatHeader.start_voice_call": "Start voice call",
+  "chatHeader.start_video_call": "Start video call",
+  "chatHeader.ongoing_voice_call": "Ongoing Voice Call",
+  "chatHeader.ongoing_video_call": "Ongoing Video Call",
 } as const;
 
 type TranslationKey = keyof typeof EN_TRANSLATIONS;
@@ -405,6 +412,13 @@ const VI_TRANSLATIONS: Record<TranslationKey, string> = {
   "chatComposer.preview": "xem trước",
   "chatComposer.preview_image": "Ảnh",
   "chatComposer.voice_attachment": "Tin nhắn thoại",
+  "thread.no_replies_yet": "Chưa có trả lời",
+  "thread.reply": "trả lời",
+  "thread.replies": "trả lời",
+  "chatHeader.start_voice_call": "Gọi thoại",
+  "chatHeader.start_video_call": "Gọi video",
+  "chatHeader.ongoing_voice_call": "Cuộc gọi thoại đang diễn ra",
+  "chatHeader.ongoing_video_call": "Cuộc gọi video đang diễn ra",
 };
 
 const TRANSLATIONS: Record<SupportedLocale, Record<TranslationKey, string>> = {
